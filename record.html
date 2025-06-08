@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>交易管理系统</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+  </script>
   <style>
     body {
       margin: 0;
@@ -87,10 +93,10 @@
 
       <label>类型：</label>
       <select id="typeInput">
-        <option value="买入">买入</option>
-        <option value="卖出">卖出</option>
-        <option value="卖空">卖空</option>
-        <option value="回补">回补</option>
+        <option value="buy">买入</option>
+        <option value="sell">卖出</option>
+        <option value="short">卖空</option>
+        <option value="cover">回补</option>
       </select>
 
       <label>日期：</label>
@@ -158,21 +164,46 @@
       });
     }
 
-    function addRecord() {
+    async function addRecord() {
       const date = document.getElementById("dateInput").value;
-      const symbol = document.getElementById("symbolInput").value;
+      const symbol = document.getElementById("symbolInput").value.toUpperCase();
       const name = document.getElementById("nameInput").value;
       const type = document.getElementById("typeInput").value;
       const qty = parseInt(document.getElementById("qtyInput").value);
       const price = parseFloat(document.getElementById("priceInput").value);
       const fee = parseFloat(document.getElementById("feeInput").value);
       const note = document.getElementById("noteInput").value;
-      if (!date || !symbol || isNaN(qty) || isNaN(price)) return alert("请填写完整信息");
-
       const total = (qty * price).toFixed(2);
-      const row = document.createElement("tr");
-      row.innerHTML = `<td>${date}</td><td>${symbol}</td><td>${name}</td><td>${type}</td><td>${qty}</td><td>${price.toFixed(2)}</td><td>${total}</td><td>${fee.toFixed(2)}</td><td>${note}</td>`;
-      document.getElementById("recordBody").appendChild(row);
+
+      if (!date || !symbol || isNaN(qty) || isNaN(price)) {
+        alert("请填写完整信息");
+        return;
+      }
+
+      const userRes = await supabase.auth.getUser();
+      const userId = userRes?.data?.user?.id;
+      if (!userId) {
+        alert("用户未登录，无法写入记录");
+        return;
+      }
+
+      const { error } = await supabase.from("transactions").insert({
+        user_id: userId,
+        symbol: symbol,
+        action: type,
+        quantity: qty,
+        price: price,
+        timestamp: date,
+      });
+
+      if (error) {
+        alert("添加失败：" + error.message);
+      } else {
+        alert("记录添加成功！");
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${date}</td><td>${symbol}</td><td>${name}</td><td>${type}</td><td>${qty}</td><td>${price.toFixed(2)}</td><td>${total}</td><td>${fee.toFixed(2)}</td><td>${note}</td>`;
+        document.getElementById("recordBody").appendChild(row);
+      }
     }
   </script>
 </body>
