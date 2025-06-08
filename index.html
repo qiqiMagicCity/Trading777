@@ -7,61 +7,173 @@
   <style>
     body {
       margin: 0;
-      background-color: #000;
-      font-family: 'Segoe UI', sans-serif;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #0a0a0a;
       color: #00ff99;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background-image: radial-gradient(circle at center, #002b36, #000);
-      overflow: hidden;
+    }
+    header {
+      background-color: #001d14;
+      padding: 16px;
+      text-align: center;
+      font-size: 1.5em;
+      font-weight: bold;
+      border-bottom: 1px solid #00ff99;
     }
     .container {
-      text-align: center;
-      animation: fadeIn 2s ease-in-out;
+      max-width: 1000px;
+      margin: auto;
+      padding: 20px;
     }
-    h1 {
-      font-size: 3em;
-      letter-spacing: 2px;
-      margin-bottom: 0.5em;
-      text-shadow: 0 0 10px #00ff99;
-    }
-    p {
-      font-size: 1.2em;
-      color: #ccc;
-    }
-    footer {
-      position: absolute;
-      bottom: 20px;
-      text-align: center;
-      font-size: 0.9em;
-      color: #888;
-    }
-    footer .logo {
-      font-weight: bold;
+    h2 {
+      margin-top: 30px;
       color: #00ff99;
     }
-    footer small {
-      display: block;
-      margin-top: 5px;
-      font-size: 0.75em;
+    input, select, button {
+      padding: 8px;
+      margin: 6px 4px;
+      border: 1px solid #00ff99;
+      background-color: #000;
+      color: #00ff99;
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
+    input[type="number"] {
+      width: 100px;
+    }
+    button {
+      cursor: pointer;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #00ff99;
+      padding: 6px;
+      text-align: center;
+    }
+    th {
+      background-color: #003322;
+    }
+    #suggestions {
+      position: absolute;
+      background-color: #000;
+      border: 1px solid #00ff99;
+      max-height: 150px;
+      overflow-y: auto;
+      width: 300px;
+      z-index: 999;
+    }
+    #suggestions div {
+      padding: 6px;
+      cursor: pointer;
+    }
+    #suggestions div:hover {
+      background-color: #003322;
     }
   </style>
 </head>
 <body>
+  <header>交易管理系统</header>
   <div class="container">
-    <h1>欢迎来到交易管理系统</h1>
-    <p>系统正在初始化，请稍候上线更多功能...</p>
+    <h2>添加交易记录</h2>
+    <div>
+      <label>股票代码：</label>
+      <input type="text" id="symbolInput" placeholder="输入代码" oninput="autocomplete()">
+      <div id="suggestions"></div>
+
+      <label>名称：</label>
+      <input type="text" id="nameInput">
+
+      <label>类型：</label>
+      <select id="typeInput">
+        <option value="买入">买入</option>
+        <option value="卖出">卖出</option>
+        <option value="卖空">卖空</option>
+        <option value="回补">回补</option>
+      </select>
+
+      <label>日期：</label>
+      <input type="date" id="dateInput">
+
+      <label>股数：</label>
+      <input type="number" id="qtyInput">
+
+      <label>单价：</label>
+      <input type="number" id="priceInput" step="0.01">
+
+      <label>手续费：</label>
+      <input type="number" id="feeInput" step="0.01" value="0">
+
+      <label>备注：</label>
+      <input type="text" id="noteInput">
+
+      <button onclick="addRecord()">添加记录</button>
+    </div>
+
+    <h2>交易记录表格</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>日期</th>
+          <th>股票代码</th>
+          <th>名称</th>
+          <th>类型</th>
+          <th>股数</th>
+          <th>单价</th>
+          <th>总金额</th>
+          <th>手续费</th>
+          <th>备注</th>
+        </tr>
+      </thead>
+      <tbody id="recordBody">
+      </tbody>
+    </table>
   </div>
-  <footer>
-    <div class="logo">© 魔都万事屋™</div>
-    <small>2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tech</small>
-  </footer>
+
+  <script>
+    const symbols = [
+      { symbol: "AAPL", name: "Apple Inc." },
+      { symbol: "TSLA", name: "Tesla Inc." },
+      { symbol: "GOOG", name: "Alphabet Inc." },
+      { symbol: "MSFT", name: "Microsoft Corp." },
+      { symbol: "NVDA", name: "NVIDIA Corp." }
+    ];
+
+    function autocomplete() {
+      const input = document.getElementById("symbolInput").value.toUpperCase();
+      const box = document.getElementById("suggestions");
+      box.innerHTML = "";
+      if (!input) return;
+      const matches = symbols.filter(s => s.symbol.startsWith(input));
+      matches.forEach(item => {
+        const div = document.createElement("div");
+        div.innerText = `${item.symbol} - ${item.name}`;
+        div.onclick = () => {
+          document.getElementById("symbolInput").value = item.symbol;
+          document.getElementById("nameInput").value = item.name;
+          box.innerHTML = "";
+        };
+        box.appendChild(div);
+      });
+    }
+
+    function addRecord() {
+      const date = document.getElementById("dateInput").value;
+      const symbol = document.getElementById("symbolInput").value;
+      const name = document.getElementById("nameInput").value;
+      const type = document.getElementById("typeInput").value;
+      const qty = parseInt(document.getElementById("qtyInput").value);
+      const price = parseFloat(document.getElementById("priceInput").value);
+      const fee = parseFloat(document.getElementById("feeInput").value);
+      const note = document.getElementById("noteInput").value;
+      if (!date || !symbol || isNaN(qty) || isNaN(price)) return alert("请填写完整信息");
+
+      const total = (qty * price).toFixed(2);
+      const row = document.createElement("tr");
+      row.innerHTML = `<td>${date}</td><td>${symbol}</td><td>${name}</td><td>${type}</td><td>${qty}</td><td>${price.toFixed(2)}</td><td>${total}</td><td>${fee.toFixed(2)}</td><td>${note}</td>`;
+      document.getElementById("recordBody").appendChild(row);
+    }
+  </script>
 </body>
 </html>
