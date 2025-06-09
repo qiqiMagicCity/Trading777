@@ -69,26 +69,36 @@
     const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
     async function register() {
-      const email = document.getElementById('email').value;
+      const email = document.getElementById('email').value.trim();
       const msg = document.getElementById('message');
       const button = document.getElementById('register-button');
       button.disabled = true;
       button.textContent = '发送中...';
 
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: 'https://trading777.vercel.app/record.html'
-        }
-      });
+      try {
+        const { data, error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: 'https://trading777.vercel.app/record.html'
+          }
+        });
 
-      if (error) {
-        msg.textContent = `❌ 发送失败: ${error.message}`;
+        // 调试输出
+        console.log('📨 注册请求结果:', { data, error });
+
+        if (error) {
+          msg.textContent = `❌ 发送失败: ${error.message}`;
+          button.disabled = false;
+          button.textContent = '发送注册链接';
+        } else {
+          button.style.display = 'none';
+          msg.textContent = '✅ 注册邮件已发送，请查收邮箱。';
+        }
+      } catch (err) {
+        msg.textContent = '❌ 系统异常：' + err.message;
+        console.error('💥 发生异常:', err);
         button.disabled = false;
         button.textContent = '发送注册链接';
-      } else {
-        button.style.display = 'none';
-        msg.textContent = '✅ 注册邮件已发送，请查看收件箱。';
       }
     }
   </script>
