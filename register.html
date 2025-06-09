@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>注册账号</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      margin: 0;
+      background-color: #000;
+      font-family: Arial, sans-serif;
+      color: #00ff99;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    h1 {
+      margin-bottom: 30px;
+      text-shadow: 0 0 10px #00ff99;
+    }
+    input {
+      padding: 10px;
+      margin: 10px;
+      width: 250px;
+      border: 1px solid #00ff99;
+      background: #000;
+      color: #00ff99;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #00ff99;
+      color: #000;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #00ffaa;
+    }
+    .message {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>注册账号</h1>
+  <input type="email" id="email" placeholder="请输入邮箱">
+  <button onclick="signUp()">发送注册链接</button>
+  <div class="message" id="message"></div>
+
+  <script>
+    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    async function signUp() {
+      const email = document.getElementById('email').value;
+      const message = document.getElementById('message');
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) {
+        message.innerText = '❌ 注册失败：' + error.message;
+      } else {
+        message.innerText = '✅ 注册链接已发送到邮箱，请查收！';
+      }
+    }
+  </script>
+</body>
+</html>
