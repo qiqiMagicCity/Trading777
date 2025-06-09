@@ -26,7 +26,8 @@
     h2 {
       margin-bottom: 20px;
     }
-    input[type=email] {
+    input[type=email],
+    input[type=password] {
       width: 260px;
       padding: 10px;
       margin: 10px 0;
@@ -59,7 +60,9 @@
     <h2>注册账号</h2>
     <input type="email" id="email" placeholder="请输入邮箱" />
     <br>
-    <button id="register-button" onclick="register()">发送注册链接</button>
+    <input type="password" id="password" placeholder="请输入密码" />
+    <br>
+    <button onclick="register()">注册</button>
     <div class="message" id="message"></div>
   </div>
 
@@ -71,34 +74,25 @@
 
     async function register() {
       const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
       const msg = document.getElementById('message');
-      const button = document.getElementById('register-button');
-      button.disabled = true;
-      button.textContent = '发送中...';
 
-      try {
-        const { data, error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: 'https://trading777.vercel.app/record.html'
-          }
-        });
+      if (!email || !password) {
+        msg.textContent = '❌ 邮箱和密码不能为空';
+        return;
+      }
 
-        console.log('📨 注册请求结果:', { data, error });
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password
+      });
 
-        if (error) {
-          msg.textContent = `❌ 发送失败: ${error.message}`;
-          button.disabled = false;
-          button.textContent = '发送注册链接';
-        } else {
-          button.style.display = 'none';
-          msg.textContent = '✅ 注册邮件已发送，请查收邮箱。';
-        }
-      } catch (err) {
-        msg.textContent = '❌ 系统异常：' + err.message;
-        console.error('💥 发生异常:', err);
-        button.disabled = false;
-        button.textContent = '发送注册链接';
+      console.log("📨 注册响应", { data, error });
+
+      if (error) {
+        msg.textContent = `❌ 注册失败：${error.message}`;
+      } else {
+        msg.textContent = '✅ 注册成功，请前往邮箱确认激活链接（如已启用验证）。';
       }
     }
   </script>
