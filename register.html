@@ -71,11 +71,16 @@
     async function register() {
       const email = document.getElementById('email').value;
       const msg = document.getElementById('message');
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: 'https://trading777.vercel.app/record.html'
+        }
+      });
       if (error) {
         msg.innerText = `发送失败: ${error.message}`;
       } else {
-        msg.innerText = '注册链接已发送，请前往邮箱确认';
+        msg.innerText = '✅ 注册链接已发送，请前往邮箱确认并登录';
       }
     }
   </script>
