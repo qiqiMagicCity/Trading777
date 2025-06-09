@@ -3,81 +3,75 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>注册账号</title>
+  <title>交易记录</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body {
       margin: 0;
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
       font-family: 'Segoe UI', sans-serif;
-      background: radial-gradient(circle at center, #002b36, #000);
+      background-color: #001f1f;
       color: #00ff99;
     }
-    .register-box {
-      text-align: center;
-      background: #000;
-      padding: 40px;
-      border-radius: 10px;
-      box-shadow: 0 0 20px #00ff99;
-    }
-    h2 {
-      margin-bottom: 20px;
-    }
-    input[type=email] {
-      width: 260px;
-      padding: 10px;
-      margin: 10px 0;
-      background: #000;
-      color: #00ff99;
-      border: 1px solid #00ff99;
-      border-radius: 4px;
-    }
-    button {
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       padding: 10px 20px;
-      background: #00ff99;
+      background-color: #003333;
+      color: #00ff99;
+      box-shadow: 0 2px 5px rgba(0,255,153,0.3);
+    }
+
+    .logout-button {
+      background-color: #00ff99;
       color: #000;
+      padding: 5px 10px;
       border: none;
-      border-radius: 6px;
+      border-radius: 5px;
       cursor: pointer;
-      font-weight: bold;
-      box-shadow: 0 0 10px #00ff99;
     }
-    button:hover {
-      background: #00ffcc;
-    }
-    .message {
-      margin-top: 20px;
-      font-size: 0.95em;
+
+    .content {
+      padding: 20px;
     }
   </style>
 </head>
 <body>
-  <div class="register-box">
-    <h2>注册账号</h2>
-    <input type="email" id="email" placeholder="请输入邮箱" />
-    <br>
-    <button onclick="register()">发送注册链接</button>
-    <div class="message" id="message"></div>
+  <div class="top-bar">
+    <div id="user-email">正在加载...</div>
+    <button class="logout-button" onclick="logout()">退出登录</button>
+  </div>
+
+  <div class="content">
+    <h1>交易录入功能区</h1>
+    <!-- 这里可以添加交易表单 -->
   </div>
 
   <script>
-    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
-    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    const supabase = window.supabase.createClient(
+      'https://zcosfwmtatuheqrytvad.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTc5MjM3NTgsImV4cCI6MjAzMzUwOTc1OH0.dfiQXhCVX_wGlxwbHgCBKCIjYONCEZQ3BImqrzya5Og'
+    );
 
-    async function register() {
-      const email = document.getElementById('email').value;
-      const msg = document.getElementById('message');
-      const { error } = await supabase.auth.signInWithOtp({ email });
-      if (error) {
-        msg.innerText = `发送失败: ${error.message}`;
-      } else {
-        msg.innerText = '注册链接已发送，请前往邮箱确认';
+    async function checkLoginStatus() {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        window.location.href = 'login.html';
+        return;
       }
+
+      const userEmail = session.user.email;
+      document.getElementById('user-email').textContent = `欢迎您，${userEmail}`;
     }
+
+    async function logout() {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    }
+
+    checkLoginStatus();
   </script>
 </body>
 </html>
