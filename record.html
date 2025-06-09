@@ -16,7 +16,6 @@
       align-items: flex-start;
       padding-top: 40px;
     }
-
     .form-box {
       background: #000;
       padding: 30px;
@@ -24,18 +23,15 @@
       box-shadow: 0 0 20px #00ff99;
       width: 400px;
     }
-
     h2 {
       text-align: center;
       margin-bottom: 20px;
     }
-
     label {
       display: block;
       margin-top: 15px;
       margin-bottom: 5px;
     }
-
     input, select {
       width: 100%;
       padding: 10px;
@@ -44,7 +40,6 @@
       border: 1px solid #00ff99;
       border-radius: 4px;
     }
-
     button {
       margin-top: 20px;
       width: 100%;
@@ -56,11 +51,9 @@
       cursor: pointer;
       font-weight: bold;
     }
-
     button:hover {
       background: #00ffcc;
     }
-
     .message {
       margin-top: 20px;
       font-size: 0.95em;
@@ -106,6 +99,11 @@
   </div>
 
   <script>
+    const supabase = window.supabase.createClient(
+      'https://zcosfwmtatuheqrytvad.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk'
+    );
+
     const nameMap = {
       AAPL: '苹果公司',
       NVDA: '英伟达',
@@ -128,10 +126,45 @@
       document.getElementById('amount').value = total;
     }
 
-    function submitForm() {
-      // 下一步处理写入 Supabase
+    async function submitForm() {
       const msg = document.getElementById('message');
-      msg.innerText = '✅ 表单已填写完毕，准备写入数据库（下一步）';
+      msg.textContent = '⏳ 提交中...';
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+
+      if (!user) {
+        msg.textContent = '❌ 用户未登录';
+        return;
+      }
+
+      const symbol = document.getElementById('code').value.trim().toUpperCase();
+      const name = document.getElementById('name').value.trim();
+      const side = document.getElementById('side').value;
+      const price = parseFloat(document.getElementById('price').value);
+      const quantity = parseInt(document.getElementById('qty').value);
+      const amount = parseFloat(document.getElementById('amount').value);
+      const trade_date = document.getElementById('date').value;
+      const note = document.getElementById('note').value.trim();
+
+      const { error } = await supabase.from('records').insert([{
+        user_id: user.id,
+        symbol,
+        name,
+        side,
+        price,
+        quantity,
+        amount,
+        trade_date,
+        note
+      }]);
+
+      if (error) {
+        console.error('❌ 写入失败', error);
+        msg.textContent = '❌ 写入失败: ' + error.message;
+      } else {
+        msg.textContent = '✅ 写入成功';
+      }
     }
   </script>
 </body>
