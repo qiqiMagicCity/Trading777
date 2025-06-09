@@ -5,82 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>注册账号</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const supabase = supabase.createClient(
-      'https://zcosfwmtatuheqrytvad.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk'
-    );
-
-    async function handleRegister() {
-      const email = document.getElementById("email").value;
-      if (!email) return alert("请输入邮箱");
-
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: location.origin + "/record.html" }
-      });
-
-      if (error) {
-        alert("发送失败：" + error.message);
-      } else {
-        alert("注册链接已发送，请查收邮箱");
-      }
-    }
-  </script>
   <style>
     body {
       margin: 0;
-      background-color: #000;
-      font-family: 'Segoe UI', sans-serif;
-      color: #00ff99;
+      height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      background-image: radial-gradient(circle at center, #002b36, #000);
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at center, #002b36, #000);
+      color: #00ff99;
     }
-    .card {
-      background-color: #000;
-      border: 1px solid #00ff99;
-      padding: 40px;
-      border-radius: 12px;
-      box-shadow: 0 0 20px #00ff99;
+    .register-box {
       text-align: center;
+      background: #000;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px #00ff99;
     }
     h2 {
       margin-bottom: 20px;
-      text-shadow: 0 0 10px #00ff99;
     }
-    input {
-      width: 100%;
+    input[type=email] {
+      width: 260px;
       padding: 10px;
-      margin-bottom: 15px;
-      border: 1px solid #00ff99;
-      background-color: #000;
+      margin: 10px 0;
+      background: #000;
       color: #00ff99;
-      font-size: 16px;
+      border: 1px solid #00ff99;
+      border-radius: 4px;
     }
     button {
       padding: 10px 20px;
-      background-color: #00ff99;
+      background: #00ff99;
       color: #000;
       border: none;
-      font-weight: bold;
-      cursor: pointer;
       border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
       box-shadow: 0 0 10px #00ff99;
     }
     button:hover {
-      transform: scale(1.05);
-      box-shadow: 0 0 15px #00ffcc;
+      background: #00ffcc;
+    }
+    .message {
+      margin-top: 20px;
+      font-size: 0.95em;
     }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="register-box">
     <h2>注册账号</h2>
     <input type="email" id="email" placeholder="请输入邮箱" />
-    <button onclick="handleRegister()">发送注册链接</button>
+    <br>
+    <button onclick="register()">发送注册链接</button>
+    <div class="message" id="message"></div>
   </div>
+
+  <script>
+    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    async function register() {
+      const email = document.getElementById('email').value;
+      const msg = document.getElementById('message');
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) {
+        msg.innerText = `发送失败: ${error.message}`;
+      } else {
+        msg.innerText = '注册链接已发送，请前往邮箱确认';
+      }
+    }
+  </script>
 </body>
 </html>
