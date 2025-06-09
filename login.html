@@ -26,7 +26,8 @@
     h2 {
       margin-bottom: 20px;
     }
-    input[type=email] {
+    input[type=email],
+    input[type=password] {
       width: 260px;
       padding: 10px;
       margin: 10px 0;
@@ -59,23 +60,39 @@
     <h2>用户登录</h2>
     <input type="email" id="email" placeholder="请输入邮箱" />
     <br>
-    <button onclick="login()">发送登录链接</button>
+    <input type="password" id="password" placeholder="请输入密码" />
+    <br>
+    <button onclick="login()">登录</button>
     <div class="message" id="message"></div>
   </div>
 
   <script>
-    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
-    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+    const supabase = window.supabase.createClient(
+      'https://zcosfwmtatuheqrytvad.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk'
+    );
 
     async function login() {
-      const email = document.getElementById('email').value;
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
       const msg = document.getElementById('message');
-      const { error } = await supabase.auth.signInWithOtp({ email });
+
+      if (!email || !password) {
+        msg.textContent = '❌ 邮箱和密码不能为空';
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      console.log('🔐 登录响应:', { data, error });
+
       if (error) {
-        msg.innerText = `发送失败: ${error.message}`;
+        msg.textContent = `❌ 登录失败：${error.message}`;
       } else {
-        msg.innerText = '登录链接已发送，请前往邮箱确认';
+        msg.textContent = '✅ 登录成功，正在跳转...';
+        setTimeout(() => {
+          window.location.href = 'record.html';
+        }, 800);
       }
     }
   </script>
