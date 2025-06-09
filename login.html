@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户登录</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at center, #002b36, #000);
+      color: #00ff99;
+    }
+    .login-box {
+      text-align: center;
+      background: #000;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px #00ff99;
+    }
+    h2 {
+      margin-bottom: 20px;
+    }
+    input[type=email] {
+      width: 260px;
+      padding: 10px;
+      margin: 10px 0;
+      background: #000;
+      color: #00ff99;
+      border: 1px solid #00ff99;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 20px;
+      background: #00ff99;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      box-shadow: 0 0 10px #00ff99;
+    }
+    button:hover {
+      background: #00ffcc;
+    }
+    .message {
+      margin-top: 20px;
+      font-size: 0.95em;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h2>用户登录</h2>
+    <input type="email" id="email" placeholder="请输入邮箱" />
+    <br>
+    <button onclick="login()">发送登录链接</button>
+    <div class="message" id="message"></div>
+  </div>
+
+  <script>
+    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
+    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+    async function login() {
+      const email = document.getElementById('email').value;
+      const msg = document.getElementById('message');
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) {
+        msg.innerText = `发送失败: ${error.message}`;
+      } else {
+        msg.innerText = '登录链接已发送，请前往邮箱确认';
+      }
+    }
+  </script>
+</body>
+</html>
