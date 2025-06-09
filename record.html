@@ -1,179 +1,81 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>交易管理系统</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
-    const supabase = supabase.createClient(supabaseUrl, supabaseKey);
-  </script>
-  <style>
-    body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #0a0a0a; color: #00ff99; }
-    header { background-color: #001d14; padding: 16px; text-align: center; font-size: 1.5em; font-weight: bold; border-bottom: 1px solid #00ff99; }
-    .container { max-width: 1000px; margin: auto; padding: 20px; }
-    h2 { margin-top: 30px; color: #00ff99; }
-    input, select, button { padding: 8px; margin: 6px 4px; border: 1px solid #00ff99; background-color: #000; color: #00ff99; }
-    input[type="number"] { width: 100px; }
-    button { cursor: pointer; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #00ff99; padding: 6px; text-align: center; }
-    th { background-color: #003322; }
-    #suggestions { position: absolute; background-color: #000; border: 1px solid #00ff99; max-height: 150px; overflow-y: auto; width: 300px; z-index: 999; }
-    #suggestions div { padding: 6px; cursor: pointer; }
-    #suggestions div:hover { background-color: #003322; }
-  </style>
-</head>
-<body>
-  <header>交易管理系统</header>
-  <div class="container" id="authSection">
-    <h2>用户登录</h2>
-    <div id="loginArea">
-      <input type="email" id="emailInput" placeholder="请输入邮箱" />
-      <button onclick="login()">发送登录链接</button>
+<!-- record.html 表单区域：用于录入交易信息 -->
+<div class="content">
+  <h2>添加交易记录</h2>
+  <form id="trade-form" onsubmit="return handleSubmit(event)">
+    <div style="margin-bottom:10px">
+      <label>标的代码：</label>
+      <input type="text" id="symbol" placeholder="如 AAPL" required oninput="updateName()" />
     </div>
-    <div id="userInfo" style="display:none;">
-      <span id="userEmailLabel"></span>
-      <button onclick="logout()">退出登录</button>
+    <div style="margin-bottom:10px">
+      <label>标的名称：</label>
+      <input type="text" id="symbol-name" disabled />
     </div>
-  </div>
-
-  <div class="container">
-    <h2>添加交易记录</h2>
-    <div>
-      <label>股票代码：</label>
-      <input type="text" id="symbolInput" placeholder="输入代码" oninput="autocomplete()">
-      <div id="suggestions"></div>
-      <label>名称：</label>
-      <input type="text" id="nameInput">
-      <label>类型：</label>
-      <select id="typeInput">
-        <option value="buy">买入</option>
-        <option value="sell">卖出</option>
-        <option value="short">卖空</option>
-        <option value="cover">回补</option>
+    <div style="margin-bottom:10px">
+      <label>买卖方向：</label>
+      <select id="side" required>
+        <option value="BOUGHT">买入</option>
+        <option value="SOLD">卖出</option>
+        <option value="SHORT">做空</option>
+        <option value="COVER">回补</option>
       </select>
-      <label>日期：</label>
-      <input type="date" id="dateInput">
-      <label>股数：</label>
-      <input type="number" id="qtyInput">
-      <label>单价：</label>
-      <input type="number" id="priceInput" step="0.01">
-      <label>手续费：</label>
-      <input type="number" id="feeInput" step="0.01" value="0">
-      <label>备注：</label>
-      <input type="text" id="noteInput">
-      <button onclick="addRecord()">添加记录</button>
     </div>
+    <div style="margin-bottom:10px">
+      <label>单价：</label>
+      <input type="number" id="price" step="0.01" required oninput="updateTotal()" />
+    </div>
+    <div style="margin-bottom:10px">
+      <label>数量：</label>
+      <input type="number" id="quantity" required oninput="updateTotal()" />
+    </div>
+    <div style="margin-bottom:10px">
+      <label>订单金额：</label>
+      <input type="text" id="total" disabled />
+    </div>
+    <div style="margin-bottom:10px">
+      <label>成交日期：</label>
+      <input type="date" id="date" required />
+    </div>
+    <div style="margin-bottom:10px">
+      <label>备注：</label>
+      <input type="text" id="note" />
+    </div>
+    <button type="submit">提交交易记录</button>
+  </form>
+</div>
 
-    <h2>交易记录表格</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>日期</th><th>股票代码</th><th>名称</th><th>类型</th>
-          <th>股数</th><th>单价</th><th>总金额</th><th>手续费</th><th>备注</th>
-        </tr>
-      </thead>
-      <tbody id="recordBody"></tbody>
-    </table>
-  </div>
+<script>
+  const symbolMap = {
+    AAPL: "苹果公司",
+    NVDA: "英伟达",
+    TSLA: "特斯拉",
+    MSFT: "微软",
+    AMZN: "亚马逊",
+    META: "Meta"
+    // 可扩展更多
+  };
 
-  <script>
-    const symbols = [
-      { symbol: "AAPL", name: "Apple Inc." },
-      { symbol: "TSLA", name: "Tesla Inc." },
-      { symbol: "GOOG", name: "Alphabet Inc." },
-      { symbol: "MSFT", name: "Microsoft Corp." },
-      { symbol: "NVDA", name: "NVIDIA Corp." }
-    ];
+  function updateName() {
+    const code = document.getElementById('symbol').value.toUpperCase();
+    document.getElementById('symbol-name').value = symbolMap[code] || '';
+  }
 
-    function autocomplete() {
-      const input = document.getElementById("symbolInput").value.toUpperCase();
-      const box = document.getElementById("suggestions");
-      box.innerHTML = "";
-      if (!input) return;
-      symbols.filter(s => s.symbol.startsWith(input)).forEach(item => {
-        const div = document.createElement("div");
-        div.innerText = `${item.symbol} - ${item.name}`;
-        div.onclick = () => {
-          document.getElementById("symbolInput").value = item.symbol;
-          document.getElementById("nameInput").value = item.name;
-          box.innerHTML = "";
-        };
-        box.appendChild(div);
-      });
+  function updateTotal() {
+    const price = parseFloat(document.getElementById('price').value);
+    const qty = parseFloat(document.getElementById('quantity').value);
+    if (!isNaN(price) && !isNaN(qty)) {
+      document.getElementById('total').value = (price * qty).toFixed(2);
+    } else {
+      document.getElementById('total').value = '';
     }
+  }
 
-    async function login() {
-      const email = document.getElementById('emailInput').value.trim();
-      if (!email) return alert('请输入邮箱');
-      const { error } = await supabase.auth.signInWithOtp({ email });
-      if (error) alert('登录失败：' + error.message);
-      else alert('已发送登录链接，请前往邮箱确认');
-    }
+  function handleSubmit(event) {
+    event.preventDefault();
+    // 下一步接入 Supabase 写入逻辑
+    alert('✅ 表单验证通过，可写入数据库');
+    return false;
+  }
 
-    async function logout() {
-      await supabase.auth.signOut();
-      location.reload();
-    }
-
-    async function addRecord() {
-      const date = document.getElementById("dateInput").value;
-      const symbol = document.getElementById("symbolInput").value.toUpperCase();
-      const name = document.getElementById("nameInput").value;
-      const type = document.getElementById("typeInput").value;
-      const qty = parseInt(document.getElementById("qtyInput").value);
-      const price = parseFloat(document.getElementById("priceInput").value);
-      const fee = parseFloat(document.getElementById("feeInput").value);
-      const note = document.getElementById("noteInput").value;
-      if (!date || !symbol || isNaN(qty) || isNaN(price)) return alert("请填写完整信息");
-
-      const userRes = await supabase.auth.getUser();
-      const userId = userRes?.data?.user?.id;
-      if (!userId) return alert("用户未登录，无法写入记录");
-
-      const { error } = await supabase.from("transactions").insert({
-        user_id: userId, symbol, action: type, quantity: qty, price, timestamp: date
-      });
-
-      if (error) alert("添加失败：" + error.message);
-      else {
-        alert("记录添加成功！");
-        const total = (qty * price).toFixed(2);
-        const row = document.createElement("tr");
-        row.innerHTML = `<td>${date}</td><td>${symbol}</td><td>${name}</td><td>${type}</td><td>${qty}</td><td>${price.toFixed(2)}</td><td>${total}</td><td>${fee.toFixed(2)}</td><td>${note}</td>`;
-        document.getElementById("recordBody").appendChild(row);
-      }
-    }
-
-    async function loadRecords(userId) {
-      const { data, error } = await supabase.from("transactions")
-        .select("*").eq("user_id", userId).order("timestamp", { ascending: false });
-      if (error) return console.error("加载记录失败", error);
-
-      const body = document.getElementById("recordBody");
-      body.innerHTML = "";
-      data.forEach(row => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${row.timestamp?.split("T")[0] || ""}</td><td>${row.symbol}</td><td></td>
-          <td>${row.action}</td><td>${row.quantity}</td><td>${row.price.toFixed(2)}</td>
-          <td>${(row.price * row.quantity).toFixed(2)}</td><td>-</td><td></td>`;
-        body.appendChild(tr);
-      });
-    }
-
-    window.addEventListener("DOMContentLoaded", async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        document.getElementById("loginArea").style.display = "none";
-        document.getElementById("userInfo").style.display = "block";
-        document.getElementById("userEmailLabel").innerText = "已登录：" + session.user.email;
-        loadRecords(session.user.id);
-      }
-    });
-  </script>
-</body>
-</html>
+  // 默认日期为今天
+  document.getElementById('date').valueAsDate = new Date();
+</script>
