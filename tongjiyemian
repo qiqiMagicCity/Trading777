@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>账户总览</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at center, #002b36, #000);
+      color: #00ff99;
+    }
+    .header {
+      padding: 20px;
+      text-align: center;
+      font-size: 1.8em;
+      font-weight: bold;
+    }
+    .summary, .positions, .charts {
+      margin: 20px;
+      background: #000;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #00ff99;
+      padding: 20px;
+    }
+    h3 {
+      margin-top: 0;
+    }
+    .floating-button {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background-color: #00ff99;
+      color: #000;
+      border: none;
+      padding: 15px;
+      border-radius: 50%;
+      font-size: 1.5em;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00ff99;
+    }
+    .floating-button:hover {
+      background-color: #00ffcc;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid #00ff99;
+      padding: 8px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">📊 我的账户总览</div>
+
+  <div class="summary">
+    <h3>账户汇总</h3>
+    <div id="accountSummary">加载中...</div>
+  </div>
+
+  <div class="positions">
+    <h3>当前持仓</h3>
+    <table id="positionsTable">
+      <thead>
+        <tr>
+          <th>标的</th>
+          <th>名称</th>
+          <th>持仓</th>
+          <th>均价</th>
+          <th>当前价</th>
+          <th>浮动盈亏</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="charts">
+    <h3>图表分析</h3>
+    <div id="charts">图表开发中...</div>
+  </div>
+
+  <button class="floating-button" onclick="goToAddTrade()">＋</button>
+
+  <script>
+    const supabase = window.supabase.createClient(
+      'https://zcosfwmtatuheqrytvad.supabase.co',
+      'YOUR_PUBLIC_ANON_KEY'
+    );
+
+    async function goToAddTrade() {
+      window.location.href = 'record.html';
+    }
+
+    // TODO: 查询并展示汇总信息、当前持仓等
+    document.getElementById('accountSummary').innerText = '（待开发）';
+  </script>
+</body>
+</html>
