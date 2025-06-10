@@ -82,17 +82,17 @@
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password
-      });
+      const { data, error } = await supabase.auth.signUp({ email, password });
 
       console.log("📨 注册响应", { data, error });
 
       if (error) {
         msg.textContent = `❌ 注册失败：${error.message}`;
       } else {
-        msg.textContent = '✅ 注册成功，请前往邮箱确认激活链接（如已启用验证）。';
+        msg.textContent = '✅ 注册成功，正在跳转...';
+        setTimeout(() => {
+          window.location.href = 'tongjiyemian.html';
+        }, 800);
       }
     }
   </script>
