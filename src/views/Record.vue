@@ -1,0 +1,1 @@
+<template><div>Record 页面</div></template>

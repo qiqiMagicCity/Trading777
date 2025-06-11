@@ -1,0 +1,1 @@
+<template><div>Register 页面</div></template>
