@@ -1,4 +1,7 @@
 <template>
+  <div class="page">
+    <div class="content">
+      <div class="container">
   <div class="register-box">
     <h2>注册账号</h2>
     <input type="email" v-model="email" placeholder="请输入邮箱" />
@@ -7,6 +10,10 @@
     <br />
     <button @click="register">注册</button>
     <div class="message">{{ message }}</div>
+  </div>
+      </div>
+    </div>
+    <footer class="footer">© 魔都万事屋™ 2005–2025</footer>
   </div>
 </template>
 
@@ -42,7 +49,39 @@ async function register() {
 }
 </script>
 
-<style scoped>
+<style>
+
+.page {
+  position: relative;
+  height: 100vh;
+  background: radial-gradient(circle at center, #002b36, #000);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #00ff99;
+}
+.content {
+  margin-top: 35vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.container {
+  background: rgba(0,0,0,0.8);
+  padding: 2em;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #00ff99;
+  width: 90%;
+  max-width: 500px;
+}
+.footer {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+  font-size: 0.9em;
+  color: #66ffcc;
+}
+ scoped>
 body {
   margin: 0;
   height: 100vh;

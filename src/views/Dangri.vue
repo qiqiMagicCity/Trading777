@@ -1,4 +1,7 @@
 <template>
+  <div class="page">
+    <div class="content">
+      <div class="container">
   <div class="record-list">
     <h2>📅 当日交易明细</h2>
     <table>
@@ -19,6 +22,10 @@
         </tr>
       </tbody>
     </table>
+  </div>
+      </div>
+    </div>
+    <footer class="footer">© 魔都万事屋™ 2005–2025</footer>
   </div>
 </template>
 
@@ -42,7 +49,39 @@ function deleteRecord(id){ alert('删除记录ID: '+id) }
 onMounted(loadData)
 </script>
 
-<style scoped>
+<style>
+
+.page {
+  position: relative;
+  height: 100vh;
+  background: radial-gradient(circle at center, #002b36, #000);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #00ff99;
+}
+.content {
+  margin-top: 35vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.container {
+  background: rgba(0,0,0,0.8);
+  padding: 2em;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #00ff99;
+  width: 90%;
+  max-width: 500px;
+}
+.footer {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+  font-size: 0.9em;
+  color: #66ffcc;
+}
+ scoped>
 body{background:rgba(0,0,0,0.8);color:#00ff99;font-family:sans-serif;}
 table{width:100%;border-collapse:collapse;margin-top:20px;}
 th,td{border:1px solid #00ff99;padding:8px;text-align:center;}

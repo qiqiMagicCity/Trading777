@@ -1,4 +1,7 @@
 <template>
+  <div class="page">
+    <div class="content">
+      <div class="container">
   <div>
     <div class="header" id="headerTitle">📊 加载中...</div>
     <div v-if="!user" class="section">
@@ -42,6 +45,10 @@
         <canvas id="pieChart" width="400" height="300"></canvas>
       </div>
     </div>
+  </div>
+      </div>
+    </div>
+    <footer class="footer">© 魔都万事屋™ 2005–2025</footer>
   </div>
 </template>
 
@@ -108,7 +115,39 @@ async function loadDashboard() {
 onMounted(loadDashboard)
 </script>
 
-<style scoped>
+<style>
+
+.page {
+  position: relative;
+  height: 100vh;
+  background: radial-gradient(circle at center, #002b36, #000);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #00ff99;
+}
+.content {
+  margin-top: 35vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.container {
+  background: rgba(0,0,0,0.8);
+  padding: 2em;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #00ff99;
+  width: 90%;
+  max-width: 500px;
+}
+.footer {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+  font-size: 0.9em;
+  color: #66ffcc;
+}
+ scoped>
 body { margin:0; font-family:'Segoe UI',sans-serif; background:radial-gradient(circle at center, #002b36, #000); color:#00ff99; }
 .header { padding:20px; text-align:center; font-size:1.8em; font-weight:bold; }
 .section { margin:20px; background:rgba(0,0,0,0.8); border-radius:10px; box-shadow:0 0 20px #00ff99; padding:20px; }

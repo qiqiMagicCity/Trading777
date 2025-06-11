@@ -1,4 +1,7 @@
 <template>
+  <div class="page">
+    <div class="content">
+      <div class="container">
   <div class="form-box">
     <h2>添加交易记录</h2>
     <label>标的代码:</label>
@@ -24,6 +27,10 @@
     <input v-model="note"/>
     <button @click="submitForm">提交交易记录</button>
     <div class="message">{{ message }}</div>
+  </div>
+      </div>
+    </div>
+    <footer class="footer">© 魔都万事屋™ 2005–2025</footer>
   </div>
 </template>
 
@@ -64,7 +71,39 @@ async function submitForm(){
 }
 </script>
 
-<style scoped>
+<style>
+
+.page {
+  position: relative;
+  height: 100vh;
+  background: radial-gradient(circle at center, #002b36, #000);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #00ff99;
+}
+.content {
+  margin-top: 35vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.container {
+  background: rgba(0,0,0,0.8);
+  padding: 2em;
+  border-radius: 10px;
+  box-shadow: 0 0 20px #00ff99;
+  width: 90%;
+  max-width: 500px;
+}
+.footer {
+  position: absolute;
+  bottom: 20px;
+  text-align: center;
+  font-size: 0.9em;
+  color: #66ffcc;
+}
+ scoped>
 body{margin:0;font-family:'Segoe UI',sans-serif;background:radial-gradient(circle at center,#002b36,#000);color:#00ff99;display:flex;justify-content:center;align-items:flex-start;padding-top:40px;}
 .form-box{background:rgba(0,0,0,0.8);box-shadow:0 0 20px #00ff99;padding:30px;border-radius:10px;box-shadow:0 0 20px #00ff99;width:400px;}
 h2{text-align:center;margin-bottom:20px;}
