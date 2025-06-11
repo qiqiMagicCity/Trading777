@@ -1,1 +1,1 @@
-<template><div>Register 页面</div></template>
+<template><div style='color:#00FF99'>注册页面 UI 整合中</div></template>

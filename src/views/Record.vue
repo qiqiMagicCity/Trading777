@@ -1,1 +1,1 @@
-<template><div>Record 页面</div></template>
+<template><div style='color:#00FF99'>交易录入页面 UI 整合中</div></template>
