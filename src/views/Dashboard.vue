@@ -111,9 +111,9 @@ onMounted(loadDashboard)
 <style scoped>
 body { margin:0; font-family:'Segoe UI',sans-serif; background:radial-gradient(circle at center, #002b36, #000); color:#00ff99; }
 .header { padding:20px; text-align:center; font-size:1.8em; font-weight:bold; }
-.section { margin:20px; background:#000; border-radius:10px; box-shadow:0 0 10px #00ff99; padding:20px; }
+.section { margin:20px; background:rgba(0,0,0,0.8); border-radius:10px; box-shadow:0 0 20px #00ff99; padding:20px; }
 h3 { margin-top:0; }
 table { width:100%; border-collapse:collapse; margin-top:10px; }
 th,td { border:1px solid #00ff99; padding:8px; text-align:center; }
-canvas { background:#000; border-radius:10px; margin-top:10px; }
+canvas { background:rgba(0,0,0,0.8); border-radius:10px; margin-top:10px; }
 </style>

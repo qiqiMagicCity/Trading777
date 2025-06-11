@@ -55,7 +55,7 @@ body {
 }
 .register-box {
   text-align: center;
-  background: #000;
+  background: rgba(0,0,0,0.8);
   padding: 40px;
   border-radius: 10px;
   box-shadow: 0 0 20px #00ff99;
@@ -68,7 +68,7 @@ input[type='password'] {
   width: 260px;
   padding: 10px;
   margin: 10px 0;
-  background: #000;
+  background: rgba(0,0,0,0.8);
   color: #00ff99;
   border: 1px solid #00ff99;
   border-radius: 4px;

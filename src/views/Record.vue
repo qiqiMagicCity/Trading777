@@ -66,7 +66,7 @@ async function submitForm(){
 
 <style scoped>
 body{margin:0;font-family:'Segoe UI',sans-serif;background:radial-gradient(circle at center,#002b36,#000);color:#00ff99;display:flex;justify-content:center;align-items:flex-start;padding-top:40px;}
-.form-box{background:#000;padding:30px;border-radius:10px;box-shadow:0 0 20px #00ff99;width:400px;}
+.form-box{background:rgba(0,0,0,0.8);box-shadow:0 0 20px #00ff99;padding:30px;border-radius:10px;box-shadow:0 0 20px #00ff99;width:400px;}
 h2{text-align:center;margin-bottom:20px;}
 label{display:block;margin-top:15px;margin-bottom:5px;}
 input,select{width:100%;padding:10px;background:#000;color:#00ff99;border:1px solid #00ff99;border-radius:4px;}

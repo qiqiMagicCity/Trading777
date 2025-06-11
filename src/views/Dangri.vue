@@ -43,8 +43,10 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-body{background:black;color:#00ff99;font-family:sans-serif;}
+body{background:rgba(0,0,0,0.8);color:#00ff99;font-family:sans-serif;}
 table{width:100%;border-collapse:collapse;margin-top:20px;}
 th,td{border:1px solid #00ff99;padding:8px;text-align:center;}
 button{padding:4px 8px;cursor:pointer;}
+
+.record-list { box-shadow: 0 0 20px #00ff99; border-radius: 10px; padding: 20px; }
 </style>
