@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
+import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
@@ -7,7 +8,7 @@ import Record from '../views/Record.vue'
 import Dangri from '../views/Dangri.vue'
 
 const routes = [
-  { path: '/', redirect: '/login' },
+  { path: '/', component: Home },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
   { path: '/dashboard', component: Dashboard },
