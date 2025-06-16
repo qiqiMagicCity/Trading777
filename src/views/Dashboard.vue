@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard-container" v-if="session">
     <h1>账户总览</h1>
     <div class="summary-cards">
       <div class="card">累计收益：{{ totalPnL }}</div>
@@ -15,13 +15,22 @@ import { useRouter } from 'vue-router';
 import { supabase } from '@/supabaseClient';
 
 const router = useRouter();
-const totalPnL = ref(0);
-const winRate = ref(0);
+const session = ref(null);
+const totalPnL = ref('--');
+const winRate = ref('--');
 
 onMounted(async () => {
+  const { data: { session: s } } = await supabase.auth.getSession();
+  if (!s) {
+    router.push('/login');
+    return;
+  }
+  session.value = s;
   // TODO: 从 Supabase 拉取汇总数据
-  // totalPnL.value = ...
-  // winRate.value = ...
+  // 示例：
+  // const { data } = await supabase.rpc('get_user_summary', { user_id: s.user.id });
+  // totalPnL.value = data.total_pnl;
+  // winRate.value = data.win_rate;
 });
 
 function openRecord() {
@@ -30,8 +39,33 @@ function openRecord() {
 </script>
 
 <style scoped>
-.dashboard { padding: 20px; }
-.summary-cards { display: flex; gap: 10px; margin-bottom: 20px; }
-.card { background: #000; color: #00ff99; padding: 20px; border-radius: 8px; flex: 1; text-align: center; }
-.add-btn { position: fixed; bottom: 20px; right: 20px; background: #00ff99; color: #000; padding: 15px; border: none; border-radius: 50%; font-size: 18px; }
+.dashboard-container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+.summary-cards {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.card {
+  background: #000;
+  color: #00ff99;
+  padding: 20px;
+  border-radius: 8px;
+  flex: 1;
+  text-align: center;
+}
+.add-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #00ff99;
+  color: #000;
+  padding: 15px;
+  border: none;
+  border-radius: 50%;
+  font-size: 18px;
+}
 </style>
