@@ -19,10 +19,12 @@
       text-align: center;
       position: relative;
     }
+    .intro {
+      transform: translateY(-15vh);
+    }
     h1 {
       font-size: 5rem;
       margin-bottom: 0.5rem;
-      transform: translateY(-15%);
     }
     p {
       font-size: 1.3rem;
@@ -48,16 +50,24 @@
       bottom: 10px;
       font-size: 0.9rem;
       color: #888;
+      text-align: center;
+      width: 100%;
     }
   </style>
 </head>
 <body>
-  <h1>交易通往财富之路。</h1>
-  <p>精细化交易管理，科学，理性，务实。</p>
+  <div class="intro">
+    <h1>交易通往财富之路</h1>
+    <p>精细化交易管理，科学，理性，务实。</p>
+  </div>
   <div class="button-group">
     <a class="button" href="/login">登录</a>
     <a class="button" href="/register">注册</a>
   </div>
-  <div class="footer">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</div>
+  <div class="footer">
+    本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建<br/>
+    © 魔都万事屋™<br/>
+    2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec
+  </div>
 </body>
 </html>
