@@ -3,8 +3,8 @@
     <div class="login-box">
       <h2>用户注册</h2>
       <form @submit.prevent="handleRegister">
-        <div><label for="email">邮箱</label><input id="email" v-model="email" type="email" required/></div>
-        <div><label for="password">密码</label><input id="password" v-model="password" type="password" required/></div>
+        <div><label for="email">邮箱</label><input id="email" v-model="email" type="email" required /></div>
+        <div><label for="password">密码</label><input id="password" v-model="password" type="password" required /></div>
         <button type="submit">注册</button>
         <p v-if="error" class="error">{{ error }}</p>
       </form>
@@ -24,7 +24,11 @@ const router = useRouter();
 
 async function handleRegister() {
   error.value = null;
-  const { error: signUpError } = await supabase.auth.signUp({ email: email.value, password: password.value });
+  const { data, error: signUpError } = await supabase.auth.signUp({
+    email: email.value,
+    password: password.value,
+  });
+  console.log(data, signUpError);
   if (signUpError) {
     error.value = signUpError.message;
   } else {
