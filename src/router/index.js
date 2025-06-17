@@ -26,4 +26,19 @@ router.beforeEach(async (to, from, next) => {
   else next();
 });
 
+router.beforeEach(async (to, from, next) => {
+  if (!to.meta.requiresAuth) {
+    // 公共路由无需检查会话，直接放行
+    return next();
+  }
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) next('/login');
+    else next();
+  } catch (error) {
+    console.error('Session check failed', error);
+    next('/login');
+  }
+});
+
 export default router;

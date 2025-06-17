@@ -8,7 +8,7 @@
     <button class="add-btn" @click="openRecord">添加交易</button>
   </div>
   <div class="footer">
-    © 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec • 版本 0.748
+    © 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec • 版本 0.750
   </div>
 </template>
 
