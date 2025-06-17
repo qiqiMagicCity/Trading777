@@ -25,8 +25,11 @@ const router = useRouter();
 async function handleRegister() {
   error.value = null;
   const { error: signUpError } = await supabase.auth.signUp({ email: email.value, password: password.value });
-  if (signUpError) error.value = signUpError.message;
-  else router.push('/login');
+  if (signUpError) {
+    error.value = signUpError.message;
+  } else {
+    router.push('/login');
+  }
 }
 </script>
 
