@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户注册 - 交易管理系统</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <div class="centered-container">
+    <div class="auth-box">
+      <h2>用户注册</h2>
+      <form id="register-form">
+        <label for="email">邮箱</label>
+        <input id="email" type="email" required />
+        <label for="password">密码</label>
+        <input id="password" type="password" required />
+        <button type="submit">注册</button>
+        <p id="error" class="error" style="display:none;"></p>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './js_supabaseClient.js';
+    const form = document.getElementById('register-form');
+    const errorElem = document.getElementById('error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorElem.style.display = 'none';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        errorElem.textContent = error.message;
+        errorElem.style.display = 'block';
+      } else {
+        alert('注册成功，请检查邮箱激活账户！');
+        window.location.href = 'login.html';
+      }
+    });
+  </script>
+</body>
+</html>

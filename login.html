@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户登录 - 交易管理系统</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <div class="centered-container">
+    <div class="auth-box">
+      <h2>用户登录</h2>
+      <form id="login-form">
+        <label for="email">邮箱</label>
+        <input id="email" type="email" required />
+        <label for="password">密码</label>
+        <input id="password" type="password" required />
+        <button type="submit">登录</button>
+        <p id="error" class="error" style="display:none;"></p>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './js_supabaseClient.js';
+    const form = document.getElementById('login-form');
+    const errorElem = document.getElementById('error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorElem.style.display = 'none';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        errorElem.textContent = error.message;
+        errorElem.style.display = 'block';
+      } else {
+        // 登录成功，跳转到仪表盘或首页
+        window.location.href = 'index.html';
+      }
+    });
+  </script>
+</body>
+</html>
