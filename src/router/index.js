@@ -1,3 +1,18 @@
-import supabase from "@/supabaseClient" // 路径别名测试
+import { createRouter, createWebHistory } from 'vue-router'
+import Home from '../views/Home.vue'
+import supabase from "@/supabaseClient"
 
-console.log("Router initialized.")
+const routes = [
+  {
+    path: '/',
+    name: 'Home',
+    component: Home
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+export default router
