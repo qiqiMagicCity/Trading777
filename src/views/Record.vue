@@ -10,18 +10,19 @@
       </form>
     </div>
   </div>
+  <div class="footer">
+    © 魔都万事屋™ &nbsp; 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec
+  </div>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import { supabase } from '@/supabaseClient';
 import { useRouter } from 'vue-router';
-
+import { supabase } from '@/supabaseClient';
 const router = useRouter();
 const symbol = ref('');
 const quantity = ref(0);
 const price = ref(0);
-
 async function submitTrade() {
   await supabase.from('trades').insert([{ symbol: symbol.value, quantity: quantity.value, price: price.value }]);
   router.push('/dashboard');
@@ -29,37 +30,11 @@ async function submitTrade() {
 </script>
 
 <style scoped>
-.record-container {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
-}
-.record-form {
-  background: #000;
-  color: #00ff99;
-  padding: 30px;
-  border-radius: 10px;
-  width: 400px;
-}
-.record-form div {
-  margin-bottom: 15px;
-}
-.record-form label {
-  display: block;
-  margin-bottom: 5px;
-}
-.record-form input {
-  width: 100%;
-  padding: 8px;
-  background: #111;
-  border: 1px solid #00ff99;
-  color: #fff;
-}
-.record-form button {
-  background: #00ff99;
-  color: #000;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-}
+.record-container {display:flex;justify-content:center;padding:40px 0;}
+.record-form {background:#000;color:#00ff99;padding:30px;border-radius:10px;width:400px;}
+.record-form div {margin-bottom:15px;}
+.record-form label {display:block;margin-bottom:5px;}
+.record-form input {width:100%;padding:8px;background:#111;border:1px solid #00ff99;color:#fff;}
+.record-form button {background:#00ff99;color:#000;padding:10px 20px;border:none;border-radius:5px;}
+.footer {text-align:center;color:#888;margin-top:20px;font-size:0.9rem;}
 </style>
