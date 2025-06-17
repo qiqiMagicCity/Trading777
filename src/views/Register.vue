@@ -1,44 +1,35 @@
 <template>
-  <div class="login-container">
-    <div class="login-box">
-      <h2>用户注册</h2>
-      <form @submit.prevent="handleRegister">
-        <div><label for="email">邮箱</label><input id="email" v-model="email" type="email" required /></div>
-        <div><label for="password">密码</label><input id="password" v-model="password" type="password" required /></div>
-        <button type="submit">注册</button>
-        <p v-if="error" class="error">{{ error }}</p>
-      </form>
-    </div>
+  <div class="form-box">
+    <h2>用户注册</h2>
+    <form @submit.prevent="signup">
+      <input v-model="email" type="email" placeholder="邮箱" required />
+      <input v-model="password" type="password" placeholder="密码（至少6位）" minlength="6" required />
+      <button type="submit">注册</button>
+      <p style="margin-top:.5rem;" :style="{ color: ok ? '#00ff9c' : '#ff6470' }">{{ msg }}</p>
+    </form>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import { supabase } from '@/supabaseClient';
 
 const email = ref('');
 const password = ref('');
-const error = ref(null);
-const router = useRouter();
+const msg = ref('');
+const ok = ref(false);
 
-async function handleRegister() {
-  error.value = null;
-  const { data, error: signUpError } = await supabase.auth.signUp({
-    email: email.value,
-    password: password.value,
+async function signup() {
+  msg.value = ''; ok.value = false;
+  const supabase = window.__supabaseClient;
+  const { error } = await supabase.auth.signUp({
+    email: email.value.trim().toLowerCase(),
+    password: password.value
   });
-  console.log(data, signUpError);
-  if (signUpError) {
-    error.value = signUpError.message;
+  if (error) {
+    msg.value = error.message;
   } else {
-    router.push('/login');
+    ok.value = true;
+    msg.value = '注册成功！请检查邮箱完成验证，然后返回登录。';
   }
 }
 </script>
-
-<style scoped>
-.login-container {display:flex;justify-content:center;align-items:center;min-height:100vh;}
-.login-box {background:#000;color:#00ff99;padding:40px;border-radius:10px;box-shadow:0 0 20px #00ff99;width:400px;}
-.error {color:#ff4d4f;margin-top:10px;}
-</style>

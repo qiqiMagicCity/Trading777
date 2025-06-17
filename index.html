@@ -2,23 +2,18 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Trading777</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
-  <main>
-    <div class="neon-box">
-      <h1>交易通往财富之路</h1>
-      <p>精细化交易管理，科学，理性，务实。</p>
-      <a href="login.html"><button style="margin-bottom:0.75rem;">登录</button></a>
-      <a href="register.html"><button>注册</button></a>
-    </div>
-  </main>
-  <footer>本站功能逐步完善中，敬请期待。© 魔都万事屋™ 2005–2025 • MagicCity Global Tec • Version 0.753</footer>
+  <div id="app"></div>
 
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="js_supabaseClient.js"></script>
+  <!-- 1) 动态加载 Supabase SDK（多 CDN 回退） -->
+  <script src="/supabaseLoader.js"></script>
+  <!-- 2) 创建 Supabase 客户端（等待 SDK 就绪自动执行） -->
+  <script src="/supabaseClient.js"></script>
+  <!-- 3) 挂载 Vue 应用（在 window.__supabaseReady 触发后执行） -->
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>
