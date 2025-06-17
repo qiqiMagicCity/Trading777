@@ -1,43 +1,42 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>用户登录 - 交易管理系统</title>
-  <link rel="stylesheet" href="assets/style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>用户登录 · Trading777</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <div class="centered-container">
-    <div class="auth-box">
+  <main>
+    <div class="neon-box">
       <h2>用户登录</h2>
-      <form id="login-form">
-        <label for="email">邮箱</label>
-        <input id="email" type="email" required />
-        <label for="password">密码</label>
-        <input id="password" type="password" required />
+      <form id="loginForm">
+        <input type="email" id="email" placeholder="邮箱" required />
+        <input type="password" id="password" placeholder="密码" required />
         <button type="submit">登录</button>
-        <p id="error" class="error" style="display:none;"></p>
+        <p id="msg" style="color:#ff6470;margin-top:0.6rem;height:1.4rem;"></p>
       </form>
     </div>
-  </div>
+  </main>
+  <footer>© 魔都万事屋™ • MagicCity Global Tec • Version 0.753</footer>
 
-  <script type="module">
-    import { supabase } from './js_supabaseClient.js';
-    const form = document.getElementById('login-form');
-    const errorElem = document.getElementById('error');
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js_supabaseClient.js"></script>
+  <script>
+    const form = document.getElementById('loginForm');
+    const msg  = document.getElementById('msg');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      errorElem.style.display = 'none';
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      msg.textContent = '';
+      const { error } = await supabase.auth.signInWithPassword({
+        email: form.email.value.trim().toLowerCase(),
+        password: form.password.value
+      });
       if (error) {
-        errorElem.textContent = error.message;
-        errorElem.style.display = 'block';
+        msg.textContent = error.message;
       } else {
-        // 登录成功，跳转到仪表盘或首页
-        window.location.href = 'index.html';
+        window.location.href = 'dashboard.html';
       }
     });
   </script>

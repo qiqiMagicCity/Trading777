@@ -1,9 +1,8 @@
-// 全局 Supabase 初始化。请在 Vercel Dashboard 的 Environment Variables
-// 中设置 SUPABASE_URL 与 SUPABASE_ANON_KEY，然后在 HTML 中通过
-// <script>window.SUPABASE_URL = "..."; window.SUPABASE_ANON_KEY = "...";</script>
-// 或者直接把下面两行改成你的值。
-const SUPABASE_URL  = window.SUPABASE_URL  || 'YOUR_SUPABASE_URL';
-const SUPABASE_KEY  = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.42.3'
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+/**
+ * Global Supabase instance (v2).
+ * 直接硬编码公共 anon key，方便前端静态托管。
+ * 若需要隐藏，可改为读取 window.SUPABASE_*。
+ */
+const supabaseUrl = 'https://zcosfwmtatuheqrytvad.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjb3Nmd210YXR1aGVxcnl0dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0MTE0ODUsImV4cCI6MjA2NDk4NzQ4NX0.y5T5cf8BNsbbM5Va0kjHX1i359J1aAB4RYO6p16TKqk';
+const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);

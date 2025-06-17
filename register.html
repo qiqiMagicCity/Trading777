@@ -1,43 +1,43 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>用户注册 - 交易管理系统</title>
-  <link rel="stylesheet" href="assets/style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>用户注册 · Trading777</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <div class="centered-container">
-    <div class="auth-box">
+  <main>
+    <div class="neon-box">
       <h2>用户注册</h2>
-      <form id="register-form">
-        <label for="email">邮箱</label>
-        <input id="email" type="email" required />
-        <label for="password">密码</label>
-        <input id="password" type="password" required />
+      <form id="registerForm">
+        <input type="email" id="email" placeholder="邮箱" required />
+        <input type="password" id="password" placeholder="密码（至少 6 位）" minlength="6" required />
         <button type="submit">注册</button>
-        <p id="error" class="error" style="display:none;"></p>
+        <p id="msg" style="color:#ff6470;margin-top:0.6rem;height:1.4rem;"></p>
       </form>
     </div>
-  </div>
+  </main>
+  <footer>© 魔都万事屋™ • MagicCity Global Tec • Version 0.753</footer>
 
-  <script type="module">
-    import { supabase } from './js_supabaseClient.js';
-    const form = document.getElementById('register-form');
-    const errorElem = document.getElementById('error');
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="js_supabaseClient.js"></script>
+  <script>
+    const form = document.getElementById('registerForm');
+    const msg  = document.getElementById('msg');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      errorElem.style.display = 'none';
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value.trim();
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      msg.textContent = '';
+      const { data, error } = await supabase.auth.signUp({
+        email: form.email.value.trim().toLowerCase(),
+        password: form.password.value
+      });
       if (error) {
-        errorElem.textContent = error.message;
-        errorElem.style.display = 'block';
+        msg.textContent = error.message;
       } else {
-        alert('注册成功，请检查邮箱激活账户！');
-        window.location.href = 'login.html';
+        msg.style.color = '#00ff9c';
+        msg.textContent = '注册成功！请检查邮箱完成验证，然后返回登录。';
       }
     });
   </script>
