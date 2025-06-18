@@ -8,7 +8,11 @@
     <p v-if="msg">{{ msg }}</p>
     <p v-if="error" style="color:red">{{ error }}</p>
   </div>
-  <div class="footer">© 魔都万事屋™ • 版本 v1.0.6</div>
+  <div class="footer">
+    本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建<br/>
+    © 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec<br/>
+    版本 v1.0.8
+  </div>
 </template>
 
 <script setup>
@@ -28,11 +32,11 @@ async function handleSubmit() {
     error.value = '请完整填写';
     return;
   }
-  const { error: insertError } = await supabase.from('trades').insert({
+  const { error: insertError } = await supabase.from?.('trades').insert({
     symbol: symbol.value,
     quantity: quantity.value,
     price: price.value
-  });
+  }) ?? {};
   if (insertError) {
     error.value = insertError.message;
   } else {

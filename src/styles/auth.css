@@ -25,7 +25,11 @@ button {
   cursor:pointer;
 }
 .footer {
+  width:100%;
+  border-top:1px solid #00ff99;
   text-align:center;
+  padding:12px 0 4px 0;
+  background:transparent;
   margin-top:32px;
   color:#00ff99;
 }

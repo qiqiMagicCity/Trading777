@@ -23,11 +23,10 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   if (!to.meta.requiresAuth) return next();
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession?.() ?? { data: { session: null }};
     if (!session) return next('/login');
     next();
   } catch (e) {
-    console.error('Auth error', e);
     next('/login');
   }
 });

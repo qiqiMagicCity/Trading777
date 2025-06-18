@@ -6,7 +6,11 @@
     <button @click="handleLogin">登录</button>
     <p v-if="error" style="color:red">{{ error }}</p>
   </div>
-  <div class="footer">© 魔都万事屋™ • 版本 v1.0.6</div>
+  <div class="footer">
+    本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建<br/>
+    © 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec<br/>
+    版本 v1.0.8
+  </div>
 </template>
 
 <script setup>
@@ -20,10 +24,10 @@ const password = ref('');
 const error = ref('');
 
 async function handleLogin() {
-  const { error: signInError } = await supabase.auth.signInWithPassword({
+  const { error: signInError } = await supabase.auth?.signInWithPassword({
     email: email.value,
     password: password.value
-  });
+  }) ?? {};
   if (signInError) {
     error.value = signInError.message;
   } else {
