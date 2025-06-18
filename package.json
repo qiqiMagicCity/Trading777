@@ -1,6 +1,6 @@
 {
   "name": "trading777",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
-    "vite": "^4.5.1"
+    "vite": "^5.2.10"
   }
 }

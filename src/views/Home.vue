@@ -9,12 +9,12 @@
       </div>
     </div>
   </div>
-
   <div class="footer">
     本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建<br/>
     © 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec<br/>
-    版本 v1.0.3
+    版本 v1.0.4
   </div>
+</template>
 <style scoped>
 .footer {
   width: 100%;
@@ -30,5 +30,3 @@
   z-index: 100;
 }
 </style>
-
-</template>
