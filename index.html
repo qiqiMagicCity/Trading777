@@ -1,13 +1,19 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>交易通往财富之路 - Trading777</title>
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Trading777</title>
+  <link rel="stylesheet" href="/src/style.css" />
 </head>
-<body style="margin:0;padding:0;background:radial-gradient(circle at center,#001f1f,#000);color:#00ff99;">
+<body>
   <div id="app"></div>
+
+  <!-- 1) 动态加载 Supabase SDK（多 CDN 回退） -->
+  <script src="/supabaseLoader.js"></script>
+  <!-- 2) 创建 Supabase 客户端（等待 SDK 就绪自动执行） -->
+  <script src="/supabaseClient.js"></script>
+  <!-- 3) 挂载 Vue 应用（在 window.__supabaseReady 触发后执行） -->
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
