@@ -22,9 +22,14 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   if (!to.meta.requiresAuth) return next();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return next('/login');
-  next();
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return next('/login');
+    next();
+  } catch (e) {
+    console.error('Auth check error', e);
+    next('/login');
+  }
 });
 
 export default router;
