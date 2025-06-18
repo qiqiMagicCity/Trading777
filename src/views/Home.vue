@@ -15,6 +15,5 @@
     版本 v1.0.8
   </div>
 </template>
-<style scoped>
-/* footer styles defined in inline or shared? Keep local */
-</style>
+
+<style src="../styles/auth.css"></style>

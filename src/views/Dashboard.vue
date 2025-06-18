@@ -9,5 +9,5 @@
     版本 v1.0.8
   </div>
 </template>
-<style scoped>
-</style>
+
+<style src="../styles/auth.css"></style>

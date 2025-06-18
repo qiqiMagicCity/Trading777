@@ -24,12 +24,17 @@ button {
   border-radius:8px;
   cursor:pointer;
 }
+
 .footer {
-  width:100%;
-  border-top:1px solid #00ff99;
-  text-align:center;
-  padding:12px 0 4px 0;
-  background:transparent;
-  margin-top:32px;
+  position: fixed;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  border: 1px solid #00ff99;
+  padding: 8px 0;
+  font-size: 0.9rem;
   color:#00ff99;
+  text-align:center;
+  background: transparent;
+  z-index: 100;
 }
