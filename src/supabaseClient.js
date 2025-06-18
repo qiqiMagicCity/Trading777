@@ -1,11 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  alert('❗ 环境变量 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 未配置，功能将受限');
+const url = import.meta.env.VITE_SUPABASE_URL;
+const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+if(!url || !key){
+  console.warn('Supabase env vars missing!');
 }
-
-export const supabase = (supabaseUrl && supabaseKey)
-  ? createClient(supabaseUrl, supabaseKey)
-  : { auth: { getSession: async () => ({ data: { session: null } }) } };
+export const supabase = (url && key) ? createClient(url,key) : { auth:{ getSession:async()=>({data:{session:null}}) }, from:()=>({ insert:async()=>({}) }) };

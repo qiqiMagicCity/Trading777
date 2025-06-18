@@ -1,39 +1,35 @@
 <template>
-  <div class="container">
-    <h2>登录</h2>
-    <input v-model="email" type="email" placeholder="邮箱">
-    <input v-model="password" type="password" placeholder="密码">
-    <button @click="handleLogin">登录</button>
-    <p v-if="error" style="color:red">{{ error }}</p>
+  <div class="page">
+    <div class="auth-box">
+      <h2>登录</h2>
+      <input v-model="email" placeholder="邮箱" type="email">
+      <input v-model="password" placeholder="密码" type="password">
+      <button @click="login">登录</button>
+      <p v-if="err" class="error-msg">{{ err }}</p>
+    </div>
   </div>
   <div class="footer">
     本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建<br/>
     © 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec<br/>
-    版本 v1.0.8
-  </div>
+    版本 v1.1.0
+</div>
 </template>
 
 <script setup>
 import { ref } from 'vue';
 import { supabase } from '../supabaseClient';
 import { useRouter } from 'vue-router';
-
-const router = useRouter();
 const email = ref('');
 const password = ref('');
-const error = ref('');
+const err = ref('');
+const router = useRouter();
 
-async function handleLogin() {
-  const { error: signInError } = await supabase.auth?.signInWithPassword({
-    email: email.value,
-    password: password.value
-  }) ?? {};
-  if (signInError) {
-    error.value = signInError.message;
-  } else {
-    setTimeout(() => router.push('/dashboard'), 500);
-  }
+async function login(){
+  err.value='';
+  const { error } = await supabase.auth.signInWithPassword({ email:email.value, password:password.value });
+  if(error) err.value = error.message;
+  else router.push('/dashboard');
 }
 </script>
 
-<style scoped src="../styles/auth.css"></style>
+<style src="../styles/base.css"></style>
