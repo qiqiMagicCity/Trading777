@@ -1,32 +1,36 @@
 <template>
-  <div class="form-box">
-    <h2>用户登录</h2>
-    <form @submit.prevent="login">
-      <input v-model="email" type="email" placeholder="邮箱" required />
-      <input v-model="password" type="password" placeholder="密码" required />
-      <button type="submit">登录</button>
-      <p style="margin-top:.5rem;color:#ff6470;">{{ msg }}</p>
-    </form>
+  <div class="page">
+    <div class="auth-box">
+      <h2>登录</h2>
+      <input v-model="email" placeholder="邮箱" />
+      <input v-model="password" placeholder="密码" type="password" />
+      <button @click="login">登录</button>
+      <p v-if="err" class="error-msg">{ err }</p>
+    </div>
   </div>
+  <div class="footer">
+  <span class="grey">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</span>
+  <span class="green">© 魔都万事屋™</span>
+  <span class="green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
+  <span class="green">版本 v1.1.1</span>
+</div>
 </template>
 
 <script setup>
 import { ref } from 'vue';
+import { supabase } from '../supabaseClient';
 import { useRouter } from 'vue-router';
 
 const email = ref('');
 const password = ref('');
-const msg = ref('');
+const err = ref('');
 const router = useRouter();
 
 async function login() {
-  msg.value = '';
-  const supabase = window.__supabaseClient;
-  const { error } = await supabase.auth.signInWithPassword({
-    email: email.value.trim().toLowerCase(),
-    password: password.value
-  });
-  if (error) msg.value = error.message;
+  err.value = '';
+  const { error } = await supabase.auth.signInWithPassword({ email: email.value, password: password.value });
+  if (error) err.value = error.message;
   else router.push('/dashboard');
 }
 </script>
+<style src="../styles/base.css"></style>
