@@ -10,16 +10,14 @@ const routes = [
   { path: '/', component: Home },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
-  { path: '/dashboard', component: Dashboard, meta: { requiresAuth: true } },
-  { path: '/record', component: Record, meta: { requiresAuth: true } },
+  { path: '/dashboard', component: Dashboard, meta:{ requiresAuth:true } },
+  { path: '/record', component: Record, meta:{ requiresAuth:true } },
   { path: '/:pathMatch(.*)*', redirect: '/login' }
 ];
-
 const router = createRouter({ history: createWebHashHistory(), routes });
-
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async(to,from,next) => {
   if (!to.meta.requiresAuth) return next();
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data:{session} } = await supabase.auth.getSession();
   if (!session) return next('/login');
   next();
 });

@@ -13,13 +13,12 @@
   <span class="grey">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</span>
   <span class="green">© 魔都万事屋™</span>
   <span class="green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
-  <span class="green">版本 v1.1.1</span>
+  <span class="green">版本 v1.1.2</span>
 </div>
 </template>
-
 <style scoped>
 .intro { transform: translateY(-15vh); }
-h1 { font-size: 5rem; margin-bottom: 0.5rem; }
-p { font-size: 1.3rem; margin-bottom: 2rem; transform: translateY(5vh); }
-.button-group { display: flex; gap: 3cm; margin-bottom: 30px; }
+h1 { font-size: 5rem; margin-bottom:0.5rem; }
+p { font-size:1.3rem; margin-bottom:2rem; transform: translateY(5vh); }
+.button-group { display:flex; gap:3cm; margin-bottom:30px; }
 </style>
