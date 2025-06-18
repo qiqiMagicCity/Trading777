@@ -27,7 +27,7 @@ router.beforeEach(async (to, from, next) => {
     if (!session) return next('/login');
     next();
   } catch (e) {
-    console.error('Auth check error', e);
+    console.error('Auth error', e);
     next('/login');
   }
 });

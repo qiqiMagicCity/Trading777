@@ -6,7 +6,7 @@
     <button @click="handleRegister">注册</button>
     <p v-if="error" style="color:red">{{ error }}</p>
   </div>
-  <div class="footer">© 魔都万事屋™ • 版本 v1.0.5</div>
+  <div class="footer">© 魔都万事屋™ • 版本 v1.0.6</div>
 </template>
 
 <script setup>
@@ -20,7 +20,7 @@ const password = ref('');
 const error = ref('');
 
 async function handleRegister() {
-  const { data, error: signUpError } = await supabase.auth.signUp({
+  const { error: signUpError } = await supabase.auth.signUp({
     email: email.value,
     password: password.value
   });
@@ -32,6 +32,4 @@ async function handleRegister() {
 }
 </script>
 
-<style scoped>
-@import './Login.vue';
-</style>
+<style scoped src="../styles/auth.css"></style>

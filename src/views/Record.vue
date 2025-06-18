@@ -8,7 +8,7 @@
     <p v-if="msg">{{ msg }}</p>
     <p v-if="error" style="color:red">{{ error }}</p>
   </div>
-  <div class="footer">© 魔都万事屋™ • 版本 v1.0.5</div>
+  <div class="footer">© 魔都万事屋™ • 版本 v1.0.6</div>
 </template>
 
 <script setup>
@@ -28,7 +28,7 @@ async function handleSubmit() {
     error.value = '请完整填写';
     return;
   }
-  const { data, error: insertError } = await supabase.from('trades').insert({
+  const { error: insertError } = await supabase.from('trades').insert({
     symbol: symbol.value,
     quantity: quantity.value,
     price: price.value
@@ -42,36 +42,4 @@ async function handleSubmit() {
 }
 </script>
 
-<style scoped>
-.container {
-  margin: 120px auto 0;
-  width: 400px;
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-  background:#000;
-  padding:40px;
-  border-radius:10px;
-  box-shadow:0 0 20px #00ff99;
-  color:#00ff99;
-}
-input {
-  padding:10px;
-  border:none;
-  border-radius:6px;
-}
-button {
-  padding:12px;
-  background:#00ff99;
-  border:none;
-  color:#002b36;
-  font-weight:bold;
-  border-radius:8px;
-  cursor:pointer;
-}
-.footer {
-  text-align:center;
-  margin-top:32px;
-  color:#00ff99;
-}
-</style>
+<style scoped src="../styles/auth.css"></style>
