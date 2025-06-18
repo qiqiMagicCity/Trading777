@@ -1,6 +1,6 @@
 {
   "name": "trading777",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,9 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
     "vue": "^3.4.21",
-    "vue-router": "^4.3.0"
+    "vue-router": "^4.3.0",
+    "chart.js": "^4.4.0",
+    "axios": "^1.6.8"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
