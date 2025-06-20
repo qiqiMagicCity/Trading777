@@ -1,1 +1,32 @@
-<template><div v-if='show' class='overlay' @click.self='close'><div class='box'><slot/></div></div></template><script setup>const props=defineProps({show:Boolean});const emit=defineEmits(['update:show']);function close(){emit('update:show',false)}</script><style scoped>.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:2000}.box{background:#000;border:1px solid #0f0;padding:24px;border-radius:12px;box-shadow:0 0 10px #0f0}</style>
+
+<template>
+  <div v-if="show" class="overlay" @click.self="close">
+    <div class="window">
+      <header>
+        <slot name="title">详情</slot>
+        <button class="close" @click="close">✕</button>
+      </header>
+      <section class="content">
+        <slot></slot>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script setup>
+const props = defineProps({ show: Boolean })
+const emit = defineEmits(['update:show'])
+function close(){ emit('update:show', false) }
+</script>
+
+<style scoped>
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;justify-content:center;align-items:center;z-index:1000;
+}
+.window{
+  background:#fff;color:#000;border-radius:10px;padding:18px;width:85%;max-width:620px;max-height:80vh;display:flex;flex-direction:column;
+}
+header{display:flex;justify-content:space-between;align-items:center;font-size:16px;margin-bottom:12px;font-weight:bold}
+.close{border:none;background:transparent;font-size:20px;cursor:pointer}
+.content{overflow:auto}
+</style>
