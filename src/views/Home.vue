@@ -10,7 +10,7 @@
     </div>
   </main>
   <div class="divider"/>
-  <footer class="footer">本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.9</footer>
+  <footer class="footer">本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.91</footer>
 </template>
 
 <script setup>
