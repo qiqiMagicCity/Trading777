@@ -35,12 +35,10 @@
 }
 .auth-box input {
   box-sizing: border-box;
-  box-sizing: border-box;
   width: 100%; padding: 10px; margin: 10px 0;
   border: none; border-radius: 6px;
 }
 .auth-box button {
-  box-sizing: border-box;
   box-sizing: border-box;
   width: 100%; padding: 12px; margin-top: 10px;
   background: #00ff99; color: #002b36;
@@ -61,66 +59,24 @@
   color: #00ff99; font-size: 1rem; font-weight: bold;
 }
 
-/* ... Dashboard & Footer CSS as before ... */
-
-/* Dashboard HeaderBar fixed top */
+/* Dashboard & global fixes */
 .dashboard-page .header-bar {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  right: 20px;
-  padding: 12px 24px;
-  background: #000;
-  box-shadow: 0 0 12px #00ff99;
-  border-radius: 8px;
-  z-index: 1000;
+  position: fixed; top: 20px; left: 20px; right: 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 24px; background: #000; box-shadow: 0 0 12px #00ff99; border-radius: 8px; z-index: 1000;
 }
-/* Timezones horizontal */
-.dashboard-page .timezones {
-  display: flex;
-  gap: 20px;
-  flex-wrap: nowrap;
-}
-/* Floating Add Transaction button */
+.dashboard-page .timezones { display: flex; gap: 20px; flex-wrap: nowrap; }
 .fab {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 56px;
-  height: 56px;
-  border: 1px solid #00ff99;
-  background: #000;
-  color: #00ff99;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  cursor: pointer;
-  box-shadow: 0 0 12px #00ff99;
+  position: fixed; bottom: 24px; right: 24px;
+  width: 56px; height: 56px; border: 1px solid #00ff99;
+  background: #000; color: #00ff99; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; cursor: pointer; box-shadow: 0 0 12px #00ff99;
 }
-/* Footer gray lines priority */
-.footer .line-gray {
-  color: #aaa !important;
-}
-
-/* Footer refined styling - four lines as per design */
+/* Footer refined styling */
 .footer {
-  text-align: center;
-  padding: 16px 0;
-  border-top: 1px solid #00ff99;
-  background: #000; /* ensure background */
+  text-align: center; padding: 16px 0; border-top: 1px solid #00ff99; background: #000;
 }
-.footer .footer-line {
-  margin: 2px 0;
-  line-height: 1.4em;
-}
-.footer .footer-line.line-gray {
-  color: #888 !important;
-  font-size: 0.9rem;
-}
-.footer .footer-line.line-green {
-  color: #00ff99;
-  font-size: 1rem;
-  font-weight: bold;
-}
+.footer .footer-line { margin: 2px 0; line-height: 1.4em; }
+.footer .footer-line.line-gray { color: #888 !important; font-size: 0.9rem; }
+.footer .footer-line.line-green { color: #00ff99; font-size: 1rem; font-weight: bold; }
