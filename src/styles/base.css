@@ -1,5 +1,84 @@
+/* Global Styles */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+}
+.footer {
+  position: fixed;
+  bottom: 10px; left: 0; width: 100%;
+  border: 1px solid #00ff99;
+  padding: 8px 0;
+  display: flex; flex-direction: column; align-items: center;
+  font-size: 0.9rem; line-height: 1.4;
+}
+.footer .grey { color: #888; }
+.footer .green { color: #00ff99; }
 
-/* Footer Styles */
+.button-simple {
+  background: #00ff99; color: #000;
+  padding: 12px 24px; font-size: 1rem;
+  border: none; border-radius: 8px; cursor: pointer;
+}
+
+.auth-box {
+  width: 380px; background: #000;
+  padding: 40px 30px; border-radius: 8px;
+  box-shadow: 0 0 20px #00ff99;
+}
+.auth-box h2 {
+  margin: 0 0 20px; color: #00ff99;
+  font-size: 1.5rem; text-align: center;
+}
+.auth-box input {
+  box-sizing: border-box;
+  width: 100%; padding: 10px; margin: 10px 0;
+  border: none; border-radius: 6px;
+}
+.auth-box button {
+  box-sizing: border-box;
+  width: 100%; padding: 12px; margin-top: 10px;
+  background: #00ff99; color: #002b36;
+  border: none; border-radius: 8px; font-weight: bold;
+  cursor: pointer;
+}
+.error-msg { color: #ff5050; margin-top: 8px; text-align: center; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+  gap: 20px; width: 90%; max-width: 800px;
+  margin-bottom: 30px;
+}
+.kpi-card {
+  background: #000; padding: 14px 10px;
+  border-radius: 8px; box-shadow: 0 0 12px #00ff99;
+  color: #00ff99; font-size: 1rem; font-weight: bold;
+}
+
+/* Logout button refined style */
+.btn-logout {
+  padding: 8px 16px;
+  border: 2px solid #00ff99;
+  border-radius: 12px;
+  background: transparent;
+  color: #00ff99;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-logout:hover {
+  background: rgba(0,255,153,0.1);
+}
+/* Clickable KPI */
+.kpi-card.clickable {
+  cursor: pointer;
+}
+
+/* Footer Styles for v1.3.8 */
 .footer {
   text-align: center;
   padding: 16px 0;
@@ -23,45 +102,3 @@
   font-size: 1rem;
   font-weight: bold;
 }
-
-/* Dashboard styles */
-.header-bar {
-  position: fixed; top:20px; left:20px; right:20px;
-  display:flex; justify-content:space-between; align-items:center;
-  padding:12px 24px; background:#000;
-  box-shadow:0 0 12px #00ff99; border-radius:8px; color:#00ff99;
-}
-.timezones { display:flex; gap:20px; font-size:0.9rem; }
-.user-controls .btn-logout {
-  padding:8px 16px; border:2px solid #00ff99; border-radius:12px;
-  background:transparent; color:#00ff99; cursor:pointer;
-}
-
-/* KPI Grid */
-.kpi-grid {
-  margin-top:100px; display:grid; gap:24px; justify-content:center;
-}
-@media(min-width:1600px){ .kpi-grid{ grid-template-columns:repeat(5,220px); } }
-@media(min-width:1280px) and (max-width:1599px){ .kpi-grid{ grid-template-columns:repeat(4,220px); } }
-@media(min-width:960px) and (max-width:1279px){ .kpi-grid{ grid-template-columns:repeat(3,220px); } }
-@media(max-width:959px){ .kpi-grid{ display:flex; overflow-x:auto; } }
-
-.kpi-card {
-  width:220px; height:100px; border-radius:12px;
-  background:#000; box-shadow:0 0 15px rgba(0,255,153,0.7);
-  display:flex; flex-direction:column; justify-content:center; align-items:center;
-  color:#00ff99; font-weight:bold;
-}
-.kpi-value.positive { color:#00ff99; }
-.kpi-value.negative { color:#ff5050; }
-
-/* FAB */
-.fab {
-  position:fixed; bottom:24px; right:24px;
-  width:56px; height:56px; border:1px solid #00ff99;
-  border-radius:50%; background:#000; color:#00ff99;
-  font-size:24px; display:flex; align-items:center; justify-content:center;
-}
-
-/* Basic page style */
-.page { padding: 60px 20px 80px; background: #111; color: #eee; min-height:100vh; }
