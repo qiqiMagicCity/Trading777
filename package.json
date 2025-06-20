@@ -1,6 +1,6 @@
 {
   "name": "trading777",
-  "version": "1.3.91",
+  "version": "1.3.92",
   "scripts": {
     "dev": "vite",
     "build": "vite build"
