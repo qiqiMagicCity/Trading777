@@ -41,7 +41,6 @@
 <script setup>
 import { ref } from 'vue'
 const showForm = ref(false)
-import { ref } from 'vue'
 import TopBar from '@/components/TopBar.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import Modal from '@/components/Modal.vue'
