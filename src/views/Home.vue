@@ -9,19 +9,13 @@
       <router-link to="/register"><button class="button-simple">注册</button></router-link>
     </div>
   </div>
-  
+  <div class="footer">
   <span class="grey">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</span>
   <span class="green">© 魔都万事屋™</span>
   <span class="green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
   <span class="green">版本 v1.2.0</span>
 </div>
-  <div class="footer">
-    <div class="footer-line">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</div>
-    <div class="footer-line">© 魔都万事屋™</div>
-    <div class="footer-line">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</div>
-    <div class="footer-line">版本 v1.3.8</div>
-  </div>
-</template></template>
+</template>
 <style scoped>
 .intro { transform: translateY(-15vh); }
 h1 { font-size: 5rem; margin-bottom:0.5rem; }
