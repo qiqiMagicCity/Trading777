@@ -1,21 +1,20 @@
 {
   "name": "trading777",
-  "version": "1.2.7",
-  "private": true,
+  "version": "1.2.8",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "serve": "vite preview"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.7",
-    "vue": "^3.4.21",
-    "vue-router": "^4.3.0",
+    "axios": "^1.6.8",
     "chart.js": "^4.4.0",
-    "axios": "^1.6.8"
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
-    "vite": "^5.2.10"
+    "vite": "^5.4.19"
   }
 }
