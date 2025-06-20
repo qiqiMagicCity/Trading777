@@ -1,0 +1,22 @@
+
+:root{
+  --fab-right: 24px;
+  --fab-bottom: 90px;
+}
+
+.fab-fixed{
+  position:fixed;
+  right:calc(var(--fab-right));
+  bottom:calc(var(--fab-bottom));
+  padding:8px 24px;
+  border-radius:28px;
+  background:#00ff99;
+  border:2px solid #00ff99;
+  color:#000;
+  font-weight:600;
+  box-shadow:none;
+  cursor:pointer;
+  transition:background .3s;
+  z-index:9999;
+}
+.fab-fixed:hover{background:#12ffb0;}

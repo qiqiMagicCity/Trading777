@@ -42,10 +42,19 @@ const quantity = ref(0);
 const price = ref(0);
 const action = ref('buy');
 const options = ref([]);
-const { data: { user } } = await supabase.auth.getUser();
 const loadingSave = ref(false);
 
+
+let debounceT=null;
 async function onSearch(val){
+  clearTimeout(debounceT);
+  debounceT=setTimeout(async ()=>{
+    if(!val){ options.value=[]; return; }
+    const list = await searchSymbols(val);
+    options.value = list.map(i=>({ value:i.symbol, label:`${i.symbol} — ${i.description}` }));
+  },300);
+}
+
   if(!val){ options.value=[]; return; }
   const list = await searchSymbols(val);
   options.value = list.map(i=>({ value: i.symbol, label: `${i.symbol} — ${i.description}` }));
@@ -56,9 +65,7 @@ function onSelect(val, option){
   name.value = option.label.split(' — ').slice(1).join(' — ');
 }
 
-async function handleSubmit(){
-  loadingSave.value = true;
-  const { error } = await supabase.from('TradeDate').insert({
+ = await supabase.from('TradeDate').insert({
     user_id: user?.id,
     symbol: symbol.value.toUpperCase(),
     action: action.value,
@@ -78,6 +85,31 @@ async function handleSubmit(){
 function handleCancel(){
   emit('close');
 }
+
+async function handleSubmit(){
+  const { data: { user } } = await supabase.auth.getUser();
+  if(!user){
+    alert('请先登录！');
+    return;
+  }
+  loadingSave.value=true;
+  const { error } = await supabase.from('TradeDate').insert({
+    user_id: user.id,
+    symbol: symbol.value.toUpperCase(),
+    action: action.value,
+    quantity: Number(quantity.value),
+    price: Number(price.value)
+  });
+  loadingSave.value=false;
+  if(error){
+    alert('保存失败: '+error.message);
+  }else{
+    alert('保存成功');
+    emit('saved');
+    emit('close');
+  }
+}
+
 </script>
 
 <style scoped>
