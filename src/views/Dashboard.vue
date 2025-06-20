@@ -20,7 +20,7 @@
     <hr class="divider" />
 
     <!-- 悬浮按钮 -->
-    <router-link to="/record" class="fab">添加交易</router-link>
+    <button class="fab" @click="showForm = true">添加交易</button>
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
@@ -34,7 +34,7 @@
       <AddTradeForm @saved="showForm = false" />
     </Modal>
 
-    <FooterBar :version="'v1.3.03'" />
+    <FooterBar />
   </div>
 </template>
 
@@ -56,7 +56,7 @@ function open(key){
 </script>
 
 <style scoped>
-.page{padding-top:48px;}
+.page{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:48px;}
 .kpi-row{display:flex;flex-wrap:wrap;justify-content:flex-start;margin:24px auto;max-width:1400px}
 .divider{width:90%;max-width:1400px;border:0;border-top:1px solid rgba(0,255,128,0.35);margin:40px auto}
 .fab{

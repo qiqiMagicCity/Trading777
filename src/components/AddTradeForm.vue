@@ -31,6 +31,7 @@
 <script setup>
 import { ref } from 'vue'
 const symbol = ref('')
+const apiKey = import.meta.env.VITE_FINNHUB_KEY;
 const results = ref([])
 const selectedName = ref('')
 const qty = ref(0)
@@ -45,7 +46,7 @@ const searchSymbol = () => {
     return
   }
   timer = setTimeout(async () => {
-    const res = await fetch(`https://finnhub.io/api/v1/search?q=${symbol.value}&token=d19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg`)
+    const res = await fetch(`https://finnhub.io/api/v1/search?q=${symbol.value}&token=${apiKey}`)
     const data = await res.json()
     results.value = data.result.filter(r => r.type === 'Equity')
   }, 300)

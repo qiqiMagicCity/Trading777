@@ -10,3 +10,8 @@ export async function fetchProfile(symbol) {
   const { data } = await axios.get(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${apiKey}`);
   return { name: data.name || symbol };
 }
+export async function searchSymbols(query) {
+  if (!apiKey || !query) return [];
+  const { data } = await axios.get(`https://finnhub.io/api/v1/search?q=${query}&token=${apiKey}`);
+  return data.result || [];
+}
