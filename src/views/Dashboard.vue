@@ -1,119 +1,96 @@
+
 <template>
   <div class="page dashboard-page">
-    <!-- HeaderBar -->
     <div class="header-bar">
       <div class="timezones">
-        <div>纽约 (UTC-4): {{ tz.NewYork }}</div>
-        <div>瓦伦西亚 (UTC+2): {{ tz.Valencia }}</div>
-        <div>上海 (UTC+8): {{ tz.Shanghai }}</div>
+        <div>{{ tz.NewYork }}</div>
+        <div>{{ tz.Valencia }}</div>
+        <div>{{ tz.Shanghai }}</div>
       </div>
       <div class="user-controls">
         <span>{{ username }}</span>
         <button class="btn-logout" @click="logout">退出</button>
       </div>
     </div>
-
-    <!-- KPI Grid -->
     <div class="kpi-grid">
-      <div
-        class="kpi-card"
-        v-for="m in metricsList"
-        :key="m.key"
-        :class="{clickable: m.key==='profitSyms' || m.key==='lossSyms'}"
-        @click="handleKpiClick(m.key)"
-      >
-        <div class="kpi-value" :class="{positive: m.value>=0, negative: m.value<0}">
-          {{ m.display }}
-        </div>
+      <div class="kpi-card" v-for="m in metricsList" :key="m.key">
+        <div :class="['kpi-value', m.value>=0?'positive':'negative']">{{ m.display }}</div>
         <div class="kpi-title">{{ m.title }}</div>
       </div>
     </div>
-
-    <!-- Floating Add Button -->
-    <button class="fab" @click="toRecord" :disabled="!session">+</button>
-
-    <!-- Footer -->
-    <div class="footer">
-      <div class="footer-line line-gray">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</div>
-      <div class="footer-line line-gray">© 魔都万事屋™</div>
-      <div class="footer-line line-green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</div>
-      <div class="footer-line line-green">版本 v1.3.5</div>
+    <div class="charts">
+      <div class="chart-container"><canvas id="profitChart"></canvas></div>
+      <div class="chart-container"><canvas id="lossChart"></canvas></div>
     </div>
+    <table class="records-table">
+      <thead>
+        <tr><th>时间</th><th>标的</th><th>类型</th><th>数量</th><th>价格</th><th>成交额</th><th>操作</th></tr>
+      </thead>
+      <tbody>
+        <tr v-for="r in records" :key="r.id">
+          <td>{{ r.inserted_at }}</td><td>{{ r.symbol }}</td><td>{{ r.type }}</td><td>{{ r.quantity }}</td><td>{{ r.price }}</td><td>{{ (r.price*r.quantity).toFixed(2) }}</td>
+          <td><button @click="editRecord(r.id)">编辑</button><button @click="deleteRecord(r.id)">删除</button></td>
+        </tr>
+        <tr v-if="records.length===0"><td colspan="7">暂无交易记录</td></tr>
+      </tbody>
+    </table>
+    <button class="fab" @click="toRecord">+</button>
+
+    <div class="footer">
+      <div class="footer-line">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</div>
+      <div class="footer-line">© 魔都万事屋™</div>
+      <div class="footer-line">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</div>
+      <div class="footer-line">版本 1.3.93</div>
+    </div>
+
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { supabase } from '../supabaseClient.js';
-import { fetchQuote } from '../services/finnhubService.js';
+import { supabase } from '../supabaseClient';
+import { fetchQuote } from '../services/finnhubService';
 
 const router = useRouter();
-const tz = ref({ NewYork:'', Valencia:'', Shanghai:'' });
-const username = ref('');
-const session = ref(null);
-const metricsList = ref([]);
+const tz = ref({NewYork:'',Valencia:'',Shanghai:''});
+const username = ref('User');
+const metricsList = ref([
+  { key:'totalCost', title:'账户总持仓成本', display:'$0.00', value:0 },
+  { key:'dailyPL', title:'日内交易盈亏', display:'$0.00', value:0 },
+  { key:'unrealPL', title:'历史持仓浮盈/浮亏', display:'$0.00', value:0 },
+  { key:'todayCount', title:'当日交易次数', display:'0', value:0 },
+  { key:'totalCount', title:'累计交易次数', display:'0', value:0 },
+  { key:'profitSymbols', title:'盈利标的数量', display:'0', value:0 },
+  { key:'lossSymbols', title:'亏损标的数量', display:'0', value:0 },
+  { key:'mtd', title:'本月盈利总和', display:'$0.00', value:0 },
+  { key:'ytd', title:'本年盈利总和', display:'$0.00', value:0 }
+]);
+const records = ref([]);
 
 function updateTime() {
   const now = new Date();
-  tz.value.NewYork = now.toLocaleString('en-US', { timeZone:'America/New_York', hour12:false});
-  tz.value.Valencia = now.toLocaleString('en-ES', { timeZone:'Europe/Madrid', hour12:false});
-  tz.value.Shanghai = now.toLocaleString('zh-CN', { timeZone:'Asia/Shanghai', hour12:false});
-}
-
-function logout() {
-  supabase.auth.signOut();
-  router.push('/login');
-}
-
-function toRecord() {
-  router.push('/record');
-}
-
-function handleKpiClick(key) {
-  if (key==='profitSyms') router.push('/profit');
-  else if (key==='lossSyms') router.push('/loss');
-}
-
-function formatNum(num) {
-  return num.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+  tz.value.NewYork = now.toLocaleString('en-US',{timeZone:'America/New_York',hour12:false});
+  tz.value.Valencia = now.toLocaleString('en-ES',{timeZone:'Europe/Madrid',hour12:false});
+  tz.value.Shanghai = now.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
 }
 
 async function loadData() {
-  const { data:{ session: sess } } = await supabase.auth.getSession();
-  session.value = sess;
-  const user = supabase.auth.user();
-  username.value = user?.user_metadata?.full_name || user?.email.split('@')[0] || 'User';
-  const { data: positions } = await supabase.from('positions').select('symbol,cost_per_share,qty');
-  const { data: trades } = await supabase.from('trades').select('*');
-  const totalCost = positions.reduce((s,p)=>s+p.cost_per_share*p.qty,0);
-  const today = new Date().toISOString().slice(0,10);
-  const todays = trades.filter(t=>t.inserted_at.startsWith(today));
-  const dailyPL = todays.reduce((s,t)=>{
-    const sign = ['Sell','Cover'].includes(t.type)?1:-1;
-    return s + t.price*t.quantity*sign;
-  },0);
-  const unreal = positions.reduce((s,p)=>s + ((p.qty*(0 - p.cost_per_share))),0);
-  const dailyCount = todays.length;
-  const { count: totalCount } = await supabase.from('trades').select('*',{ head:true, count:'exact'});
-  const profitSymsArr = positions.filter(p=>((0-p.cost_per_share)*p.qty)>0).map(p=>p.symbol);
-  const lossSymsArr = positions.filter(p=>((0-p.cost_per_share)*p.qty)<0).map(p=>p.symbol);
-  const mtd = 0, ytd = 0;
-
-  metricsList.value = [
-    { key:'totalCost', title:'账户总持仓成本', value: totalCost, display:'$'+formatNum(totalCost) },
-    { key:'dailyPL', title:'日内交易盈亏', value: dailyPL, display:(dailyPL>=0?'+':'')+'$'+dailyPL.toFixed(2) },
-    { key:'unrealized', title:'历史持仓当日浮盈/浮亏', value: unreal, display:(unreal>=0?'+':'')+'$'+unreal.toFixed(2) },
-    { key:'dailyCount', title:'当日交易次数', value: dailyCount, display: dailyCount },
-    { key:'totalCount', title:'累计交易次数', value: totalCount, display: totalCount },
-    { key:'profitSyms', title:'盈利标的数量', value: profitSymsArr.length, display: profitSymsArr.length },
-    { key:'lossSyms', title:'亏损标的数量', value: lossSymsArr.length, display: lossSymsArr.length },
-    { key:'mtd', title:'本月盈利总和', value: mtd, display:'$'+formatNum(mtd) },
-    { key:'ytd', title:'本年盈利总和', value: ytd, display:'$'+formatNum(ytd) },
-  ];
-  updateTime();
-  setInterval(updateTime,1000);
+  updateTime(); setInterval(updateTime,1000);
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return router.push('/login');
+  username.value = data.session.user.user_metadata.full_name || data.session.user.email.split('@')[0] || 'User';
+  const { data: pos } = await supabase.from('positions').select('symbol,cost_per_share,qty');
+  const { data: trds } = await supabase.from('trades').select('*').order('inserted_at',{ascending:false});
+  metricsList.value[0].value = pos.reduce((s,p)=>s+p.cost_per_share*p.qty,0);
+  metricsList.value[0].display = '$' + metricsList.value[0].value.toFixed(2);
+  records.value = trds;
 }
+
+function logout() { supabase.auth.signOut(); router.push('/login'); }
+function toRecord() { router.push('/record'); }
+function editRecord(id) { router.push(`/record?editId=${id}`); }
+function deleteRecord(id) { if(confirm('确认删除？')) supabase.from('trades').delete().eq('id',id).then(loadData); }
 
 onMounted(loadData);
 </script>
