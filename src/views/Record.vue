@@ -1,4 +1,5 @@
 <template>
+  <HeaderBar/>
   <div class="page">
     <div class="auth-box">
       <h2>添加交易</h2>
@@ -16,8 +17,15 @@
   <span class="green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
   <span class="green">版本 v1.1.2</span>
 </div>
+
+<div class="divider"/>
+<footer class="footer">
+  本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.4
+</footer>
+
 </template>
-<script setup>
+ <script setup>
+import HeaderBar from '../components/HeaderBar.vue';
 import { ref } from 'vue';
 import { supabase } from '../supabaseClient';
 import { useRouter } from 'vue-router';
