@@ -14,3 +14,20 @@ export async function fetchQuotes(symbols=[]) {
   }));
   return results;
 }
+
+
+export async function fetchPrice(symbol){
+  const quotes = await fetchQuotes([symbol]);
+  return quotes[symbol];
+}
+
+export async function fetchProfile(symbol){
+  try{
+    const { data } = await axios.get('https://finnhub.io/api/v1/stock/profile2',{
+      params:{ symbol, token: API_KEY }
+    });
+    return data;
+  }catch{
+    return null;
+  }
+}
