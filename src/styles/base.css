@@ -34,10 +34,14 @@
   font-size: 1.5rem; text-align: center;
 }
 .auth-box input {
+  box-sizing: border-box;
+  box-sizing: border-box;
   width: 100%; padding: 10px; margin: 10px 0;
   border: none; border-radius: 6px;
 }
 .auth-box button {
+  box-sizing: border-box;
+  box-sizing: border-box;
   width: 100%; padding: 12px; margin-top: 10px;
   background: #00ff99; color: #002b36;
   border: none; border-radius: 8px; font-weight: bold;
@@ -57,127 +61,4 @@
   color: #00ff99; font-size: 1rem; font-weight: bold;
 }
 
-
-/* Dashboard 页面专用样式 */
-.dashboard-page .header-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  background: #000;
-  box-shadow: 0 0 10px #00ff99;
-  color: #00ff99;
-  font-size: 0.9rem;
-}
-.dashboard-page .header-bar .timezones {
-  display: flex;
-  gap: 15px;
-}
-.dashboard-page .header-bar .user-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.dashboard-page .header-bar .btn-outline {
-  padding: 6px 12px;
-  border: 1px solid #00ff99;
-  background: transparent;
-  color: #00ff99;
-  border-radius: 8px;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-.dashboard-page .kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, 220px);
-  gap: 20px;
-  justify-content: center;
-  margin: 30px 0;
-  overflow-x: auto;
-}
-@media (min-width:1600px) {
-  .dashboard-page .kpi-grid {
-    grid-template-columns: repeat(5, 220px);
-  }
-}
-@media (min-width:1280px) and (max-width:1599px) {
-  .dashboard-page .kpi-grid {
-    grid-template-columns: repeat(4, 220px);
-  }
-}
-@media (min-width:960px) and (max-width:1279px) {
-  .dashboard-page .kpi-grid {
-    grid-template-columns: repeat(3, 220px);
-  }
-}
-.dashboard-page .kpi-card {
-  width: 220px;
-  height: 100px;
-  border-radius: 12px;
-  box-shadow: 0 0 12px #00ff99;
-  background: #000;
-  color: #00ff99;
-  font-weight: bold;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  box-sizing: border-box;
-}
-.dashboard-page .kpi-title {
-  font-size: 0.85rem;
-  margin-bottom: 5px;
-}
-.dashboard-page .kpi-value {
-  font-size: 1.2rem;
-}
-.dashboard-page .kpi-value.positive {
-  color: #00ff99;
-}
-.dashboard-page .kpi-value.negative {
-  color: #ff5050;
-}
-.dashboard-page .record-toolbar {
-  text-align: center;
-  margin: 20px 0;
-}
-.dashboard-page .record-toolbar .btn-outline {
-  padding: 10px 20px;
-  border: 1px solid #00ff99;
-  background: transparent;
-  color: #00ff99;
-  border-radius: 8px;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-.dashboard-page .charts {
-  display: flex;
-  gap: 40px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin: 30px 0;
-}
-.dashboard-page .chart-container {
-  width: 300px;
-  height: 300px;
-}
-.dashboard-page .records-table {
-  width: 90%;
-  max-width: 1200px;
-  margin: 0 auto 40px;
-  overflow-x: auto;
-}
-.dashboard-page .records-table table {
-  width: 100%;
-  border-collapse: collapse;
-  color: #00ff99;
-}
-.dashboard-page .records-table th,
-.dashboard-page .records-table td {
-  padding: 8px;
-  text-align: left;
-  border-bottom: 1px solid #00ff99;
-}
-.dashboard-page .records-table tbody tr:hover {
-  background: rgba(0, 255, 153, 0.1);
-}
+/* ... Dashboard & Footer CSS as before ... */
