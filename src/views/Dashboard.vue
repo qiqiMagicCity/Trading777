@@ -1,38 +1,67 @@
 
 <template>
   <div class="page">
+    <!-- 顶部栏 -->
     <TopBar />
+
+    <!-- KPI 区域 -->
     <div class="kpi-row">
-      <KpiCard title="账户持仓成本" :value="null" @click="open('cost')"/>
-      <KpiCard title="当天盈亏统计" :value="null" @click="open('today')"/>
-      <KpiCard title="当日浮盈浮亏" :value="null" @click="open('float')"/>
-      <KpiCard title="当日交易次数" :value="null" @click="open('todayCnt')"/>
-      <KpiCard title="累计交易笔数" :value="null" @click="open('total')"/>
-      <KpiCard title="MTD（月度盈亏）" :value="null" @click="open('mtd')"/>
-      <KpiCard title="YTD（年度盈亏）" :value="null" @click="open('ytd')"/>
-      <KpiCard title="日内盈亏" :value="null" @click="open('intraday')"/>
+      <KpiCard title="账户持仓成本" :value="null" @click="open('cost')" />
+      <KpiCard title="当天盈亏统计" :value="null" @click="open('today')" />
+      <KpiCard title="当日浮盈浮亏" :value="null" @click="open('float')" />
+      <KpiCard title="当日交易次数" :value="null" @click="open('todayCnt')" />
+      <KpiCard title="累计交易笔数" :value="null" @click="open('total')" />
+      <KpiCard title="MTD（月度盈亏）" :value="null" @click="open('mtd')" />
+      <KpiCard title="YTD（年度盈亏）" :value="null" @click="open('ytd')" />
+      <KpiCard title="日内盈亏" :value="null" @click="open('intraday')" />
     </div>
+
+    <!-- 分割线 -->
+    <hr class="divider" />
+
+    <!-- 悬浮按钮 -->
+    <router-link to="/record" class="fab">添加交易</router-link>
+
+    <!-- 弹窗 -->
     <Modal v-model:show="show">
-      <template #title>{{ title }}</template>
+      <template #title>{{ modalTitle }}</template>
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
-    <div class="footer">
-      <span class="green">© 魔都万事屋™ 2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
-      <span class="green">版本 v1.3.02</span>
-    </div>
+
+    <!-- 页脚 -->
+    <FooterBar :version="'v1.3.03'" />
   </div>
 </template>
+
 <script setup>
 import { ref } from 'vue'
 import TopBar from '@/components/TopBar.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import Modal from '@/components/Modal.vue'
-const show=ref(false)
-const title=ref('')
-function open(key){title.value='详情';show.value=true}
+import FooterBar from '@/components/FooterBar.vue'
+
+const show = ref(false)
+const modalTitle = ref('详情')
+function open(key){
+  modalTitle.value = '详情'
+  show.value = true
+}
 </script>
+
 <style scoped>
 .kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
-.footer{width:100%;text-align:center;margin-top:40px;font-size:12px}
-.footer .green{color:#00ff99;display:block}
+.divider{width:90%;max-width:1400px;border:0;border-top:2px solid #00ff99;margin:40px auto}
+.fab{
+  position:fixed;
+  right:24px;
+  bottom:24px;
+  background:#00ff99;
+  color:#000;
+  padding:12px 18px;
+  border-radius:28px;
+  font-weight:bold;
+  text-decoration:none;
+  box-shadow:0 0 12px #00ff99;
+}
+.fab:hover{background:#00e68a}
 </style>
