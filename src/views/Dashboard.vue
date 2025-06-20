@@ -144,17 +144,11 @@ function edit(row) {
 
 
 
-function goToRecord() {
-  router.push('/record');
-}
 function edit(row) {
   router.push({ path: '/record', query: { editId: row.id } });
 }
 
 
-function goToRecord(){
-  router.push('/record');
-}
 function edit(row){
   router.push({ path: '/record', query: { editId: row.id } });
 }
