@@ -24,25 +24,15 @@
       <option value="sell">卖出</option>
     </select>
 
-    <button @click="save">提交</button>
+    <div class="actions"><button class="cancel" @click="emit('cancel')">取消</button><button class="submit" @click="save">提交</button></div>
   </div>
 </template>
 
 <script setup>
-const emit = defineEmits(['close','submit','saved']);
-const handleCancel = ()=>emit('close');
-const handleSubmit = ()=>emit('submit', trade);
-
-import { ref } from "vue";
-const options = ref([]);
-const onSearch = async (value) => {
-  if (!value) { options.value = []; return; }
-  const res = await searchSymbols(value);
-  options.value = res.map(r=>({ value: r.symbol, label: `${r.symbol} - ${r.description}` }));
-};
-import { searchSymbols } from "@/services/finnhubService.js";
+import { ref } from 'vue'
+import { FINNHUB_KEY as apiKey } from '@/constants/api.js'
 const symbol = ref('')
-const apiKey = import.meta.env.VITE_FINNHUB_KEY;
+
 const results = ref([])
 const selectedName = ref('')
 const qty = ref(0)
@@ -69,6 +59,7 @@ const select = (item) => {
   results.value = []
 }
 
+const emit = defineEmits(['saved','cancel'])
 function save() {
   alert('模拟保存：' + symbol.value + ', ' + qty.value + ', ' + price.value)
   emit('saved')
@@ -104,8 +95,12 @@ button {
 }
 </style>
 
+
 <style scoped>
-a-form-item .ant-form-item-label label{
-  font-weight: 600;
-}
+.actions{display:flex;justify-content:flex-end;gap:12px;margin-top:12px;}
+.actions .cancel{background:#ff4d4f;color:#fff;padding:8px 14px;font-weight:bold;border:none;cursor:pointer;}
+.actions .submit{background:#00ff99;color:#000;padding:8px 14px;font-weight:bold;border:none;cursor:pointer;}
+.actions .cancel:hover{opacity:0.88}
+.actions .submit:hover{background:#12ffb0}
+a-form-item .ant-form-item-label label{font-weight:600;}
 </style>

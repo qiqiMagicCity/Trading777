@@ -1,5 +1,5 @@
 import axios from 'axios';
-const apiKey = FINNHUB_KEY;
+const apiKey = import.meta.env.VITE_FINNHUB_KEY;
 export async function fetchPrice(symbol) {
   if (!apiKey) return { price: '--', time: '' };
   const { data } = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);

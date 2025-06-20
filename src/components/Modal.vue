@@ -1,6 +1,6 @@
 
 <template>
-  <div v-if="show" class="overlay" @click.self="close">
+  <div v-if="show" class="overlay">
     <div class="window">
       <header>
         <slot name="title">详情</slot>

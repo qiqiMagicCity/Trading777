@@ -31,7 +31,7 @@
     <!-- 页脚 -->
     
     <Modal v-model:show="showForm">
-      <AddTradeForm @saved="showForm = false" />
+      <AddTradeForm @saved="showForm=false" @cancel="showForm=false" />
     </Modal>
 
     <FooterBar />
@@ -57,9 +57,23 @@ function open(key){
 
 <style scoped>
 .page{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:48px;}
-.kpi-row{display:flex;flex-wrap:wrap;justify-content:flex-start;margin:24px auto;max-width:1400px}
+.kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
 .divider{width:90%;max-width:1400px;border:0;border-top:1px solid rgba(0,255,128,0.35);margin:40px auto}
-.fab{position:fixed;right:32px;bottom:32px;padding:8px 24px;border-radius:28px;background:#00ffa2;border:2px solid #00ffa2;color:#000;font-weight:600;box-shadow:none;transition:background .3s;}
-.fab:hover{background:#12ffb0;}
+
 .fab:hover{background:#00e68a}
+
+.fab{
+  position:fixed;
+  right:24px;
+  bottom:32px;
+  padding:10px 20px;
+  border-radius:28px;
+  background:#00ffa2;
+  border:2px solid #00ffa2;
+  color:#000;
+  font-weight:600;
+  box-shadow:none;
+  transition:background .3s;
+}
+.fab:hover{background:#12ffb0}
 </style>
