@@ -34,10 +34,12 @@
   font-size: 1.5rem; text-align: center;
 }
 .auth-box input {
+  box-sizing: border-box;
   width: 100%; padding: 10px; margin: 10px 0;
   border: none; border-radius: 6px;
 }
 .auth-box button {
+  box-sizing: border-box;
   width: 100%; padding: 12px; margin-top: 10px;
   background: #00ff99; color: #002b36;
   border: none; border-radius: 8px; font-weight: bold;
