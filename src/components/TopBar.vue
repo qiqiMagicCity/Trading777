@@ -45,9 +45,9 @@ async function logout() {
 </script>
 
 <style scoped>
-.topbar{
+.topbar{ position:fixed; top:0; left:0; z-index:100; 
   width:100%;
-  position:relative;
+  ;
   display:flex;
   align-items:center;
   padding:8px 16px;

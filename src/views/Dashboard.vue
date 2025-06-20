@@ -49,12 +49,13 @@ function open(key){
 </script>
 
 <style scoped>
+.page{padding-top:48px;}
 .kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
-.divider{width:90%;max-width:1400px;border:0;border-top:2px solid #00ff99;margin:40px auto}
+.divider{width:90%;max-width:1400px;border:0;border-top:2px solid #00bfff;margin:40px auto}
 .fab{
   position:fixed;
   right:24px;
-  bottom:24px;
+  bottom:80px;
   background:#00ff99;
   color:#000;
   padding:12px 18px;
