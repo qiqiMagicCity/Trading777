@@ -29,6 +29,18 @@
 </template>
 
 <script setup>
+const emit = defineEmits(['close', 'submit']);
+const handleCancel = ()=>emit('close');
+const handleSubmit = ()=>emit('submit', trade);
+
+import { ref } from "vue";
+const options = ref([]);
+const onSearch = async (value) => {
+  if (!value) { options.value = []; return; }
+  const res = await searchSymbols(value);
+  options.value = res.map(r=>({ value: r.symbol, label: `${r.symbol} - ${r.description}` }));
+};
+import { searchSymbols } from "@/services/finnhubService.js";
 import { ref } from 'vue'
 const symbol = ref('')
 const apiKey = import.meta.env.VITE_FINNHUB_KEY;
@@ -91,5 +103,11 @@ button {
 .dropdown li:hover {
   background: #00ff99;
   color: #000;
+}
+</style>
+
+<style scoped>
+a-form-item .ant-form-item-label label{
+  font-weight: 600;
 }
 </style>
