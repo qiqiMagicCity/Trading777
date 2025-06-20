@@ -23,7 +23,7 @@
 
   <div class="divider"/>
   <footer class="footer">
-    本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.6
+    本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.7
   </footer>
 </template>
 
