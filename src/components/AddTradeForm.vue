@@ -42,6 +42,7 @@ const quantity = ref(0);
 const price = ref(0);
 const action = ref('buy');
 const options = ref([]);
+const { data: { user } } = await supabase.auth.getUser();
 const loadingSave = ref(false);
 
 async function onSearch(val){
@@ -58,6 +59,7 @@ function onSelect(val, option){
 async function handleSubmit(){
   loadingSave.value = true;
   const { error } = await supabase.from('TradeDate').insert({
+    user_id: user?.id,
     symbol: symbol.value.toUpperCase(),
     action: action.value,
     quantity: Number(quantity.value),
@@ -84,7 +86,12 @@ input,select{padding:6px;font-size:14px;}
 .btn-row{display:flex;justify-content:flex-end;gap:12px;margin-top:12px;}
 .cancel{background:#c0392b;color:#fff;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;}
 .submit{background:#00ff99;color:#000;font-weight:600;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;}
-.dropdown{list-style:none;padding:0;margin:0;border:1px solid #00ff99;max-height:160px;overflow:auto;}
-.dropdown li{padding:4px 8px;cursor:pointer;}
+
+
+<style scoped>
+
+.dropdown{list-style:none;padding:0;margin:4px 0 0 0;border:1px solid #00ff99;border-radius:4px;max-height:180px;overflow:auto;width:100%;background:#001b1b;color:#00ff99;font-weight:500;}
+.dropdown li{padding:6px 8px;cursor:pointer;}
 .dropdown li:hover{background:#00ff99;color:#000;}
+
 </style>

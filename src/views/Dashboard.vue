@@ -63,19 +63,7 @@ function open(key){
 
 .fab:hover{background:#00e68a}
 
-.fab{
-  position:fixed;
-  right: var(--fab-right);
-  bottom: var(--fab-bottom);
-  padding:10px 20px;
-  border-radius:28px;
-  background:#00ffa2;
-  border:2px solid #00ffa2;
-  color:#000;
-  font-weight:600;
-  box-shadow:none;
-  transition:background .3s;
-}
+.fab{position:fixed;right:var(--fab-right);bottom:var(--fab-bottom);padding:8px 24px;border-radius:28px;background:#00ff99;border:2px solid #00ff99;color:#000;font-weight:600;box-shadow:none;transition:background .3s;}
 .fab:hover{background:#12ffb0}
 </style>
 
