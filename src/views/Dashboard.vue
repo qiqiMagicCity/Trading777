@@ -144,7 +144,6 @@ function edit(row) {
 
 
 
-const router = useRouter();
 function goToRecord() {
   router.push('/record');
 }
@@ -153,7 +152,6 @@ function edit(row) {
 }
 
 
-const router = useRouter();
 function goToRecord(){
   router.push('/record');
 }
