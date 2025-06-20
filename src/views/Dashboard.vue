@@ -20,7 +20,7 @@
     <hr class="divider" />
 
     <!-- 悬浮按钮 -->
-    <button class="fab" @click="showForm = true">添加交易</button>
+    <button class="fab" @click="showModal = true">添加交易</button>
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
@@ -31,7 +31,7 @@
     <!-- 页脚 -->
     
     <Modal v-model:show="showForm">
-      <AddTradeForm @saved="showForm=false" @cancel="showForm=false" />
+      <AddTradeForm v-if="showModal" @close="showModal=false" @saved="showForm=false" @cancel="showForm=false" />
     </Modal>
 
     <FooterBar />
@@ -39,6 +39,9 @@
 </template>
 
 <script setup>
+import { ref } from "vue";
+const showModal = ref(false);
+
 import { ref } from 'vue'
 const showForm = ref(false)
 import TopBar from '@/components/TopBar.vue'
@@ -65,7 +68,7 @@ function open(key){
 .fab{
   position:fixed;
   right:24px;
-  bottom:32px;
+  bottom: 96px;
   padding:10px 20px;
   border-radius:28px;
   background:#00ffa2;

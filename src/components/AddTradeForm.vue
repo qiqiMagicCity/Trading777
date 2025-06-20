@@ -29,6 +29,7 @@
 </template>
 
 <script setup>
+const handleCancel = () => emit('close');
 import { ref } from 'vue'
 import { FINNHUB_KEY as apiKey } from '@/constants/api.js'
 const symbol = ref('')
