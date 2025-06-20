@@ -14,10 +14,25 @@
       </tbody>
     </table>
   </div>
-  <div class="footer">
-    <div class="footer-line">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</div>
-    <div class="footer-line">© 魔都万事屋™</div>
-    <div class="footer-line">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</div>
-    <div class="footer-line">版本 v1.3.6</div>
-  </div>
 </template>
+<script setup>
+import { ref, onMounted } from 'vue';
+import { supabase } from '@/supabaseClient';
+import { fetchQuote } from '@/services/finnhubService';
+const list = ref([]);
+async function load() {
+  const { data: positions } = await supabase.from('positions').select('*');
+  let total = 0;
+  const temp = [];
+  for (const p of positions) {
+    const quote = await fetchQuote(p.symbol);
+    const loss = (quote.c - p.cost_per_share) * p.qty;
+    if (loss<0) {
+      temp.push({ symbol: p.symbol, loss: -loss, percent: -loss/total });
+    }
+    total += -loss;
+  }
+  list.value = temp.map(i=>({...i, percent: total? i.loss/total:0}));
+}
+onMounted(load);
+</script>
