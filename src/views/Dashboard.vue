@@ -25,6 +25,17 @@
     <!-- 弹窗 -->
     <Modal v-model:show="show">
       <template #title>{{ modalTitle }}</template>
+
+<style scoped>
+.stats-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+  gap:16px;
+  justify-content:center;
+  margin-top:16px;
+}
+</style>
+
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
 
@@ -37,6 +48,17 @@
     <FooterBar />
   </div>
 </template>
+
+<style scoped>
+.stats-grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
+  gap:16px;
+  justify-content:center;
+  margin-top:16px;
+}
+</style>
+
 
 <script setup>import { ref } from 'vue';
 
