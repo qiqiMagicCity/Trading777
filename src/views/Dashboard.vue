@@ -93,8 +93,8 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { supabase } from '@/supabaseClient';
-import { fetchQuote } from '@/services/finnhubService';
+import { supabase } from '../supabaseClient.js';
+import { fetchQuote } from '../services/finnhubService.js';
 import Chart from 'chart.js/auto';
 
 const router = useRouter();
