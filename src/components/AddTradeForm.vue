@@ -45,7 +45,7 @@ const searchSymbol = () => {
     return
   }
   timer = setTimeout(async () => {
-    const res = await fetch(\`https://finnhub.io/api/v1/search?q=\${symbol.value}&token=d19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg\`)
+    const res = await fetch(`https://finnhub.io/api/v1/search?q=${symbol.value}&token=d19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg`)
     const data = await res.json()
     results.value = data.result.filter(r => r.type === 'Equity')
   }, 300)
