@@ -1,4 +1,3 @@
-
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
@@ -12,15 +11,13 @@ const routes = [
   { path: '/', component: Home },
   { path: '/login', component: Login },
   { path: '/register', component: Register },
-  { path: '/dashboard', component: Dashboard, meta: { requiresAuth: true } },
-  { path: '/record', component: Record, meta: { requiresAuth: true } },
-  { path: '/profit', component: ProfitList, meta: { requiresAuth: true } },
-  { path: '/loss', component: LossList, meta: { requiresAuth: true } },
+  { path: '/dashboard', component: Dashboard },
+  { path: '/record', component: Record },
+  { path: '/profit', component: ProfitList },
+  { path: '/loss', component: LossList },
 ]
 
-const router = createRouter({
+export default createRouter({
   history: createWebHistory(),
   routes,
 })
-
-export default router
