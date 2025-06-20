@@ -1,10 +1,9 @@
-
 <template>
   <div class="form">
     <label>股票代码</label>
     <input v-model="symbol" @input="onSearch(symbol)" placeholder="如 AAPL" />
     <ul v-if="options.length" class="dropdown">
-      <li v-for="opt in options" :key="opt.value" @click="onSelect(opt.value, opt)">
+      <li v-for="opt in options" :key="opt.value" @click="onSelect(opt)">
         {{ opt.label }}
       </li>
     </ul>
@@ -29,40 +28,47 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import { searchSymbols } from '@/services/finnhubService.js';
 import { supabase } from '@/utils/supabaseClient.js';
 
-const props = defineProps({});
 const emit = defineEmits(['close','saved']);
 
 const symbol = ref('');
-const name = ref('');
 const quantity = ref(0);
 const price = ref(0);
 const action = ref('buy');
 const options = ref([]);
 const loadingSave = ref(false);
 
-
-
+// --- 自动补全 ---
+let debounceT;
+function onSearch(val){
+  clearTimeout(debounceT);
+  debounceT = setTimeout(async ()=>{
+    if(!val){
+      options.value = [];
+      return;
+    }
     const list = await searchSymbols(val);
-    options.value = list.map(i=>({ value:i.symbol, label:`${i.symbol} — ${i.description}` }));
+    options.value = list.map(i => ({ value:i.symbol, label:`${i.symbol} — ${i.description}` }));
   },300);
 }
-
-  if(!val){ options.value=[]; return; }
-  const list = await searchSymbols(val);
-  options.value = list.map(i=>({ value: i.symbol, label: `${i.symbol} — ${i.description}` }));
+function onSelect(opt){
+  symbol.value = opt.value;
+  options.value=[];
 }
 
-function onSelect(val, option){
-  symbol.value = val.toUpperCase();
-  name.value = option.label.split(' — ').slice(1).join(' — ');
-}
-
- = await supabase.from('TradeDate').insert({
-    user_id: user?.id,
+// --- 提交 ---
+async function handleSubmit(){
+  const { data:{ user }} = await supabase.auth.getUser();
+  if(!user){
+    alert('请先登录！');
+    return;
+  }
+  loadingSave.value = true;
+  const { error } = await supabase.from('TradeDate').insert({
+    user_id: user.id,
     symbol: symbol.value.toUpperCase(),
     action: action.value,
     quantity: Number(quantity.value),
@@ -77,49 +83,9 @@ function onSelect(val, option){
     emit('close');
   }
 }
-
 function handleCancel(){
   emit('close');
 }
-
-async function handleSubmit(){
-  const { data: { user } } = await supabase.auth.getUser();
-  if(!user){
-    alert('请先登录！');
-    return;
-  }
-  loadingSave.value=true;
-  const { error } = await supabase.from('TradeDate').insert({
-    user_id: user.id,
-    symbol: symbol.value.toUpperCase(),
-    action: action.value,
-    quantity: Number(quantity.value),
-    price: Number(price.value)
-  });
-  loadingSave.value=false;
-  if(error){
-    alert('保存失败: '+error.message);
-  }else{
-    alert('保存成功');
-    emit('saved');
-    emit('close');
-  }
-}
-
-
-let debounceT = null;
-function onSearch(val){
-  clearTimeout(debounceT);
-  debounceT = setTimeout(async () => {
-    if(!val){
-      options.value = [];
-      return;
-    }
-    const list = await searchSymbols(val);
-    options.value = list.map(i=>({ value:i.symbol, label:`${i.symbol} — ${i.description}` }));
-  }, 300);
-}
-
 </script>
 
 <style scoped>
