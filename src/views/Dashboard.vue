@@ -29,16 +29,24 @@
     </Modal>
 
     <!-- 页脚 -->
+    
+    <Modal v-model:show="showForm">
+      <AddTradeForm @saved="showForm = false" />
+    </Modal>
+
     <FooterBar :version="'v1.3.03'" />
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+const showForm = ref(false)
+import { ref } from 'vue'
 import TopBar from '@/components/TopBar.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import Modal from '@/components/Modal.vue'
 import FooterBar from '@/components/FooterBar.vue'
+import AddTradeForm from '@/components/AddTradeForm.vue'
 
 const show = ref(false)
 const modalTitle = ref('详情')
@@ -50,8 +58,8 @@ function open(key){
 
 <style scoped>
 .page{padding-top:48px;}
-.kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
-.divider{width:90%;max-width:1400px;border:0;border-top:2px solid #00bfff;margin:40px auto}
+.kpi-row{display:flex;flex-wrap:wrap;justify-content:flex-start;margin:24px auto;max-width:1400px}
+.divider{width:90%;max-width:1400px;border:0;border-top:1px solid rgba(0,255,128,0.35);margin:40px auto}
 .fab{
   position:fixed;
   right:24px;
