@@ -1,24 +1,24 @@
-
 <template>
-  <HeaderBar/>
-  <main class="home">
-    <h1>交易通往财富之路</h1>
-    <p>精细化管理 科学 理性 务实</p>
-    <div class="btns">
-      <button @click="$router.push('/login')">登录</button>
-      <button @click="$router.push('/register')">注册</button>
+  <div class="page">
+    <div class="intro">
+      <h1>交易通往财富之路</h1>
+      <p>精细化管理 科学 理性 务实</p>
     </div>
-  </main>
-  <div class="divider"/>
-  <footer class="footer">本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.91</footer>
+    <div class="button-group">
+      <router-link to="/login"><button class="button-simple">登录</button></router-link>
+      <router-link to="/register"><button class="button-simple">注册</button></router-link>
+    </div>
+  </div>
+  <div class="footer">
+  <span class="grey">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</span>
+  <span class="green">© 魔都万事屋™</span>
+  <span class="green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
+  <span class="green">版本 v1.1.2</span>
+</div>
 </template>
-
-<script setup>
-import HeaderBar from '../components/HeaderBar.vue';
-</script>
-
 <style scoped>
-.home{display:flex;flex-direction:column;align-items:center;justify-content:center;height:70vh;text-align:center;}
-h1{font-size:48px;margin:0;}
-.btns{margin-top:32px;display:flex;gap:24px;}
+.intro { transform: translateY(-15vh); }
+h1 { font-size: 5rem; margin-bottom:0.5rem; }
+p { font-size:1.3rem; margin-bottom:2rem; transform: translateY(5vh); }
+.button-group { display:flex; gap:3cm; margin-bottom:30px; }
 </style>

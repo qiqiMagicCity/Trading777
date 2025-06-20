@@ -1,1 +1,0 @@
-Trading777 Demo v1.2.8
