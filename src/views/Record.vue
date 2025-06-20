@@ -1,5 +1,6 @@
 <template>
   <HeaderBar/>
+  <HeaderBar/>
   <div class="page">
     <div class="auth-box">
       <h2>添加交易</h2>
@@ -19,13 +20,18 @@
 </div>
 
 <div class="divider"/>
-<footer class="footer">
-  本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.4
-</footer>
 
+
+
+  <div class="divider"/>
+  <footer class="footer">
+    本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.5
+  </footer>
 </template>
+
  <script setup>
 import HeaderBar from '../components/HeaderBar.vue';
+
 import { ref } from 'vue';
 import { supabase } from '../supabaseClient';
 import { useRouter } from 'vue-router';

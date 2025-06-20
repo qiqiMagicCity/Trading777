@@ -1,5 +1,6 @@
 <template>
   <HeaderBar/>
+  <HeaderBar/>
   <div class="page">
     <div class="intro">
       <h1>交易通往财富之路</h1>
@@ -18,11 +19,15 @@
 </div>
 
 <div class="divider"/>
-<footer class="footer">
-  本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.4
-</footer>
 
+
+
+  <div class="divider"/>
+  <footer class="footer">
+    本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.5
+  </footer>
 </template>
+
 <style scoped>
 .intro { transform: translateY(-15vh); }
 h1 { font-size: 5rem; margin-bottom:0.5rem; }
