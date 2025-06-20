@@ -20,7 +20,7 @@
     <hr class="divider" />
 
     <!-- 悬浮按钮 -->
-    <button class="fab" @click="showModal = true">添加交易</button>
+    <button class="fab-fixed" @click="showModal = true">添加交易</button>
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
@@ -56,28 +56,7 @@ function open(key){
   show.value = true
 }</script>
 
-<style scoped>
-.page{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:48px;}
-.kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
-.divider{width:90%;max-width:1400px;border:0;border-top:1px solid rgba(0,255,128,0.35);margin:40px auto}
 
-.fab:hover{background:#00e68a}
-
-.fab{
-  position:fixed;
-  right: var(--fab-right);
-  bottom: var(--fab-bottom);
-  padding:10px 20px;
-  border-radius:28px;
-  background:#00ffa2;
-  border:2px solid #00ffa2;
-  color:#000;
-  font-weight:600;
-  box-shadow:none;
-  transition:background .3s;
-}
-.fab:hover{background:#12ffb0}
-</style>
 
 <style>
 :root{
