@@ -54,8 +54,6 @@
       <div class="footer-line line-green">版本 v1.3.0</div>
     </div>
 
-</template>
-
   </div>
 </template>
 
