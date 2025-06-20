@@ -1,4 +1,5 @@
 <template>
+  <HeaderBar/>
   <div class="page">
     <div class="kpi-grid">
       <div class="kpi-card" v-for="k in kpis" :key="k.label">
@@ -20,7 +21,7 @@
   <span class="grey">本站功能逐步完善中，敬请期待。对本站感兴趣的可以联系站长共同创建</span>
   <span class="green">© 魔都万事屋™</span>
   <span class="green">2005 – 2025 版权所有 • 保留所有权利 • MagicCity Global Tec</span>
-  <span class="green">版本 v1.2.2</span>
+  <span class="green">版本 v1.2.3</span>
 </div>
 </template>
 
@@ -33,6 +34,7 @@ import { supabase } from '../supabaseClient.js';
 import { fetchQuotes, fetchProfile } from '../services/finnhubService.js';
 import { kmb } from '../services/util.js';
 import Chart from 'chart.js/auto';
+import { useRouter } from 'vue-router';
 
 const kpis=ref([
   {title:'账户总持仓成本',value:'--'},
@@ -128,6 +130,15 @@ async function remove(id){
 }
 
 onMounted(loadData);
+
+const router = useRouter();
+function goToRecord(){
+  router.push('/record');
+}
+function edit(row){
+  router.push({ path: '/record', query: { editId: row.id } });
+}
+
 </script>
 
 <style src="../styles/base.css"></style>
