@@ -1,1 +1,0 @@
-<template><!-- LossList.vue --></template>

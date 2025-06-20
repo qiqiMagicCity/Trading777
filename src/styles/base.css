@@ -1,1 +1,64 @@
-/* styles */
+/* Global Styles */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+}
+.footer {
+  position: fixed;
+  bottom: 10px; left: 0; width: 100%;
+  border: 1px solid #00ff99;
+  padding: 8px 0;
+  display: flex; flex-direction: column; align-items: center;
+  font-size: 0.9rem; line-height: 1.4;
+}
+.footer .grey { color: #888; }
+.footer .green { color: #00ff99; }
+
+.button-simple {
+  background: #00ff99; color: #000;
+  padding: 12px 24px; font-size: 1rem;
+  border: none; border-radius: 8px; cursor: pointer;
+}
+
+.auth-box {
+  width: 380px; background: #000;
+  padding: 40px 30px; border-radius: 8px;
+  box-shadow: 0 0 20px #00ff99;
+}
+.auth-box h2 {
+  margin: 0 0 20px; color: #00ff99;
+  font-size: 1.5rem; text-align: center;
+}
+.auth-box input {
+  box-sizing: border-box;
+  box-sizing: border-box;
+  width: 100%; padding: 10px; margin: 10px 0;
+  border: none; border-radius: 6px;
+}
+.auth-box button {
+  box-sizing: border-box;
+  box-sizing: border-box;
+  width: 100%; padding: 12px; margin-top: 10px;
+  background: #00ff99; color: #002b36;
+  border: none; border-radius: 8px; font-weight: bold;
+  cursor: pointer;
+}
+.error-msg { color: #ff5050; margin-top: 8px; text-align: center; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+  gap: 20px; width: 90%; max-width: 800px;
+  margin-bottom: 30px;
+}
+.kpi-card {
+  background: #000; padding: 14px 10px;
+  border-radius: 8px; box-shadow: 0 0 12px #00ff99;
+  color: #00ff99; font-size: 1rem; font-weight: bold;
+}
+
+/* ... Dashboard & Footer CSS as before ... */
