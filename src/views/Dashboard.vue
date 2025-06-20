@@ -24,18 +24,29 @@
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
-      <template #title>{{ modalTitle }}</template>
+      <template #title>{{ modalTitle }}  <button @click="showTradeForm = true"
+          style="position: fixed; right: 24px; bottom: 100px; z-index: 1500; background: #0f0; color: #000; border-radius: 24px; padding: 12px 20px; font-weight: bold;">
+    添加交易
+  </button>
+  <AddTradeForm :visible="showTradeForm" @click.self="showTradeForm = false" />
+</template>
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
 
     <!-- 页脚 -->
     <FooterBar :version="'v1.3.03'" />
   </div>
+  <button @click="showTradeForm = true"
+          style="position: fixed; right: 24px; bottom: 100px; z-index: 1500; background: #0f0; color: #000; border-radius: 24px; padding: 12px 20px; font-weight: bold;">
+    添加交易
+  </button>
+  <AddTradeForm :visible="showTradeForm" @click.self="showTradeForm = false" />
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import TopBar from '@/components/TopBar.vue'
+import AddTradeForm from '@/components/AddTradeForm.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import Modal from '@/components/Modal.vue'
 import FooterBar from '@/components/FooterBar.vue'
@@ -50,7 +61,12 @@ function open(key){
 
 <style scoped>
 .page{padding-top:48px;}
-.kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
+.kpi-row {
+  margin: 16px auto 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
 .divider{width:90%;max-width:1400px;border:0;border-top:2px solid #00bfff;margin:40px auto}
 .fab{
   position:fixed;
