@@ -45,11 +45,7 @@ const options = ref([]);
 const loadingSave = ref(false);
 
 
-let debounceT=null;
-async function onSearch(val){
-  clearTimeout(debounceT);
-  debounceT=setTimeout(async ()=>{
-    if(!val){ options.value=[]; return; }
+
     const list = await searchSymbols(val);
     options.value = list.map(i=>({ value:i.symbol, label:`${i.symbol} — ${i.description}` }));
   },300);
@@ -108,6 +104,20 @@ async function handleSubmit(){
     emit('saved');
     emit('close');
   }
+}
+
+
+let debounceT = null;
+function onSearch(val){
+  clearTimeout(debounceT);
+  debounceT = setTimeout(async () => {
+    if(!val){
+      options.value = [];
+      return;
+    }
+    const list = await searchSymbols(val);
+    options.value = list.map(i=>({ value:i.symbol, label:`${i.symbol} — ${i.description}` }));
+  }, 300);
 }
 
 </script>
