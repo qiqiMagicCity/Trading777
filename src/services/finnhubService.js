@@ -1,12 +1,16 @@
 import axios from 'axios';
-const apiKey = import.meta.env.VITE_FINNHUB_KEY;
-export async function fetchPrice(symbol) {
-  if (!apiKey) return { price: '--', time: '' };
-  const { data } = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`);
-  return { price: data.c || '--', time: new Date(data.t * 1000).toLocaleString() };
-}
-export async function fetchProfile(symbol) {
-  if (!apiKey) return { name: symbol };
-  const { data } = await axios.get(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${apiKey}`);
-  return { name: data.name || symbol };
+const API_KEY = 'd19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg';
+export async function fetchQuotes(symbols=[]) {
+  const results = {};
+  await Promise.all(symbols.map(async s => {
+    try {
+      const { data } = await axios.get('https://finnhub.io/api/v1/quote',{
+        params:{ symbol:s, token:API_KEY }
+      });
+      results[s] = data.c || null;
+    } catch {
+      results[s] = null;
+    }
+  }));
+  return results;
 }

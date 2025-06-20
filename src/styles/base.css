@@ -56,3 +56,5 @@
   border-radius: 8px; box-shadow: 0 0 12px #00ff99;
   color: #00ff99; font-size: 1rem; font-weight: bold;
 }
+
+.divider { border-top:1px solid var(--theme-green); box-shadow:0 0 8px var(--theme-green); margin:16px 0; }
