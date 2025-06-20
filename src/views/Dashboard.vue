@@ -24,32 +24,28 @@
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
-      <template #title>{{ modalTitle }}  <button @click="showTradeForm = true"
-          style="position: fixed; right: 24px; bottom: 100px; z-index: 1500; background: #0f0; color: #000; border-radius: 24px; padding: 12px 20px; font-weight: bold;">
-    添加交易
-  </button>
-  <AddTradeForm :visible="showTradeForm" @click.self="showTradeForm = false" />
-</template>
+      <template #title>{{ modalTitle }}</template>
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
 
     <!-- 页脚 -->
+    
+    <Modal v-model:show="showForm">
+      <AddTradeForm @saved="showForm = false" />
+    </Modal>
+
     <FooterBar :version="'v1.3.03'" />
   </div>
-  <button @click="showTradeForm = true"
-          style="position: fixed; right: 24px; bottom: 100px; z-index: 1500; background: #0f0; color: #000; border-radius: 24px; padding: 12px 20px; font-weight: bold;">
-    添加交易
-  </button>
-  <AddTradeForm :visible="showTradeForm" @click.self="showTradeForm = false" />
 </template>
 
 <script setup>
 import { ref } from 'vue'
+const showForm = ref(false)
 import TopBar from '@/components/TopBar.vue'
-import AddTradeForm from '@/components/AddTradeForm.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import Modal from '@/components/Modal.vue'
 import FooterBar from '@/components/FooterBar.vue'
+import AddTradeForm from '@/components/AddTradeForm.vue'
 
 const show = ref(false)
 const modalTitle = ref('详情')
@@ -61,13 +57,8 @@ function open(key){
 
 <style scoped>
 .page{padding-top:48px;}
-.kpi-row {
-  margin: 16px auto 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.divider{width:90%;max-width:1400px;border:0;border-top:2px solid #00bfff;margin:40px auto}
+.kpi-row{display:flex;flex-wrap:wrap;justify-content:flex-start;margin:24px auto;max-width:1400px}
+.divider{width:90%;max-width:1400px;border:0;border-top:1px solid rgba(0,255,128,0.35);margin:40px auto}
 .fab{
   position:fixed;
   right:24px;

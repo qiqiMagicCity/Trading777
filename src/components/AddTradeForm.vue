@@ -1,7 +1,5 @@
 
 <template>
-  <div v-if="visible" class="modal-overlay">
-    <div class="modal-content">
   <div class="form">
     <label>股票代码</label>
     <input v-model="symbol" @input="searchSymbol" placeholder="如 AAPL" />
@@ -27,8 +25,6 @@
     </select>
 
     <button @click="save">提交</button>
-  </div>
-    </div>
   </div>
 </template>
 
@@ -69,51 +65,6 @@ function save() {
 </script>
 
 <style scoped>
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0,0,0,0.4);
-  z-index: 2000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.modal-content {
-  background: #121212;
-  border: 1px solid #0f0;
-  border-radius: 10px;
-  padding: 24px;
-  width: 420px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 0 12px #0f0;
-}
-
-
-.dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  background: #000;
-  border: 1px solid #0f0;
-  z-index: 1000;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.dropdown li {
-  padding: 6px 12px;
-  cursor: pointer;
-}
-.dropdown li:hover {
-  background: #0f0;
-  color: #000;
-}
-
 .form { display:flex; flex-direction:column; gap:12px; }
 input, select { padding:6px; font-size:14px; }
 button {
