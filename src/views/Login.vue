@@ -8,7 +8,7 @@
     <button @click="login">登录</button>
   </div>
   <div class="divider"/>
-  <footer class="footer">本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.8</footer>
+  <footer class="footer">本站功能逐步完善中… © 魔都万事屋™ 2005–2025 • Version v1.2.9</footer>
 </template>
 
 <script setup>
