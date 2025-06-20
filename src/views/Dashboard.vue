@@ -65,8 +65,8 @@ function open(key){
 
 .fab{
   position:fixed;
-  right:24px;
-  bottom: 96px;
+  right: var(--fab-right);
+  bottom: var(--fab-bottom);
   padding:10px 20px;
   border-radius:28px;
   background:#00ffa2;
@@ -77,4 +77,11 @@ function open(key){
   transition:background .3s;
 }
 .fab:hover{background:#12ffb0}
+</style>
+
+<style>
+:root{
+  --fab-right: var(--fab-right);
+  --fab-bottom: var(--fab-bottom);
+}
 </style>
