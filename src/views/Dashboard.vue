@@ -30,20 +30,19 @@
 
     <!-- 页脚 -->
     
-    <Modal v-model:show="showForm">
-      <AddTradeForm v-if="showModal" @close="showModal=false" @saved="showForm=false" @cancel="showForm=false" />
+    <Modal v-model:show="showModal">
+      <AddTradeForm v-if="showModal" @close="showModal=false" @saved="showModal=false" @cancel="showModal=false" />
     </Modal>
 
     <FooterBar />
   </div>
 </template>
 
-<script setup>
-import { ref } from "vue";
+<script setup>import { ref } from 'vue';
+
 const showModal = ref(false);
 
-import { ref } from 'vue'
-const showForm = ref(false)
+
 import TopBar from '@/components/TopBar.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import Modal from '@/components/Modal.vue'
@@ -55,8 +54,7 @@ const modalTitle = ref('详情')
 function open(key){
   modalTitle.value = '详情'
   show.value = true
-}
-</script>
+}</script>
 
 <style scoped>
 .page{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:48px;}
