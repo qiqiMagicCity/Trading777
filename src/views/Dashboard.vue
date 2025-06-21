@@ -25,7 +25,6 @@
     <!-- 弹窗 -->
     <Modal v-model:show="show">
       <template #title>{{ modalTitle }}  
-  <AddTradeForm v-if="showModal" @close="showModal=false" />
   
 </template>
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
@@ -34,14 +33,18 @@
     <!-- 页脚 -->
     
     <Modal v-model:show="showModal">
+  <template #title>
+    添加交易
+    <button class="modal-close" @click="showModal=false">×</button>
+  </template>
+
       <AddTradeForm v-if="showModal" @close="showModal=false" @saved="showModal=false" @cancel="showModal=false" />
     </Modal>
 
     <FooterBar />
   </div>
   
-  <AddTradeForm v-if="showModal" @close="showModal=false" />
-  <AddTradeFab @open="showModal=true" />
+    <AddTradeFab @open="showModal=true" />
 </template>
 
 <script setup>
