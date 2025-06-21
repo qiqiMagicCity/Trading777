@@ -69,4 +69,5 @@ input,select{padding:6px;font-size:14px;}
 .dropdown{list-style:none;padding:0;margin:0;border:1px solid #00ff99;max-height:160px;overflow:auto;}
 .dropdown li{padding:4px 8px;cursor:pointer;}
 .dropdown li:hover{background:#00ff99;color:#000;}
+li{cursor:pointer;} li:hover{background:#00ff99;color:#000;}
 </style>

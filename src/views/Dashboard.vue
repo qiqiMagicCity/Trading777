@@ -38,7 +38,7 @@
 
     <FooterBar />
   </div>
-  <AddTradeFab @open="showModal=true" />
+  
   <AddTradeForm v-if="showModal" @close="showModal=false" />
 </template>
 
