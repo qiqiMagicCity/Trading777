@@ -1,0 +1,1 @@
+<template><button class='fab-fixed' @click="$emit('open')">添加交易</button></template>

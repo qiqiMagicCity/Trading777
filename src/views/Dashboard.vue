@@ -24,7 +24,9 @@
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
-      <template #title>{{ modalTitle }}</template>
+      <template #title>{{ modalTitle }}  <AddTradeFab @open="showModal=true" />
+  <AddTradeForm v-if="showModal" @close="showModal=false" />
+</template>
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
 
@@ -36,9 +38,12 @@
 
     <FooterBar />
   </div>
+  <AddTradeFab @open="showModal=true" />
+  <AddTradeForm v-if="showModal" @close="showModal=false" />
 </template>
 
-<script setup>import { ref } from 'vue';
+<script setup>
+import AddTradeFab from "@/components/AddTradeFab.vue";import { ref } from 'vue';
 
 const showModal = ref(false);
 
@@ -78,3 +83,5 @@ function open(key){
 }
 .fab:hover{background:#12ffb0}
 </style>
+
+<style scoped>.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;justify-content:center;}</style>

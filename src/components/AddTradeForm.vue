@@ -1,107 +1,72 @@
-
 <template>
   <div class="form">
     <label>股票代码</label>
-    <input v-model="symbol" @input="searchSymbol" placeholder="如 AAPL" />
-    <ul v-if="results.length" class="dropdown">
-      <li v-for="item in results" :key="item.symbol" @click="select(item)">
-        {{ item.symbol }} — {{ item.description }}
+    <input v-model="symbol" @input="onSearch(symbol)" placeholder="如 AAPL" />
+    <ul v-if="options.length" class="dropdown">
+      <li v-for="opt in options" :key="opt.value" @click="onSelect(opt.value, opt)">
+        {{ opt.label }}
       </li>
     </ul>
 
-    <label>名称</label>
-    <input :value="selectedName" disabled />
-
     <label>数量</label>
-    <input v-model.number="qty" type="number" />
+    <input v-model.number="quantity" type="number" />
 
     <label>价格</label>
     <input v-model.number="price" type="number" />
 
     <label>类型</label>
-    <select v-model="type">
+    <select v-model="action">
       <option value="buy">买入</option>
       <option value="sell">卖出</option>
     </select>
 
-    <div class="actions"><button class="cancel" @click="emit('cancel')">取消</button><button class="submit" @click="save">提交</button></div>
+    <div class="btn-row">
+      <button class="cancel" @click="handleCancel">取消</button>
+      <button class="submit" @click="handleSubmit" :disabled="loadingSave">提交</button>
+    </div>
   </div>
 </template>
-
 <script setup>
-const handleCancel = () => emit('close');
-import { ref } from 'vue'
-import { FINNHUB_KEY as apiKey } from '@/constants/api.js'
-const symbol = ref('')
+import { ref } from 'vue';
+import { searchSymbols } from '@/services/finnhubService.js';
+import { supabase } from '@/utils/supabaseClient.js';
+import { showToast } from '@/utils/toast.js';
 
-const results = ref([])
-const selectedName = ref('')
-const qty = ref(0)
-const price = ref(0)
-const type = ref('buy')
+const emit=defineEmits(['close','saved']);
+const symbol=ref('');
+const quantity=ref(0);
+const price=ref(0);
+const action=ref('buy');
+const options=ref([]);
 
-let timer = null
-const searchSymbol = () => {
-  if (timer) clearTimeout(timer)
-  if (!symbol.value) {
-    results.value = []
-    return
-  }
-  timer = setTimeout(async () => {
-    const res = await fetch(`https://finnhub.io/api/v1/search?q=${symbol.value}&token=${apiKey}`)
-    const data = await res.json()
-    results.value = data.result.filter(r => r.type === 'Equity')
-  }, 300)
+let timer;
+function onSearch(val){
+  clearTimeout(timer);
+  timer=setTimeout(async ()=>{
+    if(!val){options.value=[];return;}
+    const list=await searchSymbols(val);
+    options.value=list.map(i=>({value:i.symbol,label:`${i.symbol} — ${i.description}`}));
+  },300);
+}
+function selectOpt(opt){
+  symbol.value=opt.value;
+  options.value=[];
 }
 
-const select = (item) => {
-  symbol.value = item.symbol
-  selectedName.value = item.description
-  results.value = []
-}
-
-const emit = defineEmits(['saved','cancel'])
-function save() {
-  alert('模拟保存：' + symbol.value + ', ' + qty.value + ', ' + price.value)
-  emit('saved')
+async function submit(){
+  const { data:{user}}=await supabase.auth.getUser();
+  if(!user){showToast('请先登录','error');return;}
+  const {error}=await supabase.from('TradeDate').insert({user_id:user.id,symbol:symbol.value.toUpperCase(),action:action.value,quantity:Number(quantity.value),price:Number(price.value)});
+  if(error){showToast('保存失败:'+error.message,'error');}else{showToast('保存成功');emit('saved');emit('close');}
 }
 </script>
-
 <style scoped>
-.form { display:flex; flex-direction:column; gap:12px; }
-input, select { padding:6px; font-size:14px; }
-button {
-  background: #00ff99;
-  color: #000;
-  padding: 8px;
-  font-weight: bold;
-  cursor: pointer;
-}
-.dropdown {
-  list-style: none;
-  background: #111;
-  border: 1px solid #00ff99;
-  padding: 4px;
-  margin: 0;
-  max-height: 150px;
-  overflow: auto;
-}
-.dropdown li {
-  padding: 4px 8px;
-  cursor: pointer;
-}
-.dropdown li:hover {
-  background: #00ff99;
-  color: #000;
-}
-</style>
-
-
-<style scoped>
-.actions{display:flex;justify-content:flex-end;gap:12px;margin-top:12px;}
-.actions .cancel{background:#ff4d4f;color:#fff;padding:8px 14px;font-weight:bold;border:none;cursor:pointer;}
-.actions .submit{background:#00ff99;color:#000;padding:8px 14px;font-weight:bold;border:none;cursor:pointer;}
-.actions .cancel:hover{opacity:0.88}
-.actions .submit:hover{background:#12ffb0}
-a-form-item .ant-form-item-label label{font-weight:600;}
+.form{display:flex;flex-direction:column;gap:12px;font-weight:600;}
+input,select{padding:6px;font-size:14px;}
+.btn-row{display:flex;justify-content:flex-end;gap:12px;margin-top:12px;}
+.cancel{background:#c0392b;color:#fff;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;}
+.submit{background:#00ff99;color:#000;font-weight:600;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;}
+.dropdown{list-style:none;padding:0;margin:0;border:1px solid #00ff99;max-height:160px;overflow:auto;}
+.dropdown li{padding:4px 8px;cursor:pointer;}
+.dropdown li:hover{background:#00ff99;color:#000;}
 </style>

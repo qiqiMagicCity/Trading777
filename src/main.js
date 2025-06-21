@@ -1,3 +1,5 @@
+import '@/assets/fab.css';
+import '@/assets/toast.css';
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
