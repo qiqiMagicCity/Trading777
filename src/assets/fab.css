@@ -1,1 +1,3 @@
-:root{--fab-right:32px;--fab-bottom:80px}.fab-fixed{font-size:1.5rem;position:fixed;right:var(--fab-right);bottom:var(--fab-bottom);z-index:9999;padding:12px 36px;border-radius:28px;background:rgba(0,255,153,0.9);border:2px solid #00ff99;color:#000;font-weight:600;cursor:pointer}.fab-fixed:hover{background:#12ffb0}
+:root{
+  --fab-bottom:132px;
+  --fab-right:32px;--fab-right:32px;--fab-bottom:80px}.fab-fixed{position:fixed;right:var(--fab-right);bottom:var(--fab-bottom);z-index:9999;padding:8px 24px;border-radius:28px;background:#00ff99;border:2px solid #00ff99;color:#000;font-weight:600;cursor:pointer}.fab-fixed:hover{background:#12ffb0}
