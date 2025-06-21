@@ -1,4 +1,3 @@
-
 <script setup>
 defineEmits(['open']);
 </script>
@@ -8,47 +7,50 @@ defineEmits(['open']);
     <span class="label">添加交易</span>
   </button>
 </template>
-
 <style>
 .fab-fixed{
-  position:fixed !important;
-  left:50% !important;
-  transform:translateX(-50%) !important;
-  bottom:154px !important;
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:154px;
   z-index:10000;
+
   display:flex;
   align-items:center;
   justify-content:center;
+  min-width:260px;
+  padding:18px 50px;
 
-  min-width:240px;
-  padding:20px 60px;
-  font-size:2rem;
+  font-size:1.9rem;
   font-weight:700;
-  color:#021;               /* dark text for contrast */
-  text-shadow:0 2px 4px rgba(0,0,0,0.4);
+  letter-spacing:1px;
+  color:#ffffff;
+  text-shadow:0 0 6px rgba(0,255,200,.8);
 
-  border:none;
-  border-radius:36px;
-  background:linear-gradient(145deg,#00ffd1 0%, #00c27a 100%);
+  border-radius:30px;
+  border:1px solid rgba(0,255,153,.4);
+  background:rgba(0,255,153,.25);
+  backdrop-filter:blur(10px) saturate(180%);
+  -webkit-backdrop-filter:blur(10px) saturate(180%);
+
   box-shadow:
-      0 0 20px rgba(0,255,200,.45),
-      0 10px 25px rgba(0,0,0,.35) inset;
+     0 0 12px rgba(0,255,153,.45),
+     0 4px 8px rgba(0,0,0,.25) inset,
+     0 -4px 8px rgba(0,0,0,.25) inset;
+
+  transition:transform .18s ease, box-shadow .18s ease, background .18s ease, opacity .18s ease;
   opacity:.77;
-  transition:transform .2s ease,opacity .2s ease,box-shadow .2s ease;
 }
 .fab-fixed:hover{
-  transform:translateX(-50%) scale(1.08);
   opacity:1;
+  transform:translateX(-50%) scale(1.06);
+  background:rgba(0,255,153,.35);
   box-shadow:
-      0 0 28px rgba(0,255,200,.75),
-      0 12px 30px rgba(0,0,0,.4) inset;
+     0 0 18px rgba(0,255,180,.75),
+     0 6px 12px rgba(0,0,0,.35) inset,
+     0 -6px 12px rgba(0,0,0,.35) inset;
 }
 .fab-fixed:active{
-  transform:translateX(-50%) scale(0.96);
-}
-.label{
-  background:linear-gradient(45deg,rgba(255,255,255,.3),rgba(255,255,255,0));
-  -webkit-background-clip:text;
-  color:transparent;
+  transform:translateX(-50%) scale(.96);
 }
 </style>
