@@ -3,7 +3,7 @@ defineEmits(['open']);
 </script>
 
 <template>
-  <button class="fab-fixed" @click="$emit('open')">添加交易</button>
+  
 </template>
 
 <style>
@@ -29,4 +29,5 @@ defineEmits(['open']);
   opacity:1;
   box-shadow:0 0 25px rgba(0,255,153,.8);
 }
+button.fab{display:none !important;}
 </style>

@@ -20,7 +20,7 @@
     <hr class="divider" />
 
     <!-- 悬浮按钮 -->
-    <button class="fab" @click="showModal = true">添加交易</button>
+    
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
