@@ -27,6 +27,7 @@
   </div>
 </template>
 <script setup>
+const showOptions = ref(false);
 import { ref } from 'vue';
 import { searchSymbols } from '@/services/finnhubService.js';
 import { supabase } from '@/utils/supabaseClient.js';
@@ -45,7 +46,8 @@ function onSearch(val){
   timer=setTimeout(async ()=>{
     if(!val){options.value=[];return;}
     const list=await searchSymbols(val);
-    options.value=list.map(i=>({value:i.symbol,label:`${i.symbol} — ${i.description}`}));
+    showOptions.value = true;
+    options.value = list.map(i=>({value:i.symbol,label:`${i.symbol} — ${i.description}`}));
   },300);
 }
 function selectOpt(opt){
