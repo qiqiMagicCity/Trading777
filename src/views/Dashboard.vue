@@ -34,10 +34,6 @@
     <!-- 页脚 -->
     
     <Modal v-model:show="showModal">
-    <template #title>
-      添加交易
-      <button class="modal-close" @click="showModal=false">×</button>
-    </template>
       <AddTradeForm v-if="showModal" @close="showModal=false" @saved="showModal=false" @cancel="showModal=false" />
     </Modal>
 

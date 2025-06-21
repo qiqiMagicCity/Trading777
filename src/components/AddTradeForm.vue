@@ -2,7 +2,7 @@
   <div class="form">
     <label>股票代码</label>
     <input v-model="symbol" @input="onSearch(symbol)" placeholder="如 AAPL" />
-    <ul v-if="showOptions && options.length" class="dropdown">
+    <ul v-if="options.length" class="dropdown">
       <li v-for="opt in options" :key="opt.value" @click="onSelect(opt.value, opt)">
         {{ opt.label }}
       </li>
