@@ -3,7 +3,7 @@
     <label>股票代码</label>
     <input v-model="symbol" @input="onSearch(symbol)" placeholder="如 AAPL" />
     <ul v-if="showOptions && options.length" class="dropdown">
-      <li v-for="opt in options" :key="opt.value" @click="selectOpt(opt)">
+      <li v-for="opt in options" :key="opt.value" @click="onSelect(opt.value, opt)">
         {{ opt.label }}
       </li>
     </ul>
@@ -51,20 +51,8 @@ function onSearch(val){
   },300);
 }
 function selectOpt(opt){
-  showOptions.value = false;
   symbol.value=opt.value;
   options.value=[];
-}
-
-
-function handleCancel(){
-  symbol.value = '';
-  quantity.value = 0;
-  price.value = 0;
-  action.value = 'buy';
-  options.value = [];
-  showOptions.value = false;
-  emit('close');
 }
 
 async function submit(){
