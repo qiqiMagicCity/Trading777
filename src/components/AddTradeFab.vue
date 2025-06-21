@@ -1,4 +1,3 @@
-
 <script setup>
 defineEmits(['open']);
 </script>
@@ -12,20 +11,22 @@ defineEmits(['open']);
   position:fixed !important;
   left:50% !important;
   transform:translateX(-50%) !important;
-  bottom:154px !important;          /* 1304 - 1150 */
-  z-index:10000 !important;
-
-  padding:18px 54px !important;
-  font-size:2rem !important;
-  font-weight:600 !important;
-
-  border-radius:28px;
-  background:rgba(0,255,153,0.77);
-  border:2px solid rgba(0,255,153,0.77);
+  bottom:154px !important;
+  z-index:10000;
+  padding:18px 54px;
+  font-size:2rem;
+  font-weight:600;
   color:#000;
-  cursor:pointer;
+  border:none;
+  border-radius:28px;
+  background:linear-gradient(145deg,#00ff99 0%,#00d48c 100%);
+  box-shadow:0 0 18px rgba(0,255,153,.55);
+  opacity:0.77;
+  transition:transform .15s ease,opacity .15s ease,box-shadow .15s ease;
 }
 .fab-fixed:hover{
-  background:rgba(18,255,176,0.77);
+  transform:translateX(-50%) scale(1.05);
+  opacity:1;
+  box-shadow:0 0 25px rgba(0,255,153,.8);
 }
 </style>
