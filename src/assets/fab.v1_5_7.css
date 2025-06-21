@@ -1,0 +1,18 @@
+
+.fab-fixed{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:154px !important; /* 1304 - 1150 = 154 */
+  z-index:9999;
+  padding:18px 54px;
+  font-size:2rem;
+  border-radius:28px;
+  background:rgba(0,255,153,0.9);
+  border:2px solid rgba(0,255,153,0.9);
+  color:#000;
+  cursor:pointer;
+}
+.fab-fixed:hover{
+  background:rgba(18,255,176,0.9);
+}
