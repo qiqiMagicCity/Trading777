@@ -1,4 +1,3 @@
-import '@/assets/fab.v1_5_7.css';
 import '@/assets/toast.css';
 import { createApp } from 'vue';
 import App from './App.vue';

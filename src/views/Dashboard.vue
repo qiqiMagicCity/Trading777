@@ -24,8 +24,9 @@
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
-      <template #title>{{ modalTitle }}  <AddTradeFab @open="showModal=true" />
+      <template #title>{{ modalTitle }}  
   <AddTradeForm v-if="showModal" @close="showModal=false" />
+  <AddTradeFab @open="showModal=true" />
 </template>
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
@@ -40,6 +41,7 @@
   </div>
   
   <AddTradeForm v-if="showModal" @close="showModal=false" />
+  <AddTradeFab @open="showModal=true" />
 </template>
 
 <script setup>
