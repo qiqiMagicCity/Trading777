@@ -1,9 +1,12 @@
+
 <script setup>
 defineEmits(['open']);
 </script>
 
 <template>
-  
+  <button class="fab-fixed" @click="$emit('open')">
+    <span class="label">添加交易</span>
+  </button>
 </template>
 
 <style>
@@ -13,21 +16,39 @@ defineEmits(['open']);
   transform:translateX(-50%) !important;
   bottom:154px !important;
   z-index:10000;
-  padding:18px 54px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width:240px;
+  padding:20px 60px;
   font-size:2rem;
-  font-weight:600;
-  color:#000;
+  font-weight:700;
+  color:#021;               /* dark text for contrast */
+  text-shadow:0 2px 4px rgba(0,0,0,0.4);
+
   border:none;
-  border-radius:28px;
-  background:linear-gradient(145deg,#00ff99 0%,#00d48c 100%);
-  box-shadow:0 0 18px rgba(0,255,153,.55);
-  opacity:0.77;
-  transition:transform .15s ease,opacity .15s ease,box-shadow .15s ease;
+  border-radius:36px;
+  background:linear-gradient(145deg,#00ffd1 0%, #00c27a 100%);
+  box-shadow:
+      0 0 20px rgba(0,255,200,.45),
+      0 10px 25px rgba(0,0,0,.35) inset;
+  opacity:.77;
+  transition:transform .2s ease,opacity .2s ease,box-shadow .2s ease;
 }
 .fab-fixed:hover{
-  transform:translateX(-50%) scale(1.05);
+  transform:translateX(-50%) scale(1.08);
   opacity:1;
-  box-shadow:0 0 25px rgba(0,255,153,.8);
+  box-shadow:
+      0 0 28px rgba(0,255,200,.75),
+      0 12px 30px rgba(0,0,0,.4) inset;
 }
-button.fab{display:none !important;}
+.fab-fixed:active{
+  transform:translateX(-50%) scale(0.96);
+}
+.label{
+  background:linear-gradient(45deg,rgba(255,255,255,.3),rgba(255,255,255,0));
+  -webkit-background-clip:text;
+  color:transparent;
+}
 </style>
