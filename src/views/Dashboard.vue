@@ -20,22 +20,11 @@
     <hr class="divider" />
 
     <!-- 悬浮按钮 -->
-    <button class="fab-fixed" @click="showModal = true">添加交易</button>
+    <button class="fab" @click="showModal = true">添加交易</button>
 
     <!-- 弹窗 -->
     <Modal v-model:show="show">
       <template #title>{{ modalTitle }}</template>
-
-<style scoped>
-.stats-grid{
-  display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
-  gap:16px;
-  justify-content:center;
-  margin-top:16px;
-}
-</style>
-
       <div style="color:#333">功能占位，后续接入 Supabase 数据</div>
     </Modal>
 
@@ -48,17 +37,6 @@
     <FooterBar />
   </div>
 </template>
-
-<style scoped>
-.stats-grid{
-  display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
-  gap:16px;
-  justify-content:center;
-  margin-top:16px;
-}
-</style>
-
 
 <script setup>import { ref } from 'vue';
 
@@ -78,11 +56,25 @@ function open(key){
   show.value = true
 }</script>
 
+<style scoped>
+.page{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:48px;}
+.kpi-row{display:flex;flex-wrap:wrap;justify-content:center;margin:24px auto;max-width:1400px}
+.divider{width:90%;max-width:1400px;border:0;border-top:1px solid rgba(0,255,128,0.35);margin:40px auto}
 
+.fab:hover{background:#00e68a}
 
-<style>
-:root{
-  --fab-right: var(--fab-right);
-  --fab-bottom: var(--fab-bottom);
+.fab{
+  position:fixed;
+  right:24px;
+  bottom: 96px;
+  padding:10px 20px;
+  border-radius:28px;
+  background:#00ffa2;
+  border:2px solid #00ffa2;
+  color:#000;
+  font-weight:600;
+  box-shadow:none;
+  transition:background .3s;
 }
+.fab:hover{background:#12ffb0}
 </style>
