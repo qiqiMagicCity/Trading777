@@ -59,7 +59,7 @@ async function load(){
   const trades = data as any as Trade[];
   const pos = calcPosition(trades);
 
-  const token = import.meta.env.VITE_FINNHUB_TOKEN as string;
+  const token = (import.meta.env.VITE_FINNHUB_TOKEN as string) || 'd19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg';
   const symbols = Object.keys(pos);
   const quotes: Record<string,{c:number,pc:number}> = {};
   await Promise.all(symbols.map(async s=>{

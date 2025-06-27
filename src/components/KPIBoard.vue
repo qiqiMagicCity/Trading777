@@ -26,7 +26,7 @@ async function load(){
   // fetch quotes for all symbols
   const symbols = [...new Set(trades.map(t=>t.symbol))];
   const quotes: Record<string,{c:number,pc:number}> = {};
-  const token = import.meta.env.VITE_FINNHUB_TOKEN as string;
+  const token = (import.meta.env.VITE_FINNHUB_TOKEN as string) || 'd19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg';
   await Promise.all(symbols.map(async s=>{
     const {data} = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${token}`);
     quotes[s]=data;
