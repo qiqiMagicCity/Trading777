@@ -1,4 +1,11 @@
-# Trading777 v1.6.9
+# Trading777 v1.7.0
 
-本版本实现 KPI 统计、持仓明细、交易列表三大功能区，并兼容碎股与 4 位价格精度。
-参考 `sql/` 目录执行视图脚本后 `npm i && npm run dev` 即可本地运行。
+Vue 3 + Vite + Tailwind  
+新增 KPI 统计、持仓明细、交易列表（满足 2025‑06 设计要求）。  
+运行步骤：
+
+```bash
+cp .env.example .env   # 填入 Supabase & Finnhub Key
+npm i
+npm run dev
+```
