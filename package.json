@@ -1,6 +1,6 @@
 {
   "name": "trading777",
-  "version": "1.6.13",
+  "version": "1.6.14",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,7 @@
     "@supabase/supabase-js": "^2.39.5",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5",
-    "vue3-toastify": "^2.4.1"
+    "vue3-toastify": "^0.2.8"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.5.0",
