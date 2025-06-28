@@ -25,7 +25,6 @@
 
 <script setup lang='ts'>
 import { ref } from 'vue'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-vue'
 import useSWRV from 'swrv'
 import KpiCard from '@/components/KpiCard.vue'
 import PositionTable from '@/components/PositionTable.vue'
@@ -35,7 +34,7 @@ import AddTradeModal from '@/components/AddTradeModal.vue'
 import Divider from '@/components/Divider.vue'
 import { fetcher } from '@/utils/fetcher'
 
-const supabase = useSupabaseClient()
+const supabase = supabaseClient
 const { data: kpis } = useSWRV(() => supabase.from('vw_kpi_stats').select('*'), fetcher)
 const { data: positions } = useSWRV(() => supabase.from('vw_positions').select('*'), fetcher)
 const { data: trades } = useSWRV(() => supabase.from('vw_trades_latest').select('*'), fetcher)

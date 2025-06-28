@@ -1,6 +1,6 @@
 {
   "name": "trading777",
-  "version": "1.6.13",
+  "version": "1.6.14",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -15,7 +15,6 @@
     "axios": "^1.6.8",
     "vite": "^5.2.10",
     "@vitejs/plugin-vue": "^5.0.4",
-    "@supabase/auth-helpers-vue": "^1.5.3",
     "swrv": "^1.1.2",
     "@supabase/gotrue-js": "^2.59.0"
   },
