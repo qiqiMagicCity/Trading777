@@ -9,17 +9,15 @@
     </ul>
 
     <label>数量</label>
-    <input v-model.number="quantity" type="number" step="0.0001" />
+    <input v-model.number="quantity" type="number" />
 
     <label>价格</label>
-    <input v-model.number="price" type="number" step="0.0001" />
+    <input v-model.number="price" type="number" />
 
     <label>类型</label>
     <select v-model="action">
-      <option value="BUY">买入</option>
-      <option value="SELL">卖出</option>
-      <option value="SHORT">卖空</option>
-      <option value="COVER">回补</option>
+      <option value="buy">买入</option>
+      <option value="sell">卖出</option>
     </select>
 
     <div class="btn-row">      <button class="submit" @click="handleSubmit" :disabled="loadingSave">提交</button>
@@ -37,7 +35,7 @@ const emit=defineEmits(['close','saved']);
 const symbol=ref('');
 const quantity=ref(0);
 const price=ref(0);
-const action=ref('BUY');
+const action=ref('buy');
 const options=ref([]);
 const loadingSave = ref(false);
 
