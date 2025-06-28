@@ -1,38 +1,9 @@
-
 <template>
-  <div class="kpi" @click="$emit('click')">
-    <h4>{{ title }}</h4>
-    <div :class="['value', positive? 'positive': negative? 'negative':'']">{{ text }}</div>
+  <div class="p-4 bg-gray-800/40 rounded-2xl">
+    <p class="text-sm opacity-70">{{ kpi.label }}</p>
+    <p class="text-xl font-bold mt-1">{{ kpi.value }}</p>
   </div>
 </template>
-
 <script setup>
-import { computed } from 'vue'
-const props = defineProps({
-  title: String,
-  value: [Number, String],
-  positive: Boolean,
-  negative: Boolean
-})
-const text = computed(()=> {
-  if(props.value===undefined || props.value===null) return '暂无数据'
-  return typeof props.value === 'number' ? props.value.toFixed(2) : props.value
-})
+defineProps({ kpi: Object });
 </script>
-
-<style scoped>
-.kpi{
-  min-width:180px;
-  text-align:center;
-  padding:16px 8px;
-  border:2px solid #00ff99;
-  border-radius:8px;
-  margin:8px;
-  box-shadow:0 0 10px #00ff99;
-  cursor:pointer;
-}
-h4{margin:0 0 6px;font-size:16px;font-weight:bold}
-.value{font-size:24px;}
-.value.positive{color:#00ff99}
-.value.negative{color:#ff4c4c}
-</style>

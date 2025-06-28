@@ -1,103 +1,35 @@
-
 <template>
-  <div class="page">
-    <TopBar />
-
-    <div v-if="loading" class="loading">加载中...</div>
-
-    <div v-else>
-      <div v-if="hasData" class="kpi-row">
-        <KpiCard title="账户持仓成本" :value="kpis.positionCost" :positive="kpis.positionCost > 0" :negative="kpis.positionCost < 0" @click="open('cost')" />
-        <KpiCard title="当日盈亏统计" :value="kpis.dailyPnL" :positive="kpis.dailyPnL > 0" :negative="kpis.dailyPnL < 0" @click="open('today')" />
-        <KpiCard title="当日浮盈浮亏" :value="kpis.dailyUnrealized" :positive="kpis.dailyUnrealized > 0" :negative="kpis.dailyUnrealized < 0" @click="open('float')" />
-        <KpiCard title="当日盈亏笔数" :value="kpis.dailyPnLCount" @click="open('pnlCnt')" />
-        <KpiCard title="当日交易次数" :value="kpis.dailyTradeCount" @click="open('todayCnt')" />
-        <KpiCard title="累计交易笔数" :value="kpis.cumulativeTradeCount" @click="open('total')" />
-        <KpiCard title="WTD 盈亏" :value="kpis.wtdPnL" :positive="kpis.wtdPnL > 0" :negative="kpis.wtdPnL < 0" @click="open('wtd')" />
-        <KpiCard title="MTD 盈亏" :value="kpis.mtdPnL" :positive="kpis.mtdPnL > 0" :negative="kpis.mtdPnL < 0" @click="open('mtd')" />
-        <KpiCard title="YTD 盈亏" :value="kpis.ytdPnL" :positive="kpis.ytdPnL > 0" :negative="kpis.ytdPnL < 0" @click="open('ytd')" />
-      </div>
-      <div v-else class="no-data">暂无交易数据</div>
+  <section class="p-4">
+    <div v-if="loading" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div v-for="n in 8" :key="n" class="h-24 bg-gray-700/20 rounded-2xl animate-pulse"></div>
     </div>
+    <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <KpiCard v-for="k in kpis" :key="k.label" :kpi="k" />
+    </div>
+    <p v-if="!loading && !hasData" class="text-center mt-8 text-primary">暂无交易数据</p>
 
-    <AddTradeFab class="fab" @click="showAdd = true" />
-
-    <Modal v-if="showAdd" @close="showAdd = false" title="添加交易">
-      <AddTradeForm @submitted="onAddedTrade" />
-    </Modal>
-
-    <FooterBar />
-  </div>
+    <AddTradeModal v-model="showModal" @saved="reload" />
+    <div class="fixed bottom-10 inset-x-0 flex justify-center">
+      <button @click="showModal=true" class="btn btn-primary px-10">添加交易</button>
+    </div>
+  </section>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import TopBar from '@/components/TopBar.vue'
-import KpiCard from '@/components/KpiCard.vue'
-import Modal from '@/components/Modal.vue'
-import FooterBar from '@/components/FooterBar.vue'
-import AddTradeForm from '@/components/AddTradeForm.vue'
-import AddTradeFab from '@/components/AddTradeFab.vue'
-import { getKpis } from '@/services/kpiService'
-import { supabase } from '@/utils/supabaseClient'
+import { ref, onMounted, computed } from 'vue';
+import { fetchKpi } from '../services/kpiService';
+import KpiCard from '../components/KpiCard.vue';
+import AddTradeModal from '../components/AddTradeModal.vue';
 
-const loading = ref(true)
-const kpis = ref({})
-const hasData = ref(false)
-const showAdd = ref(false)
+const loading = ref(true);
+const kpis = ref([]);
+const showModal = ref(false);
+const hasData = computed(()=>kpis.value.some(k=>k.value!==0));
 
-function open(section) {
-  // TODO: open detail modal or route
+async function reload() {
+  loading.value = true;
+  kpis.value = await fetchKpi();
+  loading.value = false;
 }
-
-async function load () {
-  try {
-    const { data: sessionData } = await supabase.auth.getUser()
-    const user = sessionData?.user
-    if (!user) {
-      loading.value = false
-      return
-    }
-    kpis.value = await getKpis(user.id)
-    hasData.value = Object.keys(kpis.value).length > 0
-  } catch (e) {
-    console.error('Dashboard load error', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-function onAddedTrade () {
-  showAdd.value = false
-  loading.value = true
-  load()
-}
-
-onMounted(load)
+onMounted(reload);
 </script>
-
-<style scoped>
-.page{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:flex-start;
-  padding-top:48px;
-}
-.kpi-row{
-  display:flex;
-  flex-wrap:wrap;
-  justify-content:center;
-  margin:24px auto;
-  max-width:1400px;
-}
-.loading,.no-data{
-  margin:40px;
-  font-size:18px;
-}
-.fab{
-  position:fixed;
-  bottom:100px;
-  right:30px;
-}
-</style>
