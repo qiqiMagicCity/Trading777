@@ -1,2 +1,0 @@
--- create_views_v1_6_11.sql
--- (Same content as executed in Supabase)

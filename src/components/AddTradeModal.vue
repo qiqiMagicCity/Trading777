@@ -1,0 +1,56 @@
+
+<template>
+  <div>
+    <button class="bg-emerald-500 text-white px-4 py-2 rounded-xl" @click="open = true">新增交易</button>
+    <div v-if="open" class="fixed inset-0 bg-black/30 flex items-center justify-center">
+      <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md space-y-4">
+        <h2 class="text-xl font-semibold">录入交易</h2>
+        <form @submit.prevent="handleSubmit">
+          <div class="flex flex-col space-y-2">
+            <input v-model="form.symbol" class="border p-2 rounded" placeholder="代码 eg. AAPL" required>
+            <select v-model="form.action" class="border p-2 rounded">
+              <option value="BUY">买入</option>
+              <option value="SELL">卖出</option>
+              <option value="SHORT">卖空</option>
+              <option value="COVER">回补</option>
+            </select>
+            <input v-model.number="form.price" step="0.0001" type="number" class="border p-2 rounded" placeholder="价格" required>
+            <input v-model.number="form.quantity" step="0.000001" type="number" class="border p-2 rounded" placeholder="数量" required>
+            <button type="submit" class="bg-emerald-500 text-white py-2 rounded-xl w-full" :disabled="loading">
+              {{ loading ? '提交中…' : '提交' }}
+            </button>
+            <button type="button" class="text-gray-500 underline text-sm" @click="open=false">关闭</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { supabase } from '../supabaseClient'
+
+const open = ref(false)
+const loading = ref(false)
+const form = ref({
+  symbol: '',
+  action: 'BUY',
+  price: null,
+  quantity: null
+})
+
+async function handleSubmit () {
+  loading.value = true
+  const { error } = await supabase.from('TradeDate').insert({
+    ...form.value,
+    trade_at: new Date().toISOString()
+  })
+  loading.value = false
+  if (error) {
+    alert(error.message)
+  } else {
+    open.value = false
+  }
+}
+</script>
