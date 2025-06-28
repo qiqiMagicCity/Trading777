@@ -1,10 +1,8 @@
 
 import { createRouter, createWebHistory } from 'vue-router'
-import App from '../App.vue'
+import Dashboard from '../views/Dashboard.vue'
 
 export default createRouter({
   history: createWebHistory(),
-  routes: [
-    { path: '/', component: App }
-  ]
+  routes: [{ path: '/', component: Dashboard }]
 })

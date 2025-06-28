@@ -12,8 +12,8 @@
 </template>
 
 <script setup>
-import AddTradeModal from './components/AddTradeModal.vue'
-import KpiBoard from './components/KpiBoard.vue'
-import PositionTable from './components/PositionTable.vue'
-import TradeTable from './components/TradeTable.vue'
+import AddTradeModal from '../components/AddTradeModal.vue'
+import KpiBoard from '../components/KpiBoard.vue'
+import PositionTable from '../components/PositionTable.vue'
+import TradeTable from '../components/TradeTable.vue'
 </script>

@@ -1,33 +1,25 @@
 
 # Trading777 v1.7.0
 
+完整实现 8 大功能区（KPI 卡片 / 持仓 / 交易列表）——可直接推 GitHub & 部署 Vercel。
+
 ## 快速开始
 
 ```bash
-npm install
-cp .env.example .env      # 填写 Supabase & Finnhub Key
-npm run dev
+npm ci
+cp .env.example .env   # 填入 Supabase & Finnhub key
+npm run dev            # 本地预览
 ```
 
-### 部署
+## 构建
 
-```bash
+```
 npm run build
 ```
 
-### 数据库迁移
+输出文件位于 `dist/`，符合 Vercel 静态托管。
 
-```sql
-\i supabase/schema_v1.7.0.sql
-```
+## 数据库迁移
 
-## KPI 公式
+在 Supabase **SQL Editor** 执行 `supabase/schema_v1.7.0.sql` 脚本（见随包提供或下方聊天）。
 
-| 指标 | 公式 |
-|------|------|
-| 账户持仓金额 | Σ |qty| × cost |
-| 日内交易统计 | 卖买差价 × qty (当日) |
-| 当日盈亏统计 | (实时价 - 昨收) × 当前持仓数 |
-| 当日交易次数 | COUNT(*) 当日 |
-| 累计交易笔数 | COUNT(*) |
-| WTD / MTD / YTD | 同上，按周/月/年筛选 |
