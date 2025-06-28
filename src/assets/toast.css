@@ -1,0 +1,1 @@
+#toast-root{position:fixed;right:24px;bottom:120px;display:flex;flex-direction:column;gap:8px;z-index:10000}.toast{padding:8px 16px;border-radius:4px;font-size:14px;background:#2ecc71;color:#fff}.toast.error{background:#e74c3c}

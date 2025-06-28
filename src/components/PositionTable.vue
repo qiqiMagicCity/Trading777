@@ -1,89 +1,64 @@
+
 <template>
-  <div class="mt-8">
-    <h2 class="text-lg font-semibold mb-2">当前持仓</h2>
-    <div class="border-t-2 border-emerald-400/60 mb-4"></div>
-    <table class="w-full text-sm">
-      <thead class="text-left text-neutral-400">
+  <div class="position-table">
+    <table v-if="positions.length">
+      <thead>
         <tr>
-          <th>股票</th><th>实时价</th><th>总成本</th><th>盈亏平衡点</th><th>持仓成本</th><th>当日涨跌</th>
+          <th>股票</th>
+          <th>价格</th>
+          <th>总成本</th>
+          <th>盈亏平衡点</th>
+          <th>持仓成本</th>
+          <th>当日涨跌</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in rows" :key="row.symbol" class="border-b border-neutral-700">
-          <td>{{ row.symbol }} <span class="text-neutral-500">({{ row.qty.toFixed(6) }})</span></td>
-          <td>{{ row.price.toFixed(2) }}</td>
-          <td>{{ row.totalCost.toFixed(2) }}</td>
-          <td>{{ row.jVal.toFixed(2) }}</td>
-          <td>{{ row.mVal.toFixed(2) }}</td>
-          <td :class="row.dayChg>=0?'text-emerald-400':'text-red-400'">{{ row.dayChg.toFixed(2) }}</td>
+        <tr v-for="p in positions" :key="p.symbol">
+          <td class="sym">
+            <img :src="p.logo" alt="" class="logo" v-if="p.logo"/>
+            <div class="code">{{ p.symbol }}</div>
+            <div class="qty">{{ formatQty(p.qty) }}</div>
+          </td>
+          <td>{{ fmt(p.price) }}</td>
+          <td>{{ fmt(p.qty * p.avg_cost) }}</td>
+          <td :class="colorClass(p.jVal - p.price)">{{ fmt(p.jVal) }}</td>
+          <td>{{ fmt(p.avg_cost) }}</td>
+          <td :class="colorClass(p.price - p.prevClose)">{{ fmt((p.price - p.prevClose) * p.qty) }}</td>
         </tr>
       </tbody>
     </table>
+    <div v-else class="empty">暂无持仓</div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { supabase } from '../supabase';
-import { Trade } from '../types';
-import axios from 'axios';
-
-// simplified rolling algorithm
-function calcPosition(trades: Trade[]){
-  const map: Record<string, any> = {};
-  trades.forEach(t=>{
-    const m = map[t.symbol] || {qty:0, cost:0};
-    if(t.action==='BUY'){
-      m.cost += t.quantity*t.price;
-      m.qty += t.quantity;
-    }else if(t.action==='SELL'){
-      m.cost -= t.quantity*t.price;
-      m.qty -= t.quantity;
-    }else if(t.action==='SHORT'){
-      m.cost -= t.quantity*t.price;
-      m.qty -= t.quantity;
-    }else{ // COVER
-      m.cost += t.quantity*t.price;
-      m.qty += t.quantity;
-    }
-    map[t.symbol]=m;
-  });
-  return map;
+<script setup>
+import { usePositions } from '../services/positionsService'
+import { computed } from 'vue'
+const { positions, loading, refresh } = usePositions()
+function fmt(n) {
+  if (n === '--') return '--'
+  if (isNaN(n)) return '--'
+  return Number(n).toFixed(2)
 }
-
-const rows = ref<any[]>([]);
-
-async function load(){
-  const { data, error } = await supabase.from('TradeDate').select('*');
-  if(error) return;
-  const trades = data as any as Trade[];
-  const pos = calcPosition(trades);
-
-  const token = (import.meta.env.VITE_FINNHUB_TOKEN as string) || 'd19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg';
-  const symbols = Object.keys(pos);
-  const quotes: Record<string,{c:number,pc:number}> = {};
-  await Promise.all(symbols.map(async s=>{
-    const {data} = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${token}`);
-    quotes[s]=data;
-  }));
-
-  rows.value = symbols.map(s=>{
-    const info = pos[s];
-    const price = quotes[s]?.c ?? 0;
-    const yclose = quotes[s]?.pc ?? 0;
-    const qty = info.qty;
-    const avgCost = qty!==0? Math.abs(info.cost/qty):0;
-    return {
-      symbol:s,
-      qty,
-      price,
-      totalCost: Math.abs(qty)*avgCost,
-      jVal: avgCost, // placeholder
-      mVal: avgCost,
-      dayChg: (price - yclose)*Math.abs(qty)
-    };
-  });
+function formatQty(q) {
+  if (q === '--') return '--'
+  return Number(q).toFixed(q % 1 === 0 ? 0 : 4)
 }
-
-onMounted(load);
+function colorClass(v){
+  if(v==='--' || isNaN(v)) return ''
+  return v>0? 'positive': v<0? 'negative':''
+}
 </script>
+
+<style scoped>
+.position-table{width:100%;overflow-x:auto;margin:24px auto;max-width:1400px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 12px;border-bottom:1px solid rgba(0,255,128,0.2);text-align:right}
+th:first-child,td.sym{text-align:left}
+.sym{display:flex;align-items:center;gap:8px}
+.logo{width:20px;height:20px;border-radius:50%}
+.qty{font-size:12px;color:#888}
+.positive{color:#00e68a}
+.negative{color:#ff4c4c}
+.empty{padding:24px;text-align:center;color:#888}
+</style>
