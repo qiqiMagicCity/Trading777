@@ -1,0 +1,90 @@
+[?9001h[?1004h[?25l[2J[m[H]0;npm[?25h]0;npm run build[?25l
+> web@0.1.0 build
+> next build[5;1H[?25h[K]0;C:\WINDOWS\system32\cmd.exe    [38;2;173;127;168m[1m▲ Next.js 15.3.5
+[?25l[m   - Environments: .env.local[8;1H[?25h [37m[1m [m Creating an optimized production build ...
+ [32m[1m✓[m Compiled successfully in 14.0s
+ [37m[1m [m Linting and checking validity of types  [36m.[?25l[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C [37m[1m [m Linting and checking validity of types  [36m...[m[K[161C [37m[1m [m Linting and checking validity of types  [36m.[m[K[161C [37m[1m [m Linting and checking validity of types  [36m..[m[K[161C
+./app/analysis/page.tsx
+23:27  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+59:5  Warning: Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free.  @typescript-eslint/ban-ts-comment[?25h
+65:7  Warning: Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free.  @typescript-eslint/ban-ts-co
+[13;161Homment
+
+./app/components/AddTradeModal.tsx
+7:11  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/components/ui/table.tsx
+72:6  Warning: 'className' is missing in props validation  react/prop-types
+87:6  Warning: 'className' is missing in props validation  react/prop-types
+
+./app/lib/services/apiQueue.ts
+6:23  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+7:18  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+8:20  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+39:21  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/lib/services/priceService.ts
+1:30  Warning: 'CachedPrice' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./app/modules/DashboardMetrics.tsx
+110:9  Warning: 'pnlFifo' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./app/modules/PnlChart.tsx
+15:35  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+85:30  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+117:42  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+126:41  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/modules/PositionsTable.tsx
+80:6  Warning: React Hook useMemo has a missing dependency: 'getRealized'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps        
+123:21  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automati
+[13;161Hically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-elemen
+[13;161Hnt
+
+./app/modules/TradeCalendar.tsx
+13:33  Warning: 'trades' is defined but never used.  @typescript-eslint/no-unused-vars
+13:52  Warning: 'isIntraday' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./app/modules/TradesTable.tsx
+49:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatic
+[13;161Hcally optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element[14;1H
+
+./app/page.tsx
+36:39  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+79:37  Warning: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./app/stock/page.tsx
+5:8  Warning: 'Link' is defined but never used.  @typescript-eslint/no-unused-vars
+82:9  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatica
+[13;161Hally optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element [14;1H
+
+./app/trades/page.tsx
+60:7  Warning: 'histReal' is never reassigned. Use 'const' instead.  prefer-const
+84:21  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatic
+[13;161Hcally optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element[14;1H
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+ [36m.[K[?25l[159C[m[K[161C [36m.. [m[K[161C [36m... [m[K[161C [36m. [m[K[161C [36m.. [m[K[161C [32m[1m✓[m Linting and checking validity of types [?25h
+ [37m[1m [m Collecting page data  [36m.[K[?25l[135C[m[K[161C [37m[1m [m Collecting page data  [36m..[m[K[161C [37m[1m [m Collecting page data  [36m...[m[K[161C [37m[1m [m Collecting page data  [36m.[m[K[161C [37m[1m [m Collecting page data  [36m..[m[K[161C [37m[1m [m Collecting page data  [36m...[m[K[161C [37m[1m [m Collecting page data  [36m.[m[K[161C [32m[1m✓[m Collecting page data    [?25h
+[?25l [37m[1m [m Generating static pages (0/9)  [36m[    ][m[K[161C [37m[1m [m Generating static pages (0/9)  [36m[=   ][m[K[161C [37m[1m [m Generating static pages (0/9)  [36m[==  ][m[K[161C [37m[1m [m Generating static pages (0/9)  [36m[=== ][m[K[161C [37m[1m [m Generating static pages (0/9)  [36m[ ===][m[K[161C ⨯ useSearchParams() should be wrapped in a suspense boundary at page "/stock". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout[?25h
+    at a (C:\Users\Ryan\Desktop\大单\trading-app\apps\web\.next\server\chunks\64.js:1:23477)
+    at d (C:\Users\Ryan\Desktop\大单\trading-app\apps\web\.next\server\chunks\64.js:1:21585)
+    at l (C:\Users\Ryan\Desktop\大单\trading-app\apps\web\.next\server\app\stock\page.js:1:613)
+    at nF (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:46843)
+    at nH (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:48618)
+    at nW (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:67762)
+    at nz (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:65337)
+    at nB (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:47195)
+    at nH (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:48664)
+    at nH (C:\Users\Ryan\Desktop\大单\trading-app\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:64688)
+Error occurred prerendering page "/stock". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /stock/page: /stock, exiting the build.
+ [31m[1m⨯[m Next.js build worker exited with code: 1 and signal: null
+[1mnpm[22m [31merror [mLifecycle script `build` failed with error:[K
+[1mnpm[22m [31merror [94mcode [33m1[K[m
+[1mnpm[22m [31merror [94mpath [mC:\Users\Ryan\Desktop\大单\trading-app\apps\web[K
+[1mnpm[22m [31merror [94mworkspace [mweb@0.1.0[K
+[1mnpm[22m [31merror [94mlocation [mC:\Users\Ryan\Desktop\大单\trading-app\apps\web[K
+[1mnpm[22m [31merror [mcommand failed[K
+[1mnpm[22m [31merror [94mcommand [mC:\WINDOWS\system32\cmd.exe /d /s /c next build[K
+\[K[?9001l[?1004l
