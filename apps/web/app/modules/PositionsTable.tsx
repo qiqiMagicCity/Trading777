@@ -123,7 +123,7 @@ export function PositionsTable({ positions, trades }: Props) {
         <tbody>
           {positions.map((pos, idx) => {
             const result = results[idx];
-            const lastPrice = (result?.data ?? undefined);
+            const lastPrice = result?.data;
             const isLoading = result?.isLoading;
             const isError = result?.isError;
 
