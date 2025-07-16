@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -13,9 +12,7 @@ import AddTradeModal from "@/components/AddTradeModal";
 import Link from "next/link";
 import { fetchRealtimePrice } from "@/lib/services/priceService";
 
-/**
- * 把 FIFO 计算出的 Position[] 补上最新价格
- */
+/** 补充实时价格 */
 async function attachRealtimePrices(raw: Position[]): Promise<Position[]> {
   return Promise.all(
     raw.map(async (p) => {
@@ -42,17 +39,17 @@ export default function DashboardPage() {
     async function loadData() {
       try {
         setIsLoading(true);
-        // 1. 导入初始示例数据（仅首次进入时）
+        // 导入示例数据
         const response = await fetch("/trades.json");
         if (!response.ok) throw new Error("Failed to fetch trades.json");
         const rawData = await response.json();
         await importData(rawData);
 
-        // 2. 从 IndexedDB 读取全部 trades 并 enrich
+        // 读取 trades 并计算
         const dbTrades = await findTrades();
         const enriched = computeFifo(dbTrades);
 
-        // 3. 取每个 symbol 的最新头寸
+        // 取最新持仓
         const latest: Record<string, typeof enriched[number]> = {};
         for (const t of enriched) latest[t.symbol] = t;
         const rawPos: Position[] = Object.values(latest)
@@ -65,12 +62,11 @@ export default function DashboardPage() {
             priceOk: true,
           }));
 
-        // 4. 补全实时价格
         const posWithPrice = await attachRealtimePrices(rawPos);
 
         setTrades(dbTrades);
         setPositions(posWithPrice);
-      } catch (e):
+      } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : "An unknown error occurred.");
       } finally {
@@ -100,7 +96,6 @@ export default function DashboardPage() {
           priceOk: true,
         }));
       const posWithPrice = await attachRealtimePrices(rawPos);
-
       setTrades(dbTrades);
       setPositions(posWithPrice);
     } catch (e) {
