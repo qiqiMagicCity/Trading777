@@ -20,8 +20,5 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ],
-  "dependencies": {
-    "date-fns-tz": "^3.2.0"
-  }
+  ]
 }
