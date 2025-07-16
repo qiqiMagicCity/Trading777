@@ -44,6 +44,15 @@ export function PositionsTable({ positions, trades }: Props) {
       .catch(() => { });
   }, []);
 
+  // Close prices for yesterday
+  const [closePrices, setClosePrices] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetch('/close_prices.json')  // 更新为根目录下的路径，根据您提供的目录调整（假设在 public/ 根下）
+      .then((res) => res.json())
+      .then((json) => setClosePrices(json))
+      .catch(() => { });
+  }, []);
+
   const getTradeCount = (symbol: string) => {
     if (!trades) return '--';
     return trades.filter((t) => t.symbol === symbol).length;
@@ -58,26 +67,38 @@ export function PositionsTable({ positions, trades }: Props) {
   // 计算总市值和总盈亏
   const totals = useMemo(() => {
     let totalMarketValue = 0;
-    let totalUnrealized = 0;
+    let totalDailyChange = 0;
+    let totalHoldUnrealized = 0;
     let totalRealized = 0;
+    let totalCost = 0;
 
     positions.forEach((pos, idx) => {
       const result = results[idx];
       if (result?.data) {
         const lastPrice = result.data;
-        totalMarketValue += lastPrice * pos.qty;
-        totalUnrealized += (lastPrice - pos.avgPrice) * pos.qty;
+        const yesterdayClose = closePrices[pos.symbol];
+        const marketValue = lastPrice * pos.qty;
+        const holdUnrealized = (lastPrice - pos.avgPrice) * pos.qty;
+        const dailyChange = yesterdayClose !== undefined ? (lastPrice - yesterdayClose) * pos.qty : 0;
+
+        totalMarketValue += marketValue;
+        totalHoldUnrealized += holdUnrealized;
+        totalDailyChange += dailyChange;
       }
-      totalRealized += getRealized(pos.symbol);
+      const realized = getRealized(pos.symbol);
+      totalRealized += realized;
+      totalCost += pos.avgPrice * pos.qty;
     });
 
     return {
       marketValue: totalMarketValue,
-      unrealized: totalUnrealized,
+      dailyChange: totalDailyChange,
+      holdUnrealized: totalHoldUnrealized,
       realized: totalRealized,
-      total: totalUnrealized + totalRealized
+      total: totalHoldUnrealized + totalRealized,
+      cost: totalCost
     };
-  }, [positions, results, trades]);
+  }, [positions, results, trades, closePrices]);
 
   return (
     <div>
@@ -92,8 +113,8 @@ export function PositionsTable({ positions, trades }: Props) {
             <th>持仓单价</th>
             <th>持仓金额</th>
             <th>盈亏平衡点</th>
-            <th>当前浮盈亏</th>
-            <th>浮动百分比</th>
+            <th>当日变动</th>
+            <th>持仓总盈亏%</th>
             <th>标的盈亏</th>
             <th>历史交易次数</th>
             <th>详情</th>
@@ -106,17 +127,19 @@ export function PositionsTable({ positions, trades }: Props) {
             const isLoading = result?.isLoading;
             const isError = result?.isError;
 
-            // 只有在有价格时才计算
+            // 计算
+            const yesterdayClose = closePrices[pos.symbol];
             const marketValue = lastPrice ? lastPrice * pos.qty : undefined;
-            const unrealized = lastPrice ? (lastPrice - pos.avgPrice) * pos.qty : undefined;
-            const unrealizedPercent = lastPrice && pos.avgPrice ? (lastPrice - pos.avgPrice) / pos.avgPrice : undefined;
-
+            const holdUnrealized = lastPrice ? (lastPrice - pos.avgPrice) * pos.qty : undefined;
+            const dailyChange = lastPrice && yesterdayClose !== undefined ? (lastPrice - yesterdayClose) * pos.qty : undefined;
+            const cost = pos.avgPrice * pos.qty;
             const realized = getRealized(pos.symbol);
-            const totalPNL = unrealized !== undefined ? unrealized + realized : realized;
+            const totalPNL = holdUnrealized !== undefined ? holdUnrealized + realized : realized;
+            const totalPnlPercent = cost > 0 && holdUnrealized !== undefined ? (holdUnrealized + realized) / cost : undefined;
 
-            const pnlClass = unrealized !== undefined ? (unrealized > 0 ? 'green' : unrealized < 0 ? 'red' : '') : '';
+            const changeClass = dailyChange !== undefined ? (dailyChange > 0 ? 'green' : dailyChange < 0 ? 'red' : '') : '';
             const totalClass = totalPNL > 0 ? 'green' : totalPNL < 0 ? 'red' : '';
-            const percentClass = unrealizedPercent !== undefined ? (unrealizedPercent > 0 ? 'green' : unrealizedPercent < 0 ? 'red' : '') : '';
+            const percentClass = totalPnlPercent !== undefined ? (totalPnlPercent > 0 ? 'green' : totalPnlPercent < 0 ? 'red' : '') : '';
 
             return (
               <tr key={pos.symbol}>
@@ -132,8 +155,8 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{marketValue !== undefined ? formatNumber(marketValue) : '--'}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>
-                <td className={pnlClass}>{unrealized !== undefined ? formatNumber(unrealized) : '--'}</td>
-                <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
+                <td className={changeClass}>{dailyChange !== undefined ? formatNumber(dailyChange) : '--'}</td>
+                <td className={percentClass}>{totalPnlPercent !== undefined ? formatPercent(totalPnlPercent) : '--'}</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
                 <td>{getTradeCount(pos.symbol)}</td>
                 <td><a href={`/stock?symbol=${pos.symbol}`} className="details">详情</a></td>
@@ -145,8 +168,8 @@ export function PositionsTable({ positions, trades }: Props) {
             <td colSpan={6}><strong>总计</strong></td>
             <td><strong>{formatNumber(totals.marketValue)}</strong></td>
             <td></td>
-            <td className={totals.unrealized > 0 ? 'green' : totals.unrealized < 0 ? 'red' : ''}>
-              <strong>{formatNumber(totals.unrealized)}</strong>
+            <td className={totals.dailyChange > 0 ? 'green' : totals.dailyChange < 0 ? 'red' : ''}>
+              <strong>{formatNumber(totals.dailyChange)}</strong>
             </td>
             <td></td>
             <td className={totals.total > 0 ? 'green' : totals.total < 0 ? 'red' : ''}>
@@ -158,4 +181,4 @@ export function PositionsTable({ positions, trades }: Props) {
       </table>
     </div>
   );
-} 
+}
