@@ -1,11 +1,16 @@
 {
-  "$schema": "https://turborepo.com/schema.json",
+  // 使用 turborepo 官方 Schema 地址
+  "$schema": "https://turborepo.org/schema.json",
+  // 你的 UI 配置不变
   "ui": "tui",
+  // 这里用的是老版的 "tasks" 写法
   "tasks": {
     "build": {
+      // 保留你原本的依赖、inputs、outputs
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"],
+      // ─── 关键：声明要注入的环境变量 ───
       "env": ["VITE_FINNHUB_KEY"]
     },
     "lint": {
