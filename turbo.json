@@ -2,21 +2,23 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["VITE_FINNHUB_KEY"]
-    },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
-    "check-types": {
-      "dependsOn": ["^check-types"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    }
-  }
+-   "build": {
++   "build": {
++    "cache": false,        // ← 新增：关掉缓存，强制执行注入
+     "dependsOn": ["^build"],
+     "inputs": ["$TURBO_DEFAULT$", ".env*"],
+     "outputs": [".next/**", "!.next/cache/**"],
+     "env": ["VITE_FINNHUB_KEY"]
+   },
+   "lint": {
+     "dependsOn": ["^lint"]
+   },
+   "check-types": {
+     "dependsOn": ["^check-types"]
+   },
+   "dev": {
+     "cache": false,
+     "persistent": true
+   }
+ }
 }
