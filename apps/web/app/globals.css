@@ -339,7 +339,7 @@ body {
 
 /* 总计行样式 */
 .summary-row {
-  background-color: #f5f5f5;
+  background-color: var(--c-bg-dark);  /* 修改：适配深色主题 */
   font-weight: 500;
 }
 
