@@ -1,98 +1,136 @@
+"use client";
 
-import { getPrice, putPrice } from "./dataService";
+import { useEffect, useState, useMemo } from "react";
+import { importData, findTrades } from "@/lib/services/dataService";
+import type { Trade, Position } from "@/lib/services/dataService";
+import { computeFifo } from "@/lib/fifo";
+import { DashboardMetrics } from "@/modules/DashboardMetrics";
+import { PositionsTable } from "@/modules/PositionsTable";
+import { TradesTable } from "@/modules/TradesTable";
+import { SymbolTags } from "@/modules/SymbolTags";
+import AddTradeModal from "@/components/AddTradeModal";
+import Link from "next/link";
+import { fetchRealtimePrice } from "@/lib/services/priceService";
 
-const FINNHUB_BASE_URL = "https://finnhub.io/api/v1";
-const ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query";
-
-const FINNHUB_TOKEN_ENV = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
-const ALPHA_TOKEN_ENV = process.env.NEXT_PUBLIC_ALPHA_VANTAGE_TOKEN;
-
-let runtimeKeys = null;
-async function loadKeysTxt() {
-  if (runtimeKeys) return runtimeKeys;
-  try {
-    const txt = await fetch("/KEY.txt").then(r => r.text());
-    const finnhubKey = txt.match(/Finnhub\s+key[：: ]([A-Za-z0-9]+)/i)?.[1];
-    const alphaKey = txt.match(/Alpha\s+key[：: ]([A-Za-z0-9]+)/i)?.[1];
-    runtimeKeys = { finnhub: finnhubKey, alpha: alphaKey };
-  } catch (e) {
-    runtimeKeys = {};
-  }
-  return runtimeKeys;
-}
-
-async function getFinnhubToken() {
-  if (FINNHUB_TOKEN_ENV) return FINNHUB_TOKEN_ENV;
-  return (await loadKeysTxt()).finnhub;
-}
-async function getAlphaToken() {
-  if (ALPHA_TOKEN_ENV) return ALPHA_TOKEN_ENV;
-  return (await loadKeysTxt()).alpha;
-}
-
-async function fetchFinnhubQuote(symbol) {
-  const token = await getFinnhubToken();
-  if (!token) return null;
-  const url = `${FINNHUB_BASE_URL}/quote?symbol=${encodeURIComponent(symbol)}&token=${token}`;
-  try {
-    const json = await fetch(url).then(r => r.json());
-    return typeof json.c === "number" && json.c > 0 ? json.c : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-async function fetchAlphaQuote(symbol) {
-  const token = await getAlphaToken();
-  if (!token) return null;
-  const url = `${ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${token}`;
-  try {
-    const json = await fetch(url).then(r => r.json());
-    if (json.Note) return null;
-    const priceStr = json["Global Quote"]?.["05. price"];
-    return priceStr ? parseFloat(priceStr) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-export async function fetchRealtimePrice(symbol) {
-  const price = (await fetchFinnhubQuote(symbol)) ?? (await fetchAlphaQuote(symbol));
-  return price ?? null;
-}
-
-export async function fetchDailyClose(symbol, date) {
-  const cached = await getPrice(symbol, date);
-  if (cached) return cached.close;
-
-  const finnhubToken = await getFinnhubToken();
-  if (finnhubToken) {
-    const from = Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
-    const to = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
-    const url = `${FINNHUB_BASE_URL}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${finnhubToken}`;
-    try {
-      const json = await fetch(url).then(r => r.json());
-      if (json?.c?.[0]) {
-        const close = json.c[0];
-        await putPrice({ symbol, date, close, source: "finnhub" });
-        return close;
+/**
+ * 为每条持仓补上最新价格
+ */
+async function attachRealtimePrices(raw: Position[]): Promise<Position[]> {
+  return Promise.all(
+    raw.map(async (p) => {
+      try {
+        const price = await fetchRealtimePrice(p.symbol);
+        const ok = price !== null && price > 0;
+        return { ...p, last: ok ? price : 0, priceOk: ok } as Position;
+      } catch (e) {
+        console.warn(`[Dashboard] fetchRealtimePrice failed for ${p.symbol}`, e);
+        return { ...p, last: 0, priceOk: false } as Position;
       }
-    } catch {}
-  }
+    })
+  );
+}
 
-  const alphaToken = await getAlphaToken();
-  if (alphaToken) {
-    const url = `${ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${alphaToken}`;
-    try {
-      const json = await fetch(url).then(r => r.json());
-      const closeStr = json["Time Series (Daily)"]?.[date]?.["4. close"];
-      if (closeStr) {
-        const close = parseFloat(closeStr);
-        await putPrice({ symbol, date, close, source: "alphavantage" });
-        return close;
+export default function DashboardPage() {
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        // 1. 导入初始示例数据（仅首次进入时）
+        const response = await fetch("/trades.json");
+        if (!response.ok) throw new Error("Failed to fetch trades.json");
+        const rawData = await response.json();
+        await importData(rawData);
+
+        // 2. 读取全部 trades 并增强字段
+        const dbTrades = await findTrades();
+        const enriched = computeFifo(dbTrades);
+
+        // 3. 取每个 symbol 的最新头寸
+        const latest: Record<string, typeof enriched[number]> = {};
+        for (const t of enriched) latest[t.symbol] = t;
+        const rawPos: Position[] = Object.values(latest)
+          .filter((t) => t.quantityAfter !== 0)
+          .map((t) => ({
+            symbol: t.symbol,
+            qty: t.quantityAfter,
+            avgPrice: t.averageCost,
+            last: 0,
+            priceOk: true,
+          }));
+
+        // 4. 补全实时价格
+        const posWithPrice = await attachRealtimePrices(rawPos);
+
+        setTrades(dbTrades);
+        setPositions(posWithPrice);
+      } catch (e) {
+        console.error(e);
+        setError(e instanceof Error ? e.message : "An unknown error occurred.");
+      } finally {
+        setIsLoading(false);
       }
-    } catch {}
+    }
+
+    loadData();
+  }, []);
+
+  const enrichedTrades = useMemo(() => (trades.length ? computeFifo(trades) : []), [trades]);
+  const symbolsInPositions = useMemo(() => positions.map((p) => p.symbol), [positions]);
+
+  async function reloadData() {
+    try {
+      const dbTrades = await findTrades();
+      const enriched = computeFifo(dbTrades);
+      const latest: Record<string, typeof enriched[number]> = {};
+      for (const t of enriched) latest[t.symbol] = t;
+      const rawPos: Position[] = Object.values(latest)
+        .filter((t) => t.quantityAfter !== 0)
+        .map((t) => ({
+          symbol: t.symbol,
+          qty: t.quantityAfter,
+          avgPrice: t.averageCost,
+          last: 0,
+          priceOk: true,
+        }));
+      const posWithPrice = await attachRealtimePrices(rawPos);
+
+      setTrades(dbTrades);
+      setPositions(posWithPrice);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  throw new Error(`Unable to fetch close price for ${symbol} on ${date}`);
+  if (isLoading) return <div className="text-center p-10">Loading Dashboard...</div>;
+  if (error) return <div className="text-center p-10 text-destructive">Error: {error}</div>;
+
+  return (
+    <div>
+      <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
+
+      <h3 className="section-title" id="positions-title">
+        目前持仓 <Link href="/analysis" className="details">交易分析</Link>
+      </h3>
+      <PositionsTable positions={positions} trades={enrichedTrades} />
+
+      <h3 className="section-title">
+        个股情况 <Link href="/" className="details" style={{ visibility: "hidden" }}>详情</Link>
+      </h3>
+      <SymbolTags symbols={symbolsInPositions} />
+
+      <h3 className="section-title">
+        交易记录 <Link href="/trades" className="details">查看全部</Link>
+      </h3>
+      <TradesTable trades={enrichedTrades} />
+
+      <button id="fab" onClick={() => setShowModal(true)}>+</button>
+      {showModal && <AddTradeModal onClose={() => setShowModal(false)} onAdded={reloadData} />}
+    </div>
+  );
 }
