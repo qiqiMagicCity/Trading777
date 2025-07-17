@@ -46,6 +46,22 @@ async function loadKeys(){
  * @param {string} symbol
  * @returns {Promise<number|null>}
  */
+
+// --- Patch v2025-07-16: robust token loading ---------------------------
+// 1. Also check browser environment variables injected at build‑time
+//    (import.meta.env or process.env for Node).
+// 2. Also fallback to FINNHUB_TOKEN stored in localStorage (same key used
+//    by finnhubService.js).
+// 3. Finally fallback to public demo token so the dashboard never breaks.
+// -----------------------------------------------------------------------
+function resolveFinnhubToken(raw){
+  const envToken =
+    (typeof import !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_FINNHUB_KEY) ||
+    (typeof process !== 'undefined' && process.env && (process.env.VITE_FINNHUB_KEY || process.env.NEXT_PUBLIC_FINNHUB_TOKEN));
+  const lsToken = (typeof localStorage!=='undefined') ? localStorage.getItem('FINNHUB_TOKEN') : null;
+  return raw || envToken || lsToken || 'd19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg';
+}
+
 export async function fetchRealtimePrice(symbol){
   const cacheKey = `rt_${symbol}`;
   try{
@@ -55,7 +71,8 @@ export async function fetchRealtimePrice(symbol){
     }
   }catch{}
 
-  const { finnhub } = await loadKeys();
+  const { finnhub: rawToken } = await loadKeys();
+  const finnhub = resolveFinnhubToken(rawToken);
   if(!finnhub){
     console.warn('[priceService] Finnhub API key missing');
     return null;

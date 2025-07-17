@@ -166,7 +166,11 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>
                   {isLoading && <span className="loading">加载中...</span>}
                   {isError && <span className="error">获取失败</span>}
+<<<<<<< HEAD
                   {!isLoading && !isError && formatNumber(lastPrice)}
+=======
+                  {!isLoading && !isError && lastPrice !== undefined && formatNumber(lastPrice)}
+>>>>>>> fb967bfa0b7f97d82c49789c9aa1cebd12dc004c
                 </td>
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { getPrice, putPrice, CachedPrice } from './dataService';
 
 const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
@@ -243,6 +244,25 @@ export async function fetchRealtimeQuote(symbol: string): Promise<number> {
     console.error(`[DEBUG] 获取${symbol}价格时发生错误:`, error);
     return 1; // 错误情况下也使用保底价格
   }
+=======
+/**
+ * 获取指定股票的实时价格
+ * @param symbol 股票代码
+ * @returns 实时价格，若获取失败返回 null
+ */
+export async function fetchRealtimePrice(symbol: string): Promise<number | null> {
+  // TODO: 实现实时价格获取逻辑，如 fetch API 调用或其他服务接口
+  // 示例：
+  // try {
+  //   const res = await fetch(`/api/price?symbol=${symbol}`);
+  //   if (!res.ok) return null;
+  //   const data = await res.json();
+  //   return Number(data.price) || null;
+  // } catch {
+  //   return null;
+  // }
+  return null;
+>>>>>>> fb967bfa0b7f97d82c49789c9aa1cebd12dc004c
 }
 
 // 兼容旧版 API：导出同名函数 fetchRealtimePrice
