@@ -11,7 +11,7 @@ import { SymbolTags } from '@/modules/SymbolTags';
 import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
 import { calcMetrics } from '@/lib/metrics';
-import { fetchRealtimeQuote } from '@/lib/services/priceService';   // 实时价格
+import { fetchRealtimeQuote } from '@/lib/services/priceService';
 import { useStore } from '@/lib/store';
 
 export default function DashboardPage() {
@@ -27,40 +27,40 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
 
-        /* 1. 读入 trades.json 并写入本地数据库 */
+        /* 1. 读取交易数据 */
         const res = await fetch('/trades.json');
         if (!res.ok) throw new Error('Failed to fetch trades.json');
         const raw = await res.json();
         await importData(raw);
 
-        /* 2. 拿出全部交易并生成 enrichedTrades */
+        /* 2. enrichedTrades */
         const dbTrades = await findTrades();
         const enriched = computeFifo(dbTrades);
 
-        /* 3. 由 enriched 计算当前持仓列表 posList */
+        /* 3. 生成当前持仓 */
         const lastMap: Record<string, any> = {};
-        for (const t of enriched) lastMap[t.symbol] = t; // 最后一条是最新
+        for (const t of enriched) lastMap[t.symbol] = t;
         const posList: Position[] = Object.values(lastMap)
           .filter(t => t.quantityAfter !== 0)
           .map(t => ({
             symbol: t.symbol,
             qty: t.quantityAfter,
             avgPrice: t.averageCost,
-            last: t.averageCost, // 先用均价站位
+            last: t.averageCost,
             priceOk: true,
           }));
 
-        /* 4. 拉实时价格，填充 last 字段 */
+        /* 4. 实时价格填充 */
         for (const p of posList) {
           try {
             const rt = await fetchRealtimeQuote(p.symbol);
             if (!isNaN(rt) && rt > 0) p.last = rt;
           } catch (e) {
-            console.warn(`获取 ${p.symbol} 实时价格失败`, e);
+            console.warn(`实时价格 ${p.symbol} 获取失败`, e);
           }
         }
 
-        /* 5. 计算指标写入全局 store */
+        /* 5. 指标写入全局 */
         const dailyRes = await fetch('/dailyResult.json');
         const daily = dailyRes.ok ? await dailyRes.json() : [];
         const metrics = calcMetrics(enriched, posList, daily);
@@ -92,7 +92,6 @@ export default function DashboardPage() {
       const dbTrades = await findTrades();
       const enriched = computeFifo(dbTrades);
 
-      /* 最新持仓 */
       const lastMap: Record<string, any> = {};
       for (const t of enriched) lastMap[t.symbol] = t;
 
@@ -106,23 +105,20 @@ export default function DashboardPage() {
           priceOk: true,
         }));
 
-      /* 实时价格更新 */
       for (const p of posList) {
         try {
           const rt = await fetchRealtimeQuote(p.symbol);
           if (!isNaN(rt) && rt > 0) p.last = rt;
         } catch (e) {
-          console.warn(`获取 ${p.symbol} 实时价格失败`, e);
+          console.warn(`实时价格 ${p.symbol} 获取失败`, e);
         }
       }
 
-      /* 指标刷新 */
       const dailyRes = await fetch('/dailyResult.json');
       const daily = dailyRes.ok ? await dailyRes.json() : [];
       const metrics = calcMetrics(enriched, posList, daily);
       useStore.getState().setMetrics(metrics);
 
-      /* 写入状态 */
       setTrades(dbTrades);
       setPositions(posList);
     } catch (e) {
@@ -153,10 +149,10 @@ export default function DashboardPage() {
       {/* 当前持仓 */}
       <PositionsTable positions={positions} trades={enrichedTrades} />
 
-      {/* 全部交易（☑ 修正：传入 enrichedTrades） */}
-      <TradesTable trades={enrichedTrades} onChange={handleTradesChange} />
+      {/* 全部交易（仅传 trades，已移除 onChange） */}
+      <TradesTable trades={enrichedTrades} />
 
-      {/* 股票标签（仍用原始 trades） */}
+      {/* 股票标签 */}
       <SymbolTags trades={trades} />
 
       {/* 新增交易弹窗 */}
