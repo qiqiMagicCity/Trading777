@@ -3,24 +3,21 @@
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 
-/**
- * Props 说明——兼容两种写法：
- *   • onAdded   ← 项目旧代码使用
- *   • onSuccess ← page.tsx 里使用
- * 传 1 个或 2 个都行；有则依次调用。
- */
+/** 与 dataService.Trade 对齐的字段 */
+interface BaseFields {
+  symbol: string;
+  price: number;
+  quantity: number;
+  date: string;
+  action: 'buy' | 'sell' | 'short' | 'cover';
+}
+
+/** 组件 Props：旧写法 onAdded， 新写法 onSuccess，二选一或都传 */
 interface Props {
   onClose: () => void;
   onAdded?: () => void;
   onSuccess?: () => void;
-  trade?: {
-    id: number;
-    symbol: string;
-    action: string;
-    quantity: number;
-    price: number;
-    date: string;
-  };
+  trade?: { id: number } & BaseFields;
 }
 
 export default function AddTradeModal({
@@ -31,64 +28,54 @@ export default function AddTradeModal({
 }: Props) {
   const editing = Boolean(trade);
 
-  /* -------- 表单状态 -------- */
+  /* ---------- 表单状态 ---------- */
   const [symbol, setSymbol] = useState('');
-  const [action, setAction] = useState<'BUY' | 'SELL' | 'SHORT' | 'COVER'>(
-    'BUY'
-  );
+  const [side, setSide] = useState<'BUY' | 'SELL' | 'SHORT' | 'COVER'>('BUY');
   const [qty, setQty] = useState(0);
   const [price, setPrice] = useState(0);
-  const [date, setDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
-  );
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
-  /* -------- 编辑模式：回填旧值 -------- */
+  /* ---------- 编辑模式回填 ---------- */
   useEffect(() => {
     if (!trade) return;
     setSymbol(trade.symbol);
-    setAction(trade.action.toUpperCase() as any);
+    setSide(trade.action.toUpperCase() as any);
     setQty(trade.quantity);
     setPrice(trade.price);
-    const d = new Date(trade.date);
-    setDate(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-        d.getDate()
-      ).padStart(2, '0')}`
-    );
+    setDate(trade.date);
   }, [trade]);
 
-  /* -------- 保存 -------- */
+  /* ---------- 保存 ---------- */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const payload = {
+    // 转成 dataService.Trade 需要的字段 & 小写 action
+    const payload: BaseFields = {
       symbol: symbol.toUpperCase(),
-      action,
-      quantity: qty,
       price,
+      quantity: qty,
       date,
+      action: side.toLowerCase() as BaseFields['action'],
     };
 
     if (editing) {
-      await updateTrade(trade!.id, payload);
+      // ❗ 只传 1 个对象参数
+      await updateTrade({ id: trade!.id, ...payload });
     } else {
       await addTrade(payload);
     }
 
-    // 依次触发回调（若有）
-    if (onAdded) onAdded();
+    // 触发回调
+    onAdded?.();
     if (onSuccess && onSuccess !== onAdded) onSuccess();
-
     onClose();
   }
 
-  /* -------- UI -------- */
+  /* ---------- UI ---------- */
   return (
     <div className="modal">
       <div className="modal-content" style={{ maxWidth: 420 }}>
-        <h3 style={{ marginBottom: 12 }}>
-          {editing ? '编辑交易' : '新增交易'}
-        </h3>
+        <h3 style={{ marginBottom: 12 }}>{editing ? '编辑交易' : '新增交易'}</h3>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <label>股票代码</label>
@@ -100,8 +87,8 @@ export default function AddTradeModal({
 
           <label>方向</label>
           <select
-            value={action}
-            onChange={(e) => setAction(e.target.value as any)}
+            value={side}
+            onChange={(e) => setSide(e.target.value as any)}
           >
             <option value="BUY">BUY</option>
             <option value="SELL">SELL</option>
@@ -138,8 +125,8 @@ export default function AddTradeModal({
             <button
               type="button"
               className="btn"
-              onClick={onClose}
               style={{ marginRight: 8 }}
+              onClick={onClose}
             >
               取消
             </button>
