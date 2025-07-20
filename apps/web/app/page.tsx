@@ -11,6 +11,7 @@ import { SymbolTags } from '@/modules/SymbolTags';
 import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
 import { calcMetrics } from '@/lib/metrics';
+import { fetchRealtimeQuote } from '@/lib/services/priceService';   // ⬅️ 新增导入
 import { useStore } from '@/lib/store';
 
 export default function DashboardPage() {
@@ -34,29 +35,35 @@ export default function DashboardPage() {
         const dbTrades = await findTrades();
         const enriched = computeFifo(dbTrades);
 
-        // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
+        // 根据 enriched 计算最新持仓
         const lastMap: Record<string, any> = {};
         for (const t of enriched) {
-          lastMap[t.symbol] = t; // 由于 computeFifo 已按日期升序，遍历结束时即为最后状态
+          lastMap[t.symbol] = t; // 由于 computeFifo 已排好序，最后一条为最新状态
         }
 
         const posList: Position[] = Object.values(lastMap)
-          .filter(t => t.quantityAfter !== 0) // 只保留有持仓的
+          .filter(t => t.quantityAfter !== 0)
           .map(t => ({
             symbol: t.symbol,
             qty: t.quantityAfter,
             avgPrice: t.averageCost,
-            last: t.averageCost, // 使用平均价格作为初始last值，而不是0
+            last: t.averageCost,   // 先用均价占位
             priceOk: true,
           }));
 
-        console.log('加载的持仓数据:', posList);
-        console.log('持仓数据中的qty类型:', posList.map(p => ({
-          symbol: p.symbol,
-          qty: p.qty,
-          qtyType: typeof p.qty,
-          isNumber: !isNaN(Number(p.qty))
-        })));
+        /* === 新增：拉取实时价格并更新 last 字段 === */
+        for (const p of posList) {
+          try {
+            const rt = await fetchRealtimeQuote(p.symbol);
+            if (!isNaN(rt) && rt > 0) {
+              p.last = rt;
+              p.priceOk = true;
+            }
+          } catch (e) {
+            console.warn(`获取 ${p.symbol} 实时价格失败`, e);
+          }
+        }
+        /* === 实时价格更新完毕 === */
 
         // 获取每日结果数据用于计算周期性指标
         const dailyResultsResponse = await fetch('/dailyResult.json');
@@ -80,20 +87,16 @@ export default function DashboardPage() {
   }, []);
 
   const enrichedTrades = useMemo(() => {
-    if (trades.length > 0) {
-      return computeFifo(trades);
-    }
-    return [];
+    if (!trades.length) return [];
+    return computeFifo(trades);
   }, [trades]);
 
-  const symbolsInPositions = useMemo(() => positions.map(p => p.symbol), [positions]);
-
-  async function reloadData() {
+  /** 处理“添加交易”后刷新仪表盘 */
+  async function handleTradesChange() {
     try {
       const dbTrades = await findTrades();
       const enriched = computeFifo(dbTrades);
 
-      // 根据 enriched 计算最新持仓
       const lastMap: Record<string, any> = {};
       for (const t of enriched) {
         lastMap[t.symbol] = t;
@@ -105,9 +108,23 @@ export default function DashboardPage() {
           symbol: t.symbol,
           qty: t.quantityAfter,
           avgPrice: t.averageCost,
-          last: t.averageCost, // 使用平均价格作为初始last值
+          last: t.averageCost,
           priceOk: true,
         }));
+
+      /* === 新增：拉取实时价格并更新 last 字段 === */
+      for (const p of posList) {
+        try {
+          const rt = await fetchRealtimeQuote(p.symbol);
+          if (!isNaN(rt) && rt > 0) {
+            p.last = rt;
+            p.priceOk = true;
+          }
+        } catch (e) {
+          console.warn(`获取 ${p.symbol} 实时价格失败`, e);
+        }
+      }
+      /* === 实时价格更新完毕 === */
 
       // 获取每日结果数据用于计算周期性指标
       const dailyResultsResponse = await fetch('/dailyResult.json');
@@ -131,25 +148,36 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
+    <div className="p-4 space-y-6">
+      <section className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">交易仪表盘</h1>
+        <button
+          onClick={() => setShowModal(true)}
+          className="btn-primary"
+        >
+          + 添加交易
+        </button>
+      </section>
+
+      {/* Top-level metrics (M1-M13) */}
       <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
 
-      <h3 className="section-title" id="positions-title">目前持仓 <Link href="/analysis" className="details">交易分析</Link></h3>
+      {/* Positions */}
       <PositionsTable positions={positions} trades={enrichedTrades} />
 
-      <h3 className="section-title">个股情况 <Link href="/" className="details" style={{ visibility: 'hidden' }}>详情</Link></h3>
-      <SymbolTags symbols={symbolsInPositions} />
+      {/* Trades */}
+      <TradesTable trades={trades} onChange={handleTradesChange} />
 
-      <h3 className="section-title">交易记录 <Link href="/trades" className="details">查看全部</Link></h3>
-      <TradesTable trades={enrichedTrades} />
+      {/* 股票标签 */}
+      <SymbolTags trades={trades} />
 
-      <button
-        id="fab"
-        onClick={() => setShowModal(true)}
-      >
-        +
-      </button>
-      {showModal && <AddTradeModal onClose={() => setShowModal(false)} onAdded={reloadData} />}
+      {/* 弹窗：新增交易 */}
+      {showModal && <AddTradeModal onClose={() => setShowModal(false)} onSuccess={handleTradesChange} />}
+
+      {/* 底部链接 */}
+      <footer className="text-center mt-10 text-sm text-muted-foreground">
+        <Link href="https://github.com/your-repo" target="_blank">项目仓库</Link>
+      </footer>
     </div>
   );
 }
