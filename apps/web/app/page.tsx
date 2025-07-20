@@ -11,7 +11,7 @@ import { SymbolTags } from '@/modules/SymbolTags';
 import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
 import { calcMetrics } from '@/lib/metrics';
-import { fetchRealtimeQuote } from '@/lib/services/priceService';   // ⬅️ 新增导入
+import { fetchRealtimeQuote } from '@/lib/services/priceService';   // 实时价格
 import { useStore } from '@/lib/store';
 
 export default function DashboardPage() {
@@ -21,63 +21,57 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
+  /* ---------- 首次加载 ---------- */
   useEffect(() => {
     async function loadData() {
       try {
         setIsLoading(true);
-        const response = await fetch('/trades.json');
-        if (!response.ok) {
-          throw new Error('Failed to fetch trades.json');
-        }
-        const rawData = await response.json();
-        await importData(rawData);
 
+        /* 1. 读入 trades.json 并写入本地数据库 */
+        const res = await fetch('/trades.json');
+        if (!res.ok) throw new Error('Failed to fetch trades.json');
+        const raw = await res.json();
+        await importData(raw);
+
+        /* 2. 拿出全部交易并生成 enrichedTrades */
         const dbTrades = await findTrades();
         const enriched = computeFifo(dbTrades);
 
-        // 根据 enriched 计算最新持仓
+        /* 3. 由 enriched 计算当前持仓列表 posList */
         const lastMap: Record<string, any> = {};
-        for (const t of enriched) {
-          lastMap[t.symbol] = t; // 由于 computeFifo 已排好序，最后一条为最新状态
-        }
-
+        for (const t of enriched) lastMap[t.symbol] = t; // 最后一条是最新
         const posList: Position[] = Object.values(lastMap)
           .filter(t => t.quantityAfter !== 0)
           .map(t => ({
             symbol: t.symbol,
             qty: t.quantityAfter,
             avgPrice: t.averageCost,
-            last: t.averageCost,   // 先用均价占位
+            last: t.averageCost, // 先用均价站位
             priceOk: true,
           }));
 
-        /* === 新增：拉取实时价格并更新 last 字段 === */
+        /* 4. 拉实时价格，填充 last 字段 */
         for (const p of posList) {
           try {
             const rt = await fetchRealtimeQuote(p.symbol);
-            if (!isNaN(rt) && rt > 0) {
-              p.last = rt;
-              p.priceOk = true;
-            }
+            if (!isNaN(rt) && rt > 0) p.last = rt;
           } catch (e) {
             console.warn(`获取 ${p.symbol} 实时价格失败`, e);
           }
         }
-        /* === 实时价格更新完毕 === */
 
-        // 获取每日结果数据用于计算周期性指标
-        const dailyResultsResponse = await fetch('/dailyResult.json');
-        const dailyResults = dailyResultsResponse.ok ? await dailyResultsResponse.json() : [];
-
-        // 计算指标并存入全局状态
-        const metrics = calcMetrics(enriched, posList, dailyResults);
+        /* 5. 计算指标写入全局 store */
+        const dailyRes = await fetch('/dailyResult.json');
+        const daily = dailyRes.ok ? await dailyRes.json() : [];
+        const metrics = calcMetrics(enriched, posList, daily);
         useStore.getState().setMetrics(metrics);
 
+        /* 6. 写入本地状态 */
         setTrades(dbTrades);
         setPositions(posList);
       } catch (e) {
         console.error(e);
-        setError(e instanceof Error ? e.message : 'An unknown error occurred.');
+        setError(e instanceof Error ? e.message : 'Unknown error');
       } finally {
         setIsLoading(false);
       }
@@ -86,21 +80,21 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
+  /* ---------- memo 化的 enrichedTrades ---------- */
   const enrichedTrades = useMemo(() => {
     if (!trades.length) return [];
     return computeFifo(trades);
   }, [trades]);
 
-  /** 处理“添加交易”后刷新仪表盘 */
+  /* ---------- 添加 / 修改交易后刷新 ---------- */
   async function handleTradesChange() {
     try {
       const dbTrades = await findTrades();
       const enriched = computeFifo(dbTrades);
 
+      /* 最新持仓 */
       const lastMap: Record<string, any> = {};
-      for (const t of enriched) {
-        lastMap[t.symbol] = t;
-      }
+      for (const t of enriched) lastMap[t.symbol] = t;
 
       const posList: Position[] = Object.values(lastMap)
         .filter(t => t.quantityAfter !== 0)
@@ -112,71 +106,72 @@ export default function DashboardPage() {
           priceOk: true,
         }));
 
-      /* === 新增：拉取实时价格并更新 last 字段 === */
+      /* 实时价格更新 */
       for (const p of posList) {
         try {
           const rt = await fetchRealtimeQuote(p.symbol);
-          if (!isNaN(rt) && rt > 0) {
-            p.last = rt;
-            p.priceOk = true;
-          }
+          if (!isNaN(rt) && rt > 0) p.last = rt;
         } catch (e) {
           console.warn(`获取 ${p.symbol} 实时价格失败`, e);
         }
       }
-      /* === 实时价格更新完毕 === */
 
-      // 获取每日结果数据用于计算周期性指标
-      const dailyResultsResponse = await fetch('/dailyResult.json');
-      const dailyResults = dailyResultsResponse.ok ? await dailyResultsResponse.json() : [];
-
-      // 计算指标并更新全局状态
-      const metrics = calcMetrics(enriched, posList, dailyResults);
+      /* 指标刷新 */
+      const dailyRes = await fetch('/dailyResult.json');
+      const daily = dailyRes.ok ? await dailyRes.json() : [];
+      const metrics = calcMetrics(enriched, posList, daily);
       useStore.getState().setMetrics(metrics);
 
+      /* 写入状态 */
       setTrades(dbTrades);
       setPositions(posList);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  if (isLoading) {
+  /* ---------- 渲染 ---------- */
+  if (isLoading)
     return <div className="text-center p-10">Loading Dashboard...</div>;
-  }
 
-  if (error) {
+  if (error)
     return <div className="text-center p-10 text-destructive">Error: {error}</div>;
-  }
 
   return (
     <div className="p-4 space-y-6">
+      {/* 顶部工具栏 */}
       <section className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">交易仪表盘</h1>
-        <button
-          onClick={() => setShowModal(true)}
-          className="btn-primary"
-        >
+        <button onClick={() => setShowModal(true)} className="btn-primary">
           + 添加交易
         </button>
       </section>
 
-      {/* Top-level metrics (M1-M13) */}
+      {/* M1-M13 指标 */}
       <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
 
-      {/* Positions */}
+      {/* 当前持仓 */}
       <PositionsTable positions={positions} trades={enrichedTrades} />
 
-      {/* Trades */}
-      <TradesTable trades={trades} onChange={handleTradesChange} />
+      {/* 全部交易（☑ 修正：传入 enrichedTrades） */}
+      <TradesTable trades={enrichedTrades} onChange={handleTradesChange} />
 
-      {/* 股票标签 */}
+      {/* 股票标签（仍用原始 trades） */}
       <SymbolTags trades={trades} />
 
-      {/* 弹窗：新增交易 */}
-      {showModal && <AddTradeModal onClose={() => setShowModal(false)} onSuccess={handleTradesChange} />}
+      {/* 新增交易弹窗 */}
+      {showModal && (
+        <AddTradeModal
+          onClose={() => setShowModal(false)}
+          onSuccess={handleTradesChange}
+        />
+      )}
 
       {/* 底部链接 */}
       <footer className="text-center mt-10 text-sm text-muted-foreground">
-        <Link href="https://github.com/your-repo" target="_blank">项目仓库</Link>
+        <Link href="https://github.com/your-repo" target="_blank">
+          项目仓库
+        </Link>
       </footer>
     </div>
   );
