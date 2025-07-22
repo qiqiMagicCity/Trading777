@@ -24,6 +24,19 @@ interface Props {
   trades?: EnrichedTrade[];
 }
 
+/** 根据 trades 动态计算每个标的的「盈亏平衡价」——即在经历过部分平仓后，为剩余仓位分摊历史已实现盈亏后的成本价 */
+function getBreakEvenPrice(symbol: string, qty: number, trades?: EnrichedTrade[]): number | undefined {
+  if (!trades || qty === 0) return undefined;
+  // 找到该 symbol 最新的一笔（即最后一笔）交易的 breakEvenPrice 字段
+  for (let i = trades.length - 1; i >= 0; i--) {
+    const t = trades[i];
+    if (t.symbol === symbol && typeof t.breakEvenPrice === 'number') {
+      return t.breakEvenPrice;
+    }
+  }
+  return undefined;
+}
+
 export function PositionsTable({ positions, trades }: Props) {
   const metrics = useStore(state => state.metrics);
 
@@ -31,90 +44,65 @@ export function PositionsTable({ positions, trades }: Props) {
     queries: positions.map((pos) => ({
       queryKey: ['quote', pos.symbol],
       queryFn: () => fetchRealtimeQuote(pos.symbol),
-      staleTime: 0, // 立即过期，每次都重新请求
-      cacheTime: 0, // 不缓存
-      refetchInterval: 1000 * 60, // 每分钟自动刷新
-      retry: 2, // 失败时重试2次
+      staleTime: 0,
+      cacheTime: 0,
+      refetchInterval: 1000 * 60, // 每分钟刷新
+      retry: 2,
       refetchOnWindowFocus: true,
-      refetchOnMount: true
+      refetchOnMount: true,
     })),
   });
 
-  // Chinese name map
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   useEffect(() => {
     fetch('/data/symbol_name_map.json')
       .then((res) => res.json())
-      .then((json) => setNameMap(json))
-      .catch(() => { });
+      .then((data) => setNameMap(data || {}))
+      .catch(() => {});
   }, []);
 
+  /** 取某只股票的历史已实现盈亏 */
+  const getRealized = (symbol: string) => {
+    if (!trades) return 0;
+    return trades
+      .filter((t) => t.symbol === symbol && t.realizedPnl !== undefined)
+      .reduce((sum, t) => sum + (t.realizedPnl || 0), 0);
+  };
+
+  /** 取某只股票的历史成交次数 */
   const getTradeCount = (symbol: string) => {
     if (!trades) return '--';
     return trades.filter((t) => t.symbol === symbol).length;
   };
 
-  const getRealized = (symbol: string) => {
-    if (!trades) return 0;
-    return trades.filter(t => t.symbol === symbol && t.realizedPnl !== undefined)
-      .reduce((sum, t) => sum + (t.realizedPnl || 0), 0);
-  };
-
-  // 计算市值和浮动盈亏
+  /** 预先根据行情结果与 break-even 价计算市值 / 浮动盈亏 */
   const marketValues = useMemo(() => {
-    // 添加日志帮助调试
-    console.log('持仓数据:', positions);
-    console.log('Price API results:', positions.map((pos, idx) => ({
-      symbol: pos.symbol,
-      qty: pos.qty,
-      avgPrice: pos.avgPrice,
-      apiResult: results[idx]?.status,
-      hasData: results[idx]?.data !== undefined,
-      data: results[idx]?.data,
-      error: results[idx]?.error
-    })));
-
     return positions.map((pos, idx) => {
       const result = results[idx];
-      // 修改：如果lastPrice为undefined，则使用平均价格作为回退值
-      const lastPrice = result?.data !== undefined ? result.data : pos.avgPrice;
+      const lastPrice = result?.data !== undefined ? result.data : pos.avgPrice; // 若报价失败则使用 avgPrice 兜底
 
-      // 修改：对于空头持仓，市值应该是正数（使用绝对值）
+      // 优先使用动态 breakEvenPrice；若不可用再回退 avgPrice
+      const breakEvenPrice = getBreakEvenPrice(pos.symbol, pos.qty, trades) ?? pos.avgPrice;
+
+      const unrealized = (lastPrice - breakEvenPrice) * pos.qty;
+
       const isShort = pos.qty < 0;
       const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
-      const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
 
-      console.log(`${pos.symbol} 市值计算:`, {
-        lastPrice,
-        qty: pos.qty,
-        isShort,
-        rawMarket: lastPrice * pos.qty,
-        market: marketValue,
-        avgPrice: pos.avgPrice,
-        unrealized
-      });
-
-      return { market: marketValue, unrealized };
+      return { marketValue, unrealized };
     });
-  }, [positions, results]);
+  }, [positions, results, trades]);
 
-  // 计算总计
+  /** 汇总 */
   const totals = useMemo(() => {
-    console.log('计算总计，marketValues:', marketValues);
-
-    const totalMarketValue = marketValues.reduce((sum, item) => sum + item.market, 0);
-    const totalUnrealized = marketValues.reduce((sum, item) => sum + item.unrealized, 0);
-    const totalRealized = metrics?.M9 || 0; // 历史已实现盈亏
-    const totalPnL = totalUnrealized + totalRealized;
-
-    console.log('总计结果:', {
-      totalMarketValue,
-      totalUnrealized,
-      totalRealized,
-      totalPnL
-    });
-
-    return { marketValue: totalMarketValue, unrealized: totalUnrealized, realized: totalRealized, total: totalPnL };
+    const totalMarketValue = marketValues.reduce((sum, m) => sum + m.marketValue, 0);
+    const totalUnrealized = marketValues.reduce((sum, m) => sum + m.unrealized, 0);
+    const totalRealized = metrics?.M9 || 0;
+    return {
+      marketValue: totalMarketValue,
+      unrealized: totalUnrealized,
+      total: totalUnrealized + totalRealized,
+    };
   }, [marketValues, metrics?.M9]);
 
   return (
@@ -140,23 +128,26 @@ export function PositionsTable({ positions, trades }: Props) {
         <tbody>
           {positions.map((pos, idx) => {
             const result = results[idx];
-            // 修改：如果lastPrice为undefined，则使用平均价格作为回退值
             const lastPrice = result?.data !== undefined ? result.data : pos.avgPrice;
             const isLoading = result?.isLoading;
             const isError = result?.isError;
 
-            // 使用回退价格计算市值和浮动盈亏
-            const isShort = pos.qty < 0;
-            const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
-            const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
-            const unrealizedPercent = lastPrice && pos.avgPrice ? (lastPrice - pos.avgPrice) / pos.avgPrice : undefined;
+            const breakEvenPrice = getBreakEvenPrice(pos.symbol, pos.qty, trades) ?? pos.avgPrice;
+
+            const unrealized = (lastPrice - breakEvenPrice) * pos.qty;
+            const unrealizedPercent = breakEvenPrice ? (lastPrice - breakEvenPrice) / breakEvenPrice : undefined;
 
             const realized = getRealized(pos.symbol);
-            const totalPNL = unrealized + realized;
+
+            const isShort = pos.qty < 0;
+            const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
 
             const pnlClass = unrealized > 0 ? 'green' : unrealized < 0 ? 'red' : '';
+            const totalPNL = unrealized + realized;
             const totalClass = totalPNL > 0 ? 'green' : totalPNL < 0 ? 'red' : '';
-            const percentClass = unrealizedPercent !== undefined ? (unrealizedPercent > 0 ? 'green' : unrealizedPercent < 0 ? 'red' : '') : '';
+            const percentClass = unrealizedPercent !== undefined
+              ? (unrealizedPercent > 0 ? 'green' : unrealizedPercent < 0 ? 'red' : '')
+              : '';
 
             return (
               <tr key={pos.symbol}>
@@ -171,7 +162,7 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{formatNumber(marketValue)}</td>
-                <td>{formatNumber(pos.avgPrice)}</td>
+                <td>{formatNumber(breakEvenPrice)}</td>
                 <td className={pnlClass}>{formatNumber(unrealized)}</td>
                 <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
@@ -180,7 +171,6 @@ export function PositionsTable({ positions, trades }: Props) {
               </tr>
             );
           })}
-          {/* 总计行 */}
           <tr className="summary-row">
             <td colSpan={6}><strong>总计</strong></td>
             <td><strong>{formatCurrency(totals.marketValue)}</strong></td>
@@ -198,4 +188,4 @@ export function PositionsTable({ positions, trades }: Props) {
       </table>
     </div>
   );
-} 
+}
