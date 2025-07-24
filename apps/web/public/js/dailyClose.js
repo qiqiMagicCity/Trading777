@@ -16,7 +16,8 @@ function getNYDateParts() {
     second: '2-digit',
     hour12: false,
   });
-  const partsArray = formatter.formatToParts(new Date());
+  const { nowNY } = window;
+  const partsArray = formatter.formatToParts(nowNY());
   const parts = {};
   for (const part of partsArray) {
     if (part.type !== 'literal') {

@@ -12,6 +12,11 @@
  *   const date2 = toNY('2025-07-23');    // 任意 Date/字符串/时间戳
  *   const date3 = toNY(2025, 0, 1);      // 年月日，用法与 new Date(2025,0,1)
  */
+
+// Ensure server timezone defaults to New York
+if (typeof process !== 'undefined') {
+  process.env.TZ = process.env.TZ || 'America/New_York';
+}
 export function toNY(): Date;
 export function toNY(value: string | number | Date): Date;
 export function toNY(
@@ -66,3 +71,5 @@ export const formatNY = (
 // Attach helper to global for quick usage in dev tools
 // @ts-ignore
 (globalThis as any).toNY = toNY;
+(globalThis as any).nowNY = nowNY;
+(globalThis as any).formatNY = formatNY;

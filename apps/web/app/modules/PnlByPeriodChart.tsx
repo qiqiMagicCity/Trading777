@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { toNY } from '@/lib/timezone';
 import type { EnrichedTrade } from '@/lib/fifo';
 
 interface PnlByPeriodChartProps {
@@ -29,7 +30,7 @@ export function PnlByPeriodChart({ trades, period }: PnlByPeriodChartProps) {
     const pnlByPeriod: Record<string, number> = {};
 
     trades.forEach((trade) => {
-      const date = new Date(trade.date);
+      const date = toNY(trade.date);
       const key =
         period === 'monthly'
           ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
