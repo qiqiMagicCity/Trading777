@@ -1,4 +1,5 @@
 import type { Trade } from './services/dataService';
+import { toNY, nowNY } from '@/lib/timezone';
 
 const EPSILON = 1e-6;
 
@@ -29,7 +30,7 @@ export function computeFifo(trades: Trade[]): EnrichedTrade[] {
   const symbolStateMap: Record<string, SymbolState> = {};
 
   // Sort trades by date to process them chronologically
-  const sortedTrades = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sortedTrades = [...trades].sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime());
 
   return sortedTrades.map((trade): EnrichedTrade => {
     const state = symbolStateMap[trade.symbol] || (symbolStateMap[trade.symbol] = {
@@ -99,7 +100,7 @@ export function computeFifo(trades: Trade[]): EnrichedTrade[] {
     const averageCost = totalQuantity > EPSILON ? costOfPositions / totalQuantity : 0;
     const breakEvenPrice = totalQuantity > EPSILON ? (costOfPositions - state.accumulatedRealizedPnl) / totalQuantity : 0;
 
-    const date = new Date(trade.date);
+    const date = toNY(trade.date);
     const weekday = ((date.getUTCDay() + 6) % 7) + 1; // Monday: 1, Sunday: 7
 
     return {

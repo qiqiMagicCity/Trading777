@@ -5,6 +5,7 @@
  */
 import { apiQueue } from './apiQueue.js';
 import { putPrice, getPrice } from '../lib/idb.js';
+import { toNY, nowNY } from '@/lib/timezone';
 
 const TOKEN_KEY = 'FINNHUB_TOKEN';
 const API_BASE  = 'https://finnhub.io/api/v1';
@@ -21,8 +22,8 @@ export function getToken(){
  * @returns {number|null}
  */
 export async function fetchFinnhubDailyClose(symbol, date){
-  const fromTs = Math.floor(new Date(date + 'T00:00:00Z').getTime()/1000);
-  const toTs   = Math.floor(new Date(date + 'T23:59:59Z').getTime()/1000);
+  const fromTs = Math.floor(toNY(date + 'T00:00:00Z').getTime()/1000);
+  const toTs   = Math.floor(toNY(date + 'T23:59:59Z').getTime()/1000);
   const url = `${API_BASE}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${getToken()}`;
   try{
     const json = await apiQueue.enqueue(()=> fetch(url).then(r=>r.json()));

@@ -1,6 +1,7 @@
 import { calcMetrics } from './metrics';
 import type { EnrichedTrade } from './fifo';
 import type { Position } from './services/dataService';
+import { toNY, nowNY } from '@/lib/timezone';
 
 // Mock current date to ensure consistent test results
 const realDateNow = Date.now;
@@ -30,7 +31,7 @@ function expectMetricsToBeClose(actual: any, expected: any) {
 describe('黄金案例验证', () => {
   // 设置固定的当前日期为2025-07-15
   beforeAll(() => {
-    global.Date.now = jest.fn(() => new Date('2025-07-15T12:00:00Z').getTime());
+    global.Date.now = jest.fn(() => toNY('2025-07-15T12:00:00Z').getTime());
     Date.prototype.toISOString = jest.fn(() => '2025-07-15T12:00:00.000Z');
   });
 

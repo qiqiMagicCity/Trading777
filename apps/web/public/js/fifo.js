@@ -1,8 +1,9 @@
+import { toNY, nowNY } from '@/lib/timezone';
 
 // ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) using UTC to avoid timezone skew ----
 function getWeekIdx(dateStr){
   const parts = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
+  return toNY(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
 }
 
 /* FIFO cost calculation & metrics – ported from Apps Script (迭代3.3.2) */
@@ -12,7 +13,7 @@ function getWeekIdx(dateStr){
     const symMap = {};   // per‑symbol state
     // sort in-place by date asc (YYYY-MM-DD) then original order
     allTrades.sort((a,b)=>{
-      const d1 = new Date(a.date), d2 = new Date(b.date);
+      const d1 = toNY(a.date), d2 = toNY(b.date);
       return d1 - d2;
     });
 
@@ -93,7 +94,7 @@ function getWeekIdx(dateStr){
       }
 
       // enrich trade object
-      t.weekday = (function(d){ const w=d.getDay(); return ((w+6)%7)+1; })(new Date(t.date));
+      t.weekday = (function(d){ const w=d.getDay(); return ((w+6)%7)+1; })(toNY(t.date));
       t.count   = st.count;
       t.amount  = t.qty * t.price;
       t.be      = jVal;

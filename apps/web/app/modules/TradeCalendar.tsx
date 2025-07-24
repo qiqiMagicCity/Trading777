@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useMemo } from 'react';
+import { toNY, nowNY } from '@/lib/timezone';
 
 interface TradeCalendarProps {
   trades: EnrichedTrade[];
@@ -59,9 +60,9 @@ export function TradeCalendar({ trades, title, id, isIntraday = false }: TradeCa
         {Object.entries(months).map(([month, arr]) => {
           // 计算该月第一天星期几
           const [yStr, mStr] = month.split('-');
-          const firstDate = new Date(Number(yStr), Number(mStr) - 1, 1);
+          const firstDate = toNY(Number(yStr), Number(mStr) - 1, 1);
           const firstWeekDay = firstDate.getDay();
-          const daysInMonth = new Date(Number(yStr), Number(mStr), 0).getDate();
+          const daysInMonth = toNY(Number(yStr), Number(mStr), 0).getDate();
           const dayMap: Record<number, number> = {};
           arr.forEach(d => { dayMap[d.day] = d.pnl ?? 0; });
           return (

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { findTrades } from '@/lib/services/dataService';
 import { computeFifo, type EnrichedTrade } from '@/lib/fifo';
+import { toNY, nowNY } from '@/lib/timezone';
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '-';
@@ -114,7 +115,7 @@ export default function StockPage() {
         <tbody>
           {trades.length > 0 ? (
             trades.map((trade, idx) => {
-              const dateObj = new Date(trade.date);
+              const dateObj = toNY(trade.date);
               const weekday = weekdayMap[dateObj.getUTCDay()];
               const plCls = (trade.realizedPnl || 0) > 0 ? 'green' : (trade.realizedPnl || 0) < 0 ? 'red' : 'white';
               const sideCls = (trade.action === 'buy' || trade.action === 'cover') ? 'green' : 'red';

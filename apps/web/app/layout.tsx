@@ -7,7 +7,7 @@ import Providers from "./providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Trading777 v7.80",
+  title: "Trading777 7.0",
   description: "Trading777 Dashboard",
 };
 

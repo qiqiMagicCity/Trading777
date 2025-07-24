@@ -1,3 +1,4 @@
+import { toNY, nowNY } from '@/lib/timezone';
 
 /* ---------- Prev Close attachment (v7.27) ---------- */
 
@@ -8,8 +9,8 @@ const nyNow   = ()=> luxon.DateTime.now().setZone(NY_TZ);
 const todayNY = ()=> nyNow().toISODate();
 async function attachPrevCloses(){
   const idb = await import('./lib/idb.js');
-  const now = new Date();
-  let d = new Date(now);
+  const now = nowNY();
+  let d = toNY(now);
   // 找到上一个交易日（跳过周末）
   do{
     d.setDate(d.getDate()-1);
@@ -38,8 +39,8 @@ async function attachPrevCloses(){
 
 async function getPrevTradingDayClose(symbol){
   const idb = await import('./lib/idb.js');
-  const now = new Date();
-  let d = new Date(now);
+  const now = nowNY();
+  let d = toNY(now);
   d.setDate(d.getDate()-1);
   while(d.getDay()===0 || d.getDay()===6){ d.setDate(d.getDate()-1); }
   const dateStr = d.toISOString().slice(0,10);
@@ -58,7 +59,7 @@ function buildOptionSymbol(root, dateStr, cp, strike){
 // ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) using UTC to avoid timezone skew ----
 function getWeekIdx(dateStr){
   const parts = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
+  return toNY(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
 }
 
 /* Trading777 v5.3.2 dashboard – implements import / export, dynamic positions, add‑trade */
@@ -108,7 +109,7 @@ function recalcPositions(){
   const symbolLots = {};   // {SYM: [{qty, price}] }
   const dayStr = todayNY();
 
-  trades.sort((a,b)=> new Date(a.date) - new Date(b.date));   // 确保按时间先后
+  trades.sort((a,b)=> toNY(a.date) - toNY(b.date));   // 确保按时间先后
 
   trades.forEach(t=>{
     const lots = symbolLots[t.symbol] || (symbolLots[t.symbol] = []);
@@ -240,7 +241,7 @@ const floating = positions.reduce((sum,p)=>{
 
 
   const latestTradeDate = trades.reduce((d,t)=> t.date>d ? t.date : d, '');
-  const todayStr = latestTradeDate || new Date().toLocaleDateString('en-CA', { timeZone:'America/New_York' });
+  const todayStr = latestTradeDate || nowNY().toLocaleDateString('en-CA', { timeZone:'America/New_York' });
   const todayTrades = trades.filter(t=> t.date === todayStr);
 // --- v7.53 修复：精确计算当日浮动盈亏（历史仓 + 今日仓） ---
 // 构建今日净买卖映射
@@ -286,15 +287,15 @@ const lossesTotal = trades.filter(t=> (t.pl||0) < 0).length;
 const winRate = (winsTotal + lossesTotal) ? winsTotal / (winsTotal + lossesTotal) * 100 : null;
 
 
-const now = new Date();
-const monday = new Date(now);
+const now = nowNY();
+const monday = toNY(now);
 monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
 monday.setHours(0,0,0,0);
 
-const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+const firstOfMonth = toNY(now.getFullYear(), now.getMonth(), 1);
 firstOfMonth.setHours(0,0,0,0);
 
-const firstOfYear = new Date(now.getFullYear(), 0, 1);
+const firstOfYear = toNY(now.getFullYear(), 0, 1);
 firstOfYear.setHours(0,0,0,0);
 
 // --- v7.75 重新计算 WTD/MTD/YTD（含每日浮动 + 已实现） ---
@@ -302,7 +303,7 @@ function sumPeriod(startDate){
   // startDate: JS Date at 00:00 local, inclusive
   const toISO = d => d.toISOString().slice(0,10);
   const startISO = toISO(startDate);
-  const todayISO = toISO(new Date());
+  const todayISO = toISO(nowNY());
 
   // ---- 1. Build daily realized P/L map ----
   const realizedDaily = {};
@@ -383,7 +384,7 @@ const ytdReal = sumPeriod(firstOfYear);
 
 
 function updateClocks(){
-  const fmt = tz => new Date().toLocaleTimeString('en-GB',{timeZone:tz,hour12:false});
+  const fmt = tz => nowNY().toLocaleTimeString('en-GB',{timeZone:tz,hour12:false});
   document.getElementById('clocks').innerHTML =
       `纽约：${fmt('America/New_York')} | 瓦伦西亚：${fmt('Europe/Madrid')} | 上海：${fmt('Asia/Shanghai')}`;
 }
@@ -454,7 +455,7 @@ function renderTrades(){
   if(!tbl) return;
   const head=['日期','星期','图标','代码','中文','方向','单价','数量','订单金额','详情'];
   tbl.innerHTML='<tr>'+head.map(h=>`<th class="${h==='中文'?'cn':''}">${h}</th>`).join('')+'</tr>';
-  trades.slice().sort((a,b)=> new Date(b.date)-new Date(a.date)).forEach(t=>{
+  trades.slice().sort((a,b)=> toNY(b.date)-toNY(a.date)).forEach(t=>{
     const amt=(t.qty*t.price).toFixed(2);
     const sideCls = t.side==='BUY' ? 'green' : t.side==='SELL' ? 'red' : t.side==='SHORT' ? 'purple' : 'blue';
     const wkAbbr = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][ getWeekIdx(t.date) ];
@@ -480,7 +481,7 @@ function addTrade(){
 
 /* Export */
 function exportData(){
-  const data={positions,trades,equityCurve:loadCurve(),generated:new Date().toISOString()};
+  const data={positions,trades,equityCurve:loadCurve(),generated:nowNY().toISOString()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -557,10 +558,10 @@ function openTradeForm(editIndex){
 
 // Set default trade datetime to now in New York timezone (America/New_York)
 if(editIndex==null){
-    const now = new Date();
+    const now = nowNY();
     // convert to New York timezone by using toLocaleString
     const nyString = now.toLocaleString('en-US', {timeZone: 'America/New_York'});
-    const nyDate   = new Date(nyString);
+    const nyDate   = toNY(nyString);
     const pad = (n)=>n.toString().padStart(2,'0');
     const val = `${nyDate.getFullYear()}-${pad(nyDate.getMonth()+1)}-${pad(nyDate.getDate())}T${pad(nyDate.getHours())}:${pad(nyDate.getMinutes())}`;
     document.getElementById('t-date').value = val;
@@ -573,7 +574,7 @@ if(editIndex==null){
      document.getElementById('t-qty').value=t.qty;
      document.getElementById('t-price').value=t.price;
   }else{
-     document.getElementById('t-date').value=new Date().toISOString().slice(0,16);
+     document.getElementById('t-date').value=nowNY().toISOString().slice(0,16);
   }
   function close(){modal.remove();}
   
@@ -792,7 +793,7 @@ function refreshAll(){
 /* ---- NY Date Display ---- */
 function renderNYDate(){
   const opts = {timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',weekday:'short'};
-  document.getElementById('nyDate').textContent = new Intl.DateTimeFormat('zh-CN',opts).format(new Date());
+  document.getElementById('nyDate').textContent = new Intl.DateTimeFormat('zh-CN',opts).format(nowNY());
 }
 renderNYDate();
 setInterval(renderNYDate,60*1000);

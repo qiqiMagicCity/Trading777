@@ -8,13 +8,13 @@ import Link from 'next/link';
 
 // Match the original clocks div in the HTML
 export function Clocks() {
-  const [time, setTime] = useState(() => new Date()); // Use a function to prevent immediate execution on server import
+  const [time, setTime] = useState(() => nowNY()); // Use a function to prevent immediate execution on server import
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
     const timer = setInterval(() => {
-      setTime(new Date());
+      setTime(nowNY());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -43,7 +43,7 @@ export function Clocks() {
 }
 
 function getNyDate(): string {
-  const now = new Date();
+  const now = nowNY();
   const nyDate = toZonedTime(now, 'America/New_York');
   return format(nyDate, 'yyyy-MM-dd');
 }
@@ -93,7 +93,7 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `trades-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `trades-export-${nowNY().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

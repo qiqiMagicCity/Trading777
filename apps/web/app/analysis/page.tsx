@@ -7,6 +7,7 @@ import { findTrades } from '@/lib/services/dataService';
 import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
+import { toNY, nowNY } from '@/lib/timezone';
 
 export default function AnalysisPage() {
   const [isChartReady, setIsChartReady] = useState(false);
@@ -32,9 +33,9 @@ export default function AnalysisPage() {
     const fmt = (d: string) => {
       if (period === 'day') return d;
       if (period === 'week') {
-        const dt = new Date(d);
+        const dt = toNY(d);
         const y = dt.getFullYear();
-        const week = Math.ceil((((+dt) - +new Date(y, 0, 1)) / 86400000 + new Date(y, 0, 1).getDay() + 1) / 7);
+        const week = Math.ceil((((+dt) - +toNY(y, 0, 1)) / 86400000 + toNY(y, 0, 1).getDay() + 1) / 7);
         return `${y}-W${String(week).padStart(2, '0')}`;
       }
       // month

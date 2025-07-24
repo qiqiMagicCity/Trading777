@@ -1,4 +1,5 @@
 import { getPrice, putPrice, CachedPrice } from './dataService';
+import { toNY, nowNY } from '@/lib/timezone';
 
 /**
  * API 基础 URL 常量
@@ -114,8 +115,8 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
     return null;
   }
 
-  const fromTs = Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
-  const toTs = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
+  const fromTs = Math.floor(toNY(`${date}T00:00:00Z`).getTime() / 1000);
+  const toTs = Math.floor(toNY(`${date}T23:59:59Z`).getTime() / 1000);
   const url = `${FINNHUB_BASE_URL}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${token}`;
 
   try {

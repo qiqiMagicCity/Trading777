@@ -1,3 +1,4 @@
+import { toNY, nowNY } from '@/lib/timezone';
 (function(){
   // 工具
   function numberColor(v){ return v>0?'green':(v<0?'red':'white'); }
@@ -8,7 +9,7 @@
   if(!Array.isArray(trades) || trades.length===0) return;
 
   // 2. 按日期排序
-  trades.sort((a,b)=> new Date(a.date)-new Date(b.date));
+  trades.sort((a,b)=> toNY(a.date)-toNY(b.date));
   const allSymbols = [...new Set(trades.map(t=>t.symbol))];
   const allDates = trades.map(t=>t.date).sort();
   const minDate = allDates[0], maxDate = allDates[allDates.length-1];
@@ -20,7 +21,7 @@
     let pos = {}; // symbol: {qty, cost}
     let prevUnreal = 0;
     let dateArr = [];
-    for(let d=new Date(minDate+'T00:00:00Z'); d<=new Date(maxDate+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+1)){
+    for(let d=toNY(minDate+'T00:00:00Z'); d<=toNY(maxDate+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+1)){
       dateArr.push(formatDate(d));
     }
     for(const date of dateArr){
@@ -64,7 +65,7 @@
       // 按周合并
       let weekMap={}, cum=0;
       arr.forEach(d=>{
-        let key = d.date.slice(0,7)+'-W'+new Date(d.date).getUTCDay();
+        let key = d.date.slice(0,7)+'-W'+toNY(d.date).getUTCDay();
         weekMap[key]=(weekMap[key]||0)+d.net;
       });
       arr = Object.entries(weekMap).map(([k,v],i)=>({date:k, cumulative:(arr[i-1]?.cumulative||0)+v}));
@@ -107,13 +108,13 @@
       let grid=document.createElement('div');
       grid.className='calendar-grid';
       let [y,m]=month.split('-').map(Number);
-      let firstDate=new Date(y, m-1, 1), firstWeekDay=firstDate.getDay();
+      let firstDate=toNY(y, m-1, 1), firstWeekDay=firstDate.getDay();
       for(let i=0;i<firstWeekDay;i++){
         let cell=document.createElement('div');
         cell.className='calendar-cell zero';
         grid.appendChild(cell);
       }
-      let days=new Date(y, m, 0).getDate();
+      let days=toNY(y, m, 0).getDate();
       for(let d=1; d<=days; d++){
         let dateKey = month + '-' + String(d).padStart(2,'0');
         let pnl = dayMap[dateKey]||0;
