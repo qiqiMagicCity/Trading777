@@ -7,12 +7,14 @@ function getWeekIdx(dateStr){
 
 /* FIFO cost calculation & metrics – ported from Apps Script (迭代3.3.2) */
 (function(g){
+  const { toNY } = window;
   function computeFIFO(allTrades){
     const EPS = 1e-6;
     const symMap = {};   // per‑symbol state
     // sort in-place by date asc (YYYY-MM-DD) then original order
+    const { toNY } = window;
     allTrades.sort((a,b)=>{
-      const d1 = new Date(a.date), d2 = new Date(b.date);
+      const d1 = toNY(a.date), d2 = toNY(b.date);
       return d1 - d2;
     });
 
@@ -93,7 +95,7 @@ function getWeekIdx(dateStr){
       }
 
       // enrich trade object
-      t.weekday = (function(d){ const w=d.getDay(); return ((w+6)%7)+1; })(new Date(t.date));
+      t.weekday = (function(d){ const w=d.getDay(); return ((w+6)%7)+1; })(toNY(t.date));
       t.count   = st.count;
       t.amount  = t.qty * t.price;
       t.be      = jVal;

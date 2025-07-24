@@ -4,6 +4,7 @@
 const DB_NAME = 'TradingApp';
 const DB_VERSION = 1;
 const STORE_PRICES = 'prices';
+const { nowNY } = window;
 
 function _open() {
   return new Promise((resolve, reject) => {
@@ -75,7 +76,7 @@ export async function exportPrices() {
       const blob = new Blob([JSON.stringify(req.result, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = nowNY().toISOString().slice(0, 10);
       a.download = `prices_${today}.json`;
       a.href = url;
       a.click();

@@ -2,6 +2,7 @@
 
 import type { EnrichedTrade } from "@/lib/fifo";
 import { useEffect, useState } from "react";
+import { toNY } from '@/lib/timezone';
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '-';
@@ -37,7 +38,7 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
       </thead>
       <tbody>
         {trades.slice(0, 10).map((trade, idx) => {
-          const dateObj = new Date(trade.date);
+          const dateObj = toNY(trade.date);
           const weekday = weekdayMap[dateObj.getUTCDay()];
           const colorSide = (trade.action === 'buy' || trade.action === 'cover') ? 'green' : 'red';
           const qtyColor = colorSide;
