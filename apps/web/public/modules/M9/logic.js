@@ -6,7 +6,7 @@ class M9Logic extends ModuleBase{
   constructor(){ super('M9'); this.calc(); }
   async calc(){
     const trades = await getTrades();
-    const todayStr=nowNY().toISOString().slice(0,10);
+    const todayStr=new Date().toISOString().slice(0,10);
     const histTrades = trades.filter(t=> t.date && !t.date.startsWith(todayStr)); // before today
     let realized=0;
     const fifoMap={};

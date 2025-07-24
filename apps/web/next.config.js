@@ -1,8 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  env: {
-    TZ: 'America/New_York',
-  },
-};
+const nextConfig = {};
 
 export default nextConfig;

@@ -97,7 +97,7 @@ export async function fetchRealtimePrice(symbol){
  * Called by closeRecorder.js after market close.
  */
 export async function saveDailyClose(symbol, price){
-  const todayStr = nowNY().toISOString().slice(0,10);
+  const todayStr = new Date().toISOString().slice(0,10);
   await putPrice(symbol, todayStr, price, 'finnhub');
 }
 

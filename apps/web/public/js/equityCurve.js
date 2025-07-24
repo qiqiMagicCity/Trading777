@@ -1,4 +1,3 @@
-import { toNY, nowNY } from '@/lib/timezone';
 
 (function(){
   const STORAGE_KEY = 'equity_curve';
@@ -50,7 +49,7 @@ import { toNY, nowNY } from '@/lib/timezone';
 /* ---- v7.8.1 新增: Alpha Vantage 收盘价 & 当日浮动盈亏自动更新 ---- */
 (function(){
   // 若曲线里已存在今天数据且执行过，则跳过
-  const today = nowNY().toISOString().slice(0,10);
+  const today = new Date().toISOString().slice(0,10);
   const curve = loadCurve();
   if(curve.some(p=> p.date===today && p.auto)) return;
 
@@ -61,7 +60,7 @@ import { toNY, nowNY } from '@/lib/timezone';
   /* 1. 计算持仓 */
   function calcPositions(){
     const pos={};
-    trades.sort((a,b)=> toNY(a.date)-toNY(b.date));
+    trades.sort((a,b)=> new Date(a.date)-new Date(b.date));
     trades.forEach(t=>{
       const s=t.symbol, q=Number(t.qty), price=Number(t.price);
       if(t.side==='BUY' || t.side==='COVER'){

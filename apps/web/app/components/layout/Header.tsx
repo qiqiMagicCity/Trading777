@@ -6,7 +6,7 @@ import { zhCN } from 'date-fns/locale/zh-CN';
 import { clearAndImportData, exportData, importClosePrices, getAllPrices } from '@/lib/services/dataService';
 
 export function Header() {
-  const [now, setNow] = useState(nowNY());
+  const [now, setNow] = useState(new Date());
   const [nyTime, setNyTime] = useState('');
   const [valenciaTime, setValenciaTime] = useState('');
   const [shanghaiTime, setShanghaiTime] = useState('');
@@ -14,7 +14,7 @@ export function Header() {
   useEffect(() => {
     // 更新所有时区的时间
     function updateAllTimes() {
-      const currentDate = nowNY();
+      const currentDate = new Date();
 
       // 获取各时区的时间
       setNyTime(currentDate.toLocaleTimeString('en-US', {
@@ -93,7 +93,7 @@ export function Header() {
       const data = {
         ...core,
         equityCurve: [],        // 暂无专门存储，留空占位
-        generated: nowNY().toISOString()
+        generated: new Date().toISOString()
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -153,7 +153,7 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `close_prices_${nowNY().toISOString().slice(0, 10)}.json`;
+      a.download = `close_prices_${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

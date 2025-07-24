@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
-import { toNY, nowNY } from '@/lib/timezone';
 
 type Side = 'BUY' | 'SELL' | 'SHORT' | 'COVER';
 
@@ -18,7 +17,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const [side, setSide] = useState<Side>('BUY');
   const [qty, setQty] = useState(0);
   const [price, setPrice] = useState(0);
-  const [date, setDate] = useState(nowNY().toISOString().slice(0, 10));
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     if (trade) {
@@ -31,14 +30,14 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
 
       // 确保日期格式正确
       try {
-        const tradeDate = toNY(trade.date);
+        const tradeDate = new Date(trade.date);
         const formattedDate = tradeDate.toISOString().slice(0, 10);
         setDate(formattedDate);
         console.log('设置日期:', formattedDate, '原始日期:', trade.date);
       } catch (e) {
         console.error('日期格式错误:', trade.date, e);
         // 回退到当前日期
-        setDate(nowNY().toISOString().slice(0, 10));
+        setDate(new Date().toISOString().slice(0, 10));
       }
     }
   }, [trade]);

@@ -1,9 +1,8 @@
 import ModuleBase from '../ModuleBase.js';
 import { getTrades } from '../../utils/dataStore.js';
-import { toNY, nowNY } from '@/lib/timezone';
 function isToday(ts){
-  const d = toNY(ts);
-  const now = nowNY();
+  const d = new Date(ts);
+  const now = new Date();
   return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth() && d.getDate()===now.getDate();
 }
 class M7Logic extends ModuleBase{

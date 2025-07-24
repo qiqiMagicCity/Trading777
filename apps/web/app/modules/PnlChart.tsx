@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EnrichedTrade } from '@/lib/fifo';
 import Script from 'next/script';
-import { toNY, nowNY } from '@/lib/timezone';
 
 interface PnlChartProps {
   trades: EnrichedTrade[];
@@ -31,14 +30,14 @@ export function PnlChart({ trades }: PnlChartProps) {
     trades.forEach(trade => {
       if (!trade.date) return; // Skip trades without a date
 
-      const date = toNY(trade.date);
+      const date = new Date(trade.date);
       let key = '';
 
       if (activeView === 'day') {
         key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
       } else if (activeView === 'week') {
         // Get the week number
-        const firstDayOfYear = toNY(date.getFullYear(), 0, 1);
+        const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
         const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
         const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
         key = `${date.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
