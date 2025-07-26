@@ -1,4 +1,5 @@
 (function(){
+  const { toNY } = window;
   // 工具
   function numberColor(v){ return v>0?'green':(v<0?'red':'white'); }
   function formatDate(d){ return d.toISOString().slice(0,10); }
@@ -8,7 +9,7 @@
   if(!Array.isArray(trades) || trades.length===0) return;
 
   // 2. 按日期排序
-  trades.sort((a,b)=> new Date(a.date)-new Date(b.date));
+  trades.sort((a,b)=> toNY(a.date)-toNY(b.date));
   const allSymbols = [...new Set(trades.map(t=>t.symbol))];
   const allDates = trades.map(t=>t.date).sort();
   const minDate = allDates[0], maxDate = allDates[allDates.length-1];
@@ -107,13 +108,13 @@
       let grid=document.createElement('div');
       grid.className='calendar-grid';
       let [y,m]=month.split('-').map(Number);
-      let firstDate=new Date(y, m-1, 1), firstWeekDay=firstDate.getDay();
+      let firstDate=toNY(y, m-1, 1), firstWeekDay=firstDate.getDay();
       for(let i=0;i<firstWeekDay;i++){
         let cell=document.createElement('div');
         cell.className='calendar-cell zero';
         grid.appendChild(cell);
       }
-      let days=new Date(y, m, 0).getDate();
+      let days=toNY(y, m, 0).getDate();
       for(let d=1; d<=days; d++){
         let dateKey = month + '-' + String(d).padStart(2,'0');
         let pnl = dayMap[dateKey]||0;

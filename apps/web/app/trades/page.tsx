@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { findTrades, deleteTrade } from '@/lib/services/dataService';
 import { computeFifo, type EnrichedTrade } from '@/lib/fifo';
 import AddTradeModal from '@/components/AddTradeModal';
+import { toNY } from '@/lib/timezone';
 
 export default function TradesPage() {
   const [trades, setTrades] = useState<EnrichedTrade[]>([]);
@@ -72,7 +73,7 @@ export default function TradesPage() {
         </thead>
         <tbody>
           {trades.map((trade, idx) => {
-            const dateObj = new Date(trade.date);
+            const dateObj = toNY(trade.date);
             const weekday = weekdayMap[dateObj.getUTCDay()];
             const sideCls = getSideClass(trade.action);
             const amt = trade.price * trade.quantity;

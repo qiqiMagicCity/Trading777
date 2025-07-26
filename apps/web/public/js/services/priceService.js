@@ -4,6 +4,7 @@
  * No Node.js fs/path required – works on Vercel static hosting.
  */
 import { putPrice } from '../lib/idb.js';
+const { nowNY } = window;
 
 /** milliseconds to cache realtime quotes in localStorage */
 const RT_CACHE_MS = 60_000;
@@ -97,7 +98,7 @@ export async function fetchRealtimePrice(symbol){
  * Called by closeRecorder.js after market close.
  */
 export async function saveDailyClose(symbol, price){
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = nowNY().toISOString().slice(0,10);
   await putPrice(symbol, todayStr, price, 'finnhub');
 }
 

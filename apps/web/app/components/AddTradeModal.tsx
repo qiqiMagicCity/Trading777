@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
+import { nowNY, toNY } from '@/lib/timezone';
 
 interface Props {
   onClose: () => void;
@@ -11,7 +12,7 @@ function buildOptionSymbol(root: string, dateStr: string, cp: string, strike: nu
   if (!root || !dateStr || !cp || !strike) return '';
 
   // Format: AAPL230915C00165000
-  const date = new Date(dateStr);
+  const date = toNY(dateStr);
   const yy = date.getFullYear().toString().slice(-2);
   const mm = (date.getMonth() + 1).toString().padStart(2, '0');
   const dd = date.getDate().toString().padStart(2, '0');
@@ -35,10 +36,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const [optStrike, setOptStrike] = useState<number>(0);
 
   // Get current NY time for default
-  const now = new Date();
-  const nyTime = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
-  const nyDate = new Date(nyTime);
-  const defaultDatetime = nyDate.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM format
+  const defaultDatetime = nowNY().toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM format
 
   const [datetime, setDatetime] = useState(defaultDatetime);
 
@@ -65,8 +63,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
 
       // 处理日期 -> datetime-local 格式 (YYYY-MM-DDTHH:MM)
       try {
-        const d = new Date(trade.date);
-        const iso = d.toISOString(); // YYYY-MM-DDTHH:MM:SSZ
+        const iso = toNY(trade.date).toISOString(); // YYYY-MM-DDTHH:MM:SSZ
         setDatetime(iso.slice(0, 16));
       } catch (e) {
         console.error('无法解析日期:', trade.date, e);

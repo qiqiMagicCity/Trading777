@@ -15,7 +15,8 @@ function getSideClass(side) {
 }
 function render(){
   let trades = JSON.parse(localStorage.getItem('trades')||'[]');
-  trades.sort((a,b)=> new Date(b.date)-new Date(a.date));
+  const { toNY } = window;
+  trades.sort((a,b)=> toNY(b.date)-toNY(a.date));
   trades = window.FIFO ? window.FIFO.computeFIFO(trades) : trades;
 
     const head=['#','logo','代码','中文','日期','星期','统计','方向','单价','数量','订单金额','盈亏平衡点','盈亏','详情','目前持仓','持仓成本','编辑','删除'];
