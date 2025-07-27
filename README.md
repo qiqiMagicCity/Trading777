@@ -10,6 +10,12 @@ Run the following command:
 npx create-turbo@latest
 ```
 
+## API Keys
+
+This project uses external stock data providers. Set your Tiingo API token in
+`NEXT_PUBLIC_TIINGO_TOKEN` (or the `KEY.txt` file for local usage) so the app
+can request quotes from Tiingo.
+
 ## What's inside?
 
 This Turborepo includes the following packages/apps:
