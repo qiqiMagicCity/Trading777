@@ -1,5 +1,6 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from '@/lib/services/dataService';
+import { nowNY, toNY } from './timezone';
 
 /**
  * 交易系统指标接口
@@ -134,7 +135,7 @@ function calcTodayTradePnL(enrichedTrades: EnrichedTrade[], todayStr: string): n
   // 按时间顺序处理今日交易
   enrichedTrades
     .filter(t => t.date.startsWith(todayStr))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime())
     .forEach(t => {
       const { symbol, action, quantity, price } = t;
 
@@ -216,7 +217,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
   // 按时间顺序处理今日交易，找出日内交易匹配
   enrichedTrades
     // .filter(t => t.date.startsWith(todayStr))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime())
     .forEach(t => {
       const { symbol, action, quantity, price, date } = t;
 
@@ -291,7 +292,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
   // 3. 构建历史FIFO栈
   enrichedTrades
     .filter(t => !t.date.startsWith(todayStr))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime())
     .forEach(t => {
       const { symbol, action, quantity, price, date } = t;
       if (!fifo[symbol]) fifo[symbol] = [];
@@ -373,7 +374,7 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
 
   // 按时间顺序处理今日交易，找出日内交易匹配
   enrichedTrades
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime())
     .forEach(t => {
       const { symbol, action, quantity, price, date } = t;
 
@@ -550,7 +551,7 @@ function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: numbe
   let wins = 0;
   let losses = 0;
 
-  const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = [...trades].sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime());
 
   for (const t of sorted) {
     const { symbol, action, quantity, price } = t;
@@ -616,9 +617,9 @@ function calcPeriodMetrics(dailyResults: DailyResult[], todayStr: string): { wtd
    */
   function calcWTD(list: DailyResult[]) {
     if (!list.length) return 0;
-    const lastDate = new Date(list[list.length - 1]!.date);
+    const lastDate = toNY(list[list.length - 1]!.date);
     const day = (lastDate.getDay() + 6) % 7; // Monday=0
-    const monday = new Date(lastDate);
+    const monday = toNY(lastDate);
     monday.setDate(lastDate.getDate() - day);
     const mondayStr = monday.getFullYear() + '-' + (monday.getMonth() + 1 > 9 ? monday.getMonth() + 1 : `0${monday.getMonth() + 1}`) + '-' + (monday.getDate() > 9 ? monday.getDate() : `0${monday.getDate()}`);
     return sumSince(list, mondayStr);
@@ -645,7 +646,7 @@ export function calcMetrics(
   dailyResults: DailyResult[] = []
 ): Metrics {
   // 获取今日日期字符串
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = nowNY().toISOString().slice(0, 10);
 
   // M1: 账户总成本
   const totalCost = sum(positions.map(p => p.avgPrice * Math.abs(p.qty)));
