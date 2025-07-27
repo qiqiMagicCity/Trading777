@@ -114,7 +114,11 @@ export default function DashboardPage() {
     return [];
   }, [trades]);
 
-  const symbolsInPositions = useMemo(() => positions.map(p => p.symbol), [positions]);
+  // Unique set of all traded symbols
+  const symbolsInTrades = useMemo(() => {
+    const set = new Set(trades.map(t => t.symbol));
+    return Array.from(set);
+  }, [trades]);
 
   async function reloadData() {
     try {
@@ -191,7 +195,7 @@ export default function DashboardPage() {
       <PositionsTable positions={positions} trades={enrichedTrades} />
 
       <h3 className="section-title">个股情况 <Link href="/" className="details" style={{ visibility: 'hidden' }}>详情</Link></h3>
-      <SymbolTags symbols={symbolsInPositions} />
+      <SymbolTags symbols={symbolsInTrades} />
 
       <h3 className="section-title">交易记录 <Link href="/trades" className="details">查看全部</Link></h3>
       <TradesTable trades={enrichedTrades} />
