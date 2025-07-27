@@ -54,14 +54,15 @@ export default function DashboardPage() {
         // 为每个持仓获取最新价格
         for (const pos of posList) {
           try {
-            let price = await fetchRealtimeQuote(pos.symbol);
-            if (!price || price === 1) {
+            let result = await fetchRealtimeQuote(pos.symbol);
+            if (!result || result.price === 1) {
               const today = new Date().toISOString().slice(0, 10);
-              price = await fetchDailyClose(pos.symbol, today);
+              result = await fetchDailyClose(pos.symbol, today);
             }
-            if (price && price !== 1) {
-              pos.last = price;
-              pos.priceOk = true;
+
+            if (result && result.price && result.price !== 1) {
+              pos.last = result.price;
+              pos.priceOk = !result.stale;
             } else {
               pos.last = NaN;
               pos.priceOk = false;
@@ -143,14 +144,14 @@ export default function DashboardPage() {
 
       for (const pos of posList) {
         try {
-          let price = await fetchRealtimeQuote(pos.symbol);
-          if (!price || price === 1) {
+          let result = await fetchRealtimeQuote(pos.symbol);
+          if (!result || result.price === 1) {
             const today = new Date().toISOString().slice(0, 10);
-            price = await fetchDailyClose(pos.symbol, today);
+            result = await fetchDailyClose(pos.symbol, today);
           }
-          if (price && price !== 1) {
-            pos.last = price;
-            pos.priceOk = true;
+          if (result && result.price && result.price !== 1) {
+            pos.last = result.price;
+            pos.priceOk = !result.stale;
           } else {
             pos.last = NaN;
             pos.priceOk = false;
