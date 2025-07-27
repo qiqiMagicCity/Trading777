@@ -4,5 +4,6 @@ NEXT_PUBLIC_FINNHUB_TOKEN=d19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg
 Finnhub key：d19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg
 https://finnhub.io/docs/api 这是api说明文档
 NEXT_PUBLIC_ALPHA_VANTAGE_TOKEN=7WVA9HZ4BCR6BR30
-Alpha key：7WVA9HZ4BCR6BR30 
+Alpha key：7WVA9HZ4BCR6BR30
+NEXT_PUBLIC_TIINGO_TOKEN=a295297fc4a8990c372a17d622adb84ff71aea5f
 Tiingo key:a295297fc4a8990c372a17d622adb84ff71aea5f
