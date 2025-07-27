@@ -86,8 +86,13 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const m5 = value as Metrics['M5'];
         formattedValue = (
           <>
-            交易: {formatCurrency(m5.trade)}<br />
-            FIFO: {formatCurrency(m5.fifo)}
+            <span className={m5.trade > 0 ? 'green' : m5.trade < 0 ? 'red' : undefined}>
+              交易: {formatCurrency(m5.trade)}
+            </span>
+            <br />
+            <span className={m5.fifo > 0 ? 'green' : m5.fifo < 0 ? 'red' : undefined}>
+              FIFO: {formatCurrency(m5.fifo)}
+            </span>
           </>
         );
       }
@@ -97,14 +102,23 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           <>
             <span className="green">B/{counts.B}</span>{' '}
             <span className="red">S/{counts.S}</span>{' '}
-            P/{counts.P} C/{counts.C}
+            <span className="purple">P/{counts.P}</span>{' '}
+            <span className="blue">C/{counts.C}</span>
             <br />【{counts.total}】
           </>
         );
       }
       else if (key === 'M10') {
         const m10 = value as Metrics['M10'];
-        formattedValue = `W/${m10.W} L/${m10.L} ${m10.rate.toFixed(1)}%`;
+        formattedValue = (
+          <>
+            <span className="green">W/{m10.W}</span>{' '}
+            <span className="red">L/{m10.L}</span>{' '}
+            <span className={m10.rate >= 50 ? 'green' : 'red'}>
+              {m10.rate.toFixed(1)}%
+            </span>
+          </>
+        );
       }
       else {
         const numValue = value as number;

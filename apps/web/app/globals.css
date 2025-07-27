@@ -6,6 +6,8 @@
   --c-green: #00e676;      /* positive number */
   --c-green-alt: #05c788;  /* secondary positive */
   --c-red: #ff5252;        /* negative number */
+  --c-purple: #b388ff;     /* short position */
+  --c-blue: #40c4ff;       /* cover position */
   --c-gray: #94a3b8;       /* secondary text */
 
   /* Layout */
@@ -146,6 +148,8 @@ body {
 /* Color utility classes (legacy) */
 .green { color: var(--c-green); }
 .red   { color: var(--c-red); }
+.purple { color: var(--c-purple); }
+.blue  { color: var(--c-blue); }
 .white { color: #ffffff; }
 .gray  { color: var(--c-gray); }
 
