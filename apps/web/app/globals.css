@@ -43,7 +43,7 @@ body {
 }
 
 /* Original CSS classes from style.css */
-.section-title, .table, #symbols-list, .stats-grid {
+.section-title, .table, #symbols-list {
   width: 90%;
   max-width: var(--page-max);
   margin-left: auto;
@@ -89,11 +89,16 @@ body {
 
 /* Dashboard stats grid */
 .stats-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 10px;
   justify-content: center;
   margin: 20px auto;
+  width: max-content;
+}
+
+/* Default layout for dashboard metrics */
+#stats {
+  grid-template-columns: repeat(7, 180px);
 }
 
 .symbols-list {
