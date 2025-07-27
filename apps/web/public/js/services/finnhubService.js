@@ -6,14 +6,8 @@
 import { apiQueue } from './apiQueue.js';
 import { putPrice, getPrice } from '../lib/idb.js';
 
-const TOKEN_KEY = 'FINNHUB_TOKEN';
-const API_BASE  = 'https://finnhub.io/api/v1';
-
-/** Return stored token or fallback demo token */
-export function getToken(){
-  return localStorage.getItem(TOKEN_KEY) || 'd19cvm9r01qmm7tudrk0d19cvm9r01qmm7tudrkg';
-}
-
+// 使用内部 API 路由，避免在浏览器暴露密钥
+const API_BASE  = '/api';
 /**
  * Fetch daily close from Finnhub.
  * @param {string} symbol
@@ -23,7 +17,7 @@ export function getToken(){
 export async function fetchFinnhubDailyClose(symbol, date){
   const fromTs = Math.floor(new Date(date + 'T00:00:00Z').getTime()/1000);
   const toTs   = Math.floor(new Date(date + 'T23:59:59Z').getTime()/1000);
-  const url = `${API_BASE}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${getToken()}`;
+  const url = `${API_BASE}/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
   try{
     const json = await apiQueue.enqueue(()=> fetch(url).then(r=>r.json()));
     if(json && json.c && json.c.length){
