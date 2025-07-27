@@ -72,14 +72,8 @@ export async function fetchRealtimePrice(symbol){
     }
   }catch{}
 
-  const { finnhub: rawToken } = await loadKeys();
-  const finnhub = resolveFinnhubToken(rawToken);
-  if(!finnhub){
-    console.warn('[priceService] Finnhub API key missing');
-    return null;
-  }
   try{
-    const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${finnhub}`;
+    const url = `/api/quote?symbol=${symbol}`;
     const res = await fetch(url);
     const json = await res.json();
     const price = json.c ?? json.current ?? null;
