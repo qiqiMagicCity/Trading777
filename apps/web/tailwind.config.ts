@@ -15,6 +15,8 @@ export default {
         green: 'var(--c-green)',
         'green-alt': 'var(--c-green-alt)',
         red: 'var(--c-red)',
+        purple: 'var(--c-purple)',
+        blue: 'var(--c-blue)',
         gray: 'var(--c-gray)',
       },
       borderRadius: {
