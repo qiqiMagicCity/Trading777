@@ -12,6 +12,7 @@ import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
 import { calcMetrics } from '@/lib/metrics';
 import { useStore } from '@/lib/store';
+import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
 
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -46,9 +47,36 @@ export default function DashboardPage() {
             symbol: t.symbol,
             qty: t.quantityAfter,
             avgPrice: t.averageCost,
-            last: t.averageCost, // 使用平均价格作为初始last值，而不是0
+            last: t.averageCost, // 初始值
             priceOk: true,
           }));
+
+        // 为每个持仓获取最新价格
+        for (const pos of posList) {
+          try {
+            let price = await fetchRealtimeQuote(pos.symbol);
+            if (!price || price === 1) {
+              const today = new Date().toISOString().slice(0, 10);
+              price = await fetchDailyClose(pos.symbol, today);
+            }
+            if (price && price !== 1) {
+              pos.last = price;
+              pos.priceOk = true;
+            } else {
+              pos.last = NaN;
+              pos.priceOk = false;
+            }
+          } catch (e) {
+            pos.last = NaN;
+            pos.priceOk = false;
+          }
+        }
+
+        if (posList.some(p => !p.priceOk)) {
+          setError('无法获取实时价格，指标计算失败');
+          setIsLoading(false);
+          return;
+        }
 
         console.log('加载的持仓数据:', posList);
         console.log('持仓数据中的qty类型:', posList.map(p => ({
@@ -105,9 +133,34 @@ export default function DashboardPage() {
           symbol: t.symbol,
           qty: t.quantityAfter,
           avgPrice: t.averageCost,
-          last: t.averageCost, // 使用平均价格作为初始last值
+          last: t.averageCost, // 初始值
           priceOk: true,
         }));
+
+      for (const pos of posList) {
+        try {
+          let price = await fetchRealtimeQuote(pos.symbol);
+          if (!price || price === 1) {
+            const today = new Date().toISOString().slice(0, 10);
+            price = await fetchDailyClose(pos.symbol, today);
+          }
+          if (price && price !== 1) {
+            pos.last = price;
+            pos.priceOk = true;
+          } else {
+            pos.last = NaN;
+            pos.priceOk = false;
+          }
+        } catch (e) {
+          pos.last = NaN;
+          pos.priceOk = false;
+        }
+      }
+
+      if (posList.some(p => !p.priceOk)) {
+        setError('无法获取实时价格，指标计算失败');
+        return;
+      }
 
       // 获取每日结果数据用于计算周期性指标
       const dailyResultsResponse = await fetch('/dailyResult.json');
