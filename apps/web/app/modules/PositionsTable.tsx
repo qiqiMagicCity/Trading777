@@ -82,7 +82,8 @@ export function PositionsTable({ positions, trades }: Props) {
       // 修改：对于空头持仓，市值应该是正数（使用绝对值）
       const isShort = pos.qty < 0;
       const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
-      const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
+      // 使用实时价格乘以仓位数量，表示当前持仓市值
+      const unrealized = lastPrice * pos.qty;
 
       console.log(`${pos.symbol} 市值计算:`, {
         lastPrice,
@@ -148,7 +149,8 @@ export function PositionsTable({ positions, trades }: Props) {
             // 使用回退价格计算市值和浮动盈亏
             const isShort = pos.qty < 0;
             const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
-            const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
+            // 当前浮盈亏按实时价格乘以仓位数量计算
+            const unrealized = lastPrice * pos.qty;
             const unrealizedPercent = lastPrice && pos.avgPrice ? (lastPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
             const realized = getRealized(pos.symbol);
