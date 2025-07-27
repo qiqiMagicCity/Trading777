@@ -167,11 +167,11 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>
                   {isLoading && <span className="loading">加载中...</span>}
                   {isError && <span className="error">获取失败</span>}
-                  {!isLoading && !isError && (
-                    <span className={isStale ? 'text-gray-500' : undefined}>
-                      {formatNumber(lastPrice)}{isStale ? ' *' : ''}
-                    </span>
-                  )}
+                    {!isLoading && !isError && (
+                      <span className={isStale ? 'gray' : undefined}>
+                        {formatNumber(lastPrice)}{isStale ? ' *' : ''}
+                      </span>
+                    )}
                 </td>
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>
