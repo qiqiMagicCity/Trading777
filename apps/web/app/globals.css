@@ -96,9 +96,19 @@ body {
   width: max-content;
 }
 
-/* Default layout for dashboard metrics */
+/* Dashboard landing metrics arrangement */
 #stats {
-  grid-template-columns: repeat(7, 180px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+}
+
+#stats .stats-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 }
 
 .symbols-list {

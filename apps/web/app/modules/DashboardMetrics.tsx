@@ -139,16 +139,31 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     });
   }, [metrics, metricNames, order]);
 
+  const firstRow = formattedMetrics.slice(0, 7);
+  const secondRow = formattedMetrics.slice(7);
+
   return (
     <section id="stats" className="stats-grid">
-      {formattedMetrics.map(metric => (
-        <MetricCard
-          key={metric.key}
-          title={metric.title}
-          value={metric.value}
-          colorClass={metric.colorClass}
-        />
-      ))}
+      <div className="stats-row">
+        {firstRow.map(metric => (
+          <MetricCard
+            key={metric.key}
+            title={metric.title}
+            value={metric.value}
+            colorClass={metric.colorClass}
+          />
+        ))}
+      </div>
+      <div className="stats-row">
+        {secondRow.map(metric => (
+          <MetricCard
+            key={metric.key}
+            title={metric.title}
+            value={metric.value}
+            colorClass={metric.colorClass}
+          />
+        ))}
+      </div>
     </section>
   );
-} 
+}
