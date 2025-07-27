@@ -76,8 +76,7 @@ export function PositionsTable({ positions, trades }: Props) {
 
     return positions.map((pos, idx) => {
       const result = results[idx];
-      // 修改：如果lastPrice为undefined，则使用平均价格作为回退值
-      const lastPrice = result?.data !== undefined ? result.data : pos.avgPrice;
+      const lastPrice = result?.data?.price !== undefined ? result.data.price : pos.avgPrice;
 
       // 修改：对于空头持仓，市值应该是正数（使用绝对值）
       const isShort = pos.qty < 0;
@@ -141,8 +140,8 @@ export function PositionsTable({ positions, trades }: Props) {
         <tbody>
           {positions.map((pos, idx) => {
             const result = results[idx];
-            // 修改：如果lastPrice为undefined，则使用平均价格作为回退值
-            const lastPrice = result?.data !== undefined ? result.data : pos.avgPrice;
+            const lastPrice = result?.data?.price !== undefined ? result.data.price : pos.avgPrice;
+            const isStale = result?.data?.stale;
             const isLoading = result?.isLoading;
             const isError = result?.isError;
 
@@ -168,7 +167,11 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>
                   {isLoading && <span className="loading">加载中...</span>}
                   {isError && <span className="error">获取失败</span>}
-                  {!isLoading && !isError && formatNumber(lastPrice)}
+                  {!isLoading && !isError && (
+                    <span className={isStale ? 'text-gray-500' : undefined}>
+                      {formatNumber(lastPrice)}{isStale ? ' *' : ''}
+                    </span>
+                  )}
                 </td>
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>

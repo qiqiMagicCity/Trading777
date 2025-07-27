@@ -8,12 +8,14 @@ import { apiQueue } from './apiQueue';
  * 环境变量中的 API 令牌
  */
 const finnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
+const tiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
 
 /**
  * 从文件加载的 API 令牌缓存
  */
 interface ApiKeys {
   finnhub?: string;
+  tiingo?: string;
 }
 
 let _runtimeKeys: ApiKeys | null = null;
@@ -27,10 +29,12 @@ async function loadKeysFromTxt(): Promise<ApiKeys> {
 
   try {
     const txt = await fetch('/KEY.txt').then(r => r.text());
-    const fh = txt.match(/Finnhub\s+key：([A-Za-z0-9]+)/i);
+    const fh = txt.match(/Finnhub\s+key[:：]([A-Za-z0-9]+)/i);
+    const tg = txt.match(/Tiingo\s+key[:：]([A-Za-z0-9]+)/i);
 
     _runtimeKeys = {
       finnhub: fh ? (fh[1] as string).trim() : undefined,
+      tiingo: tg ? (tg[1] as string).trim() : undefined,
     };
   } catch (e) {
     console.warn('[priceService] 无法从 KEY.txt 加载 API 密钥', e);
@@ -46,6 +50,13 @@ async function loadKeysFromTxt(): Promise<ApiKeys> {
  */
 async function getFinnhubToken(): Promise<string | undefined> {
   return finnhubToken || (await loadKeysFromTxt()).finnhub;
+}
+
+/**
+ * 获取 Tiingo API 令牌
+ */
+async function getTiingoToken(): Promise<string | undefined> {
+  return tiingoToken || (await loadKeysFromTxt()).tiingo;
 }
 
 /**
@@ -152,6 +163,85 @@ async function fetchFinnhubRealtimeQuote(symbol: string): Promise<number | null>
   return null;
 }
 
+/**
+ * 从 Tiingo API 获取实时报价，并在 localStorage 缓存 5 分钟
+ */
+async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> {
+  const token = await getTiingoToken();
+  if (!token) {
+    console.warn('未设置 Tiingo 令牌');
+    return null;
+  }
+
+  const cacheKey = `tiingo_rt_${symbol}`;
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null') as { price: number; ts: number } | null;
+    if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
+      return cached.price;
+    }
+  } catch {}
+
+  const url = `https://api.tiingo.com/iex/?token=${token}&tickers=${encodeURIComponent(symbol)}`;
+  try {
+    const resp = await apiQueue.enqueue(() => fetch(url));
+    if (!resp.ok) {
+      console.warn(`Tiingo 报价 API 错误 (${symbol}): ${resp.statusText}`);
+      return null;
+    }
+    const json = await resp.json() as Array<{ last?: number }>;
+    const first = Array.isArray(json) && json.length ? json[0] : undefined;
+    if (first && typeof first.last === 'number') {
+      const price = first.last;
+      try { localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() })); } catch {}
+      return price;
+    }
+  } catch (err) {
+    console.warn(`从 Tiingo 获取报价失败 (${symbol})`, err);
+    throw err;
+  }
+  return null;
+}
+
+/**
+ * 从 Tiingo API 获取每日收盘价，并在 localStorage 缓存 5 分钟
+ */
+async function fetchTiingoDailyClose(symbol: string, date: string): Promise<number | null> {
+  const token = await getTiingoToken();
+  if (!token) {
+    console.warn('未设置 Tiingo 令牌');
+    return null;
+  }
+
+  const cacheKey = `tiingo_close_${symbol}_${date}`;
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null') as { price: number; ts: number } | null;
+    if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
+      return cached.price;
+    }
+  } catch {}
+
+  const url = `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(symbol)}/prices?token=${token}&startDate=${date}&endDate=${date}`;
+  try {
+    const resp = await apiQueue.enqueue(() => fetch(url));
+    if (!resp.ok) {
+      console.warn(`Tiingo 收盘价 API 错误 (${symbol}): ${resp.statusText}`);
+      return null;
+    }
+    const json = await resp.json() as Array<{ close?: number }>;
+    const first = Array.isArray(json) && json.length ? json[0] : undefined;
+    if (first && typeof first.close === 'number') {
+      const price = first.close;
+      try { localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() })); } catch {}
+      await putPrice({ symbol, date, close: price, source: 'tiingo' });
+      return price;
+    }
+  } catch (err) {
+    console.warn(`从 Tiingo 获取数据失败 (${symbol})`, err);
+    throw err;
+  }
+  return null;
+}
+
 
 /**
  * 获取股票的每日收盘价，使用缓存优先策略
@@ -161,26 +251,37 @@ async function fetchFinnhubRealtimeQuote(symbol: string): Promise<number | null>
  * @returns 收盘价
  * @throws 如果无法从任何来源获取价格，则抛出错误
  */
-export async function fetchDailyClose(symbol: string, date: string): Promise<number> {
+export interface QuoteResult {
+  price: number;
+  stale: boolean;
+}
+
+export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult> {
   try {
     // 首先尝试从缓存获取
     const cachedPrice = await getPrice(symbol, date);
     if (cachedPrice) {
-      return cachedPrice.close;
+      return { price: cachedPrice.close, stale: false };
     }
 
     // 然后尝试从 Finnhub 获取
     const finnhubPrice = await fetchFinnhubDailyClose(symbol, date);
     if (finnhubPrice !== null) {
-      return finnhubPrice;
+      return { price: finnhubPrice, stale: false };
+    }
+
+    // 尝试 Tiingo
+    const tiingoPrice = await fetchTiingoDailyClose(symbol, date);
+    if (tiingoPrice !== null) {
+      return { price: tiingoPrice, stale: false };
     }
 
     // 如果所有来源都失败，返回默认值 1 而不是抛出错误
     console.warn(`无法获取 ${symbol} 在 ${date} 的收盘价，使用默认值 1`);
-    return 1;
+    return { price: 1, stale: true };
   } catch (error) {
     console.error(`获取 ${symbol} 在 ${date} 的每日收盘价时出错:`, error);
-    return 1; // 错误情况下使用默认值
+    return { price: 1, stale: true }; // 错误情况下使用默认值
   }
 }
 
@@ -190,20 +291,26 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<num
  * @param symbol 股票代码
  * @returns 实时价格
  */
-export async function fetchRealtimeQuote(symbol: string): Promise<number> {
+export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   try {
     // 直接从 Finnhub 获取实时报价
     const finnhubPrice = await fetchFinnhubRealtimeQuote(symbol);
     if (finnhubPrice !== null) {
-      return finnhubPrice;
+      return { price: finnhubPrice, stale: false };
+    }
+
+    // 尝试 Tiingo
+    const tiingoPrice = await fetchTiingoRealtimeQuote(symbol);
+    if (tiingoPrice !== null) {
+      return { price: tiingoPrice, stale: false };
     }
 
     // 如果所有来源都失败，返回默认值 1
     console.warn(`无法获取 ${symbol} 的实时价格，使用默认值 1`);
-    return 1;
+    return { price: 1, stale: true };
   } catch (error) {
     console.error(`获取 ${symbol} 的实时报价时出错:`, error);
-    return 1; // 错误情况下使用默认值
+    return { price: 1, stale: true }; // 错误情况下使用默认值
   }
 }
 
@@ -212,6 +319,6 @@ export async function fetchRealtimeQuote(symbol: string): Promise<number> {
  * @param symbol 股票代码
  * @returns 实时价格
  */
-export async function fetchRealtimePrice(symbol: string): Promise<number> {
+export async function fetchRealtimePrice(symbol: string): Promise<QuoteResult> {
   return fetchRealtimeQuote(symbol);
-} 
+}

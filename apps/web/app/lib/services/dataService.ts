@@ -31,7 +31,7 @@ export interface CachedPrice {
   symbol: string;
   date: string;
   close: number;
-  source: 'finnhub' | 'alphavantage' | 'import';
+  source: 'finnhub' | 'alphavantage' | 'import' | 'tiingo';
 }
 
 // Internal representation, adapted for the app
