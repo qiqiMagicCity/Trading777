@@ -708,7 +708,7 @@ function updatePrices(){
 
        // 为当前所有持仓并行请求价格，全部返回后再统一刷新界面
        const reqs = positions.map(p=>{
-         return fetch(`https://finnhub.io/api/v1/quote?symbol=${p.symbol}&token=${apiKey}`)
+         return fetch(`/api/quote?symbol=${p.symbol}`)
                 .then(r=>r.json())
                 .then(q=>{
                    if(q && q.c){ p.last = q.c; if(p.prevClose == null) p.prevClose = q.pc; p.priceOk = true; } else { p.priceOk = false; }

@@ -123,13 +123,8 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
  * @returns 实时价格，如果未找到则返回 null
  */
 async function fetchFinnhubRealtimeQuote(symbol: string): Promise<number | null> {
-  const token = await getFinnhubToken();
-  if (!token) {
-    console.warn('未设置 Finnhub 令牌');
-    return null;
-  }
-
-  const url = `${FINNHUB_BASE_URL}/quote?symbol=${encodeURIComponent(symbol)}&token=${token}`;
+  // 请求改为调用内部 API 路由，避免在浏览器暴露密钥
+  const url = `/api/quote?symbol=${encodeURIComponent(symbol)}`;
 
   try {
     // 通过 apiQueue 限制请求速率
