@@ -147,6 +147,7 @@ body {
 .green { color: var(--c-green); }
 .red   { color: var(--c-red); }
 .white { color: #ffffff; }
+.gray  { color: var(--c-gray); }
 
 .table {
   border-collapse: collapse;
