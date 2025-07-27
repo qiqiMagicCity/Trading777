@@ -20,6 +20,10 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
 
   const weekdayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  const sortedRecent = [...trades]
+    .sort((a, b) => toNY(b.date).getTime() - toNY(a.date).getTime())
+    .slice(0, 100);
+
   return (
     <table id="trades" className="table">
       <thead>
@@ -37,7 +41,7 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
         </tr>
       </thead>
       <tbody>
-        {trades.slice(0, 10).map((trade, idx) => {
+        {sortedRecent.map((trade, idx) => {
           const dateObj = toNY(trade.date);
           const weekday = weekdayMap[dateObj.getUTCDay()];
           const colorSide = (trade.action === 'buy' || trade.action === 'cover') ? 'green' : 'red';
