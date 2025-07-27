@@ -5,7 +5,7 @@ import type { Position } from '@/lib/services/dataService';
 import { useStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/metrics';
 import type { Metrics } from '@/lib/metrics';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 
 /**
  * DashboardMetrics 组件的属性接口
@@ -26,7 +26,7 @@ function MetricCard({
   colorClass
 }: {
   title: string;
-  value: string;
+  value: ReactNode;
   colorClass?: string;
 }) {
   return (
@@ -78,17 +78,29 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const formattedMetrics = useMemo(() => {
     return order.map(key => {
       const value = metrics[key];
-      let formattedValue: string;
+      let formattedValue: ReactNode;
       let colorClass = '';
 
       // 根据不同指标类型格式化值
       if (key === 'M5') {
         const m5 = value as Metrics['M5'];
-        formattedValue = `交易: ${formatCurrency(m5.trade)} | FIFO: ${formatCurrency(m5.fifo)}`;
+        formattedValue = (
+          <>
+            交易: {formatCurrency(m5.trade)}<br />
+            FIFO: {formatCurrency(m5.fifo)}
+          </>
+        );
       }
       else if (key === 'M7' || key === 'M8') {
         const counts = value as Metrics['M7'] | Metrics['M8'];
-        formattedValue = `B/${counts.B} S/${counts.S} P/${counts.P} C/${counts.C} 【${counts.total}】`;
+        formattedValue = (
+          <>
+            <span className="green">B/{counts.B}</span>{' '}
+            <span className="red">S/{counts.S}</span>{' '}
+            P/{counts.P} C/{counts.C}
+            <br />【{counts.total}】
+          </>
+        );
       }
       else if (key === 'M10') {
         const m10 = value as Metrics['M10'];
@@ -99,7 +111,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         formattedValue = formatCurrency(numValue);
 
         // 设置颜色
-        if (["M3", "M4", "M6", "M9", "M11", "M12", "M13"].includes(key)) {
+        if (["M1", "M2", "M3", "M4", "M6", "M9", "M11", "M12", "M13"].includes(key)) {
           colorClass = numValue > 0 ? 'green' : numValue < 0 ? 'red' : '';
         }
       }

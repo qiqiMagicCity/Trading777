@@ -87,8 +87,8 @@ body {
 
 /* Dashboard stats grid */
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 180px);
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
   margin: 20px auto;
@@ -110,6 +110,7 @@ body {
   background: #003030;
   border: 1px solid #00e67666;
   border-radius: 6px;
+  width: 180px;
   min-height: 100px;
   display: flex;
   flex-direction: column;
@@ -127,6 +128,8 @@ body {
 .value {
   font-size: 1rem;
   font-weight: 700;
+  white-space: pre-line;
+  text-align: center;
 }
 
 /* Box helper classes from legacy */
