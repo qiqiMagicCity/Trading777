@@ -33,7 +33,8 @@ export function PositionsTable({ positions, trades }: Props) {
       queryFn: () => fetchRealtimeQuote(pos.symbol),
       staleTime: 0, // 立即过期，每次都重新请求
       cacheTime: 0, // 不缓存
-      refetchInterval: 1000 * 60, // 每分钟自动刷新
+      // 为减少频繁请求导致的加载压力，改为每5分钟刷新一次
+      refetchInterval: 1000 * 60 * 5, // 每5分钟自动刷新
       retry: 2, // 失败时重试2次
       refetchOnWindowFocus: true,
       refetchOnMount: true
