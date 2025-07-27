@@ -2,10 +2,7 @@ import { getPrice, putPrice, CachedPrice } from './dataService';
 // 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
 
-/**
- * API 基础 URL 常量
- */
-const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
+
 
 /**
  * 环境变量中的 API 令牌
@@ -83,7 +80,8 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
 
   const fromTs = Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
   const toTs = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
-  const url = `${FINNHUB_BASE_URL}/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${token}`;
+  // 通过内部 API 路由转发请求，避免在浏览器暴露密钥
+  const url = `/api/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
 
   try {
     // 使用 apiQueue 队列以避免触发速率限制
