@@ -28,7 +28,7 @@ export interface Metrics {
     fifo: number;
   };
 
-  /** M6: 今日总盈利变化 - M4 与 M3 之和 */
+  /** M6: 今日总盈利变化 - 今日历史仓位平仓盈亏、日内 FIFO 盈亏与浮动盈亏之和 */
   M6: number;
 
   /**
@@ -684,10 +684,9 @@ export function calcMetrics(
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(trades, todayStr);
   console.log('M4计算结果:', todayHistoricalRealizedPnl);
 
-  // M6: 今日总盈利变化 = 当日浮动盈亏 + 今天历史仓位平仓盈亏
-  const todayFloatPnl = floatPnl; // 当日浮动盈亏（持仓浮盈）
-  const todayTotalPnlChange = todayFloatPnl + todayHistoricalRealizedPnl;
-  console.log('M5计算结果:', todayTotalPnlChange);
+  // M6: 今日总盈利变化 = 今天历史仓位平仓盈亏 + 日内 FIFO 盈亏 + 当日浮动盈亏
+  const todayTotalPnlChange = todayHistoricalRealizedPnl + pnlFifo + floatPnl;
+  console.log('M6计算结果:', todayTotalPnlChange);
 
   // M7: 今日交易次数
   const todayTrades = trades.filter(t => t.date.startsWith(todayStr));
