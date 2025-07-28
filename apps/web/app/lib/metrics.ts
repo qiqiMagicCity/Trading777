@@ -402,8 +402,8 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
           if (batch.qty === 0) longStack.shift();
         }
 
-        // 记录匹配的历史交易
-        if (matchedQty > 0) {
+        // 仅当卖出发生在今天时才计入历史平仓
+        if (matchedQty > 0 && date === todayStr) {
           dayTradeMatches.push({
             symbol,
             action: 'sell',
@@ -442,8 +442,8 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
           if (batch.qty === 0) shortStack.shift();
         }
 
-        // 记录匹配的历史交易
-        if (matchedQty > 0) {
+        // 仅当回补发生在今天时才计入历史平仓
+        if (matchedQty > 0 && date === todayStr) {
           dayTradeMatches.push({
             symbol,
             action: 'cover',
