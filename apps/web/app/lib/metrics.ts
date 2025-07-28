@@ -596,6 +596,72 @@ function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: numbe
 }
 
 /**
+ * 根据 FIFO 拆分规则计算今日交易次数
+ * B/P 为指令数，S/C 按平仓批次数统计
+ * @param trades 所有交易记录
+ * @param todayStr 今日日期字符串 (YYYY-MM-DD)
+ */
+function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
+  const longFifo: Record<string, { qty: number }[]> = {};
+  const shortFifo: Record<string, { qty: number }[]> = {};
+
+  let B = 0;
+  let S = 0;
+  let P = 0;
+  let C = 0;
+
+  const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  for (const t of sorted) {
+    const { symbol, action, quantity, date } = t;
+
+    if (action === 'buy') {
+      if (!longFifo[symbol]) longFifo[symbol] = [];
+      longFifo[symbol].push({ qty: quantity });
+      if (date.startsWith(todayStr)) B++;
+    } else if (action === 'sell') {
+      let remain = quantity;
+      const fifo = longFifo[symbol] || [];
+      while (remain > 0 && fifo.length > 0) {
+        const lot = fifo[0]!;
+        const q = Math.min(lot.qty, remain);
+        lot.qty -= q;
+        remain -= q;
+        if (date.startsWith(todayStr)) S++;
+        if (lot.qty === 0) fifo.shift();
+      }
+      if (remain > 0) {
+        if (!shortFifo[symbol]) shortFifo[symbol] = [];
+        shortFifo[symbol].push({ qty: remain });
+        if (date.startsWith(todayStr)) P++;
+      }
+    } else if (action === 'short') {
+      if (!shortFifo[symbol]) shortFifo[symbol] = [];
+      shortFifo[symbol].push({ qty: quantity });
+      if (date.startsWith(todayStr)) P++;
+    } else if (action === 'cover') {
+      let remain = quantity;
+      const fifo = shortFifo[symbol] || [];
+      while (remain > 0 && fifo.length > 0) {
+        const lot = fifo[0]!;
+        const q = Math.min(lot.qty, remain);
+        lot.qty -= q;
+        remain -= q;
+        if (date.startsWith(todayStr)) C++;
+        if (lot.qty === 0) fifo.shift();
+      }
+      if (remain > 0) {
+        if (!longFifo[symbol]) longFifo[symbol] = [];
+        longFifo[symbol].push({ qty: remain });
+        if (date.startsWith(todayStr)) B++;
+      }
+    }
+  }
+
+  return { B, S, P, C };
+}
+
+/**
  * 计算周期性指标（WTD、MTD、YTD）
  * 
  * @param dailyResults 每日交易结果数组
@@ -692,15 +758,13 @@ export function calcMetrics(
     : todayHistoricalRealizedPnl + pnlFifo + floatPnl;
   if (DEBUG) console.log('M6计算结果:', todayTotalPnlChange);
 
-  // M7: 今日交易次数
-  const todayTrades = trades.filter(t => t.date.startsWith(todayStr));
-  const todayTradesByType = {
-    B: todayTrades.filter(t => t.action === 'buy').length,
-    S: todayTrades.filter(t => t.action === 'sell').length,
-    P: todayTrades.filter(t => t.action === 'short').length,
-    C: todayTrades.filter(t => t.action === 'cover').length
-  };
-  const todayTradeCounts = todayTradesByType.B + todayTradesByType.S + todayTradesByType.P + todayTradesByType.C;
+  // M7: 今日交易次数 (按 FIFO 拆分批次)
+  const todayTradeCountsByType = calcTodayTradeCounts(trades, todayStr);
+  const todayTradeCounts =
+    todayTradeCountsByType.B +
+    todayTradeCountsByType.S +
+    todayTradeCountsByType.P +
+    todayTradeCountsByType.C;
 
   // M8: 累计交易次数
   const allTradesByType = {
@@ -737,10 +801,10 @@ export function calcMetrics(
     },
     M6: todayTotalPnlChange,
     M7: {
-      B: todayTradesByType.B,
-      S: todayTradesByType.S,
-      P: todayTradesByType.P,
-      C: todayTradesByType.C,
+      B: todayTradeCountsByType.B,
+      S: todayTradeCountsByType.S,
+      P: todayTradeCountsByType.P,
+      C: todayTradeCountsByType.C,
       total: todayTradeCounts
     },
     M8: {
