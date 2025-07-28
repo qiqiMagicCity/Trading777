@@ -96,10 +96,6 @@ body {
   width: max-content;
 }
 
-/* Default layout for dashboard metrics */
-#stats {
-  grid-template-columns: repeat(7, 180px);
-}
 
 .symbols-list {
   display: flex;
