@@ -121,8 +121,8 @@ describe('metrics calculation', () => {
         "fifo": 0,
         "trade": 0,
       }, // 今日日内交易盈利: (当日没有配对交易)
-      // 今日总盈利变化 = M3 + M4 + 当日 FIFO 盈亏(本例为 0)
-      M6: (10 * 160 - 10 * 150) + (5 * 300 - 5 * 290) + 0,
+      // 今日总盈利变化优先取 dailyResults 中当日的 pnl (50)
+      M6: 50,
       M7: {
         "B": 2,
         "C": 0,
@@ -197,5 +197,14 @@ describe('metrics calculation', () => {
 
     const metrics = calcMetrics(trades, []);
     expect(metrics.M4).toBe(0);
+  });
+
+  test('当日结果存在时 M6 等于 dailyResults 中的 pnl', () => {
+    const dailyResults = [
+      { date: '2025-07-15', realized: 0, float: 0, pnl: 123 }
+    ];
+
+    const metrics = calcMetrics([], [], dailyResults);
+    expect(metrics.M6).toBe(123);
   });
 });
