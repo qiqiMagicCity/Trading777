@@ -116,13 +116,13 @@ describe('metrics calculation', () => {
       M1: 10 * 150 + 5 * 300, // 持仓成本: 10*150 + 5*300 = 3000
       M2: 10 * 160 + (5) * 290, // 持仓市值: 10*160 + (-5)*290 = 150
       M3: (10 * 160 - 10 * 150) + (5 * 300 - 5 * 290), // 持仓浮盈: 150 - 3000 = -2850
-      M4: 100, // 今天持仓平仓盈利: 0 (今日交易没有已实现盈亏)
+      M4: 0, // 今天无平仓交易
       M5: {
         "fifo": 0,
         "trade": 0,
       }, // 今日日内交易盈利: (当日没有配对交易)
       // 今日总盈利变化 = M3 + M4 + 当日 FIFO 盈亏(本例为 0)
-      M6: (10 * 160 - 10 * 150) + (5 * 300 - 5 * 290) + 100,
+      M6: (10 * 160 - 10 * 150) + (5 * 300 - 5 * 290) + 0,
       M7: {
         "B": 2,
         "C": 0,
@@ -185,7 +185,17 @@ describe('metrics calculation', () => {
       },
       M11: 0,
       M12: 0,
-      M13: 0,
-    });
+    M13: 0,
   });
-}); 
+  });
+
+  test('当日无交易时 M4 为 0', () => {
+    const trades: EnrichedTrade[] = [
+      { symbol: 'TSLA', date: '2025-07-14', price: 100, quantity: 10, action: 'buy', weekday: 1, tradeCount: 1, amount: 1000, breakEvenPrice: 100, realizedPnl: 0, quantityAfter: 10, averageCost: 100 },
+      { symbol: 'TSLA', date: '2025-07-14', price: 110, quantity: 10, action: 'sell', weekday: 1, tradeCount: 2, amount: 1100, breakEvenPrice: 100, realizedPnl: 100, quantityAfter: 0, averageCost: 100 }
+    ];
+
+    const metrics = calcMetrics(trades, []);
+    expect(metrics.M4).toBe(0);
+  });
+});
