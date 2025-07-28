@@ -393,15 +393,15 @@ function renderStats(){
   const s=stats();
   
 const a=[
-['账户总成本',Utils.fmtDollar(s.cost)],
-['目前市值',Utils.fmtDollar(s.value)],
-['当前浮动盈亏',Utils.fmtDollar(s.floating)],
-['当日已实现盈亏',Utils.fmtDollar(s.todayReal)],
-['日内交易', Utils.fmtDollar(s.intradayReal)],
-['当日浮动盈亏', Utils.fmtDollar(s.dailyUnrealized)],
-['当日交易次数',Utils.fmtInt(s.todayTrades)],
+['持仓成本',Utils.fmtDollar(s.cost)],
+['持仓市值',Utils.fmtDollar(s.value)],
+['持仓浮盈',Utils.fmtDollar(s.floating)],
+['今天持仓平仓盈利',Utils.fmtDollar(s.todayReal)],
+['今日日内交易盈利', Utils.fmtDollar(s.intradayReal)],
+['今日总盈利变化', Utils.fmtDollar(s.dailyUnrealized)],
+['今日交易次数',Utils.fmtInt(s.todayTrades)],
 ['累计交易次数',Utils.fmtInt(s.totalTrades)],
-['历史已实现盈亏',Utils.fmtDollar(s.histReal)],
+['所有历史平仓盈利',Utils.fmtDollar(s.histReal)],
 ['胜率', s.winRate!==null ? Utils.fmtPct(s.winRate) : '--'],
 ['WTD', Utils.fmtDollar(s.wtdReal)],
 ['MTD', Utils.fmtDollar(s.mtdReal)],

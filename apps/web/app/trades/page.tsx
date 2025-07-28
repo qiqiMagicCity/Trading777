@@ -119,7 +119,7 @@ export default function TradesPage() {
           })}
           {/* footer for hist realized */}
           <tr>
-            <td colSpan={11}>历史已实现盈亏</td>
+            <td colSpan={11}>所有历史平仓盈利</td>
             <td className={histReal > 0 ? 'green' : histReal < 0 ? 'red' : 'white'}>{formatNumber(histReal)}</td>
             <td colSpan={5}></td>
           </tr>

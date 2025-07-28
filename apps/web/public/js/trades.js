@@ -60,7 +60,7 @@ function render(){
 
   // footer for historical realized P/L
   const footer = document.createElement('tr');
-  footer.innerHTML = `<td colspan="9">历史已实现盈亏</td><td class="${histReal>0?'green':histReal<0?'red':'white'}">${histReal.toFixed(2)}</td><td colspan="4"></td>`;
+  footer.innerHTML = `<td colspan="9">所有历史平仓盈利</td><td class="${histReal>0?'green':histReal<0?'red':'white'}">${histReal.toFixed(2)}</td><td colspan="4"></td>`;
   tbl.appendChild(footer);
 
   // attach event listeners for edit / delete

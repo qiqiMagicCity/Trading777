@@ -54,15 +54,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
   // 定义指标名称映射
   const metricNames: Record<keyof Metrics, string> = useMemo(() => ({
-    M1: "账户总成本",
-    M2: "当前市值",
-    M3: "当前浮动盈亏",
-    M4: "当日已实现盈亏",
-    M5: "日内交易",
-    M6: "当日浮动盈亏",
-    M7: "当日交易次数",
+    M1: "持仓成本",
+    M2: "持仓市值",
+    M3: "持仓浮盈",
+    M4: "今天持仓平仓盈利",
+    M5: "今日日内交易盈利",
+    M6: "今日总盈利变化",
+    M7: "今日交易次数",
     M8: "累计交易次数",
-    M9: "历史已实现盈亏",
+    M9: "所有历史平仓盈利",
     M10: "胜率",
     M11: "WTD",
     M12: "MTD",

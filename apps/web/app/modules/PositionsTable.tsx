@@ -105,7 +105,7 @@ export function PositionsTable({ positions, trades }: Props) {
 
     const totalMarketValue = marketValues.reduce((sum, item) => sum + item.market, 0);
     const totalUnrealized = marketValues.reduce((sum, item) => sum + item.unrealized, 0);
-    const totalRealized = metrics?.M9 || 0; // 历史已实现盈亏
+    const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
     const totalPnL = totalUnrealized + totalRealized;
 
     console.log('总计结果:', {
