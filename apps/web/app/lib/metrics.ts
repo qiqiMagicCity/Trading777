@@ -1,5 +1,6 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from '@/lib/services/dataService';
+import { nowNY } from '@/lib/timezone';
 
 // Only enable verbose logging outside production
 const DEBUG = process.env.NODE_ENV !== 'production';
@@ -647,8 +648,8 @@ export function calcMetrics(
   positions: Position[],
   dailyResults: DailyResult[] = []
 ): Metrics {
-  // 获取今日日期字符串
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // 获取今日日期字符串（纽约时区）
+  const todayStr = nowNY().toISOString().slice(0, 10);
 
   // M1: 持仓成本
   const totalCost = sum(positions.map(p => p.avgPrice * Math.abs(p.qty)));
