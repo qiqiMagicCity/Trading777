@@ -6,20 +6,20 @@ import type { Position } from '@/lib/services/dataService';
  * 定义了所有需要计算和展示的指标
  */
 export interface Metrics {
-  /** M1: 账户总成本 - 所有持仓的成本总和 */
+  /** M1: 持仓成本 - 所有持仓的成本总和 */
   M1: number;
 
-  /** M2: 当前市值 - 所有持仓的当前市场价值总和 */
+  /** M2: 持仓市值 - 所有持仓的当前市场价值总和 */
   M2: number;
 
-  /** M3: 当前浮动盈亏 - 所有持仓的未实现盈亏总和 */
+  /** M3: 持仓浮盈 - 所有持仓的未实现盈亏总和 */
   M3: number;
 
-  /** M4: 当日已实现盈亏 - 今日所有已平仓交易的盈亏总和 */
+  /** M4: 今天持仓平仓盈利 - 今日平掉历史仓位的盈亏 */
   M4: number;
 
   /** 
-   * M5: 日内交易盈亏 - 同一天内开仓并平仓的交易盈亏
+   * M5: 今日日内交易盈利 - 同一天内开仓并平仓的交易盈亏
    * trade: 交易视角，按交易匹配计算
    * fifo: FIFO视角，按先进先出原则计算
    */
@@ -28,11 +28,11 @@ export interface Metrics {
     fifo: number;
   };
 
-  /** M6: 当日浮动盈亏 - 当日持仓的未实现盈亏 */
+  /** M6: 今日总盈利变化 - M4 与 M3 之和 */
   M6: number;
 
-  /** 
-   * M7: 当日交易次数 - 今日各类型交易的次数统计
+  /**
+   * M7: 今日交易次数 - 今日各类型交易的次数统计
    * B: 买入次数
    * S: 卖出次数
    * P: 做空次数
@@ -47,7 +47,7 @@ export interface Metrics {
     total: number;
   };
 
-  /** 
+  /**
    * M8: 累计交易次数 - 历史各类型交易的次数统计
    * B: 买入次数
    * S: 卖出次数
@@ -63,7 +63,7 @@ export interface Metrics {
     total: number;
   };
 
-  /** M9: 历史已实现盈亏 - 不含今日的所有已平仓交易盈亏总和 */
+  /** M9: 所有历史平仓盈利 - 不含今日的所有已平仓交易盈亏总和 */
   M9: number;
 
   /** 
@@ -647,20 +647,20 @@ export function calcMetrics(
   // 获取今日日期字符串
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // M1: 账户总成本
+  // M1: 持仓成本
   const totalCost = sum(positions.map(p => p.avgPrice * Math.abs(p.qty)));
 
-  // M2: 当前市值
-  console.log('计算M2(当前市值)，持仓数据:', positions);
+  // M2: 持仓市值
+  console.log('计算M2(持仓市值)，持仓数据:', positions);
   const currentValue = sum(positions.map(p => {
     const isShort = p.qty < 0;
     const marketValue = isShort ? Math.abs(p.last * p.qty) : p.last * p.qty;
     console.log(`${p.symbol} 市值计算:`, { last: p.last, qty: p.qty, isShort, marketValue });
     return marketValue;
   }));
-  console.log('M2(当前市值)计算结果:', currentValue);
+  console.log('M2(持仓市值)计算结果:', currentValue);
 
-  // M3: 当前浮动盈亏
+  // M3: 持仓浮盈
   const floatPnl = positions.reduce((acc, pos) => {
     if (pos.qty >= 0) {
       // 多头: 市值 - 成本
@@ -689,7 +689,7 @@ export function calcMetrics(
   const todayTotalPnlChange = todayFloatPnl + todayHistoricalRealizedPnl;
   console.log('M5计算结果:', todayTotalPnlChange);
 
-  // M7: 当日交易次数
+  // M7: 今日交易次数
   const todayTrades = trades.filter(t => t.date.startsWith(todayStr));
   const todayTradesByType = {
     B: todayTrades.filter(t => t.action === 'buy').length,
@@ -708,7 +708,7 @@ export function calcMetrics(
   };
   const totalTrades = allTradesByType.B + allTradesByType.S + allTradesByType.P + allTradesByType.C;
 
-  // M9: 历史已实现盈亏（不含今日）
+  // M9: 所有历史平仓盈利（不含今日）
   const historicalRealizedPnl = todayHistoricalRealizedPnl + pnlFifo;
   console.log('M9计算结果:', historicalRealizedPnl);
 
