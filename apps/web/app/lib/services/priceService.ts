@@ -2,6 +2,19 @@ import { getPrice, putPrice, CachedPrice } from './dataService';
 // 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
 
+// 将收盘价写入服务器端 JSON 文件
+async function saveToFile(symbol: string, date: string, close: number) {
+  try {
+    await fetch('/api/close-price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, date, close }),
+    });
+  } catch (err) {
+    console.warn('[priceService] 保存收盘价失败', err);
+  }
+}
+
 
 
 /**
@@ -261,27 +274,30 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     // 首先尝试从缓存获取
     const cachedPrice = await getPrice(symbol, date);
     if (cachedPrice) {
+      saveToFile(symbol, date, cachedPrice.close);
       return { price: cachedPrice.close, stale: false };
     }
 
     // 然后尝试从 Finnhub 获取
     const finnhubPrice = await fetchFinnhubDailyClose(symbol, date);
     if (finnhubPrice !== null) {
+      saveToFile(symbol, date, finnhubPrice);
       return { price: finnhubPrice, stale: false };
     }
 
     // 尝试 Tiingo
     const tiingoPrice = await fetchTiingoDailyClose(symbol, date);
     if (tiingoPrice !== null) {
+      saveToFile(symbol, date, tiingoPrice);
       return { price: tiingoPrice, stale: false };
     }
 
-    // 如果所有来源都失败，返回默认值 1 而不是抛出错误
-    console.warn(`无法获取 ${symbol} 在 ${date} 的收盘价，使用默认值 1`);
-    return { price: 1, stale: true };
+    // 如果所有来源都失败，提醒用户手动导入
+    alert(`缺少 ${symbol} 在 ${date} 的收盘价，请通过“导入收盘价格”功能手动添加。`);
+    throw new Error(`Missing close price for ${symbol} on ${date}`);
   } catch (error) {
     console.error(`获取 ${symbol} 在 ${date} 的每日收盘价时出错:`, error);
-    return { price: 1, stale: true }; // 错误情况下使用默认值
+    throw error;
   }
 }
 
