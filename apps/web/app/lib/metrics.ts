@@ -1,6 +1,9 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from '@/lib/services/dataService';
 
+// Only enable verbose logging outside production
+const DEBUG = process.env.NODE_ENV !== 'production';
+
 /**
  * 交易系统指标接口
  * 定义了所有需要计算和展示的指标
@@ -311,7 +314,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
     });
 
   // 4. 对日内交易匹配的部分，应用FIFO计算
-  console.log(JSON.stringify(dayTradeMatches))
+  if (DEBUG) console.log(JSON.stringify(dayTradeMatches));
   let pnl = 0;
   for (const match of dayTradeMatches) {
     const { symbol, action, price, qty } = match;
@@ -487,7 +490,7 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
   //   });
 
   // 4. 对历史交易匹配的部分，应用FIFO计算
-  console.log('历史交易匹配:', dayTradeMatches);
+  if (DEBUG) console.log('历史交易匹配:', dayTradeMatches);
   let pnl = 0;
   for (const match of dayTradeMatches) {
     const { symbol, action, price, qty } = match;
@@ -651,14 +654,14 @@ export function calcMetrics(
   const totalCost = sum(positions.map(p => p.avgPrice * Math.abs(p.qty)));
 
   // M2: 持仓市值
-  console.log('计算M2(持仓市值)，持仓数据:', positions);
+  if (DEBUG) console.log('计算M2(持仓市值)，持仓数据:', positions);
   const currentValue = sum(positions.map(p => {
     const isShort = p.qty < 0;
     const marketValue = isShort ? Math.abs(p.last * p.qty) : p.last * p.qty;
-    console.log(`${p.symbol} 市值计算:`, { last: p.last, qty: p.qty, isShort, marketValue });
+    if (DEBUG) console.log(`${p.symbol} 市值计算:`, { last: p.last, qty: p.qty, isShort, marketValue });
     return marketValue;
   }));
-  console.log('M2(持仓市值)计算结果:', currentValue);
+  if (DEBUG) console.log('M2(持仓市值)计算结果:', currentValue);
 
   // M3: 持仓浮盈
   const floatPnl = positions.reduce((acc, pos) => {
@@ -678,11 +681,11 @@ export function calcMetrics(
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(trades, todayStr);
-  console.log('M4计算结果:', todayHistoricalRealizedPnl);
+  if (DEBUG) console.log('M4计算结果:', todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化 = 今天历史仓位平仓盈亏 + 日内 FIFO 盈亏 + 当日浮动盈亏
   const todayTotalPnlChange = todayHistoricalRealizedPnl + pnlFifo + floatPnl;
-  console.log('M6计算结果:', todayTotalPnlChange);
+  if (DEBUG) console.log('M6计算结果:', todayTotalPnlChange);
 
   // M7: 今日交易次数
   const todayTrades = trades.filter(t => t.date.startsWith(todayStr));
@@ -707,7 +710,7 @@ export function calcMetrics(
   const historicalRealizedPnl = dailyResults.length
     ? dailyResults.reduce((acc, r) => acc + r.realized, 0)
     : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
-  console.log('M9计算结果:', historicalRealizedPnl);
+  if (DEBUG) console.log('M9计算结果:', historicalRealizedPnl);
 
   // M10: 胜率
   const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(trades);
