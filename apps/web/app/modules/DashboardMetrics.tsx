@@ -140,29 +140,9 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   }, [metrics, metricNames, order]);
 
   return (
-    <section id="stats" className="flex flex-col items-center gap-2.5 my-5">
-      <div className="flex justify-center gap-2.5">
-        {formattedMetrics.slice(0, 5).map(metric => (
-          <MetricCard
-            key={metric.key}
-            title={metric.title}
-            value={metric.value}
-            colorClass={metric.colorClass}
-          />
-        ))}
-      </div>
-      <div className="flex justify-center gap-2.5">
-        {formattedMetrics.slice(5, 10).map(metric => (
-          <MetricCard
-            key={metric.key}
-            title={metric.title}
-            value={metric.value}
-            colorClass={metric.colorClass}
-          />
-        ))}
-      </div>
-      <div className="flex justify-center gap-2.5">
-        {formattedMetrics.slice(10).map(metric => (
+    <section id="stats" className="my-5">
+      <div className="flex flex-wrap justify-center gap-4">
+        {formattedMetrics.map(metric => (
           <MetricCard
             key={metric.key}
             title={metric.title}
