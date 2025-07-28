@@ -63,7 +63,7 @@ export interface Metrics {
     total: number;
   };
 
-  /** M9: 所有历史平仓盈利 - 不含今日的所有已平仓交易盈亏总和 */
+  /** M9: 所有历史平仓盈利 - 所有已实现盈亏的累计和 */
   M9: number;
 
   /** 
@@ -676,10 +676,6 @@ export function calcMetrics(
   const pnlFifo = calcTodayFifoPnL(trades, todayStr);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
-  const todayRealizedPnlAll = trades
-    .filter(t => t.date.startsWith(todayStr))
-    .reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
-
   // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(trades, todayStr);
   console.log('M4计算结果:', todayHistoricalRealizedPnl);
@@ -707,8 +703,10 @@ export function calcMetrics(
   };
   const totalTrades = allTradesByType.B + allTradesByType.S + allTradesByType.P + allTradesByType.C;
 
-  // M9: 所有历史平仓盈利（不含今日）
-  const historicalRealizedPnl = todayHistoricalRealizedPnl + pnlFifo;
+  // M9: 所有历史平仓盈利（含今日）
+  const historicalRealizedPnl = dailyResults.length
+    ? dailyResults.reduce((acc, r) => acc + r.realized, 0)
+    : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
   console.log('M9计算结果:', historicalRealizedPnl);
 
   // M10: 胜率

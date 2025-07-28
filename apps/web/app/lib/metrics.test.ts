@@ -137,7 +137,7 @@ describe('metrics calculation', () => {
         "S": 1,
         "total": 5,
       }, // 累计交易次数: 总共5笔交易
-      M9: 100, // 所有历史平仓盈利: MSFT卖出盈利100
+      M9: 180, // 所有历史平仓盈利: dailyResults realized 50 + 30 + 100
       M10: {
         "L": 0,
         "W": 1,
