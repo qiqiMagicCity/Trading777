@@ -727,7 +727,7 @@ export function calcMetrics(
     M4: todayHistoricalRealizedPnl,
     M5: {
       trade: pnlTrade,
-      fifo: todayHistoricalRealizedPnl + pnlFifo
+      fifo: pnlFifo
     },
     M6: todayTotalPnlChange,
     M7: {
