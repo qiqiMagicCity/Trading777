@@ -9,6 +9,8 @@ import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
 import { toNY } from '@/lib/timezone';
 
+declare const Chart: any;
+
 export default function AnalysisPage() {
   const [isChartReady, setIsChartReady] = useState(false);
   // 使用 react-query 实时加载交易数据，自动刷新
@@ -27,7 +29,7 @@ export default function AnalysisPage() {
   });
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<unknown>(null);
+  const chartRef = useRef<any>(null);
 
   // 当 Chart.js 和 metricsDaily 都准备好时绘制/更新图表
   useEffect(() => {
@@ -61,13 +63,11 @@ export default function AnalysisPage() {
     const ctx = pnlCanvasRef.current!.getContext('2d');
     if (!ctx) return;
 
-    // @ts-expect-error Chart is global
     if (chartRef.current) {
       chartRef.current.data.labels = dates;
       chartRef.current.data.datasets[0].data = lineValues;
       chartRef.current.update();
     } else {
-      // @ts-expect-error Chart global
       chartRef.current = new Chart(ctx, {
         type: 'line',
         data: {
