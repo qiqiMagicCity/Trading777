@@ -234,7 +234,8 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
 
   // 3. 构建历史FIFO栈
   enrichedTrades
-    .filter(t => !t.date.startsWith(todayStr))
+    // Guard against trades without a valid date string
+    .filter(t => !t.date?.startsWith(todayStr))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .forEach(t => {
       const { symbol, action, quantity, price, date } = t;
@@ -558,7 +559,7 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     if (action === 'buy') {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity });
-      if (date.startsWith(todayStr)) B++;
+      if (date?.startsWith(todayStr)) B++;
     } else if (action === 'sell') {
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
@@ -567,18 +568,18 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (date.startsWith(todayStr)) S++;
+        if (date?.startsWith(todayStr)) S++;
         if (lot.qty === 0) fifo.shift();
       }
       if (remain > 0) {
         if (!shortFifo[symbol]) shortFifo[symbol] = [];
         shortFifo[symbol].push({ qty: remain });
-        if (date.startsWith(todayStr)) P++;
+        if (date?.startsWith(todayStr)) P++;
       }
     } else if (action === 'short') {
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
       shortFifo[symbol].push({ qty: quantity });
-      if (date.startsWith(todayStr)) P++;
+      if (date?.startsWith(todayStr)) P++;
     } else if (action === 'cover') {
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
@@ -587,13 +588,13 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (date.startsWith(todayStr)) C++;
+        if (date?.startsWith(todayStr)) C++;
         if (lot.qty === 0) fifo.shift();
       }
       if (remain > 0) {
         if (!longFifo[symbol]) longFifo[symbol] = [];
         longFifo[symbol].push({ qty: remain });
-        if (date.startsWith(todayStr)) B++;
+        if (date?.startsWith(todayStr)) B++;
       }
     }
   }
