@@ -102,10 +102,10 @@ describe('metrics calculation', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-01', realized: 50, float: 20, pnl: 70 },
-      { date: '2025-07-10', realized: 30, float: 10, pnl: 40 },
-      { date: '2025-07-14', realized: 100, float: -30, pnl: 70 },
-      { date: '2025-07-15', realized: 0, float: 50, pnl: 50 },
+      { date: '2025-07-01', realized: 50, float: 20, M5_1: 0, pnl: 70 },
+      { date: '2025-07-10', realized: 30, float: 10, M5_1: 0, pnl: 40 },
+      { date: '2025-07-14', realized: 100, float: -30, M5_1: 0, pnl: 70 },
+      { date: '2025-07-15', realized: 0, float: 50, M5_1: 0, pnl: 50 },
     ];
 
     // 执行指标计算
@@ -201,7 +201,7 @@ describe('metrics calculation', () => {
 
   test('当日结果存在时 M6 等于 dailyResults 中的 pnl', () => {
     const dailyResults = [
-      { date: '2025-07-15', realized: 0, float: 0, pnl: 123 }
+      { date: '2025-07-15', realized: 0, float: 0, M5_1: 0, pnl: 123 }
     ];
 
     const metrics = calcMetrics([], [], dailyResults);

@@ -54,7 +54,7 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-09', realized: 1900, float: 700, pnl: 2600 }
+      { date: '2025-07-09', realized: 1900, float: 700, M5_1: 900, pnl: 2600 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);
@@ -92,7 +92,7 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-09', realized: 2250, float: 250, pnl: 2500 }
+      { date: '2025-07-09', realized: 2250, float: 250, M5_1: 0, pnl: 2500 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);
@@ -128,7 +128,7 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-09', realized: 1800, float: 600, pnl: 2400 }
+      { date: '2025-07-09', realized: 1800, float: 600, M5_1: 0, pnl: 2400 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);
@@ -165,7 +165,7 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-09', realized: 60, float: 290, pnl: 350 }
+      { date: '2025-07-09', realized: 60, float: 290, M5_1: 60, pnl: 350 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);
@@ -203,7 +203,7 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-09', realized: -1800, float: -600, pnl: -2400 }
+      { date: '2025-07-09', realized: -1800, float: -600, M5_1: -150, pnl: -2400 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);
@@ -240,8 +240,8 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-08', realized: -300, float: 200, pnl: -100 },
-      { date: '2025-07-09', realized: 100, float: -60, pnl: 40 }
+      { date: '2025-07-08', realized: -300, float: 200, M5_1: 0, pnl: -100 },
+      { date: '2025-07-09', realized: 100, float: -60, M5_1: 0, pnl: 40 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);
@@ -277,7 +277,7 @@ describe('黄金案例验证（纽约时区）', () => {
     ];
 
     const dailyResults = [
-      { date: '2025-07-09', realized: 0, float: 26.25, pnl: 26.25 }
+      { date: '2025-07-09', realized: 0, float: 26.25, M5_1: 0, pnl: 26.25 }
     ];
 
     const metrics = calcMetrics(trades, positions, dailyResults);

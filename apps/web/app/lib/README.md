@@ -21,6 +21,22 @@
 - **M12**: MTD (Month-To-Date) - 本月至今的盈亏
 - **M13**: YTD (Year-To-Date) - 本年至今的盈亏
 
+### DailyResult 数据结构
+
+前端 `dailyResult.json` 与后端 `metricsDaily` 集合使用统一的数据结构：
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "realized": 0,
+  "float": 0,
+  "M5_1": 0,
+  "pnl": 0
+}
+```
+
+其中 `M5_1` 表示今日日内交易盈利（交易视角），由可复用的 `calcTodayTradePnL` 算法计算并写入。
+
 ## 黄金案例测试集
 
 我们提供了四个"黄金案例"作为标准测试集，这些案例覆盖了不同的交易场景，确保指标计算的准确性和稳定性：
