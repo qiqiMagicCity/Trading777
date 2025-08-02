@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Script from 'next/script';
-import { findTrades } from '@/lib/services/dataService';
+import { findMetricsDaily, findTrades } from '@/lib/services/dataService';
 import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
@@ -20,16 +20,21 @@ export default function AnalysisPage() {
     },
     refetchInterval: 5000
   });
+  const { data: metricsDaily = [] } = useQuery<{ date: string; M5_1: number }[]>({
+    queryKey: ['metricsDaily'],
+    queryFn: findMetricsDaily,
+    refetchInterval: 5000
+  });
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 
-  // 当 Chart.js 和 trades 都准备好时绘制/更新图表
+  // 当 Chart.js 和数据都准备好时绘制/更新图表
   useEffect(() => {
     if (!isChartReady || !pnlCanvasRef.current) return;
 
-    // 根据 period 聚合 realizedPnl
     const map: Record<string, number> = {};
+    const m5Map: Record<string, number> = {};
     const fmt = (d: string) => {
       if (period === 'day') return d;
       if (period === 'week') {
@@ -38,21 +43,28 @@ export default function AnalysisPage() {
         const week = Math.ceil((((+dt) - +toNY(y, 0, 1)) / 86400000 + toNY(y, 0, 1).getDay() + 1) / 7);
         return `${y}-W${String(week).padStart(2, '0')}`;
       }
-      // month
       return d.slice(0, 7);
     };
+
     trades.forEach(t => {
       if (t.realizedPnl !== undefined) {
         const key = fmt(t.date);
         map[key] = (map[key] || 0) + t.realizedPnl;
       }
     });
-    const dates = Object.keys(map).sort();
+    metricsDaily.forEach(m => {
+      const key = fmt(m.date);
+      m5Map[key] = (m5Map[key] || 0) + m.M5_1;
+    });
+
+    const dates = Array.from(new Set([...Object.keys(map), ...Object.keys(m5Map)])).sort();
     let cumulative = 0;
     const lineValues: number[] = [];
+    const m51Values: number[] = [];
     dates.forEach(d => {
       cumulative += map[d] ?? 0;
       lineValues.push(Number(cumulative.toFixed(2)));
+      m51Values.push(Number((m5Map[d] ?? 0).toFixed(2)));
     });
 
     const ctx = pnlCanvasRef.current!.getContext('2d');
@@ -62,6 +74,17 @@ export default function AnalysisPage() {
     if (chartRef.current) {
       chartRef.current.data.labels = dates;
       chartRef.current.data.datasets[0].data = lineValues;
+      if (chartRef.current.data.datasets[1]) {
+        chartRef.current.data.datasets[1].data = m51Values;
+      } else {
+        chartRef.current.data.datasets.push({
+          label: 'M5.1 日内盈利',
+          data: m51Values,
+          borderColor: '#ff9800',
+          tension: 0.1,
+          borderWidth: 2
+        });
+      }
       chartRef.current.update();
     } else {
       // @ts-ignore Chart global
@@ -69,12 +92,22 @@ export default function AnalysisPage() {
         type: 'line',
         data: {
           labels: dates,
-          datasets: [{
-            label: '累计盈亏',
-            data: lineValues,
-            borderColor: '#00e676',
-            tension: 0.1
-          }]
+          datasets: [
+            {
+              label: '累计盈亏',
+              data: lineValues,
+              borderColor: '#00e676',
+              tension: 0.1,
+              borderWidth: 2
+            },
+            {
+              label: 'M5.1 日内盈利',
+              data: m51Values,
+              borderColor: '#ff9800',
+              tension: 0.1,
+              borderWidth: 2
+            }
+          ]
         },
         options: {
           responsive: true,
@@ -88,7 +121,7 @@ export default function AnalysisPage() {
         }
       });
     }
-  }, [isChartReady, trades, period]);
+  }, [isChartReady, trades, metricsDaily, period]);
 
   return (
     <>

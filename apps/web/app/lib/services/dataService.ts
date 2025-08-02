@@ -269,4 +269,61 @@ export async function updateTrade(trade: Trade): Promise<void> {
 export async function deleteTrade(id: number): Promise<void> {
   const db = await getDb();
   await db.delete(TRADES_STORE_NAME, id);
-} 
+}
+
+export interface DailyMetric {
+  date: string;
+  M5_1: number;
+}
+
+function calcIntradayPnL(trades: Trade[]): number {
+  const longMap: Record<string, { qty: number; price: number }[]> = {};
+  const shortMap: Record<string, { qty: number; price: number }[]> = {};
+  let pnl = 0;
+  const sorted = [...trades].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  for (const t of sorted) {
+    const { symbol, action, quantity, price } = t;
+    const longStack = longMap[symbol] || (longMap[symbol] = []);
+    const shortStack = shortMap[symbol] || (shortMap[symbol] = []);
+    if (action === 'buy') {
+      longStack.push({ qty: quantity, price });
+    } else if (action === 'sell') {
+      let remain = quantity;
+      while (remain > 0 && longStack.length > 0) {
+        const batch = longStack[0]!;
+        const q = Math.min(batch.qty, remain);
+        pnl += (price - batch.price) * q;
+        batch.qty -= q;
+        remain -= q;
+        if (batch.qty === 0) longStack.shift();
+      }
+    } else if (action === 'short') {
+      shortStack.push({ qty: quantity, price });
+    } else if (action === 'cover') {
+      let remain = quantity;
+      while (remain > 0 && shortStack.length > 0) {
+        const batch = shortStack[0]!;
+        const q = Math.min(batch.qty, remain);
+        pnl += (batch.price - price) * q;
+        batch.qty -= q;
+        remain -= q;
+        if (batch.qty === 0) shortStack.shift();
+      }
+    }
+  }
+  return Number(pnl.toFixed(2));
+}
+
+export async function findMetricsDaily(): Promise<DailyMetric[]> {
+  const trades = await findTrades();
+  const map: Record<string, Trade[]> = {};
+  for (const t of trades) {
+    const d = t.date.slice(0, 10);
+    (map[d] ||= []).push(t);
+  }
+  return Object.keys(map)
+    .sort()
+    .map(date => ({ date, M5_1: calcIntradayPnL(map[date]) }));
+}
