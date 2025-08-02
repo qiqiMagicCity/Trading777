@@ -16,7 +16,8 @@ export function calcTodayTradePnL(enrichedTrades: EnrichedTrade[], todayStr: str
 
   // 按时间顺序处理今日交易
   enrichedTrades
-    .filter(t => t.date.startsWith(todayStr))
+    // Some trade records may miss the date field; guard to prevent runtime errors
+    .filter(t => t.date?.startsWith(todayStr))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .forEach(t => {
       const { symbol, action, quantity, price } = t;

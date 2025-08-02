@@ -8,7 +8,8 @@ import type { DailyResult } from '../app/lib/metrics';
  */
 export function generateDailyResult(trades: EnrichedTrade[], date: string): DailyResult {
   const realized = trades
-    .filter(t => t.date.startsWith(date))
+    // Ensure trade has a valid date before checking prefix
+    .filter(t => t.date?.startsWith(date))
     .reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
 
   const float = 0; // 浮动盈亏由外部价格数据计算，此处置零占位
