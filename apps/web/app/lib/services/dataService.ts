@@ -127,7 +127,7 @@ export async function importData(rawData: { positions: Position[], trades: RawTr
 
   // Import positions
   const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map(position => positionStore.add(position));
+  const positionPromises = rawData.positions.map(position => positionStore.put(position));
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;
