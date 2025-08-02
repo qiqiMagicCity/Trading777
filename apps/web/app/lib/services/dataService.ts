@@ -1,7 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'TradingApp';
-const DB_VERSION = 2; // Incremented version for schema change
+const DB_VERSION = 3; // Incremented version for schema change
 const TRADES_STORE_NAME = 'trades';
 const POSITIONS_STORE_NAME = 'positions';
 const PRICES_STORE_NAME = 'prices'; // New store for prices
@@ -80,13 +80,14 @@ function getDb(): Promise<IDBPDatabase<TradingDB>> {
             db.createObjectStore(POSITIONS_STORE_NAME, { keyPath: 'symbol' });
           }
         }
-        if (oldVersion < 2) {
-          if (!db.objectStoreNames.contains(PRICES_STORE_NAME)) {
-            const store = db.createObjectStore(PRICES_STORE_NAME, {
-              keyPath: ['symbol', 'date'],
-            });
-            store.createIndex('by-symbol', 'symbol');
+        if (oldVersion < 3) {
+          if (db.objectStoreNames.contains(PRICES_STORE_NAME)) {
+            db.deleteObjectStore(PRICES_STORE_NAME);
           }
+          const store = db.createObjectStore(PRICES_STORE_NAME, {
+            keyPath: ['symbol', 'date'],
+          });
+          store.createIndex('by-symbol', 'symbol');
         }
       },
     });
