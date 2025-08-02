@@ -1,4 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { calcTodayTradePnL } from '../calcTodayTradePnL';
+import { nowNY } from '../timezone';
+import { computeFifo } from '../fifo';
 
 const DB_NAME = 'TradingApp';
 const DB_VERSION = 3; // Incremented version for schema change
@@ -269,4 +272,15 @@ export async function updateTrade(trade: Trade): Promise<void> {
 export async function deleteTrade(id: number): Promise<void> {
   const db = await getDb();
   await db.delete(TRADES_STORE_NAME, id);
-} 
+}
+
+/**
+ * 计算 M5.1 日内交易盈亏
+ * 从数据库获取所有交易，按 FIFO enrich 后调用共享函数
+ */
+export async function getTodayTradePnl(): Promise<number> {
+  const trades = await findTrades();
+  const enriched = computeFifo(trades);
+  const todayStr = nowNY().toISOString().slice(0, 10);
+  return calcTodayTradePnL(enriched, todayStr);
+}

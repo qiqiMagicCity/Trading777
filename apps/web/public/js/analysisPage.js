@@ -1,3 +1,5 @@
+import { calcTodayTradePnL } from "../../app/lib/calcTodayTradePnL.ts";
+
 (function(){
   const { toNY } = window;
   // 工具
@@ -17,7 +19,7 @@
   // 3. 本地推算每日已实现和浮动盈亏（核心逻辑！）
   function calcDailyNet(trades){
     // 统计每日已实现
-    let dailyMap = {}; // {date: {realized, unreal, net}}
+    let dailyMap = {}; // {date: {realized, intraday, unreal, net}}
     let pos = {}; // symbol: {qty, cost}
     let prevUnreal = 0;
     let dateArr = [];
@@ -27,8 +29,16 @@
     for(const date of dateArr){
       // 1. 统计当日已实现盈亏
       let realized = 0;
+      const dayTradesForCalc = [];
       trades.filter(t=>t.date===date).forEach(t=>{
         if(typeof t.pl==='number') realized += t.pl;
+        dayTradesForCalc.push({
+          symbol: t.symbol,
+          action: ({BUY:'buy',SELL:'sell',SHORT:'short',COVER:'cover'})[t.side],
+          quantity: t.qty,
+          price: t.price,
+          date: t.date
+        });
         // 更新持仓
         if(t.side==='BUY'||t.side==='COVER'){
           let old = pos[t.symbol]||{qty:0,cost:0};
@@ -43,11 +53,12 @@
           if(pos[t.symbol].qty<=0) delete pos[t.symbol];
         }
       });
+      const intraday = calcTodayTradePnL(dayTradesForCalc, date);
       // 2. 统计当日浮动盈亏（只用上一日持仓的浮动变化，如果需要拉最新价格可以自定义）
       // 这里如需每日收盘浮动盈亏，可用本地或只在当天拉1次API
       let unreal = 0;
       // 你也可以自定义持仓浮动算法，这里假设不变
-      dailyMap[date] = { realized, unreal, net: realized + unreal };
+      dailyMap[date] = { realized, intraday, unreal, net: realized + unreal };
     }
     // 3. 累计曲线
     let cumulative = 0;
