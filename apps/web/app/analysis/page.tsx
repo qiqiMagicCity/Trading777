@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Script from 'next/script';
-import { findTrades } from '@/lib/services/dataService';
+import { findTrades, findMetricsDaily, DailyMetric } from '@/lib/services/dataService';
 import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
@@ -20,15 +20,20 @@ export default function AnalysisPage() {
     },
     refetchInterval: 5000
   });
+  const { data: metricsDaily = [] } = useQuery<DailyMetric[]>({
+    queryKey: ['metricsDaily'],
+    queryFn: findMetricsDaily,
+    refetchInterval: 60000
+  });
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<unknown>(null);
 
-  // 当 Chart.js 和 trades 都准备好时绘制/更新图表
+  // 当 Chart.js 和 metricsDaily 都准备好时绘制/更新图表
   useEffect(() => {
     if (!isChartReady || !pnlCanvasRef.current) return;
 
-    // 根据 period 聚合 realizedPnl
+    // 根据 period 聚合 M5_1
     const map: Record<string, number> = {};
     const fmt = (d: string) => {
       if (period === 'day') return d;
@@ -41,11 +46,9 @@ export default function AnalysisPage() {
       // month
       return d.slice(0, 7);
     };
-    trades.forEach(t => {
-      if (t.realizedPnl !== undefined) {
-        const key = fmt(t.date);
-        map[key] = (map[key] || 0) + t.realizedPnl;
-      }
+    metricsDaily.forEach(r => {
+      const key = fmt(r.date);
+      map[key] = (map[key] || 0) + (r.M5_1 ?? 0);
     });
     const dates = Object.keys(map).sort();
     let cumulative = 0;
@@ -58,13 +61,13 @@ export default function AnalysisPage() {
     const ctx = pnlCanvasRef.current!.getContext('2d');
     if (!ctx) return;
 
-    // @ts-ignore Chart is global
+    // @ts-expect-error Chart is global
     if (chartRef.current) {
       chartRef.current.data.labels = dates;
       chartRef.current.data.datasets[0].data = lineValues;
       chartRef.current.update();
     } else {
-      // @ts-ignore Chart global
+      // @ts-expect-error Chart global
       chartRef.current = new Chart(ctx, {
         type: 'line',
         data: {
@@ -88,7 +91,7 @@ export default function AnalysisPage() {
         }
       });
     }
-  }, [isChartReady, trades, period]);
+  }, [isChartReady, metricsDaily, period]);
 
   return (
     <>

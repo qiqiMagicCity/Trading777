@@ -34,6 +34,12 @@ export interface CachedPrice {
   source: 'finnhub' | 'alphavantage' | 'import' | 'tiingo';
 }
 
+// Interface for metricsDaily records
+export interface DailyMetric {
+  date: string;
+  M5_1?: number;
+}
+
 // Internal representation, adapted for the app
 export interface Trade {
   id?: number;
@@ -210,6 +216,32 @@ export async function findTrades(): Promise<Trade[]> {
 export async function findPositions(): Promise<Position[]> {
   const db = await getDb();
   return db.getAll(POSITIONS_STORE_NAME);
+}
+
+export async function findMetricsDaily(): Promise<DailyMetric[]> {
+  try {
+    let res = await fetch('/metricsDaily.json');
+    if (!res.ok) {
+      res = await fetch('/dailyResult.json');
+    }
+    if (!res.ok) return [];
+    const list = (await res.json()) as Array<{ date: string; M5_1?: number }>;
+    if (!Array.isArray(list)) return [];
+    return list.map((r) => {
+      const item: DailyMetric = { date: r.date, M5_1: typeof r.M5_1 === 'number' ? r.M5_1 : undefined };
+      if (item.M5_1 == null && item.date) {
+        try {
+          fetch(`/api/metrics-daily?date=${encodeURIComponent(item.date)}`, { method: 'POST' });
+        } catch (err) {
+          console.warn('trigger metrics-daily failed', err);
+        }
+      }
+      return item;
+    });
+  } catch (e) {
+    console.warn('findMetricsDaily failed', e);
+    return [];
+  }
 }
 
 // --- New functions for price cache ---
