@@ -40,6 +40,7 @@ export function computeFifo(
 
   for (const pos of initialPositions) {
     const quantity = Math.abs(pos.qty);
+    if (quantity <= EPSILON) continue;
     symbolStateMap[pos.symbol] = {
       positionList: [{ price: pos.avgPrice, quantity }],
       direction: pos.qty < 0 ? 'SHORT' : 'LONG',
