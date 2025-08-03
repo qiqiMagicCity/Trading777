@@ -268,6 +268,12 @@ export async function clearAndImportData(rawData: {
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;
+  try {
+    const newHash = await computeDataHash(rawData);
+    localStorage.setItem("dataset-hash", newHash);
+  } catch {
+    /* ignore */
+  }
   console.log("Data imported successfully after clearing.");
 }
 
