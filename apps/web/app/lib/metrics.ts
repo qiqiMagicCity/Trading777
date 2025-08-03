@@ -145,7 +145,11 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
   const longFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
   const shortFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
   let pnl = 0;
-  const sorted = [...enrichedTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = [...enrichedTrades].sort(
+    (a, b) =>
+      (a.date ? new Date(a.date).getTime() : 0) -
+      (b.date ? new Date(b.date).getTime() : 0)
+  );
   for (const t of sorted) {
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
