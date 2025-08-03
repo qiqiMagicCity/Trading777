@@ -42,7 +42,8 @@ export function computeFifo(trades: Trade[]): EnrichedTrade[] {
 
     state.tradeCount += 1;
     let realizedPnl = 0;
-    const { price, quantity, action } = trade;
+    const { price, action } = trade;
+    const quantity = Math.abs(trade.quantity);
 
     if (action === 'buy' || action === 'cover') {
       if (state.direction === 'NONE' || state.direction === 'LONG') {

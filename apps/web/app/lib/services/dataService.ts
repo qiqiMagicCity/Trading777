@@ -181,21 +181,30 @@ export async function importData(rawData: {
       );
       continue;
     }
+    const quantity = action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
     const trade: Trade = {
       symbol: rawTrade.symbol,
       price: rawTrade.price,
-      quantity: rawTrade.qty,
+      quantity,
       date: rawTrade.date,
       action,
     };
     tradePromises.push(tradeStore.add(trade));
   }
 
-  // Import positions
-  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map((position) =>
-    positionStore.put(position),
+  // Import positions, enforcing negative quantity for symbols with short trades
+  const shortSymbols = new Set(
+    rawData.trades
+      .filter((t) => t.side?.toUpperCase() === "SHORT")
+      .map((t) => t.symbol),
   );
+  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
+  const positionPromises = rawData.positions.map((position) => {
+    const qty = shortSymbols.has(position.symbol)
+      ? -Math.abs(position.qty)
+      : position.qty;
+    return positionStore.put({ ...position, qty });
+  });
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;
@@ -251,20 +260,29 @@ export async function clearAndImportData(rawData: {
       );
       continue;
     }
+    const quantity = action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
     const trade: Trade = {
       symbol: rawTrade.symbol,
       price: rawTrade.price,
-      quantity: rawTrade.qty,
+      quantity,
       date: rawTrade.date,
       action,
     };
     tradePromises.push(tradeStore.add(trade));
   }
 
-  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map((position) =>
-    positionStore.add(position),
+  const shortSymbols = new Set(
+    rawData.trades
+      .filter((t) => t.side?.toUpperCase() === "SHORT")
+      .map((t) => t.symbol),
   );
+  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
+  const positionPromises = rawData.positions.map((position) => {
+    const qty = shortSymbols.has(position.symbol)
+      ? -Math.abs(position.qty)
+      : position.qty;
+    return positionStore.add({ ...position, qty });
+  });
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;

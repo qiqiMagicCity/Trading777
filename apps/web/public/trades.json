@@ -16,7 +16,7 @@
     },
     {
       "symbol": "AMZN",
-      "qty": 80,
+      "qty": -80,
       "avgPrice": 220,
       "last": 220,
       "priceOk": false
@@ -63,14 +63,14 @@
       "symbol": "GOOGL",
       "price": 192,
       "side": "SHORT",
-      "qty": 50
+      "qty": -50
     },
     {
       "date": "2025-08-01",
       "symbol": "AMZN",
       "price": 218,
       "side": "SHORT",
-      "qty": 50
+      "qty": -50
     },
     {
       "date": "2025-08-01",
@@ -112,7 +112,7 @@
       "symbol": "GOOGL",
       "price": 195,
       "side": "SHORT",
-      "qty": 40
+      "qty": -40
     },
     {
       "date": "2025-08-01",
@@ -168,7 +168,7 @@
       "symbol": "MSFT",
       "price": 525,
       "side": "SHORT",
-      "qty": 60
+      "qty": -60
     },
     {
       "date": "2025-08-01",

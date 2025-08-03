@@ -119,4 +119,28 @@ describe("dataService trade import", () => {
     // @ts-ignore
     delete global.localStorage;
   });
+
+  test("importData enforces negative quantity for short trades and positions", async () => {
+    const rawData = {
+      positions: [
+        { symbol: "AMZN", qty: 80, avgPrice: 10, last: 10, priceOk: true },
+      ],
+      trades: [
+        {
+          date: "2025-04-01",
+          symbol: "AMZN",
+          side: "SHORT" as const,
+          qty: 80,
+          price: 10,
+        },
+      ],
+    };
+    await importData(rawData);
+    const db = await openDB("TradingApp", 3);
+    const [trade] = await db.getAll("trades");
+    const [position] = await db.getAll("positions");
+    db.close();
+    expect(trade.quantity).toBe(-80);
+    expect(position.qty).toBe(-80);
+  });
 });

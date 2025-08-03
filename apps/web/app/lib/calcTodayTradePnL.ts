@@ -20,7 +20,8 @@ export function calcTodayTradePnL(enrichedTrades: EnrichedTrade[], todayStr: str
     .filter(t => t.date?.startsWith(todayStr))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .forEach(t => {
-      const { symbol, action, quantity, price } = t;
+      const { symbol, action, price } = t;
+      const quantity = Math.abs(t.quantity);
 
       // 初始化栈
       if (!longMap[symbol]) longMap[symbol] = [];

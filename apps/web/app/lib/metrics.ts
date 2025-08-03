@@ -147,7 +147,8 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
   let pnl = 0;
   const sorted = [...enrichedTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   for (const t of sorted) {
-    const { symbol, action, quantity, price, date } = t;
+    const { symbol, action, price, date } = t;
+    const quantity = Math.abs(t.quantity);
     if (action === 'buy') {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity, price, date });
@@ -207,7 +208,8 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
   let pnl = 0;
   const sorted = [...enrichedTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   for (const t of sorted) {
-    const { symbol, action, quantity, price, date } = t;
+    const { symbol, action, price, date } = t;
+    const quantity = Math.abs(t.quantity);
     if (action === "buy") {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity, price, date });
@@ -269,7 +271,8 @@ function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: numbe
   const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   for (const t of sorted) {
-    const { symbol, action, quantity, price } = t;
+    const { symbol, action, price } = t;
+    const quantity = Math.abs(t.quantity);
 
     if (action === 'buy') {
       if (!longFifo[symbol]) longFifo[symbol] = [];
@@ -325,7 +328,8 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
   const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   for (const t of sorted) {
-    const { symbol, action, quantity, date } = t;
+    const { symbol, action, date } = t;
+    const quantity = Math.abs(t.quantity);
 
     if (action === 'buy') {
       if (!longFifo[symbol]) longFifo[symbol] = [];
