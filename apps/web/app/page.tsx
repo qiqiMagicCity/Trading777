@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades, clearAllData } from '@/lib/services/dataService';
-import type { Trade, Position } from '@/lib/services/dataService';
-import { computeFifo } from '@/lib/fifo';
+import { importData, findTrades, clearAllData, findPositions } from '@/lib/services/dataService';
+import type { Trade, Position, StoredPosition } from '@/lib/services/dataService';
+import { computeFifo, type EnrichedTrade } from '@/lib/fifo';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
 import { PositionsTable } from '@/modules/PositionsTable';
 import { TradesTable } from '@/modules/TradesTable';
@@ -33,6 +33,88 @@ async function computeDataHash(data: unknown): Promise<string> {
     hash |= 0;
   }
   return hash.toString();
+}
+
+function mergePositions(base: StoredPosition[], trades: EnrichedTrade[]): Position[] {
+  type Lot = { price: number; quantity: number };
+  type State = { positionList: Lot[]; direction: 'NONE' | 'LONG' | 'SHORT' };
+  const map: Record<string, State> = {};
+
+  // Initialize from historical positions
+  for (const p of base) {
+    const direction: State['direction'] = p.qty >= 0 ? 'LONG' : 'SHORT';
+    const positionList: Lot[] = Math.abs(p.qty) > 0
+      ? [{ price: p.avgPrice, quantity: Math.abs(p.qty) }]
+      : [];
+    map[p.symbol] = { positionList, direction };
+  }
+
+  // Apply today's trades sequentially (FIFO)
+  for (const t of trades) {
+    const { symbol, action, price, quantity } = t;
+    let state = map[symbol];
+    if (!state) {
+      state = { positionList: [], direction: 'NONE' };
+      map[symbol] = state;
+    }
+    if (action === 'buy' || action === 'cover') {
+      if (state.direction === 'NONE' || state.direction === 'LONG') {
+        state.positionList.push({ price, quantity });
+        state.direction = 'LONG';
+      } else {
+        let remaining = quantity;
+        while (remaining > 0 && state.positionList.length > 0) {
+          const lot = state.positionList[0]!;
+          const matched = Math.min(remaining, lot.quantity);
+          lot.quantity -= matched;
+          remaining -= matched;
+          if (lot.quantity === 0) state.positionList.shift();
+        }
+        if (remaining > 0) {
+          state.positionList.push({ price, quantity: remaining });
+          state.direction = 'LONG';
+        } else if (state.positionList.length === 0) {
+          state.direction = 'NONE';
+        }
+      }
+    } else {
+      if (state.direction === 'NONE' || state.direction === 'SHORT') {
+        state.positionList.push({ price, quantity });
+        state.direction = 'SHORT';
+      } else {
+        let remaining = quantity;
+        while (remaining > 0 && state.positionList.length > 0) {
+          const lot = state.positionList[0]!;
+          const matched = Math.min(remaining, lot.quantity);
+          lot.quantity -= matched;
+          remaining -= matched;
+          if (lot.quantity === 0) state.positionList.shift();
+        }
+        if (remaining > 0) {
+          state.positionList.push({ price, quantity: remaining });
+          state.direction = 'SHORT';
+        } else if (state.positionList.length === 0) {
+          state.direction = 'NONE';
+        }
+      }
+    }
+  }
+
+  const result: Position[] = [];
+  for (const [symbol, state] of Object.entries(map)) {
+    const totalQty = state.positionList.reduce((s, p) => s + p.quantity, 0);
+    if (totalQty === 0) continue;
+    const cost = state.positionList.reduce((s, p) => s + p.price * p.quantity, 0);
+    const avg = cost / totalQty;
+    result.push({
+      symbol,
+      qty: state.direction === 'SHORT' ? -totalQty : totalQty,
+      avgPrice: avg,
+      last: avg,
+      priceOk: true,
+    });
+  }
+  return result;
 }
 
 export default function DashboardPage() {
@@ -73,24 +155,16 @@ export default function DashboardPage() {
         }
 
         let dbTrades = await findTrades();
-
         const enriched = computeFifo(dbTrades);
+        const basePositions = await findPositions();
 
-        // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
-        const lastMap: Record<string, any> = {};
-        for (const t of enriched) {
-          lastMap[t.symbol] = t; // 由于 computeFifo 已按日期升序，遍历结束时即为最后状态
+        if (!basePositions || basePositions.length === 0) {
+          setError('缺少历史仓位数据');
+          setIsLoading(false);
+          return;
         }
 
-        const posList: Position[] = Object.values(lastMap)
-          .filter(t => t.quantityAfter !== 0) // 只保留有持仓的
-          .map(t => ({
-            symbol: t.symbol,
-            qty: t.quantityAfter,
-            avgPrice: t.averageCost,
-            last: t.averageCost, // 初始值
-            priceOk: true,
-          }));
+        const posList = mergePositions(basePositions, enriched);
 
         // 为每个持仓获取最新价格
         for (const pos of posList) {
@@ -166,22 +240,12 @@ export default function DashboardPage() {
     try {
       const dbTrades = await findTrades();
       const enriched = computeFifo(dbTrades);
-
-      // 根据 enriched 计算最新持仓
-      const lastMap: Record<string, any> = {};
-      for (const t of enriched) {
-        lastMap[t.symbol] = t;
+      const basePositions = await findPositions();
+      if (!basePositions || basePositions.length === 0) {
+        setError('缺少历史仓位数据');
+        return;
       }
-
-      const posList: Position[] = Object.values(lastMap)
-        .filter(t => t.quantityAfter !== 0)
-        .map(t => ({
-          symbol: t.symbol,
-          qty: t.quantityAfter,
-          avgPrice: t.averageCost,
-          last: t.averageCost, // 初始值
-          priceOk: true,
-        }));
+      const posList = mergePositions(basePositions, enriched);
 
       for (const pos of posList) {
         try {

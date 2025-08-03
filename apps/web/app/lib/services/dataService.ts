@@ -17,11 +17,15 @@ export interface RawTrade {
   closed?: boolean;
 }
 
-// Matches the structure in trades.json -> positions array
-export interface Position {
+// Matches the structure in trades.json -> positions array (imported / stored)
+export interface StoredPosition {
   symbol: string;
   qty: number;
   avgPrice: number;
+}
+
+// Runtime position with pricing info used throughout the app
+export interface Position extends StoredPosition {
   last: number;
   priceOk: boolean;
 }
@@ -58,7 +62,7 @@ interface TradingDB extends DBSchema {
   };
   [POSITIONS_STORE_NAME]: {
     key: string;
-    value: Position;
+    value: StoredPosition;
   };
   [PRICES_STORE_NAME]: {
     key: [string, string]; // [symbol, date]
@@ -128,7 +132,7 @@ async function computeDataHash(data: unknown): Promise<string> {
 }
 
 export async function importData(rawData: {
-  positions: Position[];
+  positions: StoredPosition[];
   trades: RawTrade[];
 }) {
   const newHash = await computeDataHash(rawData);
@@ -218,7 +222,7 @@ export async function clearAllData(): Promise<void> {
 }
 
 export async function clearAndImportData(rawData: {
-  positions: Position[];
+  positions: StoredPosition[];
   trades: RawTrade[];
 }): Promise<void> {
   await clearAllData();
@@ -278,7 +282,7 @@ export async function clearAndImportData(rawData: {
 }
 
 export async function exportData(): Promise<{
-  positions: Position[];
+  positions: StoredPosition[];
   trades: Trade[];
 }> {
   const [positions, trades] = await Promise.all([
@@ -307,7 +311,7 @@ export async function findTrades(): Promise<Trade[]> {
   return list;
 }
 
-export async function findPositions(): Promise<Position[]> {
+export async function findPositions(): Promise<StoredPosition[]> {
   const db = await getDb();
   return db.getAll(POSITIONS_STORE_NAME);
 }
