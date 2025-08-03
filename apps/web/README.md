@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app).
 
+## Data Format Note
+
+When working with sample data such as `public/trades.json`, **short** positions and
+trades must use negative `qty` values. For example, a short position of 80 shares of
+AMZN should appear as `"qty": -80`. This ensures short exposure is represented
+consistently across the application.
+
 ## Getting Started
 
 Copy the repository root `env.example` file to `.env` and fill in the required API keys before running the application.
