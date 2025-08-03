@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import { nowNY, toNY } from '@/lib/timezone';
@@ -45,12 +47,11 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
     ? buildOptionSymbol(optRoot, optExp, optType, optStrike)
     : '';
 
-  // Update symbol when option fields change
-  if (isOption && generatedOptionSymbol) {
-    if (symbol !== generatedOptionSymbol) {
+  useEffect(() => {
+    if (isOption && generatedOptionSymbol && symbol !== generatedOptionSymbol) {
       setSymbol(generatedOptionSymbol);
     }
-  }
+  }, [isOption, generatedOptionSymbol, symbol]);
 
   // ---------- 同步传入的 trade 数据 ----------
   useEffect(() => {
@@ -230,4 +231,4 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       </div>
     </div>
   );
-} 
+}
