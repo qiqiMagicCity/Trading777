@@ -108,16 +108,50 @@ export async function closeDb(): Promise<void> {
   }
 }
 
+async function computeDataHash(data: unknown): Promise<string> {
+  const json = JSON.stringify(data);
+  try {
+    if (typeof crypto?.subtle !== "undefined") {
+      const buffer = new TextEncoder().encode(json);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch {
+    /* ignore */
+  }
+  let hash = 0;
+  for (let i = 0; i < json.length; i++) {
+    hash = (hash + json.charCodeAt(i)) % 0xfffffff;
+  }
+  return hash.toString();
+}
+
 export async function importData(rawData: {
   positions: Position[];
   trades: RawTrade[];
 }) {
-  const db = await getDb();
-  const tradeCount = await db.count(TRADES_STORE_NAME);
-  if (tradeCount > 0) {
-    console.log("Data already exists. Skipping import.");
+  const newHash = await computeDataHash(rawData);
+  let storedHash: string | null = null;
+  try {
+    storedHash = localStorage.getItem("dataset-hash");
+  } catch {
+    /* localStorage unavailable */
+  }
+
+  if (storedHash !== newHash) {
+    await clearAllData();
+    try {
+      localStorage.setItem("dataset-hash", newHash);
+    } catch {
+      /* ignore */
+    }
+  } else {
+    console.log("Dataset unchanged. Skipping import.");
     return;
   }
+
+  const db = await getDb();
 
   console.log("Importing data...");
   const tx = db.transaction(
@@ -171,15 +205,16 @@ export async function importData(rawData: {
 export async function clearAllData(): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(
-    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
+    [TRADES_STORE_NAME, POSITIONS_STORE_NAME, PRICES_STORE_NAME],
     "readwrite",
   );
   await Promise.all([
     tx.objectStore(TRADES_STORE_NAME).clear(),
     tx.objectStore(POSITIONS_STORE_NAME).clear(),
+    tx.objectStore(PRICES_STORE_NAME).clear(),
   ]);
   await tx.done;
-  console.log("All trade and position data cleared.");
+  console.log("All trade, position, and price data cleared.");
 }
 
 export async function clearAndImportData(rawData: {
