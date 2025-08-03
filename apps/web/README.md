@@ -2,6 +2,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+Copy the repository root `env.example` file to `.env` and fill in the required API keys before running the application.
+
 First, run the development server:
 
 ```bash
