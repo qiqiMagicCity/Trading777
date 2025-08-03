@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
-import { importData } from './lib/services/dataService';
+import { importData, findTrades } from './lib/services/dataService';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -12,10 +12,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function initData() {
       try {
-        const res = await fetch('/trades.json');
-        if (res.ok) {
-          const raw = await res.json();
-          await importData(raw); // skip if already exist
+        const storedHash = localStorage.getItem('dataset-hash');
+        const trades = await findTrades();
+        if (!storedHash && trades.length === 0) {
+          const res = await fetch('/trades.json');
+          if (res.ok) {
+            const raw = await res.json();
+            await importData(raw);
+          }
         }
       } catch (_) {
         // optional: ignore errors when demo file missing
@@ -35,4 +39,4 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {children}
     </QueryClientProvider>
   );
-} 
+}
