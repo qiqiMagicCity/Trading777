@@ -25,7 +25,11 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       console.log('编辑交易:', trade);
       setSymbol(trade.symbol);
       // 将action转换为大写，确保匹配Side类型
-      setSide(trade.action.toUpperCase() as Side);
+      const action = trade.action;
+      if (!action) {
+        console.warn('Trade action missing, defaulting to BUY');
+      }
+      setSide((action ?? 'BUY').toUpperCase() as Side);
       setQty(trade.quantity);
       setPrice(trade.price);
 
