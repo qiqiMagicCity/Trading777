@@ -20,7 +20,8 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
 
   const weekdayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  const sortedRecent = [...trades]
+  const validTrades = trades.filter(t => !!t.action);
+  const sortedRecent = [...validTrades]
     .sort((a, b) => toNY(b.date).getTime() - toNY(a.date).getTime())
     .slice(0, 100);
 
@@ -44,7 +45,11 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
         {sortedRecent.map((trade, idx) => {
           const dateObj = toNY(trade.date);
           const weekday = weekdayMap[dateObj.getUTCDay()];
-          const colorSide = (trade.action === 'buy' || trade.action === 'cover') ? 'green' : 'red';
+          const colorSide = (trade.action === 'buy' || trade.action === 'cover')
+            ? 'green'
+            : (trade.action === 'sell' || trade.action === 'short')
+              ? 'red'
+              : 'white';
           const qtyColor = colorSide;
           const amount = trade.price * trade.quantity;
           return (
@@ -54,7 +59,7 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
               <td><img className="logo" src={`/logos/${trade.symbol}.png`} alt={trade.symbol} /></td>
               <td>{trade.symbol}</td>
               <td className="cn">{nameMap[trade.symbol] || '--'}</td>
-              <td className={colorSide}>{trade.action.toUpperCase()}</td>
+              <td className={colorSide}>{trade.action ? trade.action.toUpperCase() : 'UNKNOWN'}</td>
               <td>{formatNumber(trade.price)}</td>
               <td className={qtyColor}>{trade.quantity}</td>
               <td>{formatNumber(amount)}</td>

@@ -58,7 +58,10 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
     if (trade) {
       console.log('[AddTradeModal] 编辑模式载入:', trade);
       setSymbol(trade.symbol);
-      setSide(trade.action.toUpperCase() as 'BUY' | 'SELL' | 'SHORT' | 'COVER');
+      if (!trade.action) {
+        console.warn('Editing trade has invalid action, defaulting to BUY.');
+      }
+      setSide((trade.action ? trade.action.toUpperCase() : 'BUY') as 'BUY' | 'SELL' | 'SHORT' | 'COVER');
       setQty(trade.quantity);
       setPrice(trade.price);
 

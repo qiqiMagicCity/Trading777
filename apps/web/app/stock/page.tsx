@@ -36,7 +36,11 @@ export default function StockPage() {
       try {
         setIsLoading(true);
         const allTrades = await findTrades();
-        const symbolTrades = computeFifo(allTrades.filter(t => t.symbol === symbol));
+        const validTrades = allTrades.filter(t => !!t.action);
+        if (validTrades.length !== allTrades.length) {
+          console.warn('Some trades have invalid action and were skipped.');
+        }
+        const symbolTrades = computeFifo(validTrades.filter(t => t.symbol === symbol));
         setTrades(symbolTrades);
 
         // 加载中文名称
@@ -118,7 +122,11 @@ export default function StockPage() {
               const dateObj = toNY(trade.date);
               const weekday = weekdayMap[dateObj.getUTCDay()];
               const plCls = (trade.realizedPnl || 0) > 0 ? 'green' : (trade.realizedPnl || 0) < 0 ? 'red' : 'white';
-              const sideCls = (trade.action === 'buy' || trade.action === 'cover') ? 'green' : 'red';
+              const sideCls = (trade.action === 'buy' || trade.action === 'cover')
+                ? 'green'
+                : (trade.action === 'sell' || trade.action === 'short')
+                  ? 'red'
+                  : 'white';
               const amount = trade.price * trade.quantity;
 
               return (
@@ -127,7 +135,7 @@ export default function StockPage() {
                   <td>{trade.date}</td>
                   <td>{weekday}</td>
                   <td>{trade.id}</td>
-                  <td className={sideCls}>{trade.action.toUpperCase()}</td>
+                  <td className={sideCls}>{trade.action ? trade.action.toUpperCase() : 'UNKNOWN'}</td>
                   <td>{formatNumber(trade.price)}</td>
                   <td className={sideCls}>{trade.quantity}</td>
                   <td>{formatNumber(amount)}</td>

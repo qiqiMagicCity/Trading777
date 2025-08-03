@@ -17,7 +17,11 @@ export default function TradesPage() {
       try {
         setIsLoading(true);
         const fetchedTrades = await findTrades();
-        setTrades(computeFifo(fetchedTrades));
+        const validTrades = fetchedTrades.filter(t => !!t.action);
+        if (validTrades.length !== fetchedTrades.length) {
+          console.warn('Some trades have invalid action and were skipped.');
+        }
+        setTrades(computeFifo(validTrades));
 
         // 加载中文名称
         fetch('/data/symbol_name_map.json')
@@ -35,7 +39,11 @@ export default function TradesPage() {
 
   const reload = async () => {
     const fetched = await findTrades();
-    setTrades(computeFifo(fetched));
+    const valid = fetched.filter(t => !!t.action);
+    if (valid.length !== fetched.length) {
+      console.warn('Some trades have invalid action and were skipped.');
+    }
+    setTrades(computeFifo(valid));
   };
 
   function formatNumber(value: number | undefined, decimals = 2) {
@@ -75,7 +83,7 @@ export default function TradesPage() {
           {trades.map((trade, idx) => {
             const dateObj = toNY(trade.date);
             const weekday = weekdayMap[dateObj.getUTCDay()];
-            const sideCls = getSideClass(trade.action);
+            const sideCls = getSideClass(trade.action || '');
             const amt = trade.price * trade.quantity;
             const pnlCls = (trade.realizedPnl || 0) > 0 ? 'green' : (trade.realizedPnl || 0) < 0 ? 'red' : 'white';
 
@@ -88,7 +96,7 @@ export default function TradesPage() {
                 <td>{trade.date}</td>
                 <td>{weekday}</td>
                 <td>{trade.tradeCount}</td>
-                <td className={sideCls}>{trade.action.toUpperCase()}</td>
+                <td className={sideCls}>{trade.action ? trade.action.toUpperCase() : 'UNKNOWN'}</td>
                 <td>{formatNumber(trade.price)}</td>
                 <td className={sideCls}>{trade.quantity}</td>
                 <td>{formatNumber(amt)}</td>
