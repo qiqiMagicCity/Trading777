@@ -458,11 +458,7 @@ export function calcMetrics(
   if (DEBUG) console.log('M4计算结果:', todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化
-  // 优先使用 dailyResults 中当日记录的 pnl, 若不存在则按公式计算
-    const todayRecord = dailyResults.find(r => r.date?.startsWith(todayStr));
-  const todayTotalPnlChange = todayRecord
-    ? todayRecord.pnl
-    : todayHistoricalRealizedPnl + pnlFifo + floatPnl;
+  const todayTotalPnlChange = todayHistoricalRealizedPnl + pnlFifo + floatPnl;
   if (DEBUG) console.log('M6计算结果:', todayTotalPnlChange);
 
   // M7: 今日交易次数 (按 FIFO 拆分批次)
