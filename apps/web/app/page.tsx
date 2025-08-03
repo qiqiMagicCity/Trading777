@@ -78,21 +78,24 @@ export default function DashboardPage() {
 
         const enriched = computeFifo(dbTrades, dbPositions);
 
-        // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
-        const lastMap: Record<string, any> = {};
+        // 以历史仓位为基础，逐笔应用交易得到最新持仓
+        const posMap = new Map<string, Position>(
+          dbPositions.map(p => [p.symbol, { ...p }])
+        );
         for (const t of enriched) {
-          lastMap[t.symbol] = t; // 由于 computeFifo 已按日期升序，遍历结束时即为最后状态
+          if (t.quantityAfter !== 0) {
+            posMap.set(t.symbol, {
+              symbol: t.symbol,
+              qty: t.quantityAfter,
+              avgPrice: t.averageCost,
+              last: t.averageCost,
+              priceOk: true,
+            });
+          } else {
+            posMap.delete(t.symbol);
+          }
         }
-
-        const posList: Position[] = Object.values(lastMap)
-          .filter(t => t.quantityAfter !== 0) // 只保留有持仓的
-          .map(t => ({
-            symbol: t.symbol,
-            qty: t.quantityAfter,
-            avgPrice: t.averageCost,
-            last: t.averageCost, // 初始值
-            priceOk: true,
-          }));
+        const posList: Position[] = Array.from(posMap.values());
 
         // 为每个持仓获取最新价格
         for (const pos of posList) {
@@ -171,21 +174,24 @@ export default function DashboardPage() {
       const dbPositions = await findPositions();
       const enriched = computeFifo(dbTrades, dbPositions);
 
-      // 根据 enriched 计算最新持仓
-      const lastMap: Record<string, any> = {};
+      // 以历史仓位为基础，逐笔应用交易得到最新持仓
+      const posMap = new Map<string, Position>(
+        dbPositions.map(p => [p.symbol, { ...p }])
+      );
       for (const t of enriched) {
-        lastMap[t.symbol] = t;
+        if (t.quantityAfter !== 0) {
+          posMap.set(t.symbol, {
+            symbol: t.symbol,
+            qty: t.quantityAfter,
+            avgPrice: t.averageCost,
+            last: t.averageCost,
+            priceOk: true,
+          });
+        } else {
+          posMap.delete(t.symbol);
+        }
       }
-
-      const posList: Position[] = Object.values(lastMap)
-        .filter(t => t.quantityAfter !== 0)
-        .map(t => ({
-          symbol: t.symbol,
-          qty: t.quantityAfter,
-          avgPrice: t.averageCost,
-          last: t.averageCost, // 初始值
-          priceOk: true,
-        }));
+      const posList: Position[] = Array.from(posMap.values());
 
       for (const pos of posList) {
         try {
