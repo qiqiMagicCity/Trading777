@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades } from '@/lib/services/dataService';
+import { importData, findTrades, clearAllData } from '@/lib/services/dataService';
 import type { Trade, Position } from '@/lib/services/dataService';
 import { computeFifo } from '@/lib/fifo';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
@@ -13,6 +13,27 @@ import Link from 'next/link';
 import { calcMetrics } from '@/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
+
+async function computeDataHash(data: unknown): Promise<string> {
+  const json = JSON.stringify(data);
+  try {
+    if (typeof crypto?.subtle !== 'undefined') {
+      const buffer = new TextEncoder().encode(json);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    /* ignore */
+  }
+  let hash = 0;
+  for (let i = 0; i < json.length; i++) {
+    const chr = json.charCodeAt(i);
+    hash = (hash << 5) - hash + chr;
+    hash |= 0;
+  }
+  return hash.toString();
+}
 
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -26,7 +47,14 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
 
-        // First check whether we already have trade data in localStorage or the DB
+        const response = await fetch('/trades.json');
+        if (!response.ok) {
+          throw new Error('Failed to fetch trades.json');
+        }
+        const rawData = await response.json();
+
+        const newHash = await computeDataHash(rawData);
+
         let storedHash: string | null = null;
         try {
           storedHash = localStorage.getItem('dataset-hash');
@@ -34,18 +62,17 @@ export default function DashboardPage() {
           /* ignore */
         }
 
-        let dbTrades = await findTrades();
-
-        // Only fetch and import seed data if both localStorage and DB are empty
-        if (!storedHash && dbTrades.length === 0) {
-          const response = await fetch('/trades.json');
-          if (!response.ok) {
-            throw new Error('Failed to fetch trades.json');
-          }
-          const rawData = await response.json();
+        if (newHash !== storedHash) {
+          await clearAllData();
           await importData(rawData);
-          dbTrades = await findTrades();
+          try {
+            localStorage.setItem('dataset-hash', newHash);
+          } catch {
+            /* ignore */
+          }
         }
+
+        let dbTrades = await findTrades();
 
         const enriched = computeFifo(dbTrades);
 
