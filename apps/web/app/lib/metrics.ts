@@ -422,9 +422,8 @@ export function calcMetrics(
   // M2: 持仓市值
   if (DEBUG) console.log('计算M2(持仓市值)，持仓数据:', positions);
   const currentValue = sum(positions.map(p => {
-    const isShort = p.qty < 0;
-    const marketValue = isShort ? Math.abs(p.last * p.qty) : p.last * p.qty;
-    if (DEBUG) console.log(`${p.symbol} 市值计算:`, { last: p.last, qty: p.qty, isShort, marketValue });
+    const marketValue = p.last * Math.abs(p.qty);
+    if (DEBUG) console.log(`${p.symbol} 市值计算:`, { last: p.last, qty: p.qty, marketValue });
     return marketValue;
   }));
   if (DEBUG) console.log('M2(持仓市值)计算结果:', currentValue);
