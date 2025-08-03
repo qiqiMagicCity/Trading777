@@ -17,9 +17,13 @@ export default function TradesPage() {
       try {
         setIsLoading(true);
         const fetchedTrades = await findTrades();
+        const invalidTrades = fetchedTrades.filter(t => !t.action);
+        if (invalidTrades.length) {
+          console.warn('Invalid trades encountered and skipped:', invalidTrades);
+        }
         const validTrades = fetchedTrades.filter(t => !!t.action);
-        if (validTrades.length !== fetchedTrades.length) {
-          console.warn('Some trades have invalid action and were skipped.');
+        if (validTrades.length === 0) {
+          console.info('No valid trades found in fetched data');
         }
         setTrades(computeFifo(validTrades));
 
@@ -39,9 +43,13 @@ export default function TradesPage() {
 
   const reload = async () => {
     const fetched = await findTrades();
+    const invalid = fetched.filter(t => !t.action);
+    if (invalid.length) {
+      console.warn('Invalid trades encountered and skipped:', invalid);
+    }
     const valid = fetched.filter(t => !!t.action);
-    if (valid.length !== fetched.length) {
-      console.warn('Some trades have invalid action and were skipped.');
+    if (valid.length === 0) {
+      console.info('No valid trades found when reloading');
     }
     setTrades(computeFifo(valid));
   };
@@ -55,6 +63,10 @@ export default function TradesPage() {
 
   if (isLoading) {
     return <div className="text-center p-10">Loading trades...</div>;
+  }
+
+  if (trades.length === 0) {
+    return <div className="text-center p-10">No trades available or import failed.</div>;
   }
 
   // helper for side class

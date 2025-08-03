@@ -18,9 +18,17 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
       .catch(() => { });
   }, []);
 
+  const invalidTrades = trades.filter(t => !t.action);
+  if (invalidTrades.length) {
+    console.warn('Invalid trades passed to TradesTable:', invalidTrades);
+  }
+  const validTrades = trades.filter(t => !!t.action);
+  if (validTrades.length === 0) {
+    return <div className="text-center p-4">No trades available or import failed.</div>;
+  }
+
   const weekdayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  const validTrades = trades.filter(t => !!t.action);
   const sortedRecent = [...validTrades]
     .sort((a, b) => toNY(b.date).getTime() - toNY(a.date).getTime())
     .slice(0, 100);
@@ -70,4 +78,4 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
       </tbody>
     </table>
   );
-} 
+}
