@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { importData, findTrades, clearAllData, findPositions } from '@/lib/services/dataService';
 import type { Trade, Position } from '@/lib/services/dataService';
-import { computeFifo } from '@/lib/fifo';
+import { computeFifo, type InitialPosition } from '@/lib/fifo';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
 import { PositionsTable } from '@/modules/PositionsTable';
 import { TradesTable } from '@/modules/TradesTable';
@@ -38,7 +38,7 @@ async function computeDataHash(data: unknown): Promise<string> {
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [initialPositions, setInitialPositions] = useState<Position[]>([]);
+  const [initialPositions, setInitialPositions] = useState<InitialPosition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -143,7 +143,7 @@ export default function DashboardPage() {
 
         setTrades(dbTrades);
         setPositions(posList);
-        setInitialPositions(dbPositions);
+        setInitialPositions(dbPositions.map(({ symbol, qty, avgPrice }) => ({ symbol, qty, avgPrice })));
       } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
@@ -228,7 +228,7 @@ export default function DashboardPage() {
 
       setTrades(dbTrades);
       setPositions(posList);
-      setInitialPositions(dbPositions);
+      setInitialPositions(dbPositions.map(({ symbol, qty, avgPrice }) => ({ symbol, qty, avgPrice })));
     } catch (e) { console.error(e); }
   }
 
