@@ -25,14 +25,28 @@ export default function DashboardPage() {
     async function loadData() {
       try {
         setIsLoading(true);
-        const response = await fetch('/trades.json');
-        if (!response.ok) {
-          throw new Error('Failed to fetch trades.json');
-        }
-        const rawData = await response.json();
-        await importData(rawData);
 
-        const dbTrades = await findTrades();
+        // First check whether we already have trade data in localStorage or the DB
+        let storedHash: string | null = null;
+        try {
+          storedHash = localStorage.getItem('dataset-hash');
+        } catch {
+          /* ignore */
+        }
+
+        let dbTrades = await findTrades();
+
+        // Only fetch and import seed data if both localStorage and DB are empty
+        if (!storedHash && dbTrades.length === 0) {
+          const response = await fetch('/trades.json');
+          if (!response.ok) {
+            throw new Error('Failed to fetch trades.json');
+          }
+          const rawData = await response.json();
+          await importData(rawData);
+          dbTrades = await findTrades();
+        }
+
         const enriched = computeFifo(dbTrades);
 
         // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
