@@ -114,14 +114,20 @@ export async function importData(rawData: { positions: Position[], trades: RawTr
 
   // Import trades
   const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-  const tradePromises = rawData.trades.map(rawTrade => {
-    const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-      BUY: 'buy',
-      SELL: 'sell',
-      SHORT: 'short',
-      COVER: 'cover',
-    };
-    const action = sideMap[rawTrade.side];
+  const tradePromises: Promise<unknown>[] = [];
+  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
+    BUY: 'buy',
+    SELL: 'sell',
+    SHORT: 'short',
+    COVER: 'cover',
+  };
+  for (const rawTrade of rawData.trades) {
+    const sideKey = rawTrade.side.toUpperCase() as keyof typeof sideMap;
+    const action = sideMap[sideKey];
+    if (!action) {
+      console.error(`Unknown trade side: ${rawTrade.side}, skipping.`);
+      continue;
+    }
     const trade: Trade = {
       symbol: rawTrade.symbol,
       price: rawTrade.price,
@@ -129,8 +135,8 @@ export async function importData(rawData: { positions: Position[], trades: RawTr
       date: rawTrade.date,
       action,
     };
-    return tradeStore.add(trade);
-  });
+    tradePromises.push(tradeStore.add(trade));
+  }
 
   // Import positions
   const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
@@ -160,14 +166,20 @@ export async function clearAndImportData(rawData: { positions: Position[], trade
   const tx = db.transaction([TRADES_STORE_NAME, POSITIONS_STORE_NAME], 'readwrite');
 
   const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-  const tradePromises = rawData.trades.map(rawTrade => {
-    const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-      BUY: 'buy',
-      SELL: 'sell',
-      SHORT: 'short',
-      COVER: 'cover',
-    };
-    const action = sideMap[rawTrade.side];
+  const tradePromises: Promise<unknown>[] = [];
+  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
+    BUY: 'buy',
+    SELL: 'sell',
+    SHORT: 'short',
+    COVER: 'cover',
+  };
+  for (const rawTrade of rawData.trades) {
+    const sideKey = rawTrade.side.toUpperCase() as keyof typeof sideMap;
+    const action = sideMap[sideKey];
+    if (!action) {
+      console.error(`Unknown trade side: ${rawTrade.side}, skipping.`);
+      continue;
+    }
     const trade: Trade = {
       symbol: rawTrade.symbol,
       price: rawTrade.price,
@@ -175,8 +187,8 @@ export async function clearAndImportData(rawData: { positions: Position[], trade
       date: rawTrade.date,
       action,
     };
-    return tradeStore.add(trade);
-  });
+    tradePromises.push(tradeStore.add(trade));
+  }
 
   const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
   const positionPromises = rawData.positions.map(position => positionStore.add(position));
