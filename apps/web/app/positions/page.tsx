@@ -18,12 +18,10 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
         // 初次使用时导入数据（若已存在则自动跳过）
-        if (!localStorage.getItem('customTradesLoaded')) {
-          const response = await fetch('/trades.json');
-          if (response.ok) {
-            const rawData = await response.json();
-            await importData(rawData);
-          }
+        const response = await fetch('/trades.json');
+        if (response.ok) {
+          const rawData = await response.json();
+          await importData(rawData);
         }
 
         const allTrades = await findTrades();
