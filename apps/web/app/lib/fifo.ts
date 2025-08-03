@@ -26,8 +26,27 @@ export type EnrichedTrade = Trade & {
   averageCost: number;
 };
 
-export function computeFifo(trades: Trade[]): EnrichedTrade[] {
+export type InitialPosition = {
+  symbol: string;
+  qty: number;
+  avgPrice: number;
+};
+
+export function computeFifo(
+  trades: Trade[],
+  initialPositions: InitialPosition[] = [],
+): EnrichedTrade[] {
   const symbolStateMap: Record<string, SymbolState> = {};
+
+  for (const pos of initialPositions) {
+    const quantity = Math.abs(pos.qty);
+    symbolStateMap[pos.symbol] = {
+      positionList: [{ price: pos.avgPrice, quantity }],
+      direction: pos.qty < 0 ? 'SHORT' : 'LONG',
+      accumulatedRealizedPnl: 0,
+      tradeCount: 0,
+    };
+  }
 
   // Sort trades by date to process them chronologically
   const sortedTrades = [...trades].sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime());
