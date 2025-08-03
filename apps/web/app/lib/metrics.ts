@@ -158,7 +158,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date === todayStr && lot.date === todayStr) {
+        if (date?.startsWith(todayStr) && lot.date?.startsWith(todayStr)) {
           pnl += (price - lot.price) * q;
         }
         lot.qty -= q;
@@ -178,7 +178,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date === todayStr && lot.date === todayStr) {
+        if (date?.startsWith(todayStr) && lot.date?.startsWith(todayStr)) {
           pnl += (lot.price - price) * q;
         }
         lot.qty -= q;
@@ -219,7 +219,7 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date === todayStr && lot.date !== todayStr) {
+        if (date?.startsWith(todayStr) && !lot.date?.startsWith(todayStr)) {
           pnl += (price - lot.price) * q;
         }
         lot.qty -= q;
@@ -239,7 +239,7 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date === todayStr && lot.date !== todayStr) {
+        if (date?.startsWith(todayStr) && !lot.date?.startsWith(todayStr)) {
           pnl += (lot.price - price) * q;
         }
         lot.qty -= q;
@@ -455,7 +455,7 @@ export function calcMetrics(
 
   // M6: 今日总盈利变化
   // 优先使用 dailyResults 中当日记录的 pnl, 若不存在则按公式计算
-  const todayRecord = dailyResults.find(r => r.date === todayStr);
+    const todayRecord = dailyResults.find(r => r.date?.startsWith(todayStr));
   const todayTotalPnlChange = todayRecord
     ? todayRecord.pnl
     : todayHistoricalRealizedPnl + pnlFifo + floatPnl;
