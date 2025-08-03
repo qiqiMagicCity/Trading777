@@ -76,6 +76,7 @@ export function Header() {
         }
 
         await clearAndImportData(data);
+        localStorage.setItem('customTradesLoaded', 'true');
         alert('导入成功! 页面将刷新。');
         window.location.reload();
       } catch (err) {

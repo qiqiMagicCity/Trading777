@@ -25,12 +25,14 @@ export default function DashboardPage() {
     async function loadData() {
       try {
         setIsLoading(true);
-        const response = await fetch('/trades.json');
-        if (!response.ok) {
-          throw new Error('Failed to fetch trades.json');
+        if (!localStorage.getItem('customTradesLoaded')) {
+          const response = await fetch('/trades.json');
+          if (!response.ok) {
+            throw new Error('Failed to fetch trades.json');
+          }
+          const rawData = await response.json();
+          await importData(rawData);
         }
-        const rawData = await response.json();
-        await importData(rawData);
 
         const dbTrades = await findTrades();
         const enriched = computeFifo(dbTrades);

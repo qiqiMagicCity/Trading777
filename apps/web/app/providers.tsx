@@ -12,10 +12,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function initData() {
       try {
-        const res = await fetch('/trades.json');
-        if (res.ok) {
-          const raw = await res.json();
-          await importData(raw); // skip if already exist
+        if (!localStorage.getItem('customTradesLoaded')) {
+          const res = await fetch('/trades.json');
+          if (res.ok) {
+            const raw = await res.json();
+            await importData(raw); // skip if already exist
+          }
         }
       } catch (_) {
         // optional: ignore errors when demo file missing
