@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades, clearAllData } from '@/lib/services/dataService';
+import { importData, findTrades, clearAllData, findPositions } from '@/lib/services/dataService';
 import type { Trade, Position } from '@/lib/services/dataService';
 import { computeFifo } from '@/lib/fifo';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
@@ -38,6 +38,7 @@ async function computeDataHash(data: unknown): Promise<string> {
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [initialPositions, setInitialPositions] = useState<Position[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -73,8 +74,9 @@ export default function DashboardPage() {
         }
 
         let dbTrades = await findTrades();
+        const dbPositions = await findPositions();
 
-        const enriched = computeFifo(dbTrades);
+        const enriched = computeFifo(dbTrades, dbPositions);
 
         // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
         const lastMap: Record<string, any> = {};
@@ -138,6 +140,7 @@ export default function DashboardPage() {
 
         setTrades(dbTrades);
         setPositions(posList);
+        setInitialPositions(dbPositions);
       } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
@@ -151,10 +154,10 @@ export default function DashboardPage() {
 
   const enrichedTrades = useMemo(() => {
     if (trades.length > 0) {
-      return computeFifo(trades);
+      return computeFifo(trades, initialPositions);
     }
     return [];
-  }, [trades]);
+  }, [trades, initialPositions]);
 
   // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
@@ -165,7 +168,8 @@ export default function DashboardPage() {
   async function reloadData() {
     try {
       const dbTrades = await findTrades();
-      const enriched = computeFifo(dbTrades);
+      const dbPositions = await findPositions();
+      const enriched = computeFifo(dbTrades, dbPositions);
 
       // 根据 enriched 计算最新持仓
       const lastMap: Record<string, any> = {};
@@ -218,6 +222,7 @@ export default function DashboardPage() {
 
       setTrades(dbTrades);
       setPositions(posList);
+      setInitialPositions(dbPositions);
     } catch (e) { console.error(e); }
   }
 
