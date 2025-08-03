@@ -417,7 +417,7 @@ export function calcMetrics(
   const todayStr = nowNY().toISOString().slice(0, 10);
 
   // M1: 持仓成本
-  const totalCost = sum(positions.map(p => p.avgPrice * Math.abs(p.qty)));
+  const totalCost = sum(positions.map(p => Math.abs(p.avgPrice * p.qty)));
 
   // M2: 持仓市值
   if (DEBUG) console.log('计算M2(持仓市值)，持仓数据:', positions);
