@@ -430,12 +430,13 @@ export function calcMetrics(
 
   // M3: 持仓浮盈
   const floatPnl = positions.reduce((acc, pos) => {
+    const qty = Math.abs(pos.qty);
     if (pos.qty >= 0) {
-      // 多头: 市值 - 成本
-      return acc + (pos.last * pos.qty - pos.avgPrice * pos.qty);
+      // 多头: (市价 - 均价) * 数量
+      return acc + (pos.last - pos.avgPrice) * qty;
     } else {
-      // 空头: 成本 - 市值的绝对值
-      return acc + (pos.avgPrice * Math.abs(pos.qty) - Math.abs(pos.last * pos.qty));
+      // 空头: (均价 - 市价) * 数量
+      return acc + (pos.avgPrice - pos.last) * qty;
     }
   }, 0);
 
