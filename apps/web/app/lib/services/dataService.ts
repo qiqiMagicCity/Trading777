@@ -1,16 +1,16 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase } from "idb";
 
-const DB_NAME = 'TradingApp';
+const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
-const TRADES_STORE_NAME = 'trades';
-const POSITIONS_STORE_NAME = 'positions';
-const PRICES_STORE_NAME = 'prices'; // New store for prices
+const TRADES_STORE_NAME = "trades";
+const POSITIONS_STORE_NAME = "positions";
+const PRICES_STORE_NAME = "prices"; // New store for prices
 
 // Matches the structure in trades.json -> trades array
 export interface RawTrade {
   date: string; // "2025-07-04"
   symbol: string;
-  side: 'BUY' | 'SELL' | 'SHORT' | 'COVER';
+  side: "BUY" | "SELL" | "SHORT" | "COVER";
   qty: number;
   price: number;
   pl?: number;
@@ -31,7 +31,7 @@ export interface CachedPrice {
   symbol: string;
   date: string;
   close: number;
-  source: 'finnhub' | 'alphavantage' | 'import' | 'tiingo';
+  source: "finnhub" | "alphavantage" | "import" | "tiingo";
 }
 
 // Interface for metricsDaily records
@@ -47,15 +47,14 @@ export interface Trade {
   price: number;
   quantity: number;
   date: string;
-  action: 'buy' | 'sell' | 'short' | 'cover';
+  action: "buy" | "sell" | "short" | "cover";
 }
-
 
 interface TradingDB extends DBSchema {
   [TRADES_STORE_NAME]: {
     key: number;
     value: Trade;
-    indexes: { 'by-date': string };
+    indexes: { "by-date": string };
   };
   [POSITIONS_STORE_NAME]: {
     key: string;
@@ -64,11 +63,11 @@ interface TradingDB extends DBSchema {
   [PRICES_STORE_NAME]: {
     key: [string, string]; // [symbol, date]
     value: CachedPrice;
-    indexes: { 'by-symbol': string };
-  }
+    indexes: { "by-symbol": string };
+  };
 }
 
-let dbPromise: Promise<IDBPDatabase<TradingDB>>;
+let dbPromise: Promise<IDBPDatabase<TradingDB>> | undefined;
 
 function getDb(): Promise<IDBPDatabase<TradingDB>> {
   if (!dbPromise) {
@@ -77,13 +76,13 @@ function getDb(): Promise<IDBPDatabase<TradingDB>> {
         if (oldVersion < 1) {
           if (!db.objectStoreNames.contains(TRADES_STORE_NAME)) {
             const store = db.createObjectStore(TRADES_STORE_NAME, {
-              keyPath: 'id',
+              keyPath: "id",
               autoIncrement: true,
             });
-            store.createIndex('by-date', 'date');
+            store.createIndex("by-date", "date");
           }
           if (!db.objectStoreNames.contains(POSITIONS_STORE_NAME)) {
-            db.createObjectStore(POSITIONS_STORE_NAME, { keyPath: 'symbol' });
+            db.createObjectStore(POSITIONS_STORE_NAME, { keyPath: "symbol" });
           }
         }
         if (oldVersion < 2) {
@@ -91,41 +90,61 @@ function getDb(): Promise<IDBPDatabase<TradingDB>> {
             db.deleteObjectStore(PRICES_STORE_NAME);
           }
           const store = db.createObjectStore(PRICES_STORE_NAME, {
-            keyPath: ['symbol', 'date'],
+            keyPath: ["symbol", "date"],
           });
-          store.createIndex('by-symbol', 'symbol');
+          store.createIndex("by-symbol", "symbol");
         }
       },
     });
   }
-  return dbPromise;
+  return dbPromise!;
 }
 
-export async function importData(rawData: { positions: Position[], trades: RawTrade[] }) {
+export async function closeDb(): Promise<void> {
+  if (dbPromise) {
+    const db = await dbPromise;
+    db.close();
+    dbPromise = undefined;
+  }
+}
+
+export async function importData(rawData: {
+  positions: Position[];
+  trades: RawTrade[];
+}) {
   const db = await getDb();
   const tradeCount = await db.count(TRADES_STORE_NAME);
   if (tradeCount > 0) {
-    console.log('Data already exists. Skipping import.');
+    console.log("Data already exists. Skipping import.");
     return;
   }
 
-  console.log('Importing data...');
-  const tx = db.transaction([TRADES_STORE_NAME, POSITIONS_STORE_NAME], 'readwrite');
+  console.log("Importing data...");
+  const tx = db.transaction(
+    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
+    "readwrite",
+  );
 
   // Import trades
   const tradeStore = tx.objectStore(TRADES_STORE_NAME);
   const tradePromises: Promise<unknown>[] = [];
   const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-    BUY: 'buy',
-    SELL: 'sell',
-    SHORT: 'short',
-    COVER: 'cover',
+    BUY: "buy",
+    SELL: "sell",
+    SHORT: "short",
+    COVER: "cover",
   };
   for (const rawTrade of rawData.trades) {
-    const sideKey = rawTrade.side.toUpperCase() as keyof typeof sideMap;
-    const action = sideMap[sideKey];
+    const sideValue = rawTrade?.side;
+    const sideKey =
+      typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
+    const action = sideKey
+      ? sideMap[sideKey as keyof typeof sideMap]
+      : undefined;
     if (!action) {
-      console.error(`Unknown trade side: ${rawTrade.side}, skipping.`);
+      console.warn(
+        `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
+      );
       continue;
     }
     const trade: Trade = {
@@ -140,44 +159,61 @@ export async function importData(rawData: { positions: Position[], trades: RawTr
 
   // Import positions
   const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map(position => positionStore.put(position));
+  const positionPromises = rawData.positions.map((position) =>
+    positionStore.put(position),
+  );
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;
-  console.log('Data imported successfully.');
+  console.log("Data imported successfully.");
 }
 
 export async function clearAllData(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction([TRADES_STORE_NAME, POSITIONS_STORE_NAME], 'readwrite');
+  const tx = db.transaction(
+    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
+    "readwrite",
+  );
   await Promise.all([
     tx.objectStore(TRADES_STORE_NAME).clear(),
     tx.objectStore(POSITIONS_STORE_NAME).clear(),
   ]);
   await tx.done;
-  console.log('All trade and position data cleared.');
+  console.log("All trade and position data cleared.");
 }
 
-export async function clearAndImportData(rawData: { positions: Position[], trades: RawTrade[] }): Promise<void> {
+export async function clearAndImportData(rawData: {
+  positions: Position[];
+  trades: RawTrade[];
+}): Promise<void> {
   await clearAllData();
 
   const db = await getDb();
-  console.log('Importing data...');
-  const tx = db.transaction([TRADES_STORE_NAME, POSITIONS_STORE_NAME], 'readwrite');
+  console.log("Importing data...");
+  const tx = db.transaction(
+    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
+    "readwrite",
+  );
 
   const tradeStore = tx.objectStore(TRADES_STORE_NAME);
   const tradePromises: Promise<unknown>[] = [];
   const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-    BUY: 'buy',
-    SELL: 'sell',
-    SHORT: 'short',
-    COVER: 'cover',
+    BUY: "buy",
+    SELL: "sell",
+    SHORT: "short",
+    COVER: "cover",
   };
   for (const rawTrade of rawData.trades) {
-    const sideKey = rawTrade.side.toUpperCase() as keyof typeof sideMap;
-    const action = sideMap[sideKey];
+    const sideValue = rawTrade?.side;
+    const sideKey =
+      typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
+    const action = sideKey
+      ? sideMap[sideKey as keyof typeof sideMap]
+      : undefined;
     if (!action) {
-      console.error(`Unknown trade side: ${rawTrade.side}, skipping.`);
+      console.warn(
+        `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
+      );
       continue;
     }
     const trade: Trade = {
@@ -191,14 +227,19 @@ export async function clearAndImportData(rawData: { positions: Position[], trade
   }
 
   const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map(position => positionStore.add(position));
+  const positionPromises = rawData.positions.map((position) =>
+    positionStore.add(position),
+  );
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;
-  console.log('Data imported successfully after clearing.');
+  console.log("Data imported successfully after clearing.");
 }
 
-export async function exportData(): Promise<{ positions: Position[], trades: Trade[] }> {
+export async function exportData(): Promise<{
+  positions: Position[];
+  trades: Trade[];
+}> {
   const [positions, trades] = await Promise.all([
     findPositions(),
     findTrades(),
@@ -208,7 +249,7 @@ export async function exportData(): Promise<{ positions: Position[], trades: Tra
 
 export async function findTrades(): Promise<Trade[]> {
   const db = await getDb();
-  const tx = db.transaction(TRADES_STORE_NAME, 'readonly');
+  const tx = db.transaction(TRADES_STORE_NAME, "readonly");
   const store = tx.objectStore(TRADES_STORE_NAME);
   const list: Trade[] = [];
   let cursor = await store.openCursor();
@@ -217,7 +258,7 @@ export async function findTrades(): Promise<Trade[]> {
     const trade = cursor.value as Trade;
     const id = cursor.key as number;
     list.push({ ...trade, id });
-    console.log('获取交易:', { ...trade, id });
+    console.log("获取交易:", { ...trade, id });
     cursor = await cursor.continue();
   }
 
@@ -232,55 +273,65 @@ export async function findPositions(): Promise<Position[]> {
 
 export async function findMetricsDaily(): Promise<DailyMetric[]> {
   try {
-    let res = await fetch('/metricsDaily.json');
+    let res = await fetch("/metricsDaily.json");
     if (!res.ok) {
-      res = await fetch('/dailyResult.json');
+      res = await fetch("/dailyResult.json");
     }
     if (!res.ok) return [];
     const list = (await res.json()) as Array<{ date: string; M5_1?: number }>;
     if (!Array.isArray(list)) return [];
     return list.map((r) => {
-      const item: DailyMetric = { date: r.date, M5_1: typeof r.M5_1 === 'number' ? r.M5_1 : undefined };
+      const item: DailyMetric = {
+        date: r.date,
+        M5_1: typeof r.M5_1 === "number" ? r.M5_1 : undefined,
+      };
       if (item.M5_1 == null && item.date) {
         try {
-          fetch(`/api/metrics-daily?date=${encodeURIComponent(item.date)}`, { method: 'POST' });
+          fetch(`/api/metrics-daily?date=${encodeURIComponent(item.date)}`, {
+            method: "POST",
+          });
         } catch (err) {
-          console.warn('trigger metrics-daily failed', err);
+          console.warn("trigger metrics-daily failed", err);
         }
       }
       return item;
     });
   } catch (e) {
-    console.warn('findMetricsDaily failed', e);
+    console.warn("findMetricsDaily failed", e);
     return [];
   }
 }
 
 // --- New functions for price cache ---
 
-export async function getPrice(symbol: string, date: string): Promise<CachedPrice | undefined> {
+export async function getPrice(
+  symbol: string,
+  date: string,
+): Promise<CachedPrice | undefined> {
   const db = await getDb();
   return db.get(PRICES_STORE_NAME, [symbol, date]);
 }
 
 export async function putPrice(price: CachedPrice): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(PRICES_STORE_NAME, 'readwrite');
+  const tx = db.transaction(PRICES_STORE_NAME, "readwrite");
   await tx.store.put(price);
   await tx.done;
 }
 
-export async function importClosePrices(nestedPrices: Record<string, Record<string, number>>): Promise<number> {
+export async function importClosePrices(
+  nestedPrices: Record<string, Record<string, number>>,
+): Promise<number> {
   // nestedPrices format: { '2025-07-05': { 'AAPL': 123.45, ... }, ... }
   let imported = 0;
   const promises: Promise<void>[] = [];
   for (const date in nestedPrices) {
     const dayObj = nestedPrices[date];
-    if (dayObj && typeof dayObj === 'object') {
+    if (dayObj && typeof dayObj === "object") {
       for (const symbol in dayObj) {
         const close = dayObj[symbol];
-        if (typeof close === 'number') {
-          promises.push(putPrice({ symbol, date, close, source: 'import' }));
+        if (typeof close === "number") {
+          promises.push(putPrice({ symbol, date, close, source: "import" }));
           imported++;
         }
       }
@@ -303,14 +354,14 @@ export async function addTrade(trade: Trade): Promise<number> {
 
 // Update existing trade (by id)
 export async function updateTrade(trade: Trade): Promise<void> {
-  if (trade.id == null) throw new Error('Trade id is required for update');
+  if (trade.id == null) throw new Error("Trade id is required for update");
   const db = await getDb();
-  console.log('更新交易:', trade);
+  console.log("更新交易:", trade);
   await db.put(TRADES_STORE_NAME, trade);
-  console.log('交易更新成功');
+  console.log("交易更新成功");
 }
 
 export async function deleteTrade(id: number): Promise<void> {
   const db = await getDb();
   await db.delete(TRADES_STORE_NAME, id);
-} 
+}
