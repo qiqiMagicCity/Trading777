@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { openDB } from "idb";
 import { importData, clearAndImportData, closeDb } from "./dataService";
+import { createHash } from "crypto";
 
 describe("dataService trade import", () => {
   beforeEach(async () => {
@@ -75,5 +76,47 @@ describe("dataService trade import", () => {
     db.close();
     expect(trades).toHaveLength(1);
     expect(trades[0]).toMatchObject({ symbol: "GOOG", action: "sell" });
+  });
+
+  test("clearAndImportData stores dataset hash", async () => {
+    const rawData = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-03-01",
+          symbol: "AAPL",
+          side: "BUY" as const,
+          qty: 1,
+          price: 100,
+        },
+      ],
+    };
+
+    const expectedHash = createHash("sha256")
+      .update(JSON.stringify(rawData))
+      .digest("hex");
+
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
+
+    await clearAndImportData(rawData);
+    expect(global.localStorage.getItem("dataset-hash")).toBe(expectedHash);
+    // cleanup
+    // @ts-ignore
+    delete global.localStorage;
   });
 });
