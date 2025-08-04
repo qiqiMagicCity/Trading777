@@ -250,7 +250,7 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date?.startsWith(todayStr) && !lot.date?.startsWith(todayStr)) {
+        if (isTodayNY(date, todayStr) && !isTodayNY(lot.date, todayStr)) {
           pnl += (price - lot.price) * q;
         }
         lot.qty -= q;
@@ -270,7 +270,7 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date?.startsWith(todayStr) && !lot.date?.startsWith(todayStr)) {
+        if (isTodayNY(date, todayStr) && !isTodayNY(lot.date, todayStr)) {
           pnl += (lot.price - price) * q;
         }
         lot.qty -= q;
