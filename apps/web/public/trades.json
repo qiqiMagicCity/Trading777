@@ -4,22 +4,43 @@
       "symbol": "TSLA",
       "qty": 50,
       "avgPrice": 290,
-      "last": 290,
-      "priceOk": false
+      "last": 305,
+      "priceOk": true
     },
     {
       "symbol": "NFLX",
       "qty": 100,
       "avgPrice": 1100,
-      "last": 1100,
-      "priceOk": false
+      "last": 1165,
+      "priceOk": true
     },
     {
       "symbol": "AMZN",
       "qty": -80,
       "avgPrice": 220,
-      "last": 220,
-      "priceOk": false
+      "last": 215,
+      "priceOk": true
+    },
+    {
+      "symbol": "AAPL",
+      "qty": 0,
+      "avgPrice": 0,
+      "last": 199,
+      "priceOk": true
+    },
+    {
+      "symbol": "GOOGL",
+      "qty": -50,
+      "avgPrice": 194,
+      "last": 190,
+      "priceOk": true
+    },
+    {
+      "symbol": "MSFT",
+      "qty": 50,
+      "avgPrice": 520,
+      "last": 523,
+      "priceOk": true
     }
   ],
   "trades": [
