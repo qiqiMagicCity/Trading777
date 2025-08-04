@@ -1,4 +1,4 @@
-import { computeFifo } from "@/lib/fifo";
+import { computeFifo, type EnrichedTrade } from "@/lib/fifo";
 import { calcMetrics } from "@/lib/metrics";
 import type { Trade } from "@/lib/services/dataService";
 
@@ -12,7 +12,7 @@ describe("FIFO handling of invalid dates", () => {
       { symbol: "V2", price: 1, quantity: 1, date: "2024-01-02", action: "buy" },
     ];
 
-    let enriched;
+    let enriched: EnrichedTrade[] | undefined;
     expect(() => {
       enriched = computeFifo(trades);
       calcMetrics(enriched, []);
