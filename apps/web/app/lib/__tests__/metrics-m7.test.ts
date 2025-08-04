@@ -6,19 +6,55 @@ jest.mock("@/lib/timezone", () => {
   const actual = jest.requireActual("@/lib/timezone");
   return {
     ...actual,
-    nowNY: () => new Date("2024-01-02T00:00:00-05:00"),
+    nowNY: () => new Date("2024-01-02T10:00:00-05:00"),
   };
 });
 
 describe("calcMetrics M7 counts", () => {
   it("counts sell and cover once per trade", () => {
     const trades: Trade[] = [
-      { symbol: "AAPL", price: 100, quantity: 100, date: "2024-01-02T10:00:00-05:00", action: "buy" },
-      { symbol: "AAPL", price: 110, quantity: 50, date: "2024-01-02T11:00:00-05:00", action: "buy" },
-      { symbol: "AAPL", price: 120, quantity: 150, date: "2024-01-02T12:00:00-05:00", action: "sell" },
-      { symbol: "MSFT", price: 200, quantity: 30, date: "2024-01-02T09:00:00-05:00", action: "short" },
-      { symbol: "MSFT", price: 210, quantity: 20, date: "2024-01-02T09:30:00-05:00", action: "short" },
-      { symbol: "MSFT", price: 190, quantity: 50, date: "2024-01-02T13:00:00-05:00", action: "cover" },
+      {
+        symbol: "AAPL",
+        price: 100,
+        quantity: 100,
+        date: "2024-01-02T10:00:00-05:00",
+        action: "buy",
+      },
+      {
+        symbol: "AAPL",
+        price: 110,
+        quantity: 50,
+        date: "2024-01-02T11:00:00-05:00",
+        action: "buy",
+      },
+      {
+        symbol: "AAPL",
+        price: 120,
+        quantity: 150,
+        date: "2024-01-02T12:00:00-05:00",
+        action: "sell",
+      },
+      {
+        symbol: "MSFT",
+        price: 200,
+        quantity: 30,
+        date: "2024-01-02T09:00:00-05:00",
+        action: "short",
+      },
+      {
+        symbol: "MSFT",
+        price: 210,
+        quantity: 20,
+        date: "2024-01-02T09:30:00-05:00",
+        action: "short",
+      },
+      {
+        symbol: "MSFT",
+        price: 190,
+        quantity: 50,
+        date: "2024-01-02T13:00:00-05:00",
+        action: "cover",
+      },
     ];
 
     const metrics = calcMetrics(computeFifo(trades), []);
@@ -27,9 +63,27 @@ describe("calcMetrics M7 counts", () => {
 
   it("handles trades that both close and open positions", () => {
     const trades: Trade[] = [
-      { symbol: "TSLA", price: 100, quantity: 10, date: "2024-01-02T10:00:00-05:00", action: "buy" },
-      { symbol: "TSLA", price: 90, quantity: 15, date: "2024-01-02T11:00:00-05:00", action: "sell" },
-      { symbol: "TSLA", price: 95, quantity: 10, date: "2024-01-02T12:00:00-05:00", action: "cover" },
+      {
+        symbol: "TSLA",
+        price: 100,
+        quantity: 10,
+        date: "2024-01-02T10:00:00-05:00",
+        action: "buy",
+      },
+      {
+        symbol: "TSLA",
+        price: 90,
+        quantity: 15,
+        date: "2024-01-02T11:00:00-05:00",
+        action: "sell",
+      },
+      {
+        symbol: "TSLA",
+        price: 95,
+        quantity: 10,
+        date: "2024-01-02T12:00:00-05:00",
+        action: "cover",
+      },
     ];
 
     const metrics = calcMetrics(computeFifo(trades), []);

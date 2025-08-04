@@ -1,10 +1,10 @@
 import type { EnrichedTrade } from "@/lib/fifo";
-import type { Position } from '@/lib/services/dataService';
-import { nowNY, toNY } from '@/lib/timezone';
-import { calcTodayTradePnL } from './calcTodayTradePnL';
+import type { Position } from "@/lib/services/dataService";
+import { nowNY, toNY, getLatestTradingDayStr } from "@/lib/timezone";
+import { calcTodayTradePnL } from "./calcTodayTradePnL";
 
 // Only enable verbose logging outside production
-const DEBUG = process.env.NODE_ENV !== 'production';
+const DEBUG = process.env.NODE_ENV !== "production";
 
 /**
  * 交易系统指标接口
@@ -23,7 +23,7 @@ export interface Metrics {
   /** M4: 今天持仓平仓盈利 - 今日平掉历史仓位的盈亏 */
   M4: number;
 
-  /** 
+  /**
    * M5: 今日日内交易盈利 - 同一天内开仓并平仓的交易盈亏
    * trade: 交易视角，按交易匹配计算
    * fifo: FIFO视角，按先进先出原则计算
@@ -71,7 +71,7 @@ export interface Metrics {
   /** M9: 所有历史平仓盈利 - 所有已实现盈亏的累计和 */
   M9: number;
 
-  /** 
+  /**
    * M10: 胜率统计
    * W: 盈利交易次数
    * L: 亏损交易次数
@@ -141,7 +141,7 @@ function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
 /**
  * 计算日内交易盈亏（交易视角）
  * 按照交易匹配的方式，计算同一天内开仓并平仓的交易盈亏
- * 
+ *
  * @param enrichedTrades 交易记录数组
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 日内交易盈亏
@@ -154,9 +154,18 @@ function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 日内交易盈亏
  */
-function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): number {
-  const longFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
-  const shortFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
+function calcTodayFifoPnL(
+  enrichedTrades: EnrichedTrade[],
+  todayStr: string,
+): number {
+  const longFifo: Record<
+    string,
+    { qty: number; price: number; date: string }[]
+  > = {};
+  const shortFifo: Record<
+    string,
+    { qty: number; price: number; date: string }[]
+  > = {};
   let pnl = 0;
   const sorted = enrichedTrades
     .map((t, idx) => ({ t, idx }))
@@ -171,10 +180,10 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
   for (const t of sorted) {
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
-    if (action === 'buy') {
+    if (action === "buy") {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity, price, date });
-    } else if (action === 'sell') {
+    } else if (action === "sell") {
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
       while (remain > 0 && fifo.length > 0) {
@@ -191,10 +200,10 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
         if (!shortFifo[symbol]) shortFifo[symbol] = [];
         shortFifo[symbol].push({ qty: remain, price, date });
       }
-    } else if (action === 'short') {
+    } else if (action === "short") {
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
       shortFifo[symbol].push({ qty: quantity, price, date });
-    } else if (action === 'cover') {
+    } else if (action === "cover") {
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
       while (remain > 0 && fifo.length > 0) {
@@ -219,14 +228,23 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
 /**
  * 计算历史交易盈亏（FIFO视角）
  * 按照先进先出原则，计算同一天内开仓并平仓的交易盈亏
- * 
+ *
  * @param enrichedTrades 交易记录数组
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 日内交易盈亏
  */
-function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): number {
-  const longFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
-  const shortFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
+function calcHistoryFifoPnL(
+  enrichedTrades: EnrichedTrade[],
+  todayStr: string,
+): number {
+  const longFifo: Record<
+    string,
+    { qty: number; price: number; date: string }[]
+  > = {};
+  const shortFifo: Record<
+    string,
+    { qty: number; price: number; date: string }[]
+  > = {};
   let pnl = 0;
   const sorted = enrichedTrades
     .map((t, idx) => ({ t, idx }))
@@ -292,7 +310,10 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
  * @param trades 交易记录数组
  * @returns 包含 wins 与 losses 计数
  */
-function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: number } {
+function calcWinLossLots(trades: EnrichedTrade[]): {
+  wins: number;
+  losses: number;
+} {
   const longFifo: Record<string, { qty: number; price: number }[]> = {};
   const shortFifo: Record<string, { qty: number; price: number }[]> = {};
 
@@ -314,32 +335,34 @@ function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: numbe
     const { symbol, action, price } = t;
     const quantity = Math.abs(t.quantity);
 
-    if (action === 'buy') {
+    if (action === "buy") {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity, price });
-    } else if (action === 'sell') {
+    } else if (action === "sell") {
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
         const pnl = (price - lot.price) * q;
-        if (pnl > 0) wins++; else if (pnl < 0) losses++;
+        if (pnl > 0) wins++;
+        else if (pnl < 0) losses++;
         lot.qty -= q;
         remain -= q;
         if (lot.qty === 0) fifo.shift();
       }
-    } else if (action === 'short') {
+    } else if (action === "short") {
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
       shortFifo[symbol].push({ qty: quantity, price });
-    } else if (action === 'cover') {
+    } else if (action === "cover") {
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
         const pnl = (lot.price - price) * q;
-        if (pnl > 0) wins++; else if (pnl < 0) losses++;
+        if (pnl > 0) wins++;
+        else if (pnl < 0) losses++;
         lot.qty -= q;
         remain -= q;
         if (lot.qty === 0) fifo.shift();
@@ -380,11 +403,11 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     const { symbol, action, date } = t;
     const quantity = Math.abs(t.quantity);
 
-    if (action === 'buy') {
+    if (action === "buy") {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity });
       if (isTodayNY(date, todayStr)) B++;
-    } else if (action === 'sell') {
+    } else if (action === "sell") {
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
       let closed = false;
@@ -402,11 +425,11 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         shortFifo[symbol].push({ qty: remain });
         if (isTodayNY(date, todayStr)) P++;
       }
-    } else if (action === 'short') {
+    } else if (action === "short") {
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
       shortFifo[symbol].push({ qty: quantity });
       if (isTodayNY(date, todayStr)) P++;
-    } else if (action === 'cover') {
+    } else if (action === "cover") {
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
       let closed = false;
@@ -432,17 +455,17 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
 
 /**
  * 计算周期性指标（WTD、MTD、YTD）
- * 
+ *
  * @param dailyResults 每日交易结果数组
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 包含 wtd、mtd、ytd 的对象
  */
 function calcPeriodMetrics(
   dailyResults: DailyResult[],
-  todayStr: string
+  todayStr: string,
 ): { wtd: number; mtd: number; ytd: number } {
   const sumSince = (since: string) =>
-    dailyResults.filter(r => r.date >= since).reduce((a, r) => a + r.pnl, 0);
+    dailyResults.filter((r) => r.date >= since).reduce((a, r) => a + r.pnl, 0);
 
   // Ensure calculations are based on New York time
   const today = toNY(`${todayStr}T00:00:00`);
@@ -453,14 +476,14 @@ function calcPeriodMetrics(
 
   return {
     wtd: sumSince(mondayStr),
-    mtd: sumSince(todayStr.slice(0, 8) + '01'),
-    ytd: sumSince(todayStr.slice(0, 4) + '-01-01'),
+    mtd: sumSince(todayStr.slice(0, 8) + "01"),
+    ytd: sumSince(todayStr.slice(0, 4) + "-01-01"),
   };
 }
 
 /**
  * 计算所有交易指标
- * 
+ *
  * @param trades 交易记录数组
  * @param positions 持仓数组
  * @param dailyResults 每日交易结果数组
@@ -469,22 +492,29 @@ function calcPeriodMetrics(
 export function calcMetrics(
   trades: EnrichedTrade[],
   positions: Position[],
-  dailyResults: DailyResult[] = []
+  dailyResults: DailyResult[] = [],
 ): Metrics {
   // 获取今日日期字符串（纽约时区）
-  const todayStr = nowNY().toISOString().slice(0, 10);
+  const todayStr = getLatestTradingDayStr(nowNY());
 
   // M1: 持仓成本
-  const totalCost = sum(positions.map(p => Math.abs(p.avgPrice * p.qty)));
+  const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
 
   // M2: 持仓市值
-  if (DEBUG) console.log('计算M2(持仓市值)，持仓数据:', positions);
-  const currentValue = sum(positions.map(p => {
-    const marketValue = p.last * Math.abs(p.qty);
-    if (DEBUG) console.log(`${p.symbol} 市值计算:`, { last: p.last, qty: p.qty, marketValue });
-    return marketValue;
-  }));
-  if (DEBUG) console.log('M2(持仓市值)计算结果:', currentValue);
+  if (DEBUG) console.log("计算M2(持仓市值)，持仓数据:", positions);
+  const currentValue = sum(
+    positions.map((p) => {
+      const marketValue = p.last * Math.abs(p.qty);
+      if (DEBUG)
+        console.log(`${p.symbol} 市值计算:`, {
+          last: p.last,
+          qty: p.qty,
+          marketValue,
+        });
+      return marketValue;
+    }),
+  );
+  if (DEBUG) console.log("M2(持仓市值)计算结果:", currentValue);
 
   // M3: 持仓浮盈
   const floatPnl = positions.reduce((acc, pos) => {
@@ -505,11 +535,11 @@ export function calcMetrics(
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(trades, todayStr);
-  if (DEBUG) console.log('M4计算结果:', todayHistoricalRealizedPnl);
+  if (DEBUG) console.log("M4计算结果:", todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化
   const todayTotalPnlChange = todayHistoricalRealizedPnl + pnlFifo + floatPnl;
-  if (DEBUG) console.log('M6计算结果:', todayTotalPnlChange);
+  if (DEBUG) console.log("M6计算结果:", todayTotalPnlChange);
 
   // M7: 今日交易次数 (按 FIFO 拆分批次)
   const todayTradeCountsByType = calcTodayTradeCounts(trades, todayStr);
@@ -521,24 +551,29 @@ export function calcMetrics(
 
   // M8: 累计交易次数
   const allTradesByType = {
-    B: trades.filter(t => t.action === 'buy').length,
-    S: trades.filter(t => t.action === 'sell').length,
-    P: trades.filter(t => t.action === 'short').length,
-    C: trades.filter(t => t.action === 'cover').length
+    B: trades.filter((t) => t.action === "buy").length,
+    S: trades.filter((t) => t.action === "sell").length,
+    P: trades.filter((t) => t.action === "short").length,
+    C: trades.filter((t) => t.action === "cover").length,
   };
-  const totalTrades = allTradesByType.B + allTradesByType.S + allTradesByType.P + allTradesByType.C;
+  const totalTrades =
+    allTradesByType.B +
+    allTradesByType.S +
+    allTradesByType.P +
+    allTradesByType.C;
 
   // M9: 所有历史平仓盈利（含今日）
   const historicalRealizedPnl = dailyResults.length
     ? dailyResults.reduce((acc, r) => acc + r.realized, 0)
     : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
-  if (DEBUG) console.log('M9计算结果:', historicalRealizedPnl);
+  if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
   const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(trades);
-  const winRate = winningTrades + losingTrades > 0
-    ? (winningTrades / (winningTrades + losingTrades)) * 100
-    : 0;
+  const winRate =
+    winningTrades + losingTrades > 0
+      ? (winningTrades / (winningTrades + losingTrades)) * 100
+      : 0;
 
   // M11-13: 周期性指标
   const { wtd, mtd, ytd } = calcPeriodMetrics(dailyResults, todayStr);
@@ -550,7 +585,7 @@ export function calcMetrics(
     M4: todayHistoricalRealizedPnl,
     M5: {
       trade: pnlTrade,
-      fifo: pnlFifo
+      fifo: pnlFifo,
     },
     M6: todayTotalPnlChange,
     M7: {
@@ -558,24 +593,24 @@ export function calcMetrics(
       S: todayTradeCountsByType.S,
       P: todayTradeCountsByType.P,
       C: todayTradeCountsByType.C,
-      total: todayTradeCounts
+      total: todayTradeCounts,
     },
     M8: {
       B: allTradesByType.B,
       S: allTradesByType.S,
       P: allTradesByType.P,
       C: allTradesByType.C,
-      total: totalTrades
+      total: totalTrades,
     },
     M9: historicalRealizedPnl,
     M10: {
       W: winningTrades,
       L: losingTrades,
-      rate: winRate
+      rate: winRate,
     },
     M11: wtd,
     M12: mtd,
-    M13: ytd
+    M13: ytd,
   };
 }
 
@@ -589,7 +624,7 @@ export function formatCurrency(value: number): string {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
@@ -600,6 +635,6 @@ export function formatCurrency(value: number): string {
  * @returns 格式化后的字符串
  */
 export function formatNumber(value: number, decimals: number = 2): string {
-  if (isNaN(value)) return 'N/A';
+  if (isNaN(value)) return "N/A";
   return value.toFixed(decimals);
-} 
+}
