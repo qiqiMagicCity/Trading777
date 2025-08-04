@@ -1,6 +1,6 @@
 import type { EnrichedTrade } from '../app/lib/fifo';
 import { calcTodayTradePnL } from '../app/lib/calcTodayTradePnL';
-import type { DailyResult } from '../app/lib/metrics';
+import { calcTodayFifoPnL, type DailyResult } from '../app/lib/metrics';
 
 /**
  * 根据交易记录生成某日的汇总结果
@@ -14,12 +14,14 @@ export function generateDailyResult(trades: EnrichedTrade[], date: string): Dail
 
   const float = 0; // 浮动盈亏由外部价格数据计算，此处置零占位
   const M5_1 = calcTodayTradePnL(trades, date);
+  const fifo = calcTodayFifoPnL(trades, date);
 
   return {
     date,
     realized,
     float,
     M5_1,
-    pnl: realized + float,
+    fifo,
+    pnl: realized + fifo + float,
   };
 }

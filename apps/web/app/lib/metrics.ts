@@ -109,7 +109,10 @@ export interface DailyResult {
   /** 今日日内交易盈利（交易视角） */
   M5_1: number;
 
-  /** 总盈亏 (realized + float) */
+  /** 今日日内交易盈利（FIFO视角） */
+  fifo: number;
+
+  /** 总盈亏 (realized + fifo + float) */
   pnl: number;
 }
 
@@ -154,7 +157,7 @@ function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 日内交易盈亏
  */
-function calcTodayFifoPnL(
+export function calcTodayFifoPnL(
   enrichedTrades: EnrichedTrade[],
   todayStr: string,
 ): number {
@@ -465,7 +468,9 @@ function calcPeriodMetrics(
   todayStr: string,
 ): { wtd: number; mtd: number; ytd: number } {
   const sumSince = (since: string) =>
-    dailyResults.filter((r) => r.date >= since).reduce((a, r) => a + r.pnl, 0);
+    dailyResults
+      .filter((r) => r.date >= since)
+      .reduce((a, r) => a + r.realized + r.fifo + r.float, 0);
 
   // Ensure calculations are based on New York time
   const today = toNY(`${todayStr}T00:00:00`);
@@ -564,7 +569,7 @@ export function calcMetrics(
 
   // M9: 所有历史平仓盈利（含今日）
   const historicalRealizedPnl = dailyResults.length
-    ? dailyResults.reduce((acc, r) => acc + r.realized, 0)
+    ? dailyResults.reduce((acc, r) => acc + r.realized + r.fifo, 0)
     : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
