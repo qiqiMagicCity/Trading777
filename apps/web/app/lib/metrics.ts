@@ -387,14 +387,16 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     } else if (action === 'sell') {
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
+      let closed = false;
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (isTodayNY(date, todayStr)) S++;
+        closed = true;
         if (lot.qty === 0) fifo.shift();
       }
+      if (isTodayNY(date, todayStr) && closed) S++;
       if (remain > 0) {
         if (!shortFifo[symbol]) shortFifo[symbol] = [];
         shortFifo[symbol].push({ qty: remain });
@@ -407,14 +409,16 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     } else if (action === 'cover') {
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
+      let closed = false;
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (isTodayNY(date, todayStr)) C++;
+        closed = true;
         if (lot.qty === 0) fifo.shift();
       }
+      if (isTodayNY(date, todayStr) && closed) C++;
       if (remain > 0) {
         if (!longFifo[symbol]) longFifo[symbol] = [];
         longFifo[symbol].push({ qty: remain });
