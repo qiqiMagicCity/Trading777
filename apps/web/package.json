@@ -4,9 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3000",
-    "build": "next build",
-    "start": "next start",
+    "dev": "TZ=America/New_York next dev --turbopack --port 3000",
+    "build": "TZ=America/New_York next build",
+    "start": "TZ=America/New_York next start",
     "lint": "next lint --max-warnings 0",
     "check-types": "tsc --noEmit"
   },

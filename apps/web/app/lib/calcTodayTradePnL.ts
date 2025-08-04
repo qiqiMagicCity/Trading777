@@ -1,4 +1,5 @@
 import type { EnrichedTrade } from "@/lib/fifo";
+import { toNY } from "@/lib/timezone";
 
 /**
  * 计算日内交易盈亏（交易视角）
@@ -18,7 +19,7 @@ export function calcTodayTradePnL(enrichedTrades: EnrichedTrade[], todayStr: str
   enrichedTrades
     // Some trade records may miss the date field; guard to prevent runtime errors
     .filter(t => t.date?.startsWith(todayStr))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime())
     .forEach(t => {
       const { symbol, action, price } = t;
       const quantity = Math.abs(t.quantity);

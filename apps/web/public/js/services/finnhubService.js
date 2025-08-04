@@ -6,6 +6,9 @@
 import { apiQueue } from './apiQueue.js';
 import { putPrice, getPrice } from '../lib/idb.js';
 
+// lightweight timezone helper
+const { toNY } = window;
+
 // 使用内部 API 路由，避免在浏览器暴露密钥
 const API_BASE  = '/api';
 /**
@@ -15,8 +18,8 @@ const API_BASE  = '/api';
  * @returns {number|null}
  */
 export async function fetchFinnhubDailyClose(symbol, date){
-  const fromTs = Math.floor(new Date(date + 'T00:00:00Z').getTime()/1000);
-  const toTs   = Math.floor(new Date(date + 'T23:59:59Z').getTime()/1000);
+  const fromTs = Math.floor(toNY(`${date}T00:00:00`).getTime()/1000);
+  const toTs   = Math.floor(toNY(`${date}T23:59:59`).getTime()/1000);
   const url = `${API_BASE}/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
   try{
     const json = await apiQueue.enqueue(()=> fetch(url).then(r=>r.json()));

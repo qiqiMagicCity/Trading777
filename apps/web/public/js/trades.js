@@ -1,8 +1,8 @@
+const { toNY } = window;
 
-// ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) using UTC to avoid timezone skew ----
+// ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) in New York time ----
 function getWeekIdx(dateStr){
-  const parts = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
+  return toNY(dateStr).getDay();
 }
 (function(){
 const tbl=document.getElementById('all-trades');
@@ -15,7 +15,6 @@ function getSideClass(side) {
 }
 function render(){
   let trades = JSON.parse(localStorage.getItem('trades')||'[]');
-  const { toNY } = window;
   trades.sort((a,b)=> toNY(b.date)-toNY(a.date));
   trades = window.FIFO ? window.FIFO.computeFIFO(trades) : trades;
 

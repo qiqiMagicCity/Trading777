@@ -21,7 +21,7 @@
     let pos = {}; // symbol: {qty, cost}
     let prevUnreal = 0;
     let dateArr = [];
-    for(let d=new Date(minDate+'T00:00:00Z'); d<=new Date(maxDate+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+1)){
+    for(let d=toNY(`${minDate}T00:00:00`); d<=toNY(`${maxDate}T00:00:00`); d.setDate(d.getDate()+1)){
       dateArr.push(formatDate(d));
     }
     for(const date of dateArr){
@@ -65,7 +65,7 @@
       // 按周合并
       let weekMap={}, cum=0;
       arr.forEach(d=>{
-        let key = d.date.slice(0,7)+'-W'+new Date(d.date).getUTCDay();
+        let key = d.date.slice(0,7)+'-W'+toNY(d.date).getDay();
         weekMap[key]=(weekMap[key]||0)+d.net;
       });
       arr = Object.entries(weekMap).map(([k,v],i)=>({date:k, cumulative:(arr[i-1]?.cumulative||0)+v}));

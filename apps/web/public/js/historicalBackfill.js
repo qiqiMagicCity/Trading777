@@ -7,6 +7,11 @@
  */
 import { fetchDailyCandles, saveDailyClosesBulk, getTrackedSymbols } from './services/priceService.js';
 
+// Lightweight timezone helpers (NY)
+const TZ = 'America/New_York';
+const toNY = (...args) => new Date(new Date(...args).toLocaleString('en-US', { timeZone: TZ }));
+const nowNY = () => toNY();
+
 const START_DATE = '2025-04-07';  // inclusive
 const DELAY_PER_CALL_MS = 1200;   // <= 50 requests per minute
 
@@ -16,8 +21,8 @@ export async function runHistoricalBackfill(progressCallback = () => {}) {
     console.warn('[Backfill] No tracked symbols found.');
     return;
   }
-  const startEpoch = Math.floor(new Date(START_DATE + 'T00:00:00Z').getTime() / 1000);
-  const endEpoch = Math.floor(Date.now() / 1000);
+  const startEpoch = Math.floor(toNY(`${START_DATE}T00:00:00`).getTime() / 1000);
+  const endEpoch = Math.floor(nowNY().getTime() / 1000);
 
   for (let i = 0; i < symbols.length; i++) {
     const sym = symbols[i];

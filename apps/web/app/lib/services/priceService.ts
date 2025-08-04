@@ -1,6 +1,7 @@
 import { getPrice, putPrice, CachedPrice } from './dataService';
 // 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
+import { toNY } from '../timezone';
 
 // 将收盘价写入服务器端 JSON 文件
 async function saveToFile(symbol: string, date: string, close: number) {
@@ -102,8 +103,8 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
     return null;
   }
 
-  const fromTs = Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
-  const toTs = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
+  const fromTs = Math.floor(toNY(`${date}T00:00:00`).getTime() / 1000);
+  const toTs = Math.floor(toNY(`${date}T23:59:59`).getTime() / 1000);
   // 通过内部 API 路由转发请求，避免在浏览器暴露密钥
   const url = `/api/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
 

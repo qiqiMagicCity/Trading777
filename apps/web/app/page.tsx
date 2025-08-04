@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { calcMetrics } from '@/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
+import { nowNY } from '@/lib/timezone';
 
 async function computeDataHash(data: unknown): Promise<string> {
   const json = JSON.stringify(data);
@@ -102,7 +103,7 @@ export default function DashboardPage() {
           try {
             let result = await fetchRealtimeQuote(pos.symbol);
             if (!result || result.price === 1) {
-              const today = new Date().toISOString().slice(0, 10);
+              const today = nowNY().toISOString().slice(0, 10);
               result = await fetchDailyClose(pos.symbol, today);
             }
 
@@ -197,7 +198,7 @@ export default function DashboardPage() {
         try {
           let result = await fetchRealtimeQuote(pos.symbol);
           if (!result || result.price === 1) {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = nowNY().toISOString().slice(0, 10);
             result = await fetchDailyClose(pos.symbol, today);
           }
           if (result && result.price && result.price !== 1) {
