@@ -22,6 +22,7 @@ async function saveToFile(symbol: string, date: string, close: number) {
  */
 const finnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
 const tiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
+const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 /**
  * 从文件加载的 API 令牌缓存
@@ -308,6 +309,12 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
  * @returns 实时价格
  */
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
+  // 当设置了冻结日期时，直接返回该日的收盘价
+  if (freezeDate) {
+    const { price } = await fetchDailyClose(symbol, freezeDate);
+    return { price, stale: false };
+  }
+
   try {
     // 直接从 Finnhub 获取实时报价
     const finnhubPrice = await fetchFinnhubRealtimeQuote(symbol);

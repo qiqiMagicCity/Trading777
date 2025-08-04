@@ -4,6 +4,7 @@
  * No Node.js fs/path required – works on Vercel static hosting.
  */
 import { putPrice } from '../lib/idb.js';
+import { fetchDailyClose } from './finnhubService.js';
 const { nowNY, getLatestTradingDayStr } = window;
 
 /** milliseconds to cache realtime quotes in localStorage */
@@ -64,6 +65,16 @@ function resolveFinnhubToken(raw){
 }
 
 export async function fetchRealtimePrice(symbol){
+  const freeze = window.NEXT_PUBLIC_FREEZE_DATE;
+  if(freeze){
+    try{
+      return await fetchDailyClose(symbol, freeze);
+    }catch(e){
+      console.error('[priceService] fetchRealtimePrice freeze', symbol, e);
+      return null;
+    }
+  }
+
   const cacheKey = `rt_${symbol}`;
   try{
     const cached = JSON.parse(localStorage.getItem(cacheKey)||'null');

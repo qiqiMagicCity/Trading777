@@ -34,6 +34,10 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load Inter, a custom Google Font.
 
+## Freeze date for debugging
+
+To debug against a fixed market snapshot, set `NEXT_PUBLIC_FREEZE_DATE` in your `.env` file to the last Friday's date (e.g. `2024-05-17`). When this variable is present the app serves that day's closing prices instead of live quotes. Remove the variable to resume live pricing.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
