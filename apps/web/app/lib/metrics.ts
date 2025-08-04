@@ -469,7 +469,7 @@ function calcPeriodMetrics(
 ): { wtd: number; mtd: number; ytd: number } {
   const sumSince = (since: string) =>
     dailyResults
-      .filter((r) => r.date >= since)
+      .filter((r) => r.date >= since && r.date <= todayStr)
       .reduce((a, r) => a + r.realized + r.fifo + r.float, 0);
 
   // Ensure calculations are based on New York time
