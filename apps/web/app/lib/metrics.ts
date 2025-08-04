@@ -576,11 +576,11 @@ export function calcMetrics(
     allTradesByType.P +
     allTradesByType.C;
 
+  const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
+
   // M9: 所有历史平仓盈利（含今日）
-  const historicalRealizedPnl = dailyResults.length
-    ? dailyResults
-        .filter((r) => r.date <= todayStr)
-        .reduce((acc, r) => acc + r.realized + r.fifo, 0)
+  const historicalRealizedPnl = historicalDailyResults.length
+    ? historicalDailyResults.reduce((acc, r) => acc + r.realized + r.fifo, 0)
     : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
@@ -595,7 +595,7 @@ export function calcMetrics(
       : 0;
 
   // M11-13: 周期性指标
-  const { wtd, mtd, ytd } = calcPeriodMetrics(dailyResults, todayStr);
+  const { wtd, mtd, ytd } = calcPeriodMetrics(historicalDailyResults, todayStr);
 
   return {
     M1: totalCost,
