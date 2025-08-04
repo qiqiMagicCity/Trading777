@@ -7,6 +7,11 @@ trades must use negative `qty` values. For example, a short position of 80 share
 AMZN should appear as `"qty": -80`. This ensures short exposure is represented
 consistently across the application.
 
+Trades missing a valid `date` are treated as having occurred **after** all
+correctly timestamped trades. Their relative order is preserved, ensuring FIFO
+and metrics calculations remain deterministic even when some records have
+malformed or empty dates.
+
 ## Getting Started
 
 Copy the repository root `env.example` file to `.env` and fill in the required API keys before running the application.

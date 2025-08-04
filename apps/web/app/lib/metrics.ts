@@ -163,8 +163,8 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? 0 : timeA;
-      const bTime = isNaN(timeB) ? 0 : timeB;
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
       return aTime - bTime || a.idx - b.idx;
     })
     .map(({ t }) => t);
@@ -233,8 +233,8 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? 0 : timeA;
-      const bTime = isNaN(timeB) ? 0 : timeB;
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
       return aTime - bTime || a.idx - b.idx;
     })
     .map(({ t }) => t);
@@ -304,8 +304,8 @@ function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: numbe
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? 0 : timeA;
-      const bTime = isNaN(timeB) ? 0 : timeB;
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
       return aTime - bTime || a.idx - b.idx;
     })
     .map(({ t }) => t);
@@ -370,8 +370,8 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? 0 : timeA;
-      const bTime = isNaN(timeB) ? 0 : timeB;
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
       return aTime - bTime || a.idx - b.idx;
     })
     .map(({ t }) => t);

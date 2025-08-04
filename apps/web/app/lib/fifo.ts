@@ -49,8 +49,19 @@ export function computeFifo(
     };
   }
 
-  // Sort trades by date to process them chronologically
-  const sortedTrades = [...trades].sort((a, b) => toNY(a.date).getTime() - toNY(b.date).getTime());
+  // Sort trades by date to process them chronologically.
+  // Trades with invalid or missing dates are placed last while
+  // preserving their original insertion order.
+  const sortedTrades = trades
+    .map((t, idx) => ({ t, idx }))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
 
   return sortedTrades.map((trade): EnrichedTrade => {
     const state = symbolStateMap[trade.symbol] || (symbolStateMap[trade.symbol] = {
