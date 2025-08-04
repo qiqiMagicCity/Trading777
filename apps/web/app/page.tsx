@@ -15,6 +15,8 @@ import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
 import { getLatestTradingDayStr } from '@/lib/timezone';
 
+const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
+
 async function computeDataHash(data: unknown): Promise<string> {
   const json = JSON.stringify(data);
   try {
@@ -121,7 +123,11 @@ export default function DashboardPage() {
         }
 
         if (posList.some(p => !p.priceOk)) {
-          setError('无法获取实时价格，指标计算失败');
+          if (freezeDate) {
+            setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
+          } else {
+            setError('无法获取实时价格，指标计算失败');
+          }
           setIsLoading(false);
           return;
         }
@@ -220,7 +226,11 @@ export default function DashboardPage() {
       }
 
       if (posList.some(p => !p.priceOk)) {
-        setError('无法获取实时价格，指标计算失败');
+        if (freezeDate) {
+          setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
+        } else {
+          setError('无法获取实时价格，指标计算失败');
+        }
         return;
       }
 

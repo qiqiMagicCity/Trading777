@@ -293,12 +293,12 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       return { price: tiingoPrice, stale: false };
     }
 
-    // 如果所有来源都失败，提醒用户手动导入
+    // 如果所有来源都失败，提醒用户手动导入并返回默认值
     alert(`缺少 ${symbol} 在 ${date} 的收盘价，请通过“导入收盘价格”功能手动添加。`);
-    throw new Error(`Missing close price for ${symbol} on ${date}`);
+    return { price: 1, stale: true };
   } catch (error) {
     console.error(`获取 ${symbol} 在 ${date} 的每日收盘价时出错:`, error);
-    throw error;
+    return { price: 1, stale: true };
   }
 }
 
@@ -311,8 +311,8 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   // 当设置了冻结日期时，直接返回该日的收盘价
   if (freezeDate) {
-    const { price } = await fetchDailyClose(symbol, freezeDate);
-    return { price, stale: false };
+    const { price, stale } = await fetchDailyClose(symbol, freezeDate);
+    return { price, stale };
   }
 
   try {
