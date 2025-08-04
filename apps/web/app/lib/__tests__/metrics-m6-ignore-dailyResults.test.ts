@@ -46,7 +46,7 @@ describe("calcMetrics M6 ignores dailyResults pnl", () => {
     const enriched = computeFifo(trades);
     const positions: Position[] = [];
     const dailyResults: DailyResult[] = [
-      { date: "2024-01-02", realized: 0, float: 0, M5_1: 0, pnl: 9999 },
+      { date: "2024-01-02", realized: 0, float: 0, fifo: 0, M5_1: 0, pnl: 9999 },
     ];
 
     const metrics = calcMetrics(enriched, positions, dailyResults);
