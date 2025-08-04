@@ -125,6 +125,19 @@ function sum(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0);
 }
 
+/** 判断日期字符串是否为今日（纽约时区） */
+function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
+  if (!dateStr) return false;
+  const d1 =
+    dateStr.length === 10 ? toNY(`${dateStr}T12:00:00Z`) : toNY(dateStr);
+  const d2 = toNY(`${todayStr}T12:00:00Z`);
+  return (
+    !isNaN(d1.getTime()) &&
+    !isNaN(d2.getTime()) &&
+    d1.toISOString().slice(0, 10) === d2.toISOString().slice(0, 10)
+  );
+}
+
 /**
  * 计算日内交易盈亏（交易视角）
  * 按照交易匹配的方式，计算同一天内开仓并平仓的交易盈亏
@@ -145,11 +158,16 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
   const longFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
   const shortFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
   let pnl = 0;
-  const sorted = [...enrichedTrades].sort(
-    (a, b) =>
-      (a.date ? new Date(a.date).getTime() : 0) -
-      (b.date ? new Date(b.date).getTime() : 0)
-  );
+  const sorted = enrichedTrades
+    .map((t, idx) => ({ t, idx }))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? 0 : timeA;
+      const bTime = isNaN(timeB) ? 0 : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
   for (const t of sorted) {
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
@@ -162,7 +180,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date?.startsWith(todayStr) && lot.date?.startsWith(todayStr)) {
+        if (isTodayNY(date, todayStr) && isTodayNY(lot.date, todayStr)) {
           pnl += (price - lot.price) * q;
         }
         lot.qty -= q;
@@ -182,7 +200,7 @@ function calcTodayFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): nu
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (date?.startsWith(todayStr) && lot.date?.startsWith(todayStr)) {
+        if (isTodayNY(date, todayStr) && isTodayNY(lot.date, todayStr)) {
           pnl += (lot.price - price) * q;
         }
         lot.qty -= q;
@@ -281,7 +299,16 @@ function calcWinLossLots(trades: EnrichedTrade[]): { wins: number; losses: numbe
   let wins = 0;
   let losses = 0;
 
-  const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = trades
+    .map((t, idx) => ({ t, idx }))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? 0 : timeA;
+      const bTime = isNaN(timeB) ? 0 : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
 
   for (const t of sorted) {
     const { symbol, action, price } = t;
@@ -338,7 +365,16 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
   let P = 0;
   let C = 0;
 
-  const sorted = [...trades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = trades
+    .map((t, idx) => ({ t, idx }))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? 0 : timeA;
+      const bTime = isNaN(timeB) ? 0 : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
 
   for (const t of sorted) {
     const { symbol, action, date } = t;
@@ -347,7 +383,7 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     if (action === 'buy') {
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity });
-      if (date?.startsWith(todayStr)) B++;
+      if (isTodayNY(date, todayStr)) B++;
     } else if (action === 'sell') {
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
@@ -356,18 +392,18 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (date?.startsWith(todayStr)) S++;
+        if (isTodayNY(date, todayStr)) S++;
         if (lot.qty === 0) fifo.shift();
       }
       if (remain > 0) {
         if (!shortFifo[symbol]) shortFifo[symbol] = [];
         shortFifo[symbol].push({ qty: remain });
-        if (date?.startsWith(todayStr)) P++;
+        if (isTodayNY(date, todayStr)) P++;
       }
     } else if (action === 'short') {
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
       shortFifo[symbol].push({ qty: quantity });
-      if (date?.startsWith(todayStr)) P++;
+      if (isTodayNY(date, todayStr)) P++;
     } else if (action === 'cover') {
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
@@ -376,13 +412,13 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (date?.startsWith(todayStr)) C++;
+        if (isTodayNY(date, todayStr)) C++;
         if (lot.qty === 0) fifo.shift();
       }
       if (remain > 0) {
         if (!longFifo[symbol]) longFifo[symbol] = [];
         longFifo[symbol].push({ qty: remain });
-        if (date?.startsWith(todayStr)) B++;
+        if (isTodayNY(date, todayStr)) B++;
       }
     }
   }
