@@ -80,6 +80,12 @@ export const formatNY = (
  * 返回格式为 YYYY-MM-DD。
  */
 export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
+  const freeze =
+    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
+    // @ts-ignore
+    (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_FREEZE_DATE);
+  if (freeze) return freeze as string;
+
   const d = toNY(base);
   if (d.getHours() < 9 || (d.getHours() === 9 && d.getMinutes() < 30)) {
     d.setDate(d.getDate() - 1);
