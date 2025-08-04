@@ -1,4 +1,17 @@
 import type { EnrichedTrade } from "@/lib/fifo";
+import { toNY } from "@/lib/timezone";
+
+function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
+  if (!dateStr) return false;
+  const d1 =
+    dateStr.length === 10 ? toNY(`${dateStr}T12:00:00Z`) : toNY(dateStr);
+  const d2 = toNY(`${todayStr}T12:00:00Z`);
+  return (
+    !isNaN(d1.getTime()) &&
+    !isNaN(d2.getTime()) &&
+    d1.toISOString().slice(0, 10) === d2.toISOString().slice(0, 10)
+  );
+}
 
 /**
  * 计算日内交易盈亏（交易视角）
@@ -14,12 +27,18 @@ export function calcTodayTradePnL(enrichedTrades: EnrichedTrade[], todayStr: str
   const shortMap: Record<string, { qty: number; price: number }[]> = {};
   let pnl = 0;
 
-  // 按时间顺序处理今日交易
-  enrichedTrades
-    // Some trade records may miss the date field; guard to prevent runtime errors
-    .filter(t => t.date?.startsWith(todayStr))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .forEach(t => {
+  const sorted = enrichedTrades
+    .map((t, idx) => ({ t, idx }))
+    .filter(({ t }) => isTodayNY(t.date, todayStr))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
+  for (const t of sorted) {
       const { symbol, action, price } = t;
       const quantity = Math.abs(t.quantity);
 
@@ -69,7 +88,7 @@ export function calcTodayTradePnL(enrichedTrades: EnrichedTrade[], todayStr: str
 
         // 剩余的不处理（可能是平历史仓位，不计入日内交易）
       }
-    });
+    }
 
   return pnl;
 }
