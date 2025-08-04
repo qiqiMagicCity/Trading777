@@ -1,4 +1,4 @@
-import type { EnrichedTrade } from "@/lib/fifo";
+import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { nowNY, toNY, getLatestTradingDayStr } from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
@@ -160,6 +160,7 @@ function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
 export function calcTodayFifoPnL(
   enrichedTrades: EnrichedTrade[],
   todayStr: string,
+  initialPositions: InitialPosition[] = [],
 ): number {
   const longFifo: Record<
     string,
@@ -169,6 +170,18 @@ export function calcTodayFifoPnL(
     string,
     { qty: number; price: number; date: string }[]
   > = {};
+  for (const pos of initialPositions) {
+    const qty = Math.abs(pos.qty);
+    if (qty === 0) continue;
+    const lot = { qty, price: pos.avgPrice, date: "" };
+    if (pos.qty >= 0) {
+      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
+      longFifo[pos.symbol].push(lot);
+    } else {
+      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
+      shortFifo[pos.symbol].push(lot);
+    }
+  }
   let pnl = 0;
   const sorted = enrichedTrades
     .map((t, idx) => ({ t, idx }))
@@ -239,6 +252,7 @@ export function calcTodayFifoPnL(
 function calcHistoryFifoPnL(
   enrichedTrades: EnrichedTrade[],
   todayStr: string,
+  initialPositions: InitialPosition[] = [],
 ): number {
   const longFifo: Record<
     string,
@@ -248,6 +262,18 @@ function calcHistoryFifoPnL(
     string,
     { qty: number; price: number; date: string }[]
   > = {};
+  for (const pos of initialPositions) {
+    const qty = Math.abs(pos.qty);
+    if (qty === 0) continue;
+    const lot = { qty, price: pos.avgPrice, date: "" };
+    if (pos.qty >= 0) {
+      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
+      longFifo[pos.symbol].push(lot);
+    } else {
+      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
+      shortFifo[pos.symbol].push(lot);
+    }
+  }
   let pnl = 0;
   const sorted = enrichedTrades
     .map((t, idx) => ({ t, idx }))
@@ -313,12 +339,27 @@ function calcHistoryFifoPnL(
  * @param trades 交易记录数组
  * @returns 包含 wins 与 losses 计数
  */
-function calcWinLossLots(trades: EnrichedTrade[]): {
+function calcWinLossLots(
+  trades: EnrichedTrade[],
+  initialPositions: InitialPosition[] = [],
+): {
   wins: number;
   losses: number;
 } {
   const longFifo: Record<string, { qty: number; price: number }[]> = {};
   const shortFifo: Record<string, { qty: number; price: number }[]> = {};
+  for (const pos of initialPositions) {
+    const qty = Math.abs(pos.qty);
+    if (qty === 0) continue;
+    const lot = { qty, price: pos.avgPrice };
+    if (pos.qty >= 0) {
+      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
+      longFifo[pos.symbol].push(lot);
+    } else {
+      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
+      shortFifo[pos.symbol].push(lot);
+    }
+  }
 
   let wins = 0;
   let losses = 0;
@@ -454,12 +495,14 @@ function calcPeriodMetrics(
  * @param trades 交易记录数组
  * @param positions 持仓数组
  * @param dailyResults 每日交易结果数组
+ * @param initialPositions 历史持仓数组
  * @returns 所有指标的计算结果
  */
 export function calcMetrics(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
+  initialPositions: InitialPosition[] = [],
 ): Metrics {
   // 获取今日日期字符串（纽约时区）
   const todayStr = getLatestTradingDayStr(nowNY());
@@ -497,11 +540,15 @@ export function calcMetrics(
 
   // M5: 日内交易（先计算，后续 M4 需要用到 pnlFifo）
   const pnlTrade = calcTodayTradePnL(trades, todayStr);
-  const pnlFifo = calcTodayFifoPnL(trades, todayStr);
+  const pnlFifo = calcTodayFifoPnL(trades, todayStr, initialPositions);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
-  const todayHistoricalRealizedPnl = calcHistoryFifoPnL(trades, todayStr);
+  const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
+    trades,
+    todayStr,
+    initialPositions,
+  );
   if (DEBUG) console.log("M4计算结果:", todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化
@@ -536,7 +583,10 @@ export function calcMetrics(
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
-  const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(trades);
+  const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(
+    trades,
+    initialPositions,
+  );
   const winRate =
     winningTrades + losingTrades > 0
       ? (winningTrades / (winningTrades + losingTrades)) * 100

@@ -139,12 +139,17 @@ export default function DashboardPage() {
         const dailyResults = dailyResultsResponse.ok ? await dailyResultsResponse.json() : [];
 
         // 计算指标并存入全局状态
-        const metrics = calcMetrics(enriched, posList, dailyResults);
+        const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
+          symbol,
+          qty,
+          avgPrice,
+        }));
+        const metrics = calcMetrics(enriched, posList, dailyResults, initPos);
         useStore.getState().setMetrics(metrics);
 
         setTrades(dbTrades);
         setPositions(posList);
-        setInitialPositions(dbPositions.map(({ symbol, qty, avgPrice }) => ({ symbol, qty, avgPrice })));
+        setInitialPositions(initPos);
       } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
@@ -224,12 +229,17 @@ export default function DashboardPage() {
       const dailyResults = dailyResultsResponse.ok ? await dailyResultsResponse.json() : [];
 
       // 计算指标并更新全局状态
-      const metrics = calcMetrics(enriched, posList, dailyResults);
+      const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
+        symbol,
+        qty,
+        avgPrice,
+      }));
+      const metrics = calcMetrics(enriched, posList, dailyResults, initPos);
       useStore.getState().setMetrics(metrics);
 
       setTrades(dbTrades);
       setPositions(posList);
-      setInitialPositions(dbPositions.map(({ symbol, qty, avgPrice }) => ({ symbol, qty, avgPrice })));
+      setInitialPositions(initPos);
     } catch (e) { console.error(e); }
   }
 
