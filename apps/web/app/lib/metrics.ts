@@ -1,6 +1,6 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from '@/lib/services/dataService';
-import { nowNY } from '@/lib/timezone';
+import { nowNY, toNY } from '@/lib/timezone';
 import { calcTodayTradePnL } from './calcTodayTradePnL';
 
 // Only enable verbose logging outside production
@@ -210,7 +210,16 @@ function calcHistoryFifoPnL(enrichedTrades: EnrichedTrade[], todayStr: string): 
   const longFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
   const shortFifo: Record<string, { qty: number; price: number; date: string }[]> = {};
   let pnl = 0;
-  const sorted = [...enrichedTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = enrichedTrades
+    .map((t, idx) => ({ t, idx }))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? 0 : timeA;
+      const bTime = isNaN(timeB) ? 0 : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
   for (const t of sorted) {
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
