@@ -440,9 +440,10 @@ function calcPeriodMetrics(
   const sumSince = (since: string) =>
     dailyResults.filter(r => r.date >= since).reduce((a, r) => a + r.pnl, 0);
 
-  const today = new Date(todayStr + 'T00:00:00');
+  // Ensure calculations are based on New York time
+  const today = toNY(`${todayStr}T00:00:00`);
   const day = (today.getDay() + 6) % 7; // Monday=0
-  const monday = new Date(today);
+  const monday = toNY(today);
   monday.setDate(today.getDate() - day);
   const mondayStr = monday.toISOString().slice(0, 10);
 
