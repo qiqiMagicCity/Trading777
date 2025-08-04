@@ -59,6 +59,7 @@ describe("calcMetrics M7 counts", () => {
 
     const metrics = calcMetrics(computeFifo(trades), []);
     expect(metrics.M7).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
   });
 
   it("oversell/overcover only register original action", () => {
@@ -88,6 +89,7 @@ describe("calcMetrics M7 counts", () => {
 
     const metrics = calcMetrics(computeFifo(trades), []);
     expect(metrics.M7).toEqual({ B: 1, S: 1, P: 0, C: 1, total: 3 });
+    expect(metrics.M8).toEqual({ B: 1, S: 1, P: 0, C: 1, total: 3 });
   });
 
   it("counts sell/cover once even when split into multiple lots", () => {
@@ -159,5 +161,6 @@ describe("calcMetrics M7 counts", () => {
 
     const metrics = calcMetrics(splitTrades, []);
     expect(metrics.M7).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
   });
 });
