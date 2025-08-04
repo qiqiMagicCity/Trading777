@@ -388,6 +388,9 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
   let P = 0;
   let C = 0;
 
+  const sellIds = new Set<number>();
+  const coverIds = new Set<number>();
+
   for (const t of trades) {
     if (!isTodayNY(t.date, todayStr)) continue;
     switch (t.action) {
@@ -395,13 +398,19 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         B++;
         break;
       case "sell":
-        S++;
+        if (t.id === undefined || !sellIds.has(t.id)) {
+          S++;
+          if (t.id !== undefined) sellIds.add(t.id);
+        }
         break;
       case "short":
         P++;
         break;
       case "cover":
-        C++;
+        if (t.id === undefined || !coverIds.has(t.id)) {
+          C++;
+          if (t.id !== undefined) coverIds.add(t.id);
+        }
         break;
     }
   }
