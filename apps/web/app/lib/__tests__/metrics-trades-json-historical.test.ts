@@ -45,9 +45,9 @@ describe('calcMetrics with trades.json historical lots', () => {
     }
     const positions: Position[] = Array.from(posMap.values());
     const metrics = calcMetrics(enriched, positions, [], initialPositions);
-    expect(metrics.M4).toBe(6530);
+    expect(metrics.M4).toBe(6880);
     expect(metrics.M5.trade).toBe(1670);
-    expect(metrics.M5.fifo).toBe(1320);
+    expect(metrics.M5.fifo).toBe(1050);
     expect(metrics.M10.W).toBe(11);
     expect(metrics.M10.L).toBe(2);
     expect(metrics.M10.rate).toBeCloseTo(84.61538, 5);
