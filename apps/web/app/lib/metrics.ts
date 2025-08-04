@@ -563,18 +563,48 @@ export function calcMetrics(
     todayTradeCountsByType.P +
     todayTradeCountsByType.C;
 
-  // M8: 累计交易次数
-  const allTradesByType = {
-    B: trades.filter((t) => t.action === "buy").length,
-    S: trades.filter((t) => t.action === "sell").length,
-    P: trades.filter((t) => t.action === "short").length,
-    C: trades.filter((t) => t.action === "cover").length,
-  };
-  const totalTrades =
-    allTradesByType.B +
-    allTradesByType.S +
-    allTradesByType.P +
-    allTradesByType.C;
+  // M8: 累计交易次数（按唯一交易ID计数）
+  let B = 0;
+  let S = 0;
+  let P = 0;
+  let C = 0;
+
+  const buyIds = new Set<number>();
+  const sellIds = new Set<number>();
+  const shortIds = new Set<number>();
+  const coverIds = new Set<number>();
+
+  for (const t of trades) {
+    switch (t.action) {
+      case "buy":
+        if (t.id === undefined || !buyIds.has(t.id)) {
+          B++;
+          if (t.id !== undefined) buyIds.add(t.id);
+        }
+        break;
+      case "sell":
+        if (t.id === undefined || !sellIds.has(t.id)) {
+          S++;
+          if (t.id !== undefined) sellIds.add(t.id);
+        }
+        break;
+      case "short":
+        if (t.id === undefined || !shortIds.has(t.id)) {
+          P++;
+          if (t.id !== undefined) shortIds.add(t.id);
+        }
+        break;
+      case "cover":
+        if (t.id === undefined || !coverIds.has(t.id)) {
+          C++;
+          if (t.id !== undefined) coverIds.add(t.id);
+        }
+        break;
+    }
+  }
+
+  const allTradesByType = { B, S, P, C };
+  const totalTrades = B + S + P + C;
 
   const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
 
