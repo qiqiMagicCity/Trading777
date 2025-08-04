@@ -61,7 +61,7 @@ describe("calcMetrics M7 counts", () => {
     expect(metrics.M7).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
   });
 
-  it("handles trades that both close and open positions", () => {
+  it("oversell/overcover only register original action", () => {
     const trades: Trade[] = [
       {
         symbol: "TSLA",
@@ -87,6 +87,6 @@ describe("calcMetrics M7 counts", () => {
     ];
 
     const metrics = calcMetrics(computeFifo(trades), []);
-    expect(metrics.M7).toEqual({ B: 2, S: 1, P: 1, C: 1, total: 5 });
+    expect(metrics.M7).toEqual({ B: 1, S: 1, P: 0, C: 1, total: 3 });
   });
 });

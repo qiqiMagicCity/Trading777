@@ -383,73 +383,26 @@ function calcWinLossLots(trades: EnrichedTrade[]): {
  * @param todayStr 今日日期字符串 (YYYY-MM-DD)
  */
 function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
-  const longFifo: Record<string, { qty: number }[]> = {};
-  const shortFifo: Record<string, { qty: number }[]> = {};
-
   let B = 0;
   let S = 0;
   let P = 0;
   let C = 0;
 
-  const sorted = trades
-    .map((t, idx) => ({ t, idx }))
-    .sort((a, b) => {
-      const timeA = toNY(a.t.date).getTime();
-      const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? Infinity : timeA;
-      const bTime = isNaN(timeB) ? Infinity : timeB;
-      return aTime - bTime || a.idx - b.idx;
-    })
-    .map(({ t }) => t);
-
-  for (const t of sorted) {
-    const { symbol, action, date } = t;
-    const quantity = Math.abs(t.quantity);
-
-    if (action === "buy") {
-      if (!longFifo[symbol]) longFifo[symbol] = [];
-      longFifo[symbol].push({ qty: quantity });
-      if (isTodayNY(date, todayStr)) B++;
-    } else if (action === "sell") {
-      let remain = quantity;
-      const fifo = longFifo[symbol] || [];
-      let closed = false;
-      while (remain > 0 && fifo.length > 0) {
-        const lot = fifo[0]!;
-        const q = Math.min(lot.qty, remain);
-        lot.qty -= q;
-        remain -= q;
-        closed = true;
-        if (lot.qty === 0) fifo.shift();
-      }
-      if (isTodayNY(date, todayStr) && closed) S++;
-      if (remain > 0) {
-        if (!shortFifo[symbol]) shortFifo[symbol] = [];
-        shortFifo[symbol].push({ qty: remain });
-        if (isTodayNY(date, todayStr)) P++;
-      }
-    } else if (action === "short") {
-      if (!shortFifo[symbol]) shortFifo[symbol] = [];
-      shortFifo[symbol].push({ qty: quantity });
-      if (isTodayNY(date, todayStr)) P++;
-    } else if (action === "cover") {
-      let remain = quantity;
-      const fifo = shortFifo[symbol] || [];
-      let closed = false;
-      while (remain > 0 && fifo.length > 0) {
-        const lot = fifo[0]!;
-        const q = Math.min(lot.qty, remain);
-        lot.qty -= q;
-        remain -= q;
-        closed = true;
-        if (lot.qty === 0) fifo.shift();
-      }
-      if (isTodayNY(date, todayStr) && closed) C++;
-      if (remain > 0) {
-        if (!longFifo[symbol]) longFifo[symbol] = [];
-        longFifo[symbol].push({ qty: remain });
-        if (isTodayNY(date, todayStr)) B++;
-      }
+  for (const t of trades) {
+    if (!isTodayNY(t.date, todayStr)) continue;
+    switch (t.action) {
+      case "buy":
+        B++;
+        break;
+      case "sell":
+        S++;
+        break;
+      case "short":
+        P++;
+        break;
+      case "cover":
+        C++;
+        break;
     }
   }
 
