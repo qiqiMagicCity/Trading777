@@ -578,7 +578,9 @@ export function calcMetrics(
 
   // M9: 所有历史平仓盈利（含今日）
   const historicalRealizedPnl = dailyResults.length
-    ? dailyResults.reduce((acc, r) => acc + r.realized + r.fifo, 0)
+    ? dailyResults
+        .filter((r) => r.date <= todayStr)
+        .reduce((acc, r) => acc + r.realized + r.fifo, 0)
     : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
