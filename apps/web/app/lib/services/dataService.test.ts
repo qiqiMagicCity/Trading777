@@ -13,7 +13,7 @@ describe("dataService trade import", () => {
   });
 
   test("importData skips malformed trades without aborting", async () => {
-    const rawData = {
+    const rawData: any = {
       positions: [],
       trades: [
         {
@@ -30,7 +30,6 @@ describe("dataService trade import", () => {
           qty: 5,
           price: 200,
         },
-        // @ts-expect-error intentionally missing side
         { date: "2025-01-03", symbol: "TSLA", qty: 3, price: 300 },
         {
           date: "2025-01-04",
@@ -50,7 +49,7 @@ describe("dataService trade import", () => {
   });
 
   test("clearAndImportData skips malformed trades", async () => {
-    const rawData = {
+    const rawData: any = {
       positions: [],
       trades: [
         {

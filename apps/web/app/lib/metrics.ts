@@ -176,10 +176,10 @@ export function calcTodayFifoPnL(
     const lot = { qty, price: pos.avgPrice, date: "" };
     if (pos.qty >= 0) {
       if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol].push(lot);
+      longFifo[pos.symbol]!.push(lot);
     } else {
       if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol].push(lot);
+      shortFifo[pos.symbol]!.push(lot);
     }
   }
   let pnl = 0;
@@ -268,10 +268,10 @@ function calcHistoryFifoPnL(
     const lot = { qty, price: pos.avgPrice, date: "" };
     if (pos.qty >= 0) {
       if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol].push(lot);
+      longFifo[pos.symbol]!.push(lot);
     } else {
       if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol].push(lot);
+      shortFifo[pos.symbol]!.push(lot);
     }
   }
   let pnl = 0;
@@ -354,10 +354,10 @@ function calcWinLossLots(
     const lot = { qty, price: pos.avgPrice };
     if (pos.qty >= 0) {
       if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol].push(lot);
+      longFifo[pos.symbol]!.push(lot);
     } else {
       if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol].push(lot);
+      shortFifo[pos.symbol]!.push(lot);
     }
   }
 
