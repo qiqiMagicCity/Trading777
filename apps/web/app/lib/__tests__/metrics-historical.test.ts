@@ -6,23 +6,53 @@ jest.mock("@/lib/timezone", () => {
   const actual = jest.requireActual("@/lib/timezone");
   return {
     ...actual,
-    nowNY: () => new Date("2024-01-02T00:00:00-05:00"),
+    nowNY: () => new Date("2024-01-02T10:00:00-05:00"),
   };
 });
 
 describe("calcMetrics with historical positions", () => {
   it("matches expected M1-M5 values", () => {
     const trades: Trade[] = [
-      { symbol: "AAPL", price: 100, quantity: 100, date: "2024-01-01", action: "buy" },
-      { symbol: "AAPL", price: 110, quantity: 50, date: "2024-01-02", action: "sell" },
-      { symbol: "AAPL", price: 105, quantity: 20, date: "2024-01-02", action: "buy" },
-      { symbol: "AAPL", price: 108, quantity: 20, date: "2024-01-02", action: "sell" },
+      {
+        symbol: "AAPL",
+        price: 100,
+        quantity: 100,
+        date: "2024-01-01",
+        action: "buy",
+      },
+      {
+        symbol: "AAPL",
+        price: 110,
+        quantity: 50,
+        date: "2024-01-02",
+        action: "sell",
+      },
+      {
+        symbol: "AAPL",
+        price: 105,
+        quantity: 20,
+        date: "2024-01-02",
+        action: "buy",
+      },
+      {
+        symbol: "AAPL",
+        price: 108,
+        quantity: 20,
+        date: "2024-01-02",
+        action: "sell",
+      },
     ];
 
     const enriched = computeFifo(trades);
     const last = enriched[enriched.length - 1]!;
     const positions: Position[] = [
-      { symbol: "AAPL", qty: last.quantityAfter, avgPrice: last.averageCost, last: 110, priceOk: true },
+      {
+        symbol: "AAPL",
+        qty: last.quantityAfter,
+        avgPrice: last.averageCost,
+        last: 110,
+        priceOk: true,
+      },
     ];
 
     const metrics = calcMetrics(enriched, positions);

@@ -14,8 +14,8 @@
  */
 
 // Ensure server timezone defaults to New York
-if (typeof process !== 'undefined') {
-  process.env.TZ = process.env.TZ || 'America/New_York';
+if (typeof process !== "undefined") {
+  process.env.TZ = process.env.TZ || "America/New_York";
 }
 export function toNY(): Date;
 export function toNY(value: string | number | Date): Date;
@@ -46,7 +46,9 @@ export function toNY(...args: any[]): Date {
   }
 
   // 若环境时区已经是纽约，则无需转换
-  const localeString = date.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const localeString = date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+  });
   return new Date(localeString);
 }
 
@@ -57,19 +59,40 @@ export const nowNY = (): Date => toNY();
 export const formatNY = (
   dateInput: string | number | Date,
   options: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   },
 ): string =>
-  new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', ...options }).format(
-    typeof dateInput === 'object' ? (dateInput as Date) : toNY(dateInput),
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    ...options,
+  }).format(
+    typeof dateInput === "object" ? (dateInput as Date) : toNY(dateInput),
   );
+
+/**
+ * 获取最新交易日（纽约时区）的日期字符串。
+ * 如果当前时间早于 09:30，则回退一天；
+ * 若结果落在周末，则继续回退直到周五。
+ * 返回格式为 YYYY-MM-DD。
+ */
+export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
+  const d = toNY(base);
+  if (d.getHours() < 9 || (d.getHours() === 9 && d.getMinutes() < 30)) {
+    d.setDate(d.getDate() - 1);
+  }
+  while (d.getDay() === 0 || d.getDay() === 6) {
+    d.setDate(d.getDate() - 1);
+  }
+  return d.toISOString().slice(0, 10);
+};
 
 // Attach helper to global for quick usage in dev tools
 // @ts-ignore
 (globalThis as any).toNY = toNY;
 (globalThis as any).nowNY = nowNY;
 (globalThis as any).formatNY = formatNY;
+(globalThis as any).getLatestTradingDayStr = getLatestTradingDayStr;
