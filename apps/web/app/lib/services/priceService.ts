@@ -279,21 +279,19 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       return { price: cachedPrice.close, stale: false };
     }
 
-    // 然后尝试从 Finnhub 获取
-    const finnhubPrice = await fetchFinnhubDailyClose(symbol, date);
-    if (finnhubPrice !== null) {
-      saveToFile(symbol, date, finnhubPrice);
-      return { price: finnhubPrice, stale: false };
+    // 尝试从 close_prices.json 文件获取
+    try {
+      const closePrices = await fetch('/close_prices.json').then(r => r.json()) as Record<string, Record<string, number>>;
+      const filePrice = closePrices?.[date]?.[symbol];
+      if (typeof filePrice === 'number') {
+        await putPrice({ symbol, date, close: filePrice, source: 'import' });
+        return { price: filePrice, stale: false };
+      }
+    } catch (err) {
+      console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    // 尝试 Tiingo
-    const tiingoPrice = await fetchTiingoDailyClose(symbol, date);
-    if (tiingoPrice !== null) {
-      saveToFile(symbol, date, tiingoPrice);
-      return { price: tiingoPrice, stale: false };
-    }
-
-    // 如果所有来源都失败，提醒用户手动导入并返回默认值
+    // 如果仍未找到价格，提醒用户手动导入并返回默认值
     alert(`缺少 ${symbol} 在 ${date} 的收盘价，请通过“导入收盘价格”功能手动添加。`);
     return { price: 1, stale: true };
   } catch (error) {
