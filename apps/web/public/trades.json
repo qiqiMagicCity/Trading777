@@ -1,73 +1,73 @@
 {
   "trades": [
     {
-      "time": "2025-08-01T09:35:00",
-      "action": "BUY",
+      "date": "2025-08-01T09:35:00",
+      "side": "BUY",
       "symbol": "TSLA",
-      "shares": 200,
+      "qty": 200,
       "price": 295
     },
     {
-      "time": "2025-08-01T09:45:00",
-      "action": "SELL",
+      "date": "2025-08-01T09:45:00",
+      "side": "SELL",
       "symbol": "TSLA",
-      "shares": 100,
+      "qty": 100,
       "price": 300
     },
     {
-      "time": "2025-08-01T10:00:00",
-      "action": "SELL_SHORT",
+      "date": "2025-08-01T10:00:00",
+      "side": "SHORT",
       "symbol": "GOOGL",
-      "shares": 50,
+      "qty": 50,
       "price": 192
     },
     {
-      "time": "2025-08-01T10:30:00",
-      "action": "SELL",
+      "date": "2025-08-01T10:30:00",
+      "side": "SELL",
       "symbol": "TSLA",
-      "shares": 50,
+      "qty": 50,
       "price": 301
     },
     {
-      "time": "2025-08-01T11:00:00",
-      "action": "COVER",
+      "date": "2025-08-01T11:00:00",
+      "side": "COVER",
       "symbol": "GOOGL",
-      "shares": 20,
+      "qty": 20,
       "price": 188
     },
     {
-      "time": "2025-08-01T11:30:00",
-      "action": "BUY",
+      "date": "2025-08-01T11:30:00",
+      "side": "BUY",
       "symbol": "AAPL",
-      "shares": 150,
+      "qty": 150,
       "price": 200
     },
     {
-      "time": "2025-08-01T13:00:00",
-      "action": "BUY",
+      "date": "2025-08-01T13:00:00",
+      "side": "BUY",
       "symbol": "MSFT",
-      "shares": 80,
+      "qty": 80,
       "price": 520
     },
     {
-      "time": "2025-08-01T14:00:00",
-      "action": "SELL",
+      "date": "2025-08-01T14:00:00",
+      "side": "SELL",
       "symbol": "MSFT",
-      "shares": 30,
+      "qty": 30,
       "price": 525
     },
     {
-      "time": "2025-08-01T14:30:00",
-      "action": "SELL",
+      "date": "2025-08-01T14:30:00",
+      "side": "SELL",
       "symbol": "AAPL",
-      "shares": 50,
+      "qty": 50,
       "price": 201
     },
     {
-      "time": "2025-08-01T15:00:00",
-      "action": "BUY",
+      "date": "2025-08-01T15:00:00",
+      "side": "BUY",
       "symbol": "TSLA",
-      "shares": 100,
+      "qty": 100,
       "price": 303
     }
   ],
