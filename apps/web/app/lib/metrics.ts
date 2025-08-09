@@ -128,6 +128,10 @@ function sum(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0);
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /** 判断日期字符串是否为今日（纽约时区） */
 function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
   if (!dateStr) return false;
@@ -432,7 +436,11 @@ function calcWinLossLots(
  * @param trades 所有交易记录
  * @param todayStr 今日日期字符串 (YYYY-MM-DD)
  */
-function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
+function calcTodayTradeCounts(
+  trades: EnrichedTrade[],
+  todayStr: string,
+  initialPositions: InitialPosition[] = [],
+) {
   let B = 0;
   let S = 0;
   let P = 0;
@@ -450,8 +458,21 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     })
     .map(({ t }) => t);
 
-  const longFifo: Record<string, { qty: number }[]> = {};
-  const shortFifo: Record<string, { qty: number }[]> = {};
+  const longFifo: Record<string, { qty: number; touched: boolean }[]> = {};
+  const shortFifo: Record<string, { qty: number; touched: boolean }[]> = {};
+
+  for (const pos of initialPositions) {
+    const qty = Math.abs(pos.qty);
+    if (qty === 0) continue;
+    const lot = { qty, touched: false };
+    if (pos.qty >= 0) {
+      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
+      longFifo[pos.symbol]!.push(lot);
+    } else {
+      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
+      shortFifo[pos.symbol]!.push(lot);
+    }
+  }
 
   for (const t of sorted) {
     const { symbol, action, quantity, date } = t;
@@ -461,7 +482,7 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
     if (action === "buy") {
       if (isToday) B++;
       if (!longFifo[symbol]) longFifo[symbol] = [];
-      longFifo[symbol].push({ qty });
+      longFifo[symbol].push({ qty, touched: false });
     } else if (action === "sell") {
       let remain = qty;
       const fifo = longFifo[symbol] || [];
@@ -470,19 +491,20 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (lot.qty === 0) {
-          if (isToday) S++;
-          fifo.shift();
+        if (isToday && !lot.touched) {
+          S++;
+          lot.touched = true;
         }
+        if (lot.qty === 0) fifo.shift();
       }
       if (remain > 0) {
         if (!shortFifo[symbol]) shortFifo[symbol] = [];
-        shortFifo[symbol].push({ qty: remain });
+        shortFifo[symbol].push({ qty: remain, touched: false });
       }
     } else if (action === "short") {
       if (isToday) P++;
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
-      shortFifo[symbol].push({ qty });
+      shortFifo[symbol].push({ qty, touched: false });
     } else if (action === "cover") {
       let remain = qty;
       const fifo = shortFifo[symbol] || [];
@@ -491,19 +513,54 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
         const q = Math.min(lot.qty, remain);
         lot.qty -= q;
         remain -= q;
-        if (lot.qty === 0) {
-          if (isToday) C++;
-          fifo.shift();
+        if (isToday && !lot.touched) {
+          C++;
+          lot.touched = true;
         }
+        if (lot.qty === 0) fifo.shift();
       }
       if (remain > 0) {
         if (!longFifo[symbol]) longFifo[symbol] = [];
-        longFifo[symbol].push({ qty: remain });
+        longFifo[symbol].push({ qty: remain, touched: false });
       }
     }
   }
 
-  return { B, S, P, C };
+  return { B, S, P, C, total: B + S + P + C };
+}
+
+function calcCumulativeTradeCounts(
+  trades: EnrichedTrade[],
+  initialPositions: InitialPosition[] = [],
+) {
+  let B = 0;
+  let S = 0;
+  let P = 0;
+  let C = 0;
+
+  for (const t of trades) {
+    switch (t.action) {
+      case "buy":
+        B++;
+        break;
+      case "sell":
+        S++;
+        break;
+      case "short":
+        P++;
+        break;
+      case "cover":
+        C++;
+        break;
+    }
+  }
+
+  for (const pos of initialPositions) {
+    if (pos.qty > 0) B++;
+    else if (pos.qty < 0) P++;
+  }
+
+  return { B, S, P, C, total: B + S + P + C };
 }
 
 /**
@@ -599,66 +656,41 @@ export function calcMetrics(
   if (DEBUG) console.log("M4计算结果:", todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化
-  const todayTotalPnlChange = todayHistoricalRealizedPnl + pnlFifo + floatPnl;
-  if (DEBUG) console.log("M6计算结果:", todayTotalPnlChange);
+  const todayTotalPnlChange = round2(
+    todayHistoricalRealizedPnl + pnlFifo + floatPnl,
+  );
+  console.info("M6_DEBUG", {
+    M4: todayHistoricalRealizedPnl,
+    M3: floatPnl,
+    fifo: pnlFifo,
+    total: todayTotalPnlChange,
+  });
 
   // M7: 今日交易次数 (按 FIFO 拆分批次)
-  const todayTradeCountsByType = calcTodayTradeCounts(trades, todayStr);
-  const todayTradeCounts =
-    todayTradeCountsByType.B +
-    todayTradeCountsByType.S +
-    todayTradeCountsByType.P +
-    todayTradeCountsByType.C;
+  const todayTradeCountsByType = calcTodayTradeCounts(
+    trades,
+    todayStr,
+    initialPositions,
+  );
+  const todayTradeCounts = todayTradeCountsByType.total;
 
-  // M8: 累计交易次数（按唯一交易ID计数）
-  let B = 0;
-  let S = 0;
-  let P = 0;
-  let C = 0;
-
-  const buyIds = new Set<number>();
-  const sellIds = new Set<number>();
-  const shortIds = new Set<number>();
-  const coverIds = new Set<number>();
-
-  for (const t of trades) {
-    switch (t.action) {
-      case "buy":
-        if (t.id === undefined || !buyIds.has(t.id)) {
-          B++;
-          if (t.id !== undefined) buyIds.add(t.id);
-        }
-        break;
-      case "sell":
-        if (t.id === undefined || !sellIds.has(t.id)) {
-          S++;
-          if (t.id !== undefined) sellIds.add(t.id);
-        }
-        break;
-      case "short":
-        if (t.id === undefined || !shortIds.has(t.id)) {
-          P++;
-          if (t.id !== undefined) shortIds.add(t.id);
-        }
-        break;
-      case "cover":
-        if (t.id === undefined || !coverIds.has(t.id)) {
-          C++;
-          if (t.id !== undefined) coverIds.add(t.id);
-        }
-        break;
-    }
-  }
-
-  const allTradesByType = { B, S, P, C };
-  const totalTrades = B + S + P + C;
+  // M8: 累计交易次数（含历史持仓）
+  const allTradesByType = calcCumulativeTradeCounts(trades, initialPositions);
+  const totalTrades = allTradesByType.total;
 
   const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
 
   // M9: 所有历史平仓盈利（含今日）
-  const historicalRealizedPnl = historicalDailyResults.length
-    ? historicalDailyResults.reduce((acc, r) => acc + r.realized + r.fifo, 0)
-    : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
+  const historicalRealizedPnl = round2(
+    historicalDailyResults.length
+      ? historicalDailyResults.reduce(
+          (acc, r) => acc + (r.realized - (r.M5_1 || 0)) + r.fifo,
+          0,
+        )
+      : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
+          calcTodayTradePnL(trades, todayStr) +
+          calcTodayFifoPnL(trades, todayStr, initialPositions),
+  );
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率

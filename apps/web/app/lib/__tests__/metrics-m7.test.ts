@@ -1,12 +1,14 @@
-import { computeFifo } from "@/lib/fifo";
+import tradesData from "./fixtures/trades-with-history.json";
+import { computeFifo, type InitialPosition } from "@/lib/fifo";
 import { calcMetrics } from "@/lib/metrics";
-import type { Trade } from "@/lib/services/dataService";
+import type { Trade, Position } from "@/lib/services/dataService";
+import { nowNY } from "@/lib/timezone";
 
 jest.mock("@/lib/timezone", () => {
   const actual = jest.requireActual("@/lib/timezone");
   return {
     ...actual,
-    nowNY: () => new Date("2024-01-02T10:00:00-05:00"),
+    nowNY: jest.fn(() => new Date("2024-01-02T10:00:00-05:00")),
   };
 });
 
@@ -59,7 +61,7 @@ describe("calcMetrics M7 counts", () => {
 
     const metrics = calcMetrics(computeFifo(trades), []);
     expect(metrics.M7).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
-    expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M8).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
   });
 
   it("oversell/overcover only register original action", () => {
@@ -161,6 +163,45 @@ describe("calcMetrics M7 counts", () => {
 
     const metrics = calcMetrics(splitTrades, []);
     expect(metrics.M7).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
-    expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M8).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
+  });
+
+  it("matches golden dataset counts", () => {
+    (nowNY as unknown as jest.Mock).mockReturnValue(
+      new Date("2025-08-01T10:00:00-04:00"),
+    );
+    const initialPositions: InitialPosition[] = tradesData.positions.map((p) => ({
+      symbol: p.symbol,
+      qty: p.qty,
+      avgPrice: p.avgPrice,
+    }));
+    const trades: Trade[] = tradesData.trades.map((t, idx) => ({
+      id: idx,
+      symbol: t.symbol,
+      price: t.price,
+      quantity: t.qty,
+      date: t.date,
+      action: t.side.toLowerCase() as Trade["action"],
+    }));
+    const enriched = computeFifo(trades, initialPositions);
+    const posMap = new Map<string, Position>(
+      initialPositions.map((p) => [p.symbol, { ...p, last: p.avgPrice, priceOk: true }]),
+    );
+    for (const t of enriched) {
+      if (t.quantityAfter !== 0) {
+        posMap.set(t.symbol, {
+          symbol: t.symbol,
+          qty: t.quantityAfter,
+          avgPrice: t.averageCost,
+          last: t.averageCost,
+          priceOk: true,
+        });
+      } else {
+        posMap.delete(t.symbol);
+      }
+    }
+    const positions: Position[] = Array.from(posMap.values());
+    const metrics = calcMetrics(enriched, positions, [], initialPositions);
+    expect(metrics.M7).toEqual({ B: 6, S: 8, P: 4, C: 4, total: 22 });
   });
 });

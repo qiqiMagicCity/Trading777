@@ -1,6 +1,7 @@
+// apps/web/app/lib/services/priceService.ts
+
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
-// 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
 
 // 将收盘价写入服务器端 JSON 文件
@@ -16,27 +17,16 @@ async function saveToFile(symbol: string, date: string, close: number) {
   }
 }
 
-/**
- * 环境变量中的 API 令牌
- */
+/** 环境变量中的 API 令牌 & 冻结日 */
 const finnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
-const tiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
-const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
+const tiingoToken  = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
+const freezeDate   = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
-/**
- * 从文件加载的 API 令牌缓存
- */
-interface ApiKeys {
-  finnhub?: string;
-  tiingo?: string;
-}
-
+/** 从文件加载的 API 令牌缓存 */
+interface ApiKeys { finnhub?: string; tiingo?: string; }
 let _runtimeKeys: ApiKeys | null = null;
 
-/**
- * 从 KEY.txt 文件加载 API 令牌
- * @returns 包含 API 令牌的对象
- */
+/** 从 KEY.txt 文件加载 API 令牌 */
 async function loadKeysFromTxt(): Promise<ApiKeys> {
   if (_runtimeKeys) return _runtimeKeys;
 
@@ -47,7 +37,7 @@ async function loadKeysFromTxt(): Promise<ApiKeys> {
 
     _runtimeKeys = {
       finnhub: fh ? (fh[1] as string).trim() : undefined,
-      tiingo: tg ? (tg[1] as string).trim() : undefined,
+      tiingo:  tg ? (tg[1] as string).trim() : undefined,
     };
   } catch (e) {
     console.warn('[priceService] 无法从 KEY.txt 加载 API 密钥', e);
@@ -57,72 +47,35 @@ async function loadKeysFromTxt(): Promise<ApiKeys> {
   return _runtimeKeys;
 }
 
-/**
- * 获取 Finnhub API 令牌
- * @returns Finnhub API 令牌
- */
 async function getFinnhubToken(): Promise<string | undefined> {
   return finnhubToken || (await loadKeysFromTxt()).finnhub;
 }
 
-/**
- * 获取 Tiingo API 令牌
- */
 async function getTiingoToken(): Promise<string | undefined> {
   return tiingoToken || (await loadKeysFromTxt()).tiingo;
 }
 
-/**
- * Finnhub 每日收盘价响应类型
- */
-interface FinnhubCandleResponse {
-  c?: number[];
-  s?: string;
-  error?: string;
-}
+/** Finnhub 响应类型 */
+interface FinnhubCandleResponse { c?: number[]; s?: string; error?: string; }
+interface FinnhubQuoteResponse  { c?: number;   error?: string; }
 
-/**
- * Finnhub 实时报价响应类型
- */
-interface FinnhubQuoteResponse {
-  c?: number;
-  error?: string;
-}
-
-/**
- * 从 Finnhub API 获取每日收盘价
- * @param symbol 股票代码
- * @param date 日期，格式为 YYYY-MM-DD
- * @returns 收盘价，如果未找到则返回 null
- */
+/** Finnhub: 日线收盘 */
 async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<number | null> {
   const token = await getFinnhubToken();
-  if (!token) {
-    console.warn('未设置 Finnhub 令牌');
-    return null;
-  }
+  if (!token) { console.warn('未设置 Finnhub 令牌'); return null; }
 
   const fromTs = Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
-  const toTs = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
-  // 通过内部 API 路由转发请求，避免在浏览器暴露密钥
-  const url = `/api/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
+  const toTs   = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
+  const url    = `/api/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
 
   try {
-    // 使用 apiQueue 队列以避免触发速率限制
     const response = await apiQueue.enqueue(() => fetch(url));
-    if (!response.ok) {
-      console.warn(`Finnhub API 错误 (${symbol}): ${response.statusText}`);
-      return null;
-    }
+    if (!response.ok) { console.warn(`Finnhub API 错误 (${symbol}): ${response.statusText}`); return null; }
 
     const json = await response.json() as FinnhubCandleResponse;
+    if (json.error) { console.warn(`Finnhub API 错误 (${symbol}): ${json.error}`); return null; }
 
-    if (json.error) {
-      console.warn(`Finnhub API 错误 (${symbol}): ${json.error}`);
-      return null;
-    }
-
-    if (json && json.c && json.c.length > 0) {
+    if (json?.c?.length) {
       const close = json.c[0];
       if (typeof close === 'number') {
         await putPrice({ symbol, date, close, source: 'finnhub' });
@@ -131,59 +84,31 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
     }
   } catch (error) {
     console.warn(`从 Finnhub 获取数据失败 (${symbol})`, error);
-    // 向上抛出错误，便于调用方获知失败原因
     throw error;
   }
-
   return null;
 }
 
-/**
- * 从 Finnhub API 获取实时报价
- * @param symbol 股票代码
- * @returns 实时价格，如果未找到则返回 null
- */
+/** Finnhub: 实时报价 */
 async function fetchFinnhubRealtimeQuote(symbol: string): Promise<number | null> {
-  // 请求改为调用内部 API 路由，避免在浏览器暴露密钥
   const url = `/api/quote?symbol=${encodeURIComponent(symbol)}`;
-
   try {
-    // 通过 apiQueue 限制请求速率
     const response = await apiQueue.enqueue(() => fetch(url));
-    if (!response.ok) {
-      console.warn(`Finnhub 报价 API 错误 (${symbol}): ${response.statusText}`);
-      return null;
-    }
-
+    if (!response.ok) { console.warn(`Finnhub 报价 API 错误 (${symbol}): ${response.statusText}`); return null; }
     const json = await response.json() as FinnhubQuoteResponse;
-
-    if (json.error) {
-      console.warn(`Finnhub 报价 API 错误 (${symbol}): ${json.error}`);
-      return null;
-    }
-
-    // 'c' is current price in Finnhub's quote response
-    if (json && typeof json.c === 'number' && json.c > 0) {
-      return json.c;
-    }
+    if (json.error) { console.warn(`Finnhub 报价 API 错误 (${symbol}): ${json.error}`); return null; }
+    if (json && typeof json.c === 'number' && json.c > 0) return json.c;
   } catch (error) {
     console.warn(`从 Finnhub 获取报价失败 (${symbol})`, error);
-    // 向上抛出错误以便调用方处理
     throw error;
   }
-
   return null;
 }
 
-/**
- * 从 Tiingo API 获取实时报价，并在 localStorage 缓存 5 分钟
- */
+/** Tiingo: 实时报价（5 分钟本地缓存） */
 async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> {
   const token = await getTiingoToken();
-  if (!token) {
-    console.warn('未设置 Tiingo 令牌');
-    return null;
-  }
+  if (!token) { console.warn('未设置 Tiingo 令牌'); return null; }
 
   const cacheKey = `tiingo_rt_${symbol}`;
   try {
@@ -196,10 +121,7 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
   const url = `https://api.tiingo.com/iex/?token=${token}&tickers=${encodeURIComponent(symbol)}`;
   try {
     const resp = await apiQueue.enqueue(() => fetch(url));
-    if (!resp.ok) {
-      console.warn(`Tiingo 报价 API 错误 (${symbol}): ${resp.statusText}`);
-      return null;
-    }
+    if (!resp.ok) { console.warn(`Tiingo 报价 API 错误 (${symbol}): ${resp.statusText}`); return null; }
     const json = await resp.json() as Array<{ last?: number }>;
     const first = Array.isArray(json) && json.length ? json[0] : undefined;
     if (first && typeof first.last === 'number') {
@@ -214,15 +136,10 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
   return null;
 }
 
-/**
- * 从 Tiingo API 获取每日收盘价，并在 localStorage 缓存 5 分钟
- */
+/** Tiingo: 日线收盘（5 分钟本地缓存） */
 async function fetchTiingoDailyClose(symbol: string, date: string): Promise<number | null> {
   const token = await getTiingoToken();
-  if (!token) {
-    console.warn('未设置 Tiingo 令牌');
-    return null;
-  }
+  if (!token) { console.warn('未设置 Tiingo 令牌'); return null; }
 
   const cacheKey = `tiingo_close_${symbol}_${date}`;
   try {
@@ -235,10 +152,7 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
   const url = `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(symbol)}/prices?token=${token}&startDate=${date}&endDate=${date}`;
   try {
     const resp = await apiQueue.enqueue(() => fetch(url));
-    if (!resp.ok) {
-      console.warn(`Tiingo 收盘价 API 错误 (${symbol}): ${resp.statusText}`);
-      return null;
-    }
+    if (!resp.ok) { console.warn(`Tiingo 收盘价 API 错误 (${symbol}): ${resp.statusText}`); return null; }
     const json = await resp.json() as Array<{ close?: number }>;
     const first = Array.isArray(json) && json.length ? json[0] : undefined;
     if (first && typeof first.close === 'number') {
@@ -254,19 +168,17 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
   return null;
 }
 
-/**
- * 获取股票的每日收盘价，使用缓存优先策略
- * 尝试顺序：缓存 -> 文件 ->（必要时）默认值
- * @param symbol 股票代码
- * @param date 日期，格式为 YYYY-MM-DD
- */
-export interface QuoteResult {
-  price: number;
-  stale: boolean;
-}
+/** 统一返回结构 */
+export interface QuoteResult { price: number; stale: boolean; }
 
+/**
+ * 获取“每日收盘价”
+ * 顺序：缓存 -> close_prices.json -> 默认值(1)
+ * close_prices.json 结构：{ [SYMBOL]: { [YYYY-MM-DD]: price } }
+ */
 export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult> {
   const key = symbol.trim().toUpperCase();
+
   try {
     // 1) 缓存
     const cachedPrice = await getPrice(key, date);
@@ -275,20 +187,15 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       return { price: cachedPrice.close, stale: false };
     }
 
-    // 2) close_prices.json
+    // 2) 文件
     try {
-      // 结构：{ [SYMBOL]: { [DATE]: price } }
       const closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
       const filePrice = closeMap?.[key]?.[date];
       if (typeof filePrice === 'number') {
         await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
         return { price: filePrice, stale: false };
       }
-      console.warn('MISSING_CLOSE', {
-        symbol: key,
-        date,
-        available: closeMap ? Object.keys(closeMap) : [],
-      });
+      console.warn('MISSING_CLOSE', { symbol: key, date, available: closeMap ? Object.keys(closeMap) : [] });
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
@@ -301,51 +208,33 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
   }
 }
 
-/**
- * 获取股票的实时报价
- * @param symbol 股票代码
- * @returns 实时价格（冻结模式下直接返回冻结日收盘价）
- */
+/** 实时报价（冻结模式下直接返回冻结日收盘价） */
 let _freezeLogged = false;
-
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
-  // 当设置了冻结日期时，直接返回该日的收盘价
   if (freezeDate) {
     if (!_freezeLogged) {
       console.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
       _freezeLogged = true;
     }
-    const { price, stale } = await fetchDailyClose(symbol, freezeDate);
-    return { price, stale };
+    return fetchDailyClose(symbol, freezeDate);
   }
 
   try {
-    // 直接从 Finnhub 获取实时报价
     const finnhubPrice = await fetchFinnhubRealtimeQuote(symbol);
-    if (finnhubPrice !== null) {
-      return { price: finnhubPrice, stale: false };
-    }
+    if (finnhubPrice !== null) return { price: finnhubPrice, stale: false };
 
-    // 尝试 Tiingo
     const tiingoPrice = await fetchTiingoRealtimeQuote(symbol);
-    if (tiingoPrice !== null) {
-      return { price: tiingoPrice, stale: false };
-    }
+    if (tiingoPrice !== null) return { price: tiingoPrice, stale: false };
 
-    // 如果所有来源都失败，返回默认值 1
     console.warn(`无法获取 ${symbol} 的实时价格，使用默认值 1`);
     return { price: 1, stale: true };
   } catch (error) {
     console.error(`获取 ${symbol} 的实时报价时出错:`, error);
-    return { price: 1, stale: true }; // 错误情况下使用默认值
+    return { price: 1, stale: true };
   }
 }
 
-/**
- * 兼容旧版 API：获取股票的实时价格
- * @param symbol 股票代码
- * @returns 实时价格
- */
+/** 兼容旧版别名 */
 export async function fetchRealtimePrice(symbol: string): Promise<QuoteResult> {
   return fetchRealtimeQuote(symbol);
 }
