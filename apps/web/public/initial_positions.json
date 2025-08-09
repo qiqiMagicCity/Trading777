@@ -1,0 +1,5 @@
+[
+  { "symbol": "TSLA", "qty": 50,  "avgPrice": 290 },
+  { "symbol": "NFLX", "qty": 100, "avgPrice": 1100 },
+  { "symbol": "AMZN", "qty": -80, "avgPrice": 220 }
+]
