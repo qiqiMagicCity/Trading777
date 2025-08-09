@@ -1,4 +1,5 @@
 import { getPrice, putPrice, CachedPrice } from './dataService';
+import { loadJson } from '@/app/lib/dataSource';
 // 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
 
@@ -271,31 +272,32 @@ export interface QuoteResult {
 }
 
 export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult> {
+  const key = symbol.trim().toUpperCase();
   try {
     // 首先尝试从缓存获取
-    const cachedPrice = await getPrice(symbol, date);
+    const cachedPrice = await getPrice(key, date);
     if (cachedPrice) {
-      saveToFile(symbol, date, cachedPrice.close);
+      saveToFile(key, date, cachedPrice.close);
       return { price: cachedPrice.close, stale: false };
     }
 
     // 尝试从 close_prices.json 文件获取
     try {
-      const closePrices = await fetch('/close_prices.json').then(r => r.json()) as Record<string, Record<string, number>>;
-      const filePrice = closePrices?.[date]?.[symbol];
+      const closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
+      const filePrice = closeMap?.[key]?.[date];
       if (typeof filePrice === 'number') {
-        await putPrice({ symbol, date, close: filePrice, source: 'import' });
+        await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
         return { price: filePrice, stale: false };
       }
+      console.warn('MISSING_CLOSE', { symbol: key, date: '2025-08-01', keys: Object.keys(closeMap || {}) });
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    // 如果仍未找到价格，提醒用户手动导入并返回默认值
-    alert(`缺少 ${symbol} 在 ${date} 的收盘价，请通过“导入收盘价格”功能手动添加。`);
+    // 如果仍未找到价格，返回默认值
     return { price: 1, stale: true };
   } catch (error) {
-    console.error(`获取 ${symbol} 在 ${date} 的每日收盘价时出错:`, error);
+    console.error(`获取 ${key} 在 ${date} 的每日收盘价时出错:`, error);
     return { price: 1, stale: true };
   }
 }
@@ -306,9 +308,15 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
  * @param symbol 股票代码
  * @returns 实时价格
  */
+let _freezeLogged = false;
+
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   // 当设置了冻结日期时，直接返回该日的收盘价
   if (freezeDate) {
+    if (!_freezeLogged) {
+      console.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
+      _freezeLogged = true;
+    }
     const { price, stale } = await fetchDailyClose(symbol, freezeDate);
     return { price, stale };
   }

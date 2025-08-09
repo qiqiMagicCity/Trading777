@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { importData, findTrades, clearAllData, findPositions } from '@/lib/services/dataService';
+import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
 import { computeFifo, type InitialPosition } from '@/lib/fifo';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
@@ -51,11 +52,9 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
 
-        const response = await fetch('/trades.json');
-        if (!response.ok) {
-          throw new Error('Failed to fetch trades.json');
-        }
-        const rawData = await response.json();
+        const tradesFile = await loadJson('trades');
+        const initPositionsFile = await loadJson('initial_positions');
+        const rawData = { trades: tradesFile, positions: initPositionsFile };
 
         const newHash = await computeDataHash(rawData);
 
