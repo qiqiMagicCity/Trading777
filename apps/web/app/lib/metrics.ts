@@ -1,6 +1,6 @@
 import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
-import { nowNY, toNY, getLatestTradingDayStr } from "@/lib/timezone";
+import { nowNY, toNY, getLatestTradingDayStr, endOfDayNY } from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 
 // Only enable verbose logging outside production
@@ -453,104 +453,6 @@ function calcWinLossLots(
   return { wins, losses };
 }
 
-/**
- * 根据 FIFO 拆分规则计算今日交易次数
- * B/P 为指令数，S/C 按平仓批次数统计
- * @param trades 所有交易记录
- * @param todayStr 今日日期字符串 (YYYY-MM-DD)
- */
-function calcTodayTradeCounts(
-  trades: EnrichedTrade[],
-  todayStr: string,
-  initialPositions: InitialPosition[] = [],
-) {
-  let B = 0;
-  let S = 0;
-  let P = 0;
-  let C = 0;
-
-  const sorted = trades
-    .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => isOnOrBeforeNY(t.date, todayStr))
-    .sort((a, b) => {
-      const timeA = toNY(a.t.date).getTime();
-      const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? Infinity : timeA;
-      const bTime = isNaN(timeB) ? Infinity : timeB;
-      return aTime - bTime || a.idx - b.idx;
-    })
-    .map(({ t }) => t);
-
-  const longFifo: Record<string, { qty: number; touched: boolean }[]> = {};
-  const shortFifo: Record<string, { qty: number; touched: boolean }[]> = {};
-
-  for (const pos of initialPositions) {
-    const qty = Math.abs(pos.qty);
-    if (qty === 0) continue;
-    const lot = { qty, touched: false };
-    if (pos.qty >= 0) {
-      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol]!.push(lot);
-    } else {
-      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol]!.push(lot);
-    }
-  }
-
-  for (const t of sorted) {
-    const { symbol, action, quantity, date } = t;
-    const qty = Math.abs(quantity);
-    const isToday = isTodayNY(date, todayStr);
-
-    if (action === "buy") {
-      if (isToday) B++;
-      if (!longFifo[symbol]) longFifo[symbol] = [];
-      longFifo[symbol].push({ qty, touched: false });
-    } else if (action === "sell") {
-      let remain = qty;
-      const fifo = longFifo[symbol] || [];
-      while (remain > 0 && fifo.length > 0) {
-        const lot = fifo[0]!;
-        const q = Math.min(lot.qty, remain);
-        lot.qty -= q;
-        remain -= q;
-        if (isToday && !lot.touched) {
-          S++;
-          lot.touched = true;
-        }
-        if (lot.qty === 0) fifo.shift();
-      }
-      if (remain > 0) {
-        if (!shortFifo[symbol]) shortFifo[symbol] = [];
-        shortFifo[symbol].push({ qty: remain, touched: false });
-      }
-    } else if (action === "short") {
-      if (isToday) P++;
-      if (!shortFifo[symbol]) shortFifo[symbol] = [];
-      shortFifo[symbol].push({ qty, touched: false });
-    } else if (action === "cover") {
-      let remain = qty;
-      const fifo = shortFifo[symbol] || [];
-      while (remain > 0 && fifo.length > 0) {
-        const lot = fifo[0]!;
-        const q = Math.min(lot.qty, remain);
-        lot.qty -= q;
-        remain -= q;
-        if (isToday && !lot.touched) {
-          C++;
-          lot.touched = true;
-        }
-        if (lot.qty === 0) fifo.shift();
-      }
-      if (remain > 0) {
-        if (!longFifo[symbol]) longFifo[symbol] = [];
-        longFifo[symbol].push({ qty: remain, touched: false });
-      }
-    }
-  }
-
-  return { B, S, P, C, total: B + S + P + C };
-}
 
 function calcCumulativeTradeCounts(
   trades: EnrichedTrade[],
@@ -633,26 +535,18 @@ export function calcMetrics(
 ): Metrics {
   console.info("M7_INPUT", _count(trades), { sample: trades.slice(0, 3) });
 
-  // 获取今日日期字符串（纽约时区）
-  const todayStr = getLatestTradingDayStr(nowNY());
-  const evalEnd = toNY(`${todayStr}T23:59:59.999`);
+  // 基于原始交易记录（保留重复项）计算统计
+  const evalDateNY = nowNY();
+  const todayStr = getLatestTradingDayStr(evalDateNY);
+  const evalEnd = endOfDayNY(evalDateNY);
   const safeTrades = trades.filter((t) => {
-    const d = toNY(t.date);
+    const d = toNY((t as any).time ?? t.date);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
   console.info("M7_FILTERED", _count(safeTrades), {
     evalEndNY: evalEnd.toISOString?.(),
   });
-
-  console.info("M7_BEFORE_DEDUPE", _count(safeTrades));
-  const dedupMap = new Map<string | number, EnrichedTrade>();
-  for (const t of safeTrades) {
-    const key =
-      t.id ?? `${t.date}|${t.symbol}|${t.action}|${t.price}|${t.quantity}`;
-    if (!dedupMap.has(key)) dedupMap.set(key, t);
-  }
-  const dedupedTrades = Array.from(dedupMap.values());
-  console.info("M7_AFTER_DEDUPE", _count(dedupedTrades));
+  const counts = _count(safeTrades);
 
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
@@ -686,13 +580,13 @@ export function calcMetrics(
   }, 0);
 
   // M5: 日内交易（先计算，后续 M4 需要用到 pnlFifo）
-  const pnlTrade = calcTodayTradePnL(dedupedTrades, todayStr);
-  const pnlFifo = calcTodayFifoPnL(dedupedTrades, todayStr, initialPositions);
+  const pnlTrade = calcTodayTradePnL(safeTrades, todayStr);
+  const pnlFifo = calcTodayFifoPnL(safeTrades, todayStr, initialPositions);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
-    dedupedTrades,
+    safeTrades,
     todayStr,
     initialPositions,
   );
@@ -709,17 +603,13 @@ export function calcMetrics(
     total: todayTotalPnlChange,
   });
 
-  // M7: 今日交易次数 (按 FIFO 拆分批次)
-  const todayTradeCountsByType = calcTodayTradeCounts(
-    dedupedTrades,
-    todayStr,
-    initialPositions,
-  );
-  const todayTradeCounts = todayTradeCountsByType.total;
+  // M7: 今日交易次数
+  const todayTradeCountsByType = counts;
+  const todayTradeCounts = counts.total;
 
   // M8: 累计交易次数（含历史持仓）
   const allTradesByType = calcCumulativeTradeCounts(
-    dedupedTrades,
+    safeTrades,
     initialPositions,
   );
   const totalTrades = allTradesByType.total;
@@ -733,15 +623,15 @@ export function calcMetrics(
           (acc, r) => acc + (r.realized - (r.M5_1 || 0)) + r.fifo,
           0,
         )
-      : dedupedTrades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
-          calcTodayTradePnL(dedupedTrades, todayStr) +
-          calcTodayFifoPnL(dedupedTrades, todayStr, initialPositions),
+        : safeTrades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
+            calcTodayTradePnL(safeTrades, todayStr) +
+            calcTodayFifoPnL(safeTrades, todayStr, initialPositions),
   );
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
   const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(
-    dedupedTrades,
+    safeTrades,
     initialPositions,
   );
   const winRate =

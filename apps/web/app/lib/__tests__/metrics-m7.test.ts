@@ -60,8 +60,8 @@ describe("calcMetrics M7 counts", () => {
     ];
 
     const metrics = calcMetrics(computeFifo(trades), []);
-    expect(metrics.M7).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
-    expect(metrics.M8).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
+    expect(metrics.M7).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
   });
 
   it("oversell/overcover only register original action", () => {

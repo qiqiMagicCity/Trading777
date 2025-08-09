@@ -96,9 +96,17 @@ export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 获取指定纽约日期的当日结束时间 */
+export const endOfDayNY = (date: Date): Date => {
+  const d = toNY(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
 // Attach helper to global for quick usage in dev tools
 // @ts-ignore
 (globalThis as any).toNY = toNY;
 (globalThis as any).nowNY = nowNY;
 (globalThis as any).formatNY = formatNY;
 (globalThis as any).getLatestTradingDayStr = getLatestTradingDayStr;
+(globalThis as any).endOfDayNY = endOfDayNY;
