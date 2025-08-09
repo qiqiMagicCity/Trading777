@@ -1,4 +1,5 @@
 import { getPrice, putPrice, CachedPrice } from './dataService';
+import { loadJson } from '@/app/lib/dataSource';
 // 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
 
@@ -281,7 +282,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
 
     // 尝试从 close_prices.json 文件获取
     try {
-      const closePrices = await fetch('/close_prices.json').then(r => r.json()) as Record<string, Record<string, number>>;
+      const closePrices = await loadJson('close_prices') as Record<string, Record<string, number>>;
       const filePrice = closePrices?.[date]?.[symbol];
       if (typeof filePrice === 'number') {
         await putPrice({ symbol, date, close: filePrice, source: 'import' });
