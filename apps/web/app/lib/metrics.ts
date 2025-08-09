@@ -132,6 +132,29 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function _count(list: { action?: string }[] | undefined) {
+  const res = { B: 0, S: 0, P: 0, C: 0, total: 0 };
+  if (!Array.isArray(list)) return res;
+  for (const item of list) {
+    switch (item?.action) {
+      case "buy":
+        res.B++;
+        break;
+      case "sell":
+        res.S++;
+        break;
+      case "short":
+        res.P++;
+        break;
+      case "cover":
+        res.C++;
+        break;
+    }
+  }
+  res.total = res.B + res.S + res.P + res.C;
+  return res;
+}
+
 /** 判断日期字符串是否为今日（纽约时区） */
 function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
   if (!dateStr) return false;
@@ -608,8 +631,28 @@ export function calcMetrics(
   dailyResults: DailyResult[] = [],
   initialPositions: InitialPosition[] = [],
 ): Metrics {
+  console.info("M7_INPUT", _count(trades), { sample: trades.slice(0, 3) });
+
   // 获取今日日期字符串（纽约时区）
   const todayStr = getLatestTradingDayStr(nowNY());
+  const evalEnd = toNY(`${todayStr}T23:59:59.999`);
+  const safeTrades = trades.filter((t) => {
+    const d = toNY(t.date);
+    return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
+  });
+  console.info("M7_FILTERED", _count(safeTrades), {
+    evalEndNY: evalEnd.toISOString?.(),
+  });
+
+  console.info("M7_BEFORE_DEDUPE", _count(safeTrades));
+  const dedupMap = new Map<string | number, EnrichedTrade>();
+  for (const t of safeTrades) {
+    const key =
+      t.id ?? `${t.date}|${t.symbol}|${t.action}|${t.price}|${t.quantity}`;
+    if (!dedupMap.has(key)) dedupMap.set(key, t);
+  }
+  const dedupedTrades = Array.from(dedupMap.values());
+  console.info("M7_AFTER_DEDUPE", _count(dedupedTrades));
 
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
@@ -643,13 +686,13 @@ export function calcMetrics(
   }, 0);
 
   // M5: 日内交易（先计算，后续 M4 需要用到 pnlFifo）
-  const pnlTrade = calcTodayTradePnL(trades, todayStr);
-  const pnlFifo = calcTodayFifoPnL(trades, todayStr, initialPositions);
+  const pnlTrade = calcTodayTradePnL(dedupedTrades, todayStr);
+  const pnlFifo = calcTodayFifoPnL(dedupedTrades, todayStr, initialPositions);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
-    trades,
+    dedupedTrades,
     todayStr,
     initialPositions,
   );
@@ -668,14 +711,17 @@ export function calcMetrics(
 
   // M7: 今日交易次数 (按 FIFO 拆分批次)
   const todayTradeCountsByType = calcTodayTradeCounts(
-    trades,
+    dedupedTrades,
     todayStr,
     initialPositions,
   );
   const todayTradeCounts = todayTradeCountsByType.total;
 
   // M8: 累计交易次数（含历史持仓）
-  const allTradesByType = calcCumulativeTradeCounts(trades, initialPositions);
+  const allTradesByType = calcCumulativeTradeCounts(
+    dedupedTrades,
+    initialPositions,
+  );
   const totalTrades = allTradesByType.total;
 
   const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
@@ -687,15 +733,15 @@ export function calcMetrics(
           (acc, r) => acc + (r.realized - (r.M5_1 || 0)) + r.fifo,
           0,
         )
-      : trades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
-          calcTodayTradePnL(trades, todayStr) +
-          calcTodayFifoPnL(trades, todayStr, initialPositions),
+      : dedupedTrades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
+          calcTodayTradePnL(dedupedTrades, todayStr) +
+          calcTodayFifoPnL(dedupedTrades, todayStr, initialPositions),
   );
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
   const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(
-    trades,
+    dedupedTrades,
     initialPositions,
   );
   const winRate =
