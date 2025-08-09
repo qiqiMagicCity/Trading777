@@ -132,6 +132,23 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Validate consistency of a DailyResult entry.
+ * Throws an error (and warns) if realized + fifo + float does not equal pnl.
+ */
+export function validateDailyResult(r: DailyResult): void {
+  const total = round2(r.realized + r.fifo + r.float);
+  const pnl = round2(r.pnl);
+  if (total !== pnl) {
+    const msg =
+      `DailyResult mismatch on ${r.date}: ` +
+      `realized(${r.realized}) + fifo(${r.fifo}) + float(${r.float}) = ${total}, ` +
+      `but pnl is ${r.pnl}`;
+    console.warn(msg);
+    throw new Error(msg);
+  }
+}
+
 function _count(list: { action?: string }[] | undefined) {
   const res = { B: 0, S: 0, P: 0, C: 0, total: 0 };
   if (!Array.isArray(list)) return res;
@@ -495,10 +512,11 @@ function calcCumulativeTradeCounts(
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 包含 wtd、mtd、ytd 的对象
  */
-function calcPeriodMetrics(
+export function calcPeriodMetrics(
   dailyResults: DailyResult[],
   todayStr: string,
 ): { wtd: number; mtd: number; ytd: number } {
+  dailyResults.forEach(validateDailyResult);
   const sumSince = (since: string) =>
     dailyResults
       .filter((r) => r.date >= since && r.date <= todayStr)
