@@ -16,8 +16,6 @@ async function saveToFile(symbol: string, date: string, close: number) {
   }
 }
 
-
-
 /**
  * 环境变量中的 API 令牌
  */
@@ -140,7 +138,6 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
   return null;
 }
 
-
 /**
  * 从 Finnhub API 获取实时报价
  * @param symbol 股票代码
@@ -257,14 +254,11 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
   return null;
 }
 
-
 /**
  * 获取股票的每日收盘价，使用缓存优先策略
- * 尝试顺序：缓存 -> Finnhub
+ * 尝试顺序：缓存 -> 文件 ->（必要时）默认值
  * @param symbol 股票代码
  * @param date 日期，格式为 YYYY-MM-DD
- * @returns 收盘价
- * @throws 如果无法从任何来源获取价格，则抛出错误
  */
 export interface QuoteResult {
   price: number;
@@ -274,27 +268,32 @@ export interface QuoteResult {
 export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult> {
   const key = symbol.trim().toUpperCase();
   try {
-    // 首先尝试从缓存获取
+    // 1) 缓存
     const cachedPrice = await getPrice(key, date);
     if (cachedPrice) {
       saveToFile(key, date, cachedPrice.close);
       return { price: cachedPrice.close, stale: false };
     }
 
-    // 尝试从 close_prices.json 文件获取
+    // 2) close_prices.json
     try {
+      // 结构：{ [SYMBOL]: { [DATE]: price } }
       const closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
       const filePrice = closeMap?.[key]?.[date];
       if (typeof filePrice === 'number') {
         await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
         return { price: filePrice, stale: false };
       }
-      console.warn('MISSING_CLOSE', { symbol: key, date: '2025-08-01', keys: Object.keys(closeMap || {}) });
+      console.warn('MISSING_CLOSE', {
+        symbol: key,
+        date,
+        available: closeMap ? Object.keys(closeMap) : [],
+      });
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    // 如果仍未找到价格，返回默认值
+    // 3) 兜底：默认值
     return { price: 1, stale: true };
   } catch (error) {
     console.error(`获取 ${key} 在 ${date} 的每日收盘价时出错:`, error);
@@ -304,9 +303,8 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
 
 /**
  * 获取股票的实时报价
- * 数据直接来源于 Finnhub
  * @param symbol 股票代码
- * @returns 实时价格
+ * @returns 实时价格（冻结模式下直接返回冻结日收盘价）
  */
 let _freezeLogged = false;
 
