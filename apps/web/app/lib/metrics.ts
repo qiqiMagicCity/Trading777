@@ -1,6 +1,8 @@
 import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
-import { nowNY, toNY, getLatestTradingDayStr } from "@/lib/timezone";
+import { nowNY, getLatestTradingDayStr } from "@/lib/timezone";
+import { toNY, startOfDayNY, endOfDayNY } from "./date";
+import { round2 } from "./math";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 
 // Only enable verbose logging outside production
@@ -131,21 +133,10 @@ function sum(arr: number[]): number {
 /** 判断日期字符串是否为今日（纽约时区） */
 function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
   if (!dateStr) return false;
-  const d1 =
-    dateStr.length === 10 ? toNY(`${dateStr}T12:00:00Z`) : toNY(dateStr);
-  const d2 = toNY(`${todayStr}T12:00:00Z`);
-  return (
-    !isNaN(d1.getTime()) &&
-    !isNaN(d2.getTime()) &&
-    d1.toISOString().slice(0, 10) === d2.toISOString().slice(0, 10)
-  );
-}
-
-function isOnOrBeforeNY(dateStr: string | undefined, todayStr: string): boolean {
-  if (!dateStr) return true;
   const d = toNY(dateStr);
-  const end = toNY(`${todayStr}T23:59:59.999`);
-  return !isNaN(d.getTime()) && d.getTime() <= end.getTime();
+  const start = startOfDayNY(todayStr);
+  const end = endOfDayNY(todayStr);
+  return !isNaN(d.getTime()) && d >= start && d <= end;
 }
 
 /**
@@ -189,10 +180,11 @@ export function calcTodayFifoPnL(
       shortFifo[pos.symbol]!.push(lot);
     }
   }
+  const evalEnd = endOfDayNY(toNY(todayStr));
+  const safeTrades = enrichedTrades.filter((t) => toNY(t.date) <= evalEnd);
   let pnl = 0;
-  const sorted = enrichedTrades
+  const sorted = safeTrades
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => isOnOrBeforeNY(t.date, todayStr))
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
@@ -282,10 +274,11 @@ function calcHistoryFifoPnL(
       shortFifo[pos.symbol]!.push(lot);
     }
   }
+  const evalEnd = endOfDayNY(toNY(todayStr));
+  const safeTrades = enrichedTrades.filter((t) => toNY(t.date) <= evalEnd);
   let pnl = 0;
-  const sorted = enrichedTrades
+  const sorted = safeTrades
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => isOnOrBeforeNY(t.date, todayStr))
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
@@ -350,6 +343,7 @@ function calcHistoryFifoPnL(
  */
 function calcWinLossLots(
   trades: EnrichedTrade[],
+  todayStr: string,
   initialPositions: InitialPosition[] = [],
 ): {
   wins: number;
@@ -373,7 +367,9 @@ function calcWinLossLots(
   let wins = 0;
   let losses = 0;
 
-  const sorted = trades
+  const evalEnd = endOfDayNY(toNY(todayStr));
+  const safeTrades = trades.filter((t) => toNY(t.date) <= evalEnd);
+  const sorted = safeTrades
     .map((t, idx) => ({ t, idx }))
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
@@ -437,10 +433,10 @@ function calcTodayTradeCounts(trades: EnrichedTrade[], todayStr: string) {
   let S = 0;
   let P = 0;
   let C = 0;
-
-  const sorted = trades
+  const evalEnd = endOfDayNY(toNY(todayStr));
+  const safeTrades = trades.filter((t) => toNY(t.date) <= evalEnd);
+  const sorted = safeTrades
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => isOnOrBeforeNY(t.date, todayStr))
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
@@ -598,10 +594,6 @@ export function calcMetrics(
   );
   if (DEBUG) console.log("M4计算结果:", todayHistoricalRealizedPnl);
 
-  // M6: 今日总盈利变化
-  const todayTotalPnlChange = todayHistoricalRealizedPnl + pnlFifo + floatPnl;
-  if (DEBUG) console.log("M6计算结果:", todayTotalPnlChange);
-
   // M7: 今日交易次数 (按 FIFO 拆分批次)
   const todayTradeCountsByType = calcTodayTradeCounts(trades, todayStr);
   const todayTradeCounts =
@@ -664,6 +656,7 @@ export function calcMetrics(
   // M10: 胜率
   const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(
     trades,
+    todayStr,
     initialPositions,
   );
   const winRate =
@@ -674,7 +667,7 @@ export function calcMetrics(
   // M11-13: 周期性指标
   const { wtd, mtd, ytd } = calcPeriodMetrics(historicalDailyResults, todayStr);
 
-  return {
+  const metrics: Metrics = {
     M1: totalCost,
     M2: currentValue,
     M3: floatPnl,
@@ -683,7 +676,7 @@ export function calcMetrics(
       trade: pnlTrade,
       fifo: pnlFifo,
     },
-    M6: todayTotalPnlChange,
+    M6: 0,
     M7: {
       B: todayTradeCountsByType.B,
       S: todayTradeCountsByType.S,
@@ -708,6 +701,10 @@ export function calcMetrics(
     M12: mtd,
     M13: ytd,
   };
+
+  metrics.M6 = round2(metrics.M4 + metrics.M3 + metrics.M5.fifo);
+  console.info('M6_DEBUG', { M4: metrics.M4, M3: metrics.M3, M5_fifo: metrics.M5.fifo, M6: metrics.M6 });
+  return metrics;
 }
 
 /**

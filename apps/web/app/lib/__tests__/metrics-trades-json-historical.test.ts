@@ -45,7 +45,9 @@ describe('calcMetrics with trades.json historical lots', () => {
     }
     const positions: Position[] = Array.from(posMap.values());
     const metrics = calcMetrics(enriched, positions, [], initialPositions);
-    expect(metrics.M4).toBe(6880);
+    // 历史仓: TSLA 50@290 (多头)、NFLX 100@1100 (多头)、AMZN 80@220 (空头);
+    // 2025-08-01 平掉的历史部分合计 M4=6530。
+    expect(metrics.M4).toBe(6530);
     expect(metrics.M5.trade).toBe(1670);
     expect(metrics.M5.fifo).toBe(1050);
     expect(metrics.M10.W).toBe(11);

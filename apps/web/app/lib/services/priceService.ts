@@ -1,6 +1,7 @@
 import { getPrice, putPrice, CachedPrice } from './dataService';
 // 所有外部 API 调用都通过 apiQueue 进行排队以防止触发速率限制
 import { apiQueue } from './apiQueue';
+import { getFrozenClose } from '../freeze';
 
 // 将收盘价写入服务器端 JSON 文件
 async function saveToFile(symbol: string, date: string, close: number) {
@@ -22,7 +23,6 @@ async function saveToFile(symbol: string, date: string, close: number) {
  */
 const finnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
 const tiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
-const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 /**
  * 从文件加载的 API 令牌缓存
@@ -307,11 +307,8 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
  * @returns 实时价格
  */
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
-  // 当设置了冻结日期时，直接返回该日的收盘价
-  if (freezeDate) {
-    const { price, stale } = await fetchDailyClose(symbol, freezeDate);
-    return { price, stale };
-  }
+  const frozen = getFrozenClose(symbol);
+  if (frozen != null) return { price: frozen, stale: false };
 
   try {
     // 直接从 Finnhub 获取实时报价
@@ -341,5 +338,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
  * @returns 实时价格
  */
 export async function fetchRealtimePrice(symbol: string): Promise<QuoteResult> {
+  const frozen = getFrozenClose(symbol);
+  if (frozen != null) return { price: frozen, stale: false };
   return fetchRealtimeQuote(symbol);
 }

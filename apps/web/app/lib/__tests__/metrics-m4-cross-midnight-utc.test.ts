@@ -1,5 +1,6 @@
 import { computeFifo } from "@/lib/fifo";
 import { calcMetrics } from "@/lib/metrics";
+import { toNY, startOfDayNY, endOfDayNY } from "@/lib/date";
 import type { Trade, Position } from "@/lib/services/dataService";
 
 jest.mock("@/lib/timezone", () => {
@@ -17,17 +18,24 @@ describe("historical PnL across UTC midnight", () => {
         symbol: "AAPL",
         price: 100,
         quantity: 100,
-        date: "2024-01-02T01:00:00Z",
+        date: "2024-01-02T15:00:00Z", // 10:00 NY
         action: "buy",
       },
       {
         symbol: "AAPL",
         price: 110,
         quantity: 100,
-        date: "2024-01-03T00:30:00Z",
+        date: "2024-01-03T01:00:00Z", // 20:00 NY same day
         action: "sell",
       },
     ];
+
+    const dayStart = startOfDayNY("2024-01-02");
+    const dayEnd = endOfDayNY("2024-01-02");
+    for (const tr of trades) {
+      const d = toNY(tr.date);
+      expect(d >= dayStart && d <= dayEnd).toBe(true);
+    }
 
     const enriched = computeFifo(trades);
     const positions: Position[] = [];
