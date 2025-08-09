@@ -11,7 +11,7 @@ jest.mock("@/lib/timezone", () => {
 });
 
 describe("calcMetrics M7 counts", () => {
-  it("counts sell and cover once per trade", () => {
+  it("counts sell and cover per closed lot", () => {
     const trades: Trade[] = [
       {
         symbol: "AAPL",
@@ -58,7 +58,7 @@ describe("calcMetrics M7 counts", () => {
     ];
 
     const metrics = calcMetrics(computeFifo(trades), []);
-    expect(metrics.M7).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M7).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
     expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
   });
 
@@ -160,7 +160,7 @@ describe("calcMetrics M7 counts", () => {
     ];
 
     const metrics = calcMetrics(splitTrades, []);
-    expect(metrics.M7).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
+    expect(metrics.M7).toEqual({ B: 2, S: 2, P: 2, C: 2, total: 8 });
     expect(metrics.M8).toEqual({ B: 2, S: 1, P: 2, C: 1, total: 6 });
   });
 });

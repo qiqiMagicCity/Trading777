@@ -1,4 +1,4 @@
-import tradesData from '../../../public/trades.json';
+import tradesData from './fixtures/trades-with-history.json';
 import { computeFifo, type InitialPosition } from '@/lib/fifo';
 import { calcMetrics } from '@/lib/metrics';
 import type { Trade, Position } from '@/lib/services/dataService';
