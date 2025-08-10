@@ -3,6 +3,7 @@ import type { Position } from "@/lib/services/dataService";
 import { nowNY, toNY, getLatestTradingDayStr, endOfDayNY } from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import type { DailyResult } from "./types";
+import { calcPeriodMetrics } from "./metrics-period";
 
 // Only enable verbose logging outside production
 const DEBUG = process.env.NODE_ENV !== "production";
@@ -473,29 +474,6 @@ function calcCumulativeTradeCounts(
  * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
  * @returns 包含 wtd、mtd、ytd 的对象
  */
-export function calcPeriodMetrics(
-  dailyResults: DailyResult[],
-  todayStr: string,
-): { wtd: number; mtd: number; ytd: number } {
-  const sumSince = (since: string) =>
-    dailyResults
-      .filter((r) => r.date >= since && r.date <= todayStr)
-      .reduce((a, r) => a + r.realized + r.unrealized, 0);
-
-  // Ensure calculations are based on New York time
-  const today = toNY(`${todayStr}T00:00:00`);
-  const day = (today.getDay() + 6) % 7; // Monday=0
-  const monday = toNY(today);
-  monday.setDate(today.getDate() - day);
-  const mondayStr = monday.toISOString().slice(0, 10);
-
-  return {
-    wtd: sumSince(mondayStr),
-    mtd: sumSince(todayStr.slice(0, 8) + "01"),
-    ytd: sumSince(todayStr.slice(0, 4) + "-01-01"),
-  };
-}
-
 /**
  * 计算所有交易指标
  *
