@@ -1,5 +1,4 @@
-import { calcM9, collectCloseLots } from "@/lib/metrics";
-import { calcPeriodMetrics } from "@/lib/metrics-period";
+import { calcM9, collectCloseLots, calcWtdMtdYtd } from "@/lib/metrics";
 import { calcWinLossLots } from "@/lib/metrics-winloss";
 import type { DailyResult } from "@/lib/types";
 import { readFileSync } from "fs";
@@ -20,11 +19,11 @@ describe("metrics consistency", () => {
     });
   });
 
-  it("calcPeriodMetrics returns 8952.5 for single-day sample", () => {
+  it("calcWtdMtdYtd returns 8952.5 for single-day sample", () => {
     const days: DailyResult[] = [
       { date: "2025-08-01", realized: 7850, unrealized: 1102.5 },
     ];
-    const { wtd, mtd, ytd } = calcPeriodMetrics(days, "2025-08-01");
+    const { wtd, mtd, ytd } = calcWtdMtdYtd(days, "2025-08-01");
     expect(wtd).toBe(8952.5);
     expect(mtd).toBe(8952.5);
     expect(ytd).toBe(8952.5);
