@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
+import type { DailyResult } from "../types";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -359,6 +360,53 @@ export async function findMetricsDaily(): Promise<DailyMetric[]> {
     console.warn("findMetricsDaily failed", e);
     return [];
   }
+}
+
+export function migrateDailyResult(raw: any): DailyResult | undefined {
+  if (!raw || typeof raw !== "object") {
+    console.warn("Invalid dailyResult record", raw);
+    return undefined;
+  }
+  const { date, realized, unrealized, M4, fifo, float, ...rest } = raw as any;
+  const extra = Object.keys(rest);
+  if (extra.length) {
+    console.warn(
+      `Unknown properties in dailyResult record ignored: ${extra.join(", ")}`,
+    );
+  }
+
+  let r = realized;
+  let u = unrealized;
+  const hasLegacy = M4 != null || fifo != null || float != null;
+  if (hasLegacy) {
+    r = (typeof M4 === "number" ? M4 : 0) + (typeof fifo === "number" ? fifo : 0);
+    u = typeof float === "number" ? float : 0;
+    console.warn(`Migrated legacy dailyResult record${date ? ` for ${date}` : ""}`);
+  }
+
+  if (typeof date !== "string" || typeof r !== "number" || typeof u !== "number") {
+    console.warn(
+      `Missing required values in dailyResult record: ${JSON.stringify(raw)}`,
+    );
+    if (typeof date !== "string") return undefined;
+    if (typeof r !== "number") r = 0;
+    if (typeof u !== "number") u = 0;
+  }
+
+  return { date, realized: r, unrealized: u };
+}
+
+export function loadDailyResults(raw: unknown): DailyResult[] {
+  if (!Array.isArray(raw)) {
+    console.warn("dailyResult JSON is not an array");
+    return [];
+  }
+  const list: DailyResult[] = [];
+  for (const item of raw) {
+    const migrated = migrateDailyResult(item);
+    if (migrated) list.push(migrated);
+  }
+  return list;
 }
 
 // --- New functions for price cache ---
