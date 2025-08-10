@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
+import type { DailyResult } from "@/lib/types";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -35,10 +36,7 @@ export interface CachedPrice {
 }
 
 // Interface for metricsDaily records
-export interface DailyMetric {
-  date: string;
-  M5_1?: number;
-}
+export type DailyMetric = DailyResult;
 
 // Internal representation, adapted for the app
 export interface Trade {
@@ -332,29 +330,19 @@ export async function findPositions(): Promise<Position[]> {
 
 export async function findMetricsDaily(): Promise<DailyMetric[]> {
   try {
-    let res = await fetch("/metricsDaily.json");
-    if (!res.ok) {
-      res = await fetch("/dailyResult.json");
-    }
+    const res = await fetch("/dailyResult.json");
     if (!res.ok) return [];
-    const list = (await res.json()) as Array<{ date: string; M5_1?: number }>;
+    const list = (await res.json()) as Array<{
+      date: string;
+      realized: number;
+      unrealized: number;
+    }>;
     if (!Array.isArray(list)) return [];
-    return list.map((r) => {
-      const item: DailyMetric = {
-        date: r.date,
-        M5_1: typeof r.M5_1 === "number" ? r.M5_1 : undefined,
-      };
-      if (item.M5_1 == null && item.date) {
-        try {
-          fetch(`/api/metrics-daily?date=${encodeURIComponent(item.date)}`, {
-            method: "POST",
-          });
-        } catch (err) {
-          console.warn("trigger metrics-daily failed", err);
-        }
-      }
-      return item;
-    });
+    return list.map((r) => ({
+      date: r.date,
+      realized: typeof r.realized === "number" ? r.realized : 0,
+      unrealized: typeof r.unrealized === "number" ? r.unrealized : 0,
+    }));
   } catch (e) {
     console.warn("findMetricsDaily failed", e);
     return [];
