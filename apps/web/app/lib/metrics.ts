@@ -385,6 +385,7 @@ function calcCumulativeTradeCounts(
   }
 
   for (const pos of initialPositions) {
+    if (!pos.symbol || !isFinite(pos.qty)) continue;
     if (pos.qty > 0) B++;
     else if (pos.qty < 0) P++;
   }
