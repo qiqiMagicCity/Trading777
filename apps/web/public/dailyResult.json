@@ -2,9 +2,6 @@
   {
     "date": "2025-08-01",
     "realized": 7850,
-    "float": 0,
-    "M5_1": 1670,
-    "fifo": 1670,
-    "pnl": 9520
+    "unrealized": 0
   }
 ]

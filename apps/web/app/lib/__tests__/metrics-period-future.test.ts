@@ -1,4 +1,5 @@
-import { calcMetrics, type DailyResult } from "@/lib/metrics";
+import { calcMetrics } from "@/lib/metrics";
+import type { DailyResult } from "@/lib/types";
 
 jest.mock("@/lib/timezone", () => {
   const actual = jest.requireActual("@/lib/timezone");
@@ -11,10 +12,10 @@ jest.mock("@/lib/timezone", () => {
 describe("calcMetrics period metrics exclude future dates", () => {
   it("excludes daily results after today", () => {
     const dailyResults: DailyResult[] = [
-      { date: "2024-01-01", realized: 100, float: 10, fifo: 5, M5_1: 0, pnl: 115 },
-      { date: "2024-01-02", realized: 200, float: 20, fifo: 10, M5_1: 0, pnl: 230 },
+      { date: "2024-01-01", realized: 105, unrealized: 10 },
+      { date: "2024-01-02", realized: 210, unrealized: 20 },
       // Future date that should be ignored
-      { date: "2024-01-03", realized: 300, float: 30, fifo: 15, M5_1: 0, pnl: 345 },
+      { date: "2024-01-03", realized: 315, unrealized: 30 },
     ];
 
     const metrics = calcMetrics([], [], dailyResults);
