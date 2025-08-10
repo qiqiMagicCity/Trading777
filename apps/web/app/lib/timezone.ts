@@ -103,6 +103,28 @@ export const endOfDayNY = (date: Date): Date => {
   return d;
 };
 
+/** 获取所在周的周一日期（纽约时区），返回 YYYY-MM-DD */
+export const weekStartNY = (dateInput: string | Date): string => {
+  const d = toNY(dateInput);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+};
+
+/** 获取所在月的月初日期（纽约时区），返回 YYYY-MM-DD */
+export const monthStartNY = (dateInput: string | Date): string => {
+  const d = toNY(dateInput);
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+};
+
+/** 获取所在年的年初日期（纽约时区），返回 YYYY-MM-DD */
+export const yearStartNY = (dateInput: string | Date): string => {
+  const d = toNY(dateInput);
+  d.setMonth(0, 1);
+  return d.toISOString().slice(0, 10);
+};
+
 // Attach helper to global for quick usage in dev tools
 // @ts-ignore
 (globalThis as any).toNY = toNY;
