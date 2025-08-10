@@ -9,7 +9,7 @@ import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
 import { toNY } from '@/lib/timezone';
-import { calcWtdMtdYtd } from '@/lib/metrics';
+import { calcWtdMtdYtd, checkPeriodDebug } from '@/lib/metrics';
 
 declare const Chart: any;
 
@@ -34,6 +34,15 @@ export default function AnalysisPage() {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
+  const debugCalledRef = useRef(false);
+
+  useEffect(() => {
+    if (debugCalledRef.current || daily.length === 0) return;
+    if (process.env.NODE_ENV !== 'production') {
+      checkPeriodDebug(daily, evalDateStr);
+    }
+    debugCalledRef.current = true;
+  }, [daily, evalDateStr]);
 
   // 当 Chart.js 和每日结果数据准备好时绘制/更新图表
   useEffect(() => {
