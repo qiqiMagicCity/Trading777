@@ -11,7 +11,7 @@ import { TradesTable } from '@/modules/TradesTable';
 import { SymbolTags } from '@/modules/SymbolTags';
 import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
-import { calcMetrics } from '@/lib/metrics';
+import { calcMetrics, debugTodayRealizedBreakdown } from '@/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
 import { getLatestTradingDayStr } from '@/lib/timezone';
@@ -151,6 +151,13 @@ export default function DashboardPage() {
         const metrics = calcMetrics(enriched, posList, dailyResults, initPos);
         useStore.getState().setMetrics(metrics);
 
+        if (process.env.NODE_ENV !== 'production') {
+          const dbg = debugTodayRealizedBreakdown();
+          console.table(dbg.rows.slice(0, 8));
+          console.log('M4 sum =', dbg.sumM4, '(expected 6530)');
+          console.log('M5.2 sum =', dbg.sumM52, '(expected 1320)');
+        }
+
         setTrades(dbTrades);
         setPositions(posList);
         setInitialPositions(initPos);
@@ -243,6 +250,13 @@ export default function DashboardPage() {
       }));
       const metrics = calcMetrics(enriched, posList, dailyResults, initPos);
       useStore.getState().setMetrics(metrics);
+
+      if (process.env.NODE_ENV !== 'production') {
+        const dbg = debugTodayRealizedBreakdown();
+        console.table(dbg.rows.slice(0, 8));
+        console.log('M4 sum =', dbg.sumM4, '(expected 6530)');
+        console.log('M5.2 sum =', dbg.sumM52, '(expected 1320)');
+      }
 
       setTrades(dbTrades);
       setPositions(posList);
