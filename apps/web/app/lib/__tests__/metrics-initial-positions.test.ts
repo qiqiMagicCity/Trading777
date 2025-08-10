@@ -50,7 +50,9 @@ describe("FIFO calculations with initial positions", () => {
     const metrics = calcMetrics(enriched, positions, [], initialPositions);
     expect(metrics.M4).toBe(250);
     expect(metrics.M5.fifo).toBe(20);
-    expect(metrics.M10.W).toBe(2);
-    expect(metrics.M10.L).toBe(0);
+    expect(metrics.M10.win).toBe(2);
+    expect(metrics.M10.loss).toBe(0);
+    expect(metrics.M10.flat).toBe(0);
+    expect(metrics.M10.rate).toBe(1);
   });
 });

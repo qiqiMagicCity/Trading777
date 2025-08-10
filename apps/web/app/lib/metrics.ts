@@ -4,6 +4,7 @@ import { nowNY, toNY, getLatestTradingDayStr, endOfDayNY } from "@/lib/timezone"
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import type { DailyResult } from "./types";
 import { calcPeriodMetrics, sumRealized } from "./metrics-period";
+import { calcWinLossLots } from "./metrics-winloss";
 
 // Only enable verbose logging outside production
 const DEBUG = process.env.NODE_ENV !== "production";
@@ -75,13 +76,15 @@ export interface Metrics {
 
   /**
    * M10: 胜率统计
-   * W: 盈利交易次数
-   * L: 亏损交易次数
-   * rate: 胜率百分比
+   * win: 盈利交易次数
+   * loss: 亏损交易次数
+   * flat: 盈亏为0的交易次数
+   * rate: 胜率（win / (win + loss)）
    */
   M10: {
-    W: number;
-    L: number;
+    win: number;
+    loss: number;
+    flat: number;
     rate: number;
   };
 
@@ -354,84 +357,6 @@ function calcHistoryFifoPnL(
  * @param trades 交易记录数组
  * @returns 包含 wins 与 losses 计数
  */
-function calcWinLossLots(
-  trades: EnrichedTrade[],
-  initialPositions: InitialPosition[] = [],
-): {
-  wins: number;
-  losses: number;
-} {
-  const longFifo: Record<string, { qty: number; price: number }[]> = {};
-  const shortFifo: Record<string, { qty: number; price: number }[]> = {};
-  for (const pos of initialPositions) {
-    const qty = Math.abs(pos.qty);
-    if (qty === 0) continue;
-    const lot = { qty, price: pos.avgPrice };
-    if (pos.qty >= 0) {
-      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol]!.push(lot);
-    } else {
-      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol]!.push(lot);
-    }
-  }
-
-  let wins = 0;
-  let losses = 0;
-
-  const sorted = trades
-    .map((t, idx) => ({ t, idx }))
-    .sort((a, b) => {
-      const timeA = toNY(a.t.date).getTime();
-      const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? Infinity : timeA;
-      const bTime = isNaN(timeB) ? Infinity : timeB;
-      return aTime - bTime || a.idx - b.idx;
-    })
-    .map(({ t }) => t);
-
-  for (const t of sorted) {
-    const { symbol, action, price } = t;
-    const quantity = Math.abs(t.quantity);
-
-    if (action === "buy") {
-      if (!longFifo[symbol]) longFifo[symbol] = [];
-      longFifo[symbol].push({ qty: quantity, price });
-    } else if (action === "sell") {
-      let remain = quantity;
-      const fifo = longFifo[symbol] || [];
-      while (remain > 0 && fifo.length > 0) {
-        const lot = fifo[0]!;
-        const q = Math.min(lot.qty, remain);
-        const pnl = (price - lot.price) * q;
-        if (pnl > 0) wins++;
-        else if (pnl < 0) losses++;
-        lot.qty -= q;
-        remain -= q;
-        if (lot.qty === 0) fifo.shift();
-      }
-    } else if (action === "short") {
-      if (!shortFifo[symbol]) shortFifo[symbol] = [];
-      shortFifo[symbol].push({ qty: quantity, price });
-    } else if (action === "cover") {
-      let remain = quantity;
-      const fifo = shortFifo[symbol] || [];
-      while (remain > 0 && fifo.length > 0) {
-        const lot = fifo[0]!;
-        const q = Math.min(lot.qty, remain);
-        const pnl = (lot.price - price) * q;
-        if (pnl > 0) wins++;
-        else if (pnl < 0) losses++;
-        lot.qty -= q;
-        remain -= q;
-        if (lot.qty === 0) fifo.shift();
-      }
-    }
-  }
-
-  return { wins, losses };
-}
-
 
 function calcCumulativeTradeCounts(
   trades: EnrichedTrade[],
@@ -581,14 +506,13 @@ export function calcMetrics(
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
-  const { wins: winningTrades, losses: losingTrades } = calcWinLossLots(
-    safeTrades,
-    initialPositions,
-  );
-  const winRate =
-    winningTrades + losingTrades > 0
-      ? (winningTrades / (winningTrades + losingTrades)) * 100
-      : 0;
+  const closes = safeTrades
+    .filter(
+      (t) =>
+        t.realizedPnl !== 0 || t.action === "sell" || t.action === "cover",
+    )
+    .map((t) => ({ pnl: t.realizedPnl }));
+  const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13: 周期性指标
   const { wtd, mtd, ytd } = calcPeriodMetrics(historicalDailyResults, todayStr);
@@ -619,9 +543,10 @@ export function calcMetrics(
     },
     M9: historicalRealizedPnl,
     M10: {
-      W: winningTrades,
-      L: losingTrades,
-      rate: winRate,
+      win,
+      loss,
+      flat,
+      rate,
     },
     M11: wtd,
     M12: mtd,
