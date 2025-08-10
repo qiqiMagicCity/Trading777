@@ -1,26 +1,36 @@
-import type { EnrichedTrade } from '../app/lib/fifo';
-import { calcTodayTradePnL } from '../app/lib/calcTodayTradePnL';
-import { calcTodayFifoPnL } from '../app/lib/metrics';
-import type { DailyResult } from '../app/lib/types';
+import type { EnrichedTrade } from "../app/lib/fifo";
+import type { Position } from "../app/lib/services/dataService";
+import type { DailyResult } from "../app/lib/types";
 
 /**
- * 根据交易记录生成某日的汇总结果
- * 复用前端算法计算日内交易与 FIFO 盈亏
- */
+ * 根据交易记录与持仓生成某日的汇总结果
+ *
+ * realized: 直接汇总当天所有交易的 realizedPnl
+ * unrealized: 根据持仓计算 M3 浮动盈亏
+*/
 export function generateDailyResult(
   trades: EnrichedTrade[],
+  positions: Position[],
   date: string,
 ): DailyResult {
-  const realizedPnl = trades
+  const realized = trades
     // Ensure trade has a valid date before checking prefix
     .filter((t) => t.date?.startsWith(date))
     .reduce((acc, t) => acc + (t.realizedPnl || 0), 0);
-  const m5Trade = calcTodayTradePnL(trades, date);
-  const m5Fifo = calcTodayFifoPnL(trades, date);
+
+  const unrealized = positions.reduce((acc, pos) => {
+    const qty = Math.abs(pos.qty);
+    if (pos.qty >= 0) {
+      // 多头: (市价 - 均价) * 数量
+      return acc + (pos.last - pos.avgPrice) * qty;
+    }
+    // 空头: (均价 - 市价) * 数量
+    return acc + (pos.avgPrice - pos.last) * qty;
+  }, 0);
 
   return {
     date,
-    realized: realizedPnl - m5Trade + m5Fifo,
-    unrealized: 0, // 浮动盈亏由外部价格数据计算，此处置零占位
+    realized,
+    unrealized,
   };
 }
