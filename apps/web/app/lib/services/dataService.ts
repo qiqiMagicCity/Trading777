@@ -36,8 +36,6 @@ export interface CachedPrice {
 }
 
 // Interface for metricsDaily records
-export type DailyMetric = DailyResult;
-
 // Internal representation, adapted for the app
 export interface Trade {
   id?: number;
@@ -328,25 +326,46 @@ export async function findPositions(): Promise<Position[]> {
   return db.getAll(POSITIONS_STORE_NAME);
 }
 
-export async function findMetricsDaily(): Promise<DailyMetric[]> {
+const toNum = (v: any) => (Number.isFinite(+v) ? +v : 0);
+
+export async function loadDailyResults(): Promise<DailyResult[]> {
   try {
-    const res = await fetch("/dailyResult.json");
-    if (!res.ok) return [];
-    const list = (await res.json()) as Array<{
-      date: string;
-      realized: number;
-      unrealized: number;
-    }>;
-    if (!Array.isArray(list)) return [];
-    return list.map((r) => ({
-      date: r.date,
-      realized: typeof r.realized === "number" ? r.realized : 0,
-      unrealized: typeof r.unrealized === "number" ? r.unrealized : 0,
-    }));
+    const res = await fetch("/dailyResult.json", { cache: "no-store" });
+    const raw = await res.json();
+    const arr: any[] = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.items)
+        ? raw.items
+        : [];
+    const map = new Map<string, DailyResult>();
+    for (const x of arr) {
+      const d = String(x.date ?? "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+      map.set(d, {
+        date: d,
+        realized: toNum(x.realized),
+        unrealized: toNum(x.unrealized),
+      });
+    }
+    return [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
   } catch (e) {
-    console.warn("findMetricsDaily failed", e);
+    console.warn("loadDailyResults failed", e);
     return [];
   }
+}
+
+export function getEvalDateStr(
+  daily: DailyResult[],
+  lastTradeDateStr?: string,
+) {
+  const freeze = process.env.NEXT_PUBLIC_FREEZE_DATE?.trim();
+  if (freeze) return freeze.slice(0, 10);
+  const lastDaily = daily.reduce(
+    (m, r) => (r.date > m ? r.date : m),
+    "1900-01-01",
+  );
+  const lastTrade = lastTradeDateStr ?? "1900-01-01";
+  return (lastDaily > lastTrade ? lastDaily : lastTrade).slice(0, 10);
 }
 
 // --- New functions for price cache ---

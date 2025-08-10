@@ -1,9 +1,17 @@
 import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
-import { nowNY, toNY, getLatestTradingDayStr, endOfDayNY } from "@/lib/timezone";
+import {
+  nowNY,
+  toNY,
+  getLatestTradingDayStr,
+  endOfDayNY,
+  startOfWeekNY,
+  startOfMonthNY,
+  startOfYearNY,
+} from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import type { DailyResult } from "./types";
-import { calcPeriodMetrics, sumRealized } from "./metrics-period";
+import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 
 // Only enable verbose logging outside production
@@ -155,6 +163,31 @@ function isOnOrBeforeNY(dateStr: string | undefined, todayStr: string): boolean 
   const d = toNY(dateStr);
   const end = toNY(`${todayStr}T23:59:59.999`);
   return !isNaN(d.getTime()) && d.getTime() <= end.getTime();
+}
+
+function sumPeriod(daily: DailyResult[], fromStr: string, toStr: string) {
+  const fromTS = toNY(fromStr).getTime();
+  const toTS = toNY(toStr).getTime();
+  let total = 0;
+  for (const r of daily) {
+    const ts = toNY(r.date).getTime();
+    if (ts >= fromTS && ts <= toTS)
+      total += (r.realized ?? 0) + (r.unrealized ?? 0);
+  }
+  return total;
+}
+
+export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
+  const evalDate = toNY(evalDateStr);
+  const wStart = startOfWeekNY(evalDate);
+  const mStart = startOfMonthNY(evalDate);
+  const yStart = startOfYearNY(evalDate);
+  const endStr = evalDateStr;
+  return {
+    wtd: sumPeriod(daily, wStart.toISOString().slice(0, 10), endStr),
+    mtd: sumPeriod(daily, mStart.toISOString().slice(0, 10), endStr),
+    ytd: sumPeriod(daily, yStart.toISOString().slice(0, 10), endStr),
+  };
 }
 
 /**
@@ -609,7 +642,7 @@ export function calcMetrics(
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13: 周期性指标
-  const { wtd, mtd, ytd } = calcPeriodMetrics(historicalDailyResults, todayStr);
+  const { wtd, mtd, ytd } = calcWtdMtdYtd(historicalDailyResults, todayStr);
 
   return {
     M1: totalCost,

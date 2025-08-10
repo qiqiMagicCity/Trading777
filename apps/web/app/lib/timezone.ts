@@ -125,6 +125,31 @@ export const yearStartNY = (dateInput: string | Date): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 获取纽约时区当周周一零点的 Date 对象 */
+export const startOfWeekNY = (dateInput: string | Date): Date => {
+  const d = toNY(dateInput);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/** 获取纽约时区当月月初零点的 Date 对象 */
+export const startOfMonthNY = (dateInput: string | Date): Date => {
+  const d = toNY(dateInput);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/** 获取纽约时区当年年初零点的 Date 对象 */
+export const startOfYearNY = (dateInput: string | Date): Date => {
+  const d = toNY(dateInput);
+  d.setMonth(0, 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
 // Attach helper to global for quick usage in dev tools
 // @ts-ignore
 (globalThis as any).toNY = toNY;

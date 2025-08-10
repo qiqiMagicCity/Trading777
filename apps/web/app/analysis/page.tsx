@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Script from 'next/script';
-import { findTrades, findMetricsDaily } from '@/lib/services/dataService';
+import { findTrades, loadDailyResults, getEvalDateStr } from '@/lib/services/dataService';
 import type { DailyResult } from '@/lib/types';
 import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
 import { toNY } from '@/lib/timezone';
+import { calcWtdMtdYtd } from '@/lib/metrics';
 
 declare const Chart: any;
 
@@ -23,16 +24,18 @@ export default function AnalysisPage() {
     },
     refetchInterval: 5000
   });
-  const { data: metricsDaily = [] } = useQuery<DailyResult[]>({
-    queryKey: ['metricsDaily'],
-    queryFn: findMetricsDaily,
+  const { data: daily = [] } = useQuery<DailyResult[]>({
+    queryKey: ['dailyResults'],
+    queryFn: loadDailyResults,
     refetchInterval: 60000
   });
+  const evalDateStr = getEvalDateStr(daily);
+  const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 
-  // 当 Chart.js 和 metricsDaily 都准备好时绘制/更新图表
+  // 当 Chart.js 和每日结果数据准备好时绘制/更新图表
   useEffect(() => {
     if (!isChartReady || !pnlCanvasRef.current) return;
 
@@ -49,9 +52,9 @@ export default function AnalysisPage() {
       // month
       return d.slice(0, 7);
     };
-    metricsDaily.forEach(r => {
+    daily.forEach(r => {
       const key = fmt(r.date);
-      const pnl = r.realized + r.unrealized;
+      const pnl = (r.realized ?? 0) + (r.unrealized ?? 0);
       map[key] = (map[key] || 0) + pnl;
     });
     const dates = Object.keys(map).sort();
@@ -93,7 +96,7 @@ export default function AnalysisPage() {
         }
       });
     }
-  }, [isChartReady, metricsDaily, period]);
+  }, [isChartReady, daily, period]);
 
   return (
     <>
@@ -107,6 +110,16 @@ export default function AnalysisPage() {
       </h2>
 
       <main style={{ width: '90%', maxWidth: 'var(--page-max)', margin: '20px auto' }}>
+        {/* 周期性指标 */}
+        <section style={{ marginBottom: '20px' }}>
+          <h3 className="section-title">周期盈亏</h3>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <span>WTD: {wtd.toFixed(2)}</span>
+            <span>MTD: {mtd.toFixed(2)}</span>
+            <span>YTD: {ytd.toFixed(2)}</span>
+          </div>
+        </section>
+
         {/* 曲线图 */}
         <section>
           <h3 className="section-title">资金收益曲线</h3>
