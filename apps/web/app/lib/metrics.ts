@@ -207,6 +207,7 @@ export function calcM9FromDaily(
 }
 
 export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
+  if (process.env.NODE_ENV === 'production') return;
   if (!DEBUG) return;
   const evalDate = toNY(evalDateStr);
   const wStart = startOfWeekNY(evalDate).toISOString().slice(0, 10);
@@ -742,10 +743,3 @@ export function formatNumber(value: number, decimals: number = 2): string {
   return value.toFixed(decimals);
 }
 
-export function checkPeriodDebug(
-  daily: DailyResult[],
-  evalDateStr: string,
-): void {
-  const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
-  console.debug("checkPeriodDebug", { wtd, mtd, ytd, evalDateStr });
-}
