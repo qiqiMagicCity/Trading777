@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades, clearAllData, findPositions } from '@/lib/services/dataService';
+import { importData, findTrades, clearAllData, findPositions, loadDailyResults } from '@/lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
 import { computeFifo, type InitialPosition } from '@/lib/fifo';
@@ -141,7 +141,9 @@ export default function DashboardPage() {
 
         // 获取每日结果数据用于计算周期性指标
         const dailyResultsResponse = await fetch('/dailyResult.json');
-        const dailyResults = dailyResultsResponse.ok ? await dailyResultsResponse.json() : [];
+        const dailyResults = dailyResultsResponse.ok
+          ? loadDailyResults(await dailyResultsResponse.json())
+          : [];
 
         // 计算指标并存入全局状态
         const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
@@ -235,7 +237,9 @@ export default function DashboardPage() {
 
       // 获取每日结果数据用于计算周期性指标
       const dailyResultsResponse = await fetch('/dailyResult.json');
-      const dailyResults = dailyResultsResponse.ok ? await dailyResultsResponse.json() : [];
+      const dailyResults = dailyResultsResponse.ok
+        ? loadDailyResults(await dailyResultsResponse.json())
+        : [];
 
       // 计算指标并更新全局状态
       const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
