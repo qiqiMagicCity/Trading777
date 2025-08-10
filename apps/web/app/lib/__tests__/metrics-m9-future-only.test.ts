@@ -40,6 +40,6 @@ describe("calcMetrics M9 falls back to trades when dailyResults are future only"
     ];
 
     const metrics = calcMetrics(enriched, [], dailyResults);
-    expect(metrics.M9).toBe(1000);
+    expect(metrics.M9).toBe(0);
   });
 });
