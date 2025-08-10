@@ -3,7 +3,7 @@ import type { Position } from "@/lib/services/dataService";
 import { nowNY, toNY, getLatestTradingDayStr, endOfDayNY } from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import type { DailyResult } from "./types";
-import { calcPeriodMetrics } from "./metrics-period";
+import { calcPeriodMetrics, sumRealized } from "./metrics-period";
 
 // Only enable verbose logging outside production
 const DEBUG = process.env.NODE_ENV !== "production";
@@ -467,6 +467,10 @@ function calcCumulativeTradeCounts(
   return { B, S, P, C, total: B + S + P + C };
 }
 
+export function calcM9(days: DailyResult[]): number {
+  return sumRealized(days);
+}
+
 /**
  * 计算周期性指标（WTD、MTD、YTD）
  *
@@ -573,13 +577,7 @@ export function calcMetrics(
   const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
 
   // M9: 所有历史平仓盈利（含今日）
-  const historicalRealizedPnl = round2(
-    historicalDailyResults.length
-      ? historicalDailyResults.reduce((acc, r) => acc + r.realized, 0)
-      : safeTrades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
-          calcTodayTradePnL(safeTrades, todayStr) +
-          calcTodayFifoPnL(safeTrades, todayStr, initialPositions),
-  );
+  const historicalRealizedPnl = calcM9(historicalDailyResults);
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率

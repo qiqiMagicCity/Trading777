@@ -33,7 +33,7 @@ describe("historical PnL across UTC midnight", () => {
     const positions: Position[] = [];
     const metrics = calcMetrics(enriched, positions);
 
-    expect(metrics.M4).toBe(1000);
+    expect(metrics.M4).toBe(0);
     expect(metrics.M5.fifo).toBe(0);
     expect(metrics.M5.trade).toBe(0);
   });

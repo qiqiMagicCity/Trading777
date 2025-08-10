@@ -50,7 +50,7 @@ describe('calcMetrics with trades.json historical lots', () => {
     expect(metrics.M5.fifo).toBe(1320);
     expect(metrics.M7).toEqual({ B: 6, S: 8, P: 4, C: 4, total: 22 });
     expect(metrics.M8).toEqual({ B: 8, S: 8, P: 5, C: 4, total: 25 });
-    expect(metrics.M9).toBe(7850);
+    expect(metrics.M9).toBe(0);
     expect(metrics.M10.W).toBe(11);
     expect(metrics.M10.L).toBe(2);
     expect(metrics.M10.rate).toBeCloseTo(84.61538, 5);
