@@ -109,6 +109,17 @@ export interface Metrics {
 /** 价格映射类型，格式为 { 日期: { 股票代码: 价格 } } */
 export type PriceMap = Record<string, Record<string, number>>;
 
+export type RealizedBreakdownRow = {
+  time: string;
+  symbol: string;
+  side: "sell" | "cover";
+  into: "M4" | "M5.2";
+  qty: number;
+  openPrice: number;
+  closePrice: number;
+  pnl: number;
+};
+
 /**
  * 计算数组总和的辅助函数
  * @param arr 数字数组
@@ -419,6 +430,116 @@ function calcHistoryFifoPnL(
     }
   }
   return pnl;
+}
+
+export function debugTodayRealizedBreakdown(
+  trades: EnrichedTrade[],
+  evalDateStr: string,
+  initialPositions: InitialPosition[] = [],
+): { rows: RealizedBreakdownRow[]; sumM4: number; sumM52: number } {
+  const longFifo: Record<
+    string,
+    { qty: number; price: number; date: string }[]
+  > = {};
+  const shortFifo: Record<
+    string,
+    { qty: number; price: number; date: string }[]
+  > = {};
+
+  for (const pos of initialPositions) {
+    const qty = Math.abs(pos.qty);
+    if (qty === 0) continue;
+    const lot = { qty, price: pos.avgPrice, date: "" };
+    if (pos.qty >= 0) {
+      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
+      longFifo[pos.symbol]!.push(lot);
+    } else {
+      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
+      shortFifo[pos.symbol]!.push(lot);
+    }
+  }
+
+  const sorted = trades
+    .map((t, idx) => ({ t, idx }))
+    .filter(({ t }) => isOnOrBeforeNY(t.date, evalDateStr))
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
+
+  const rows: RealizedBreakdownRow[] = [];
+
+  for (const t of sorted) {
+    const { symbol, action, price, date } = t;
+    const quantity = Math.abs(t.quantity);
+
+    if (action === "buy") {
+      if (!longFifo[symbol]) longFifo[symbol] = [];
+      longFifo[symbol].push({ qty: quantity, price, date });
+      continue;
+    }
+
+    if (action === "short") {
+      if (!shortFifo[symbol]) shortFifo[symbol] = [];
+      shortFifo[symbol].push({ qty: quantity, price, date });
+      continue;
+    }
+
+    const isCloseToday = isTodayNY(date, evalDateStr);
+    let remain = quantity;
+    const fifo = action === "sell" ? longFifo[symbol] || [] : shortFifo[symbol] || [];
+
+    while (remain > 0 && fifo.length > 0) {
+      const lot = fifo[0]!;
+      const q = Math.min(lot.qty, remain);
+      if (isCloseToday) {
+        const openToday = isTodayNY(lot.date, evalDateStr);
+        const into = openToday ? "M5.2" : "M4";
+        const openPrice = lot.price;
+        const closePrice = price;
+        const pnl =
+          action === "sell"
+            ? (closePrice - openPrice) * q
+            : (openPrice - closePrice) * q;
+        rows.push({
+          time: date,
+          symbol,
+          side: action,
+          into,
+          qty: q,
+          openPrice,
+          closePrice,
+          pnl,
+        });
+      }
+      lot.qty -= q;
+      remain -= q;
+      if (lot.qty === 0) fifo.shift();
+    }
+
+    if (remain > 0) {
+      if (action === "sell") {
+        if (!shortFifo[symbol]) shortFifo[symbol] = [];
+        shortFifo[symbol]!.push({ qty: remain, price, date });
+      } else if (action === "cover") {
+        if (!longFifo[symbol]) longFifo[symbol] = [];
+        longFifo[symbol]!.push({ qty: remain, price, date });
+      }
+    }
+  }
+
+  const sumM4 = rows
+    .filter((r) => r.into === "M4")
+    .reduce((acc, r) => acc + r.pnl, 0);
+  const sumM52 = rows
+    .filter((r) => r.into === "M5.2")
+    .reduce((acc, r) => acc + r.pnl, 0);
+
+  return { rows, sumM4, sumM52 };
 }
 
 /**
