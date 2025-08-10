@@ -138,10 +138,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const m10 = value as Metrics["M10"];
         formattedValue = (
           <>
-            <span className="green">W/{m10.W}</span>{" "}
-            <span className="red">L/{m10.L}</span>{" "}
-            <span className={m10.rate >= 50 ? "green" : "red"}>
-              {m10.rate.toFixed(1)}%
+            <span className="green">W/{m10.win}</span>{" "}
+            <span className="red">L/{m10.loss}</span>{" "}
+            <span>F/{m10.flat}</span>{" "}
+            <span className={m10.rate >= 0.5 ? "green" : "red"}>
+              {(m10.rate * 100).toFixed(1)}%
             </span>
           </>
         );
