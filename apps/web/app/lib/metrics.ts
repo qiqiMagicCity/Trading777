@@ -741,3 +741,11 @@ export function formatNumber(value: number, decimals: number = 2): string {
   if (isNaN(value)) return "N/A";
   return value.toFixed(decimals);
 }
+
+export function checkPeriodDebug(
+  daily: DailyResult[],
+  evalDateStr: string,
+): void {
+  const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
+  console.debug("checkPeriodDebug", { wtd, mtd, ytd, evalDateStr });
+}
