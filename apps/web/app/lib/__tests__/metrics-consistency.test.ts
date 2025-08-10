@@ -1,4 +1,9 @@
-import { calcM9, collectCloseLots, calcWtdMtdYtd } from "@/lib/metrics";
+import {
+  calcM9,
+  collectCloseLots,
+  calcWtdMtdYtd,
+  calcM9FromDaily,
+} from "@/lib/metrics";
 import { calcWinLossLots } from "@/lib/metrics-winloss";
 import type { DailyResult } from "@/lib/types";
 import { readFileSync } from "fs";
@@ -35,6 +40,15 @@ describe("metrics consistency", () => {
       { date: "2025-08-02", realized: -100, unrealized: 0 },
     ];
     expect(calcM9(days)).toBe(7750);
+  });
+
+  it("calcM9FromDaily sums up to evaluation date", () => {
+    const days: DailyResult[] = [
+      { date: "2025-08-01", realized: 5000, unrealized: 0 },
+      { date: "2025-08-02", realized: 1000, unrealized: 0 },
+      { date: "2025-08-03", realized: 2000, unrealized: 0 },
+    ];
+    expect(calcM9FromDaily(days, "2025-08-02")).toBe(6000);
   });
 
   it("calcWinLossLots returns expected counts", () => {
