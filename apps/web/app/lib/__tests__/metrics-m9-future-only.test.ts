@@ -1,5 +1,6 @@
 import { computeFifo } from "@/lib/fifo";
-import { calcMetrics, type DailyResult } from "@/lib/metrics";
+import { calcMetrics } from "@/lib/metrics";
+import type { DailyResult } from "@/lib/types";
 import type { Trade } from "@/lib/services/dataService";
 
 jest.mock("@/lib/timezone", () => {
@@ -34,10 +35,7 @@ describe("calcMetrics M9 falls back to trades when dailyResults are future only"
       {
         date: "2024-01-03",
         realized: 1000,
-        float: 0,
-        fifo: 0,
-        M5_1: 0,
-        pnl: 1000,
+        unrealized: 0,
       },
     ];
 

@@ -1,5 +1,6 @@
 import { computeFifo } from "@/lib/fifo";
-import { calcMetrics, type DailyResult } from "@/lib/metrics";
+import { calcMetrics } from "@/lib/metrics";
+import type { DailyResult } from "@/lib/types";
 import type { Trade, Position } from "@/lib/services/dataService";
 
 jest.mock("@/lib/timezone", () => {
@@ -46,7 +47,7 @@ describe("calcMetrics M6 ignores dailyResults pnl", () => {
     const enriched = computeFifo(trades);
     const positions: Position[] = [];
     const dailyResults: DailyResult[] = [
-      { date: "2024-01-02", realized: 0, float: 0, fifo: 0, M5_1: 0, pnl: 9999 },
+      { date: "2024-01-02", realized: 0, unrealized: 0 },
     ];
 
     const metrics = calcMetrics(enriched, positions, dailyResults);

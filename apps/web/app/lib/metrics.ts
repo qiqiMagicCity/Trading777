@@ -2,6 +2,7 @@ import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { nowNY, toNY, getLatestTradingDayStr, endOfDayNY } from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
+import type { DailyResult } from "./types";
 
 // Only enable verbose logging outside production
 const DEBUG = process.env.NODE_ENV !== "production";
@@ -93,29 +94,6 @@ export interface Metrics {
   M13: number;
 }
 
-/**
- * 每日交易结果接口
- */
-export interface DailyResult {
-  /** 日期，格式为 YYYY-MM-DD */
-  date: string;
-
-  /** 已实现盈亏 */
-  realized: number;
-
-  /** 浮动盈亏 */
-  float: number;
-
-  /** 今日日内交易盈利（交易视角） */
-  M5_1: number;
-
-  /** 今日日内交易盈利（FIFO视角） */
-  fifo: number;
-
-  /** 总盈亏 (realized + fifo + float) */
-  pnl: number;
-}
-
 /** 价格映射类型，格式为 { 日期: { 股票代码: 价格 } } */
 export type PriceMap = Record<string, Record<string, number>>;
 
@@ -130,23 +108,6 @@ function sum(arr: number[]): number {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
-}
-
-/**
- * Validate consistency of a DailyResult entry.
- * Throws an error (and warns) if realized + fifo + float does not equal pnl.
- */
-export function validateDailyResult(r: DailyResult): void {
-  const total = round2(r.realized + r.fifo + r.float);
-  const pnl = round2(r.pnl);
-  if (total !== pnl) {
-    const msg =
-      `DailyResult mismatch on ${r.date}: ` +
-      `realized(${r.realized}) + fifo(${r.fifo}) + float(${r.float}) = ${total}, ` +
-      `but pnl is ${r.pnl}`;
-    console.warn(msg);
-    throw new Error(msg);
-  }
 }
 
 function _count(list: { action?: string }[] | undefined) {
@@ -516,11 +477,10 @@ export function calcPeriodMetrics(
   dailyResults: DailyResult[],
   todayStr: string,
 ): { wtd: number; mtd: number; ytd: number } {
-  dailyResults.forEach(validateDailyResult);
   const sumSince = (since: string) =>
     dailyResults
       .filter((r) => r.date >= since && r.date <= todayStr)
-      .reduce((a, r) => a + r.realized + r.fifo + r.float, 0);
+      .reduce((a, r) => a + r.realized + r.unrealized, 0);
 
   // Ensure calculations are based on New York time
   const today = toNY(`${todayStr}T00:00:00`);
@@ -637,13 +597,10 @@ export function calcMetrics(
   // M9: 所有历史平仓盈利（含今日）
   const historicalRealizedPnl = round2(
     historicalDailyResults.length
-      ? historicalDailyResults.reduce(
-          (acc, r) => acc + (r.realized - (r.M5_1 || 0)) + r.fifo,
-          0,
-        )
-        : safeTrades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
-            calcTodayTradePnL(safeTrades, todayStr) +
-            calcTodayFifoPnL(safeTrades, todayStr, initialPositions),
+      ? historicalDailyResults.reduce((acc, r) => acc + r.realized, 0)
+      : safeTrades.reduce((acc, t) => acc + (t.realizedPnl || 0), 0) -
+          calcTodayTradePnL(safeTrades, todayStr) +
+          calcTodayFifoPnL(safeTrades, todayStr, initialPositions),
   );
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
