@@ -398,6 +398,104 @@ export function calcM9(days: DailyResult[]): number {
 }
 
 /**
+ * Collect all closed lots (FIFO) up to a given date.
+ *
+ * Maintains separate FIFO queues for long and short lots. The queues are
+ * pre-seeded with `initialPositions` and then progressed through each trade in
+ * chronological order (NY timezone). For every SELL or COVER, quantities are
+ * matched against the appropriate queue and a `{ pnl }` entry is pushed for
+ * each matched lot.
+ */
+export function collectCloseLots(
+  trades: EnrichedTrade[],
+  initialPositions: InitialPosition[] = [],
+  untilDateStr?: string,
+): { pnl: number }[] {
+  const longFifo: Record<string, { qty: number; price: number }[]> = {};
+  const shortFifo: Record<string, { qty: number; price: number }[]> = {};
+
+  for (const pos of initialPositions) {
+    const qty = Math.abs(pos.qty);
+    if (qty === 0) continue;
+    const lot = { qty, price: pos.avgPrice };
+    if (pos.qty >= 0) {
+      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
+      longFifo[pos.symbol]!.push(lot);
+    } else {
+      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
+      shortFifo[pos.symbol]!.push(lot);
+    }
+  }
+
+  const untilEnd = untilDateStr
+    ? endOfDayNY(toNY(`${untilDateStr}T12:00:00Z`))
+    : undefined;
+
+  const sorted = trades
+    .map((t, idx) => ({ t, idx }))
+    .filter(({ t }) => {
+      if (!untilEnd) return true;
+      const d = toNY(t.date);
+      return !isNaN(d.getTime()) && d.getTime() <= untilEnd.getTime();
+    })
+    .sort((a, b) => {
+      const timeA = toNY(a.t.date).getTime();
+      const timeB = toNY(b.t.date).getTime();
+      const aTime = isNaN(timeA) ? Infinity : timeA;
+      const bTime = isNaN(timeB) ? Infinity : timeB;
+      return aTime - bTime || a.idx - b.idx;
+    })
+    .map(({ t }) => t);
+
+  const closes: { pnl: number }[] = [];
+
+  for (const t of sorted) {
+    const { symbol, action, price } = t;
+    const quantity = Math.abs(t.quantity);
+
+    if (action === "buy") {
+      if (!longFifo[symbol]) longFifo[symbol] = [];
+      longFifo[symbol]!.push({ qty: quantity, price });
+    } else if (action === "short") {
+      if (!shortFifo[symbol]) shortFifo[symbol] = [];
+      shortFifo[symbol]!.push({ qty: quantity, price });
+    } else if (action === "sell") {
+      let remain = quantity;
+      const fifo = longFifo[symbol] || [];
+      while (remain > 0 && fifo.length > 0) {
+        const lot = fifo[0]!;
+        const q = Math.min(lot.qty, remain);
+        closes.push({ pnl: (price - lot.price) * q });
+        lot.qty -= q;
+        remain -= q;
+        if (lot.qty === 0) fifo.shift();
+      }
+      if (remain > 0) {
+        if (!shortFifo[symbol]) shortFifo[symbol] = [];
+        shortFifo[symbol]!.push({ qty: remain, price });
+      }
+    } else if (action === "cover") {
+      let remain = quantity;
+      const fifo = shortFifo[symbol] || [];
+      while (remain > 0 && fifo.length > 0) {
+        const lot = fifo[0]!;
+        const q = Math.min(lot.qty, remain);
+        closes.push({ pnl: (lot.price - price) * q });
+        lot.qty -= q;
+        remain -= q;
+        if (lot.qty === 0) fifo.shift();
+      }
+      if (remain > 0) {
+        if (!longFifo[symbol]) longFifo[symbol] = [];
+        longFifo[symbol]!.push({ qty: remain, price });
+      }
+    }
+  }
+
+  return closes;
+}
+
+/**
  * 计算周期性指标（WTD、MTD、YTD）
  *
  * @param dailyResults 每日交易结果数组
@@ -507,12 +605,7 @@ export function calcMetrics(
   if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
-  const closes = safeTrades
-    .filter(
-      (t) =>
-        t.realizedPnl !== 0 || t.action === "sell" || t.action === "cover",
-    )
-    .map((t) => ({ pnl: t.realizedPnl }));
+  const closes = collectCloseLots(safeTrades, initialPositions, todayStr);
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13: 周期性指标
