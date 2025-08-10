@@ -1,4 +1,5 @@
-import { calcPeriodMetrics, calcM9 } from "@/lib/metrics";
+import { calcM9, collectCloseLots } from "@/lib/metrics";
+import { calcPeriodMetrics } from "@/lib/metrics-period";
 import { calcWinLossLots } from "@/lib/metrics-winloss";
 import type { DailyResult } from "@/lib/types";
 import { readFileSync } from "fs";
@@ -40,6 +41,32 @@ describe("metrics consistency", () => {
   it("calcWinLossLots returns expected counts", () => {
     const res = calcWinLossLots([{ pnl: 10 }, { pnl: -5 }, { pnl: 0 }]);
     expect(res).toEqual({ win: 1, loss: 1, flat: 1, rate: 0.5 });
+  });
+
+  it("collectCloseLots produces lot-based win/loss counts", () => {
+    const file = path.join(__dirname, "fixtures/trades-with-history.json");
+    const { trades, positions } = JSON.parse(readFileSync(file, "utf8"));
+    const enriched = trades.map((t: any, idx: number) => ({
+      symbol: t.symbol,
+      action: t.side.toLowerCase(),
+      price: t.price,
+      quantity: t.qty,
+      date: `${t.date}Z`,
+      idx,
+    }));
+    const initial = positions.map((p: any) => ({
+      symbol: p.symbol,
+      qty: p.qty,
+      avgPrice: p.avgPrice,
+    }));
+    const closes = collectCloseLots(enriched, initial, "2025-08-01");
+    const { win, loss, flat, rate } = calcWinLossLots(closes);
+    expect({ win, loss, flat, rate: Number(rate.toFixed(3)) }).toEqual({
+      win: 11,
+      loss: 2,
+      flat: 0,
+      rate: 0.846,
+    });
   });
 });
 
