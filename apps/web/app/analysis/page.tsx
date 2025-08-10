@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Script from 'next/script';
-import { findTrades, findMetricsDaily, DailyMetric } from '@/lib/services/dataService';
+import { findTrades, findMetricsDaily } from '@/lib/services/dataService';
+import type { DailyResult } from '@/lib/types';
 import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
@@ -22,7 +23,7 @@ export default function AnalysisPage() {
     },
     refetchInterval: 5000
   });
-  const { data: metricsDaily = [] } = useQuery<DailyMetric[]>({
+  const { data: metricsDaily = [] } = useQuery<DailyResult[]>({
     queryKey: ['metricsDaily'],
     queryFn: findMetricsDaily,
     refetchInterval: 60000
@@ -35,7 +36,7 @@ export default function AnalysisPage() {
   useEffect(() => {
     if (!isChartReady || !pnlCanvasRef.current) return;
 
-    // 根据 period 聚合 M5_1
+    // 根据 period 聚合每日盈亏
     const map: Record<string, number> = {};
     const fmt = (d: string) => {
       if (period === 'day') return d;
@@ -50,7 +51,8 @@ export default function AnalysisPage() {
     };
     metricsDaily.forEach(r => {
       const key = fmt(r.date);
-      map[key] = (map[key] || 0) + (r.M5_1 ?? 0);
+      const pnl = r.realized + r.unrealized;
+      map[key] = (map[key] || 0) + pnl;
     });
     const dates = Object.keys(map).sort();
     let cumulative = 0;
