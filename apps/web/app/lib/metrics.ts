@@ -158,7 +158,10 @@ function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
   );
 }
 
-function isOnOrBeforeNY(dateStr: string | undefined, todayStr: string): boolean {
+function isOnOrBeforeNY(
+  dateStr: string | undefined,
+  todayStr: string,
+): boolean {
   if (!dateStr) return true;
   const d = toNY(dateStr);
   const end = toNY(`${todayStr}T23:59:59.999`);
@@ -188,6 +191,39 @@ export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
     mtd: sumPeriod(daily, mStart.toISOString().slice(0, 10), endStr),
     ytd: sumPeriod(daily, yStart.toISOString().slice(0, 10), endStr),
   };
+}
+
+export function calcM9FromDaily(
+  daily: DailyResult[],
+  evalDateStr: string,
+): number {
+  const end = toNY(evalDateStr).getTime();
+  let total = 0;
+  for (const r of daily) {
+    const ts = toNY(r.date).getTime();
+    if (ts <= end) total += r.realized ?? 0;
+  }
+  return total;
+}
+
+export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
+  if (!DEBUG) return;
+  const evalDate = toNY(evalDateStr);
+  const wStart = startOfWeekNY(evalDate).toISOString().slice(0, 10);
+  const mStart = startOfMonthNY(evalDate).toISOString().slice(0, 10);
+  const yStart = startOfYearNY(evalDate).toISOString().slice(0, 10);
+  const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
+  const m9 = calcM9FromDaily(daily, evalDateStr);
+  console.table([
+    { metric: "evalDateStr", value: evalDateStr },
+    { metric: "weekStart", value: wStart },
+    { metric: "monthStart", value: mStart },
+    { metric: "yearStart", value: yStart },
+    { metric: "wtd", value: wtd, expected: 8952.5 },
+    { metric: "mtd", value: mtd, expected: 8952.5 },
+    { metric: "ytd", value: ytd, expected: 8952.5 },
+    { metric: "M9", value: m9, expected: 7850 },
+  ]);
 }
 
 /**
