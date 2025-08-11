@@ -14,8 +14,17 @@ import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 
+export function isDebug() {
+  return (
+    typeof window !== "undefined" &&
+    process.env.NODE_ENV !== "production" &&
+    (new URLSearchParams(location.search).has("debug") ||
+      process.env.NEXT_PUBLIC_DEBUG_METRICS === "1")
+  );
+}
+
 // Only enable verbose logging outside production
-const DEBUG = process.env.NODE_ENV !== "production";
+const DEBUG = isDebug();
 
 /**
  * 交易系统指标接口
@@ -218,7 +227,6 @@ export function calcM9FromDaily(
 }
 
 export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
-  if (process.env.NODE_ENV === 'production') return;
   if (!DEBUG) return;
   const evalDate = toNY(evalDateStr);
   const wStart = startOfWeekNY(evalDate).toISOString().slice(0, 10);
@@ -226,16 +234,17 @@ export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
   const yStart = startOfYearNY(evalDate).toISOString().slice(0, 10);
   const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
   const m9 = calcM9FromDaily(daily, evalDateStr);
-  console.table([
-    { metric: "evalDateStr", value: evalDateStr },
-    { metric: "weekStart", value: wStart },
-    { metric: "monthStart", value: mStart },
-    { metric: "yearStart", value: yStart },
-    { metric: "wtd", value: wtd, expected: 8952.5 },
-    { metric: "mtd", value: mtd, expected: 8952.5 },
-    { metric: "ytd", value: ytd, expected: 8952.5 },
-    { metric: "M9", value: m9, expected: 7850 },
-  ]);
+  if (DEBUG)
+    console.table([
+      { metric: "evalDateStr", value: evalDateStr },
+      { metric: "weekStart", value: wStart },
+      { metric: "monthStart", value: mStart },
+      { metric: "yearStart", value: yStart },
+      { metric: "wtd", value: wtd, expected: 8952.5 },
+      { metric: "mtd", value: mtd, expected: 8952.5 },
+      { metric: "ytd", value: ytd, expected: 8952.5 },
+      { metric: "M9", value: m9, expected: 7850 },
+    ]);
 }
 
 /**
@@ -708,7 +717,10 @@ export function calcMetrics(
   dailyResults: DailyResult[] = [],
   initialPositions: InitialPosition[] = [],
 ): Metrics {
-  console.info("M7_INPUT", _count(trades), { sample: trades.slice(0, 3) });
+  if (DEBUG)
+    console.info("M7_INPUT", _count(trades), {
+      sample: trades.slice(0, 3),
+    });
 
   // 基于原始交易记录（保留重复项）计算统计
   const evalDateNY = nowNY();
@@ -718,9 +730,10 @@ export function calcMetrics(
     const d = toNY((t as any).time ?? t.date);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
-  console.info("M7_FILTERED", _count(safeTrades), {
-    evalEndNY: evalEnd.toISOString?.(),
-  });
+  if (DEBUG)
+    console.info("M7_FILTERED", _count(safeTrades), {
+      evalEndNY: evalEnd.toISOString?.(),
+    });
   const counts = _count(safeTrades);
 
   // M1: 持仓成本
@@ -771,12 +784,13 @@ export function calcMetrics(
   const todayTotalPnlChange = round2(
     todayHistoricalRealizedPnl + pnlFifo + floatPnl,
   );
-  console.info("M6_DEBUG", {
-    M4: todayHistoricalRealizedPnl,
-    M3: floatPnl,
-    fifo: pnlFifo,
-    total: todayTotalPnlChange,
-  });
+  if (DEBUG)
+    console.info("M6_DEBUG", {
+      M4: todayHistoricalRealizedPnl,
+      M3: floatPnl,
+      fifo: pnlFifo,
+      total: todayTotalPnlChange,
+    });
 
   // M7: 今日交易次数
   const todayTradeCountsByType = counts;
