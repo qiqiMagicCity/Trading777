@@ -708,8 +708,6 @@ export function calcMetrics(
   dailyResults: DailyResult[] = [],
   initialPositions: InitialPosition[] = [],
 ): Metrics {
-  console.info("M7_INPUT", _count(trades), { sample: trades.slice(0, 3) });
-
   // 基于原始交易记录（保留重复项）计算统计
   const evalDateNY = nowNY();
   const todayStr = getLatestTradingDayStr(evalDateNY);
@@ -718,29 +716,18 @@ export function calcMetrics(
     const d = toNY((t as any).time ?? t.date);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
-  console.info("M7_FILTERED", _count(safeTrades), {
-    evalEndNY: evalEnd.toISOString?.(),
-  });
   const counts = _count(safeTrades);
 
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
 
   // M2: 持仓市值
-  if (DEBUG) console.log("计算M2(持仓市值)，持仓数据:", positions);
   const currentValue = sum(
     positions.map((p) => {
       const marketValue = p.last * Math.abs(p.qty);
-      if (DEBUG)
-        console.log(`${p.symbol} 市值计算:`, {
-          last: p.last,
-          qty: p.qty,
-          marketValue,
-        });
       return marketValue;
     }),
   );
-  if (DEBUG) console.log("M2(持仓市值)计算结果:", currentValue);
 
   // M3: 持仓浮盈
   const floatPnl = positions.reduce((acc, pos) => {
@@ -765,18 +752,11 @@ export function calcMetrics(
     todayStr,
     initialPositions,
   );
-  if (DEBUG) console.log("M4计算结果:", todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化
   const todayTotalPnlChange = round2(
     todayHistoricalRealizedPnl + pnlFifo + floatPnl,
   );
-  console.info("M6_DEBUG", {
-    M4: todayHistoricalRealizedPnl,
-    M3: floatPnl,
-    fifo: pnlFifo,
-    total: todayTotalPnlChange,
-  });
 
   // M7: 今日交易次数
   const todayTradeCountsByType = counts;
@@ -793,7 +773,6 @@ export function calcMetrics(
 
   // M9: 所有历史平仓盈利（含今日）
   const historicalRealizedPnl = calcM9(historicalDailyResults);
-  if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
   const closes = collectCloseLots(safeTrades, initialPositions, todayStr);
