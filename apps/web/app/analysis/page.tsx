@@ -2,20 +2,27 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
+import { useSearchParams } from 'next/navigation';
 import Script from 'next/script';
-import { findTrades, loadDailyResults, getEvalDateStr } from '@/lib/services/dataService';
+import { findTrades, loadDailyResults, getEvalDateStr, findPositions } from '@/lib/services/dataService';
 import type { DailyResult } from '@/lib/types';
 import { computeFifo, EnrichedTrade } from '@/lib/fifo';
+import type { Position } from '@/lib/services/dataService';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
 import { toNY } from '@/lib/timezone';
-import { calcWtdMtdYtd, checkPeriodDebug, debugTodayRealizedBreakdown } from '@/lib/metrics';
+import { calcWtdMtdYtd, calcMetrics } from '@/lib/metrics';
 import { useStore } from '@/lib/store';
+
+const AnalysisDebugTable = dynamic(() => import('./AnalysisDebugTable'), { ssr: false });
 
 declare const Chart: any;
 
 export default function AnalysisPage() {
   const [isChartReady, setIsChartReady] = useState(false);
+  const searchParams = useSearchParams();
+  const debug = searchParams.get('debug') === 'metrics';
   // 使用 react-query 实时加载交易数据，自动刷新
   const { data: trades = [] } = useQuery<EnrichedTrade[]>({
     queryKey: ['trades'],
@@ -35,25 +42,41 @@ export default function AnalysisPage() {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
-  const debugCalledRef = useRef(false);
+  const metricsLoadedRef = useRef(false);
 
   useEffect(() => {
-    if (debugCalledRef.current || daily.length === 0) return;
-    if (process.env.NODE_ENV !== 'production') {
-      checkPeriodDebug(daily, evalDateStr);
-      const { rows, sumM4, sumM52 } = debugTodayRealizedBreakdown(
-        trades,
-        evalDateStr,
-        [],
+    if (metricsLoadedRef.current || daily.length === 0) return;
+    (async () => {
+      const rawTrades = await findTrades();
+      const dbPositions = await findPositions();
+      const enriched = computeFifo(rawTrades, dbPositions);
+      const posMap = new Map<string, Position>(
+        dbPositions.map(p => [p.symbol, { ...p }])
       );
-      console.table(rows.slice(0, 10));
-      console.log('M4 sum =', sumM4, '(expected 6530)');
-      console.log('M5.2 sum =', sumM52, '(expected 1320)');
-      const m3 = useStore.getState().metrics?.M3;
-      console.log('today M3 =', m3, '(expected 1102.5)');
-    }
-    debugCalledRef.current = true;
-  }, [daily, evalDateStr, trades]);
+      for (const t of enriched) {
+        if (t.quantityAfter !== 0) {
+          posMap.set(t.symbol, {
+            symbol: t.symbol,
+            qty: t.quantityAfter,
+            avgPrice: t.averageCost,
+            last: t.averageCost,
+            priceOk: true,
+          });
+        } else {
+          posMap.delete(t.symbol);
+        }
+      }
+      const posList: Position[] = Array.from(posMap.values());
+      const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
+        symbol,
+        qty,
+        avgPrice,
+      }));
+      const metrics = calcMetrics(enriched, posList, daily, initPos);
+      useStore.getState().setMetrics(metrics);
+      metricsLoadedRef.current = true;
+    })();
+  }, [daily]);
 
   // 当 Chart.js 和每日结果数据准备好时绘制/更新图表
   useEffect(() => {
@@ -157,10 +180,11 @@ export default function AnalysisPage() {
         <TradeCalendar trades={trades} title="交易日历（日内交易）" id="tradeCalendarIntraday" isIntraday />
 
         {/* 盈亏排行榜 */}
-        <RankingTable trades={trades} />
+      <RankingTable trades={trades} />
 
 
       </main>
+      {debug && <AnalysisDebugTable />}
     </>
   );
-} 
+}

@@ -313,11 +313,8 @@ export async function findTrades(): Promise<Trade[]> {
     const trade = cursor.value as Trade;
     const id = cursor.key as number;
     list.push({ ...trade, id });
-    console.log("获取交易:", { ...trade, id });
     cursor = await cursor.continue();
   }
-
-  console.log(`总共获取到 ${list.length} 条交易记录`);
   return list;
 }
 

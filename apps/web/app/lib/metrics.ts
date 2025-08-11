@@ -234,34 +234,20 @@ export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
   const yStart = startOfYearNY(evalDate).toISOString().slice(0, 10);
   const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
   const m9 = calcM9FromDaily(daily, evalDateStr);
-  if (DEBUG)
-    console.table([
-      { metric: "evalDateStr", value: evalDateStr },
-      { metric: "weekStart", value: wStart },
-      { metric: "monthStart", value: mStart },
-      { metric: "yearStart", value: yStart },
-      { metric: "wtd", value: wtd, expected: 8952.5 },
-      { metric: "mtd", value: mtd, expected: 8952.5 },
-      { metric: "ytd", value: ytd, expected: 8952.5 },
-      { metric: "M9", value: m9, expected: 7850 },
-    ]);
+  console.table([
+    { metric: "evalDateStr", value: evalDateStr },
+    { metric: "weekStart", value: wStart },
+    { metric: "monthStart", value: mStart },
+    { metric: "yearStart", value: yStart },
+    { metric: "wtd", value: wtd, expected: 8952.5 },
+    { metric: "mtd", value: mtd, expected: 8952.5 },
+    { metric: "ytd", value: ytd, expected: 8952.5 },
+    { metric: "M9", value: m9, expected: 7850 },
+  ]);
 }
 
 /**
- * 计算日内交易盈亏（交易视角）
- * 按照交易匹配的方式，计算同一天内开仓并平仓的交易盈亏
- *
- * @param enrichedTrades 交易记录数组
- * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
- * @returns 日内交易盈亏
- */
-/**
  * 计算日内交易盈亏（FIFO视角）
- * 按照先进先出原则，计算同一天内开仓并平仓的交易盈亏
- *
- * @param enrichedTrades 交易记录数组
- * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
- * @returns 日内交易盈亏
  */
 export function calcTodayFifoPnL(
   enrichedTrades: EnrichedTrade[],
@@ -349,12 +335,7 @@ export function calcTodayFifoPnL(
 }
 
 /**
- * 计算历史交易盈亏（FIFO视角）
- * 按照先进先出原则，计算同一天内开仓并平仓的交易盈亏
- *
- * @param enrichedTrades 交易记录数组
- * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
- * @returns 日内交易盈亏
+ * 计算历史交易盈亏（FIFO视角）——用于 M4
  */
 function calcHistoryFifoPnL(
   enrichedTrades: EnrichedTrade[],
@@ -500,7 +481,8 @@ export function debugTodayRealizedBreakdown(
 
     const isCloseToday = isTodayNY(date, evalDateStr);
     let remain = quantity;
-    const fifo = action === "sell" ? longFifo[symbol] || [] : shortFifo[symbol] || [];
+    const fifo =
+      action === "sell" ? longFifo[symbol] || [] : shortFifo[symbol] || [];
 
     while (remain > 0 && fifo.length > 0) {
       const lot = fifo[0]!;
@@ -552,12 +534,8 @@ export function debugTodayRealizedBreakdown(
 }
 
 /**
- * 计算胜负笔数（FIFO 视角）
- * 遍历所有交易，按先进先出原则逐笔比对开平仓，统计每一笔配对结果
- * @param trades 交易记录数组
- * @returns 包含 wins 与 losses 计数
+ * 累计交易次数（含历史持仓一次）
  */
-
 function calcCumulativeTradeCounts(
   trades: EnrichedTrade[],
   initialPositions: InitialPosition[] = [],
@@ -599,12 +577,6 @@ export function calcM9(days: DailyResult[]): number {
 
 /**
  * Collect all closed lots (FIFO) up to a given date.
- *
- * Maintains separate FIFO queues for long and short lots. The queues are
- * pre-seeded with `initialPositions` and then progressed through each trade in
- * chronological order (NY timezone). For every SELL or COVER, quantities are
- * matched against the appropriate queue and a `{ pnl }` entry is pushed for
- * each matched lot.
  */
 export function collectCloseLots(
   trades: EnrichedTrade[],
@@ -696,20 +668,7 @@ export function collectCloseLots(
 }
 
 /**
- * 计算周期性指标（WTD、MTD、YTD）
- *
- * @param dailyResults 每日交易结果数组
- * @param todayStr 今日日期字符串，格式为 YYYY-MM-DD
- * @returns 包含 wtd、mtd、ytd 的对象
- */
-/**
  * 计算所有交易指标
- *
- * @param trades 交易记录数组
- * @param positions 持仓数组
- * @param dailyResults 每日交易结果数组
- * @param initialPositions 历史持仓数组
- * @returns 所有指标的计算结果
  */
 export function calcMetrics(
   trades: EnrichedTrade[],
@@ -730,30 +689,24 @@ export function calcMetrics(
     const d = toNY((t as any).time ?? t.date);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
+
   if (DEBUG)
     console.info("M7_FILTERED", _count(safeTrades), {
       evalEndNY: evalEnd.toISOString?.(),
     });
+
   const counts = _count(safeTrades);
 
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
 
   // M2: 持仓市值
-  if (DEBUG) console.log("计算M2(持仓市值)，持仓数据:", positions);
   const currentValue = sum(
     positions.map((p) => {
       const marketValue = p.last * Math.abs(p.qty);
-      if (DEBUG)
-        console.log(`${p.symbol} 市值计算:`, {
-          last: p.last,
-          qty: p.qty,
-          marketValue,
-        });
       return marketValue;
     }),
   );
-  if (DEBUG) console.log("M2(持仓市值)计算结果:", currentValue);
 
   // M3: 持仓浮盈
   const floatPnl = positions.reduce((acc, pos) => {
@@ -772,18 +725,17 @@ export function calcMetrics(
   const pnlFifo = calcTodayFifoPnL(safeTrades, todayStr, initialPositions);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
-  // 日内交易的 FIFO 盈亏已包含在 pnlFifo，需要剔除
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
     safeTrades,
     todayStr,
     initialPositions,
   );
-  if (DEBUG) console.log("M4计算结果:", todayHistoricalRealizedPnl);
 
   // M6: 今日总盈利变化
   const todayTotalPnlChange = round2(
     todayHistoricalRealizedPnl + pnlFifo + floatPnl,
   );
+
   if (DEBUG)
     console.info("M6_DEBUG", {
       M4: todayHistoricalRealizedPnl,
@@ -807,7 +759,6 @@ export function calcMetrics(
 
   // M9: 所有历史平仓盈利（含今日）
   const historicalRealizedPnl = calcM9(historicalDailyResults);
-  if (DEBUG) console.log("M9计算结果:", historicalRealizedPnl);
 
   // M10: 胜率
   const closes = collectCloseLots(safeTrades, initialPositions, todayStr);
@@ -877,4 +828,3 @@ export function formatNumber(value: number, decimals: number = 2): string {
   if (isNaN(value)) return "N/A";
   return value.toFixed(decimals);
 }
-
