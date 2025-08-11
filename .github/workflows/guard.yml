@@ -16,4 +16,5 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+        # turbo is installed as a dependency to avoid interactive prompts
       - run: npm test
