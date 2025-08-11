@@ -9,7 +9,8 @@ import { computeFifo, EnrichedTrade } from '@/lib/fifo';
 import { TradeCalendar } from '@/modules/TradeCalendar';
 import { RankingTable } from '@/modules/RankingTable';
 import { toNY } from '@/lib/timezone';
-import { calcWtdMtdYtd, checkPeriodDebug } from '@/lib/metrics';
+import { calcWtdMtdYtd, checkPeriodDebug, debugTodayRealizedBreakdown } from '@/lib/metrics';
+import { useStore } from '@/lib/store';
 
 declare const Chart: any;
 
@@ -40,9 +41,19 @@ export default function AnalysisPage() {
     if (debugCalledRef.current || daily.length === 0) return;
     if (process.env.NODE_ENV !== 'production') {
       checkPeriodDebug(daily, evalDateStr);
+      const { rows, sumM4, sumM52 } = debugTodayRealizedBreakdown(
+        trades,
+        evalDateStr,
+        [],
+      );
+      console.table(rows.slice(0, 10));
+      console.log('M4 sum =', sumM4, '(expected 6530)');
+      console.log('M5.2 sum =', sumM52, '(expected 1320)');
+      const m3 = useStore.getState().metrics?.M3;
+      console.log('today M3 =', m3, '(expected 1102.5)');
     }
     debugCalledRef.current = true;
-  }, [daily, evalDateStr]);
+  }, [daily, evalDateStr, trades]);
 
   // 当 Chart.js 和每日结果数据准备好时绘制/更新图表
   useEffect(() => {
