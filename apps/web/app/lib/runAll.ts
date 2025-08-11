@@ -6,9 +6,21 @@ type Book = Map<string, Lot[]>;
 const r2=(x:number)=>Math.round((x+1e-9)*100)/100;
 
 function push(b:Book,s:string,l:Lot){const a=b.get(s)||[];a.push({qty:l.qty,cost:l.cost});b.set(s,a);}
-function popFIFO(b:Book,s:string,n:number){const a=b.get(s)||[];const out:Lot[]=[];let left=n;
-  while(left>0 && a.length){const f=a[0];const take=Math.min(left,f.qty);out.push({qty:take,cost:f.cost});f.qty-=take;left-=take;if(f.qty===0)a.shift();}
-  if(left>0) throw new Error(`FIFO 不足: ${s}, need ${left}`); b.set(s,a); return out;
+function popFIFO(b:Book,s:string,n:number){
+  const a=b.get(s) || [];
+  const out:Lot[] = [];
+  let left = n;
+  while (left > 0 && a.length) {
+    const f = a[0]!;
+    const take = Math.min(left, f.qty);
+    out.push({ qty: take, cost: f.cost });
+    f.qty -= take;
+    left -= take;
+    if (f.qty === 0) a.shift();
+  }
+  if (left > 0) throw new Error(`FIFO 不足: ${s}, need ${left}`);
+  b.set(s, a);
+  return out;
 }
 
 export function runAll(
