@@ -26,7 +26,7 @@ export function runAll(
   const Tlong:Book=new Map(), Tshort:Book=new Map();
   const Bstk:Book=new Map(),  Sstk:Book=new Map();
 
-  // 历史期初批次（跨日）
+  // 历史期初批次
   for(const h of hist){
     const lot={qty:h.qty, cost:(typeof h.price==='number'?h.price:(h.cost??0))};
     (h.side==='LONG'?Hlong:Hshort).set(h.sym,[...((h.side==='LONG'?Hlong:Hshort).get(h.sym)||[]),lot]);
@@ -40,7 +40,7 @@ export function runAll(
     if(type==='BUY'){ push(Tlong,sym,{qty,cost:px}); push(Bstk,sym,{qty,cost:px}); }
     else if(type==='SHORT'){ push(Tshort,sym,{qty,cost:px}); push(Sstk,sym,{qty,cost:px}); }
     else if(type==='SELL'){
-      // 先用当日行为闭环 → M5.1/M5.2（当日 FIFO）
+      // 当日优先闭环 → 计入 M5.1/M5.2
       let left=qty; const bs=Bstk.get(sym)||[];
       while(left>0 && bs.length){
         const top=bs[0]; const take=Math.min(left,top.qty);
@@ -50,7 +50,7 @@ export function runAll(
         top.qty-=take; left-=take; if(top.qty===0) bs.shift();
       }
       Bstk.set(sym,bs);
-      // 余量吃历史 FIFO → M4
+      // 余量吃历史 FIFO → 计入 M4
       if(left>0){ for(const lot of popFIFO(Hlong,sym,left)){ const pnl=(px-lot.cost)*lot.qty; M4+=pnl; realized.push(pnl);} }
     }
     else if(type==='COVER'){
@@ -82,7 +82,7 @@ export function runAll(
     M3v+= o.side==='LONG' ? (p-o.cost)*o.qty : (o.cost-p)*o.qty;
   }
 
-  // 赢亏批次数
+  // 胜率
   const wins=realized.filter(v=>v>0).length, losses=realized.filter(v=>v<0).length;
   const winRate = wins+losses>0 ? Math.round((wins/(wins+losses)*100)*10)/10 : 0;
 

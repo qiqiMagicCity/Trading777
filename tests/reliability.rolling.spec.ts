@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { runAll } from '../apps/web/app/lib/runAll';
 
 type Pos = { sym:string; side:'LONG'|'SHORT'; qty:number; price?:number; cost?:number };
@@ -37,3 +37,4 @@ test('Rolling baseline (7/31 -> 8/01)：今日优先 + 滚动历史', () => {
   expect(D2.invariants.closedQtyConsistency).toBe(true);
   expect(Math.abs(D2.invariants.realizedConsistencyDiff)).toBeLessThan(1e-6);
 });
+
