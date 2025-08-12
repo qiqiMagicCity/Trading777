@@ -8,9 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint --max-warnings 0",
-    "check-types": "tsc --noEmit",
-    "verify:real": "tsx ./scripts/verify-real.ts --dir ./data",
-    "verify:fixtures": "tsx ./scripts/verify-fixtures.ts"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.12",
