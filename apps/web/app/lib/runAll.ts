@@ -57,7 +57,7 @@ export function runAll(
       // 当日优先闭环 → 计入 M5.1/M5.2
       let left=qty; const bs=Bstk.get(sym)||[];
       while(left>0 && bs.length){
-        const top=bs[0]; const take=Math.min(left,top.qty);
+        const top=bs[0]!; const take=Math.min(left,top.qty);
         M51+=(px-top.cost)*take;
         for(const lot of popFIFO(Tlong,sym,take)){ const pnl=(px-lot.cost)*lot.qty; M52+=pnl; realized.push(pnl); }
         closedByBehavior+=take; closedByTodayFifo+=take;
@@ -70,7 +70,7 @@ export function runAll(
     else if(type==='COVER'){
       let left=qty; const ss=Sstk.get(sym)||[];
       while(left>0 && ss.length){
-        const top=ss[0]; const take=Math.min(left,top.qty);
+        const top=ss[0]!; const take=Math.min(left,top.qty);
         M51+=(top.cost-px)*take;
         for(const lot of popFIFO(Tshort,sym,take)){ const pnl=(lot.cost-px)*lot.qty; M52+=pnl; realized.push(pnl); }
         closedByBehavior+=take; closedByTodayFifo+=take;
