@@ -1,0 +1,12 @@
+{
+  "positions": [],
+  "trades": [
+    {
+      "date": "2025-07-31T09:35:00-04:00",
+      "sym": "TSLA",
+      "side": "BUY",
+      "qty": 50,
+      "price": 290
+    }
+  ]
+}

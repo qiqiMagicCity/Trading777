@@ -68,18 +68,41 @@ export default function shadowCalc(
     } else if (type === 'SHORT') {
       push(Tshort, sym, { qty, cost: price });
     } else if (type === 'SELL') {
-      let left = qty;
-      const today = Tlong.get(sym) || [];
-      while (left > 0 && today.length) {
-        const lot = today[0]!;
-        const take = Math.min(left, lot.qty);
-        const pnl = (price - lot.cost) * take;
-        M5f += pnl;
-        realized.push(pnl);
-        lot.qty -= take;
-        left -= take;
-        if (lot.qty === 0) today.shift();
-      }
+  // History-first: consume historical LONG lots into M4, then today's LONG lots into M5f
+  let left = qty;
+
+  // 1) Historical LONG → M4
+  {
+    const hist = Hlong.get(sym) || [];
+    while (left > 0 && hist.length) {
+      const lot = hist[0]!;
+      const take = Math.min(left, lot.qty);
+      const pnl = (price - lot.cost) * take;
+      M4 += pnl;
+      realized.push(pnl);
+      lot.qty -= take;
+      left -= take;
+      if (lot.qty === 0) hist.shift();
+    }
+    Hlong.set(sym, hist);
+  }
+
+  // 2) Today's LONG → M5f
+  if (left > 0) {
+    const today = Tlong.get(sym) || [];
+    while (left > 0 && today.length) {
+      const lot = today[0]!;
+      const take = Math.min(left, lot.qty);
+      const pnl = (price - lot.cost) * take;
+      M5f += pnl;
+      realized.push(pnl);
+      lot.qty -= take;
+      left -= take;
+      if (lot.qty === 0) today.shift();
+    }
+    Tlong.set(sym, today);
+  }
+}
       Tlong.set(sym, today);
       if (left > 0) {
         for (const lot of pop(Hlong, sym, left)) {
@@ -89,18 +112,41 @@ export default function shadowCalc(
         }
       }
     } else if (type === 'COVER') {
-      let left = qty;
-      const today = Tshort.get(sym) || [];
-      while (left > 0 && today.length) {
-        const lot = today[0]!;
-        const take = Math.min(left, lot.qty);
-        const pnl = (lot.cost - price) * take;
-        M5f += pnl;
-        realized.push(pnl);
-        lot.qty -= take;
-        left -= take;
-        if (lot.qty === 0) today.shift();
-      }
+  // History-first: consume historical SHORT lots into M4, then today's SHORT lots into M5f
+  let left = qty;
+
+  // 1) Historical SHORT → M4
+  {
+    const hist = Hshort.get(sym) || [];
+    while (left > 0 && hist.length) {
+      const lot = hist[0]!;
+      const take = Math.min(left, lot.qty);
+      const pnl = (lot.cost - price) * take;
+      M4 += pnl;
+      realized.push(pnl);
+      lot.qty -= take;
+      left -= take;
+      if (lot.qty === 0) hist.shift();
+    }
+    Hshort.set(sym, hist);
+  }
+
+  // 2) Today's SHORT → M5f
+  if (left > 0) {
+    const today = Tshort.get(sym) || [];
+    while (left > 0 && today.length) {
+      const lot = today[0]!;
+      const take = Math.min(left, lot.qty);
+      const pnl = (lot.cost - price) * take;
+      M5f += pnl;
+      realized.push(pnl);
+      lot.qty -= take;
+      left -= take;
+      if (lot.qty === 0) today.shift();
+    }
+    Tshort.set(sym, today);
+  }
+}
       Tshort.set(sym, today);
       if (left > 0) {
         for (const lot of pop(Hshort, sym, left)) {

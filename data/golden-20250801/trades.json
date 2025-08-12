@@ -1,0 +1,178 @@
+{
+  "positions": [
+    {
+      "sym": "TSLA",
+      "side": "LONG",
+      "qty": 50,
+      "price": 290
+    },
+    {
+      "sym": "NFLX",
+      "side": "LONG",
+      "qty": 100,
+      "price": 1100
+    },
+    {
+      "sym": "AMZN",
+      "side": "SHORT",
+      "qty": 80,
+      "price": 220
+    }
+  ],
+  "trades": [
+    {
+      "date": "2025-08-01T09:10:00-04:00",
+      "sym": "NFLX",
+      "side": "BUY",
+      "qty": 50,
+      "price": 1160
+    },
+    {
+      "date": "2025-08-01T09:35:00-04:00",
+      "sym": "TSLA",
+      "side": "BUY",
+      "qty": 200,
+      "price": 295
+    },
+    {
+      "date": "2025-08-01T09:38:00-04:00",
+      "sym": "TSLA",
+      "side": "SELL",
+      "qty": 50,
+      "price": 301
+    },
+    {
+      "date": "2025-08-01T09:40:00-04:00",
+      "sym": "NFLX",
+      "side": "SELL",
+      "qty": 120,
+      "price": 1155
+    },
+    {
+      "date": "2025-08-01T09:45:00-04:00",
+      "sym": "TSLA",
+      "side": "SELL",
+      "qty": 100,
+      "price": 300
+    },
+    {
+      "date": "2025-08-01T10:00:00-04:00",
+      "sym": "GOOGL",
+      "side": "SHORT",
+      "qty": 50,
+      "price": 192
+    },
+    {
+      "date": "2025-08-01T10:15:00-04:00",
+      "sym": "AMZN",
+      "side": "SHORT",
+      "qty": 50,
+      "price": 218
+    },
+    {
+      "date": "2025-08-01T10:45:00-04:00",
+      "sym": "AMZN",
+      "side": "COVER",
+      "qty": 80,
+      "price": 214
+    },
+    {
+      "date": "2025-08-01T11:00:00-04:00",
+      "sym": "GOOGL",
+      "side": "COVER",
+      "qty": 20,
+      "price": 188
+    },
+    {
+      "date": "2025-08-01T11:00:00-04:00",
+      "sym": "TSLA",
+      "side": "BUY",
+      "qty": 50,
+      "price": 300
+    },
+    {
+      "date": "2025-08-01T11:30:00-04:00",
+      "sym": "TSLA",
+      "side": "SELL",
+      "qty": 50,
+      "price": 300
+    },
+    {
+      "date": "2025-08-01T11:30:00-04:00",
+      "sym": "AAPL",
+      "side": "BUY",
+      "qty": 50,
+      "price": 200
+    },
+    {
+      "date": "2025-08-01T12:00:00-04:00",
+      "sym": "GOOGL",
+      "side": "SHORT",
+      "qty": 40,
+      "price": 195
+    },
+    {
+      "date": "2025-08-01T13:00:00-04:00",
+      "sym": "GOOGL",
+      "side": "COVER",
+      "qty": 20,
+      "price": 190
+    },
+    {
+      "date": "2025-08-01T13:00:00-04:00",
+      "sym": "MSFT",
+      "side": "BUY",
+      "qty": 80,
+      "price": 520
+    },
+    {
+      "date": "2025-08-01T14:00:00-04:00",
+      "sym": "AAPL",
+      "side": "BUY",
+      "qty": 100,
+      "price": 198
+    },
+    {
+      "date": "2025-08-01T14:00:00-04:00",
+      "sym": "MSFT",
+      "side": "SELL",
+      "qty": 30,
+      "price": 525
+    },
+    {
+      "date": "2025-08-01T14:30:00-04:00",
+      "sym": "AAPL",
+      "side": "SELL",
+      "qty": 50,
+      "price": 201
+    },
+    {
+      "date": "2025-08-01T14:30:00-04:00",
+      "sym": "AAPL",
+      "side": "SELL",
+      "qty": 30,
+      "price": 195
+    },
+    {
+      "date": "2025-08-01T15:00:00-04:00",
+      "sym": "AAPL",
+      "side": "SELL",
+      "qty": 70,
+      "price": 200
+    },
+    {
+      "date": "2025-08-01T15:30:00-04:00",
+      "sym": "MSFT",
+      "side": "SHORT",
+      "qty": 60,
+      "price": 525
+    },
+    {
+      "date": "2025-08-01T16:00:00-04:00",
+      "sym": "MSFT",
+      "side": "COVER",
+      "qty": 60,
+      "price": 520
+    }
+  ]
+}
