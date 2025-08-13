@@ -160,7 +160,7 @@ export const startOfYearNY = (dateInput: string | Date): Date => {
 // Attach helpers to global for quick usage in dev tools. Using a plain
 // intersection type keeps the runtime code simple and avoids parser issues
 // when compiling with SWC.
-type TimezoneHelpers = {
+type TimezoneGlobal = typeof globalThis & {
   toNY: typeof toNY;
   nowNY: typeof nowNY;
   formatNY: typeof formatNY;
@@ -168,7 +168,7 @@ type TimezoneHelpers = {
   endOfDayNY: typeof endOfDayNY;
 };
 
-const g = globalThis as typeof globalThis & TimezoneHelpers;
+const g = globalThis as TimezoneGlobal;
 g.toNY = toNY;
 g.nowNY = nowNY;
 g.formatNY = formatNY;
