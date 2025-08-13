@@ -35,7 +35,9 @@ export function toNY(
 ): Date;
 
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
-export function toNY(...args: any[]): Date {
+export function toNY(
+  ...args: ConstructorParameters<typeof Date>
+): Date {
   let date: Date;
 
   if (args.length === 0) {
@@ -46,7 +48,6 @@ export function toNY(...args: any[]): Date {
   } else {
     // 与 new Date(year, month, ...) 行为保持一致
     // (服务器已通过 TZ=America/New_York 保证本地时区为纽约，否则仍再转一次)
-    // eslint-disable-next-line prefer-spread
     date = new Date(...args);
   }
 
