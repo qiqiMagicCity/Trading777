@@ -157,16 +157,18 @@ export const startOfYearNY = (dateInput: string | Date): Date => {
   return d;
 };
 
-// Attach helpers to global for quick usage in dev tools
-interface TimezoneGlobal extends typeof globalThis {
+// Attach helpers to global for quick usage in dev tools. Using a plain
+// intersection type keeps the runtime code simple and avoids parser issues
+// when compiling with SWC.
+type TimezoneHelpers = {
   toNY: typeof toNY;
   nowNY: typeof nowNY;
   formatNY: typeof formatNY;
   getLatestTradingDayStr: typeof getLatestTradingDayStr;
   endOfDayNY: typeof endOfDayNY;
-}
+};
 
-const g = globalThis as TimezoneGlobal;
+const g = globalThis as typeof globalThis & TimezoneHelpers;
 g.toNY = toNY;
 g.nowNY = nowNY;
 g.formatNY = formatNY;
