@@ -192,10 +192,23 @@ function sumPeriod(daily: DailyResult[], fromStr: string, toStr: string) {
   const fromTS = toNY(fromStr).getTime();
   const toTS = toNY(toStr).getTime();
   let total = 0;
-  for (const r of daily) {
+  let prevUnrealized = 0;
+
+  const sorted = daily.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  for (const r of sorted) {
     const ts = toNY(r.date).getTime();
-    if (ts >= fromTS && ts <= toTS)
-      total += (r.realized ?? 0) + (r.unrealized ?? 0);
+    const unrealized = r.unrealized ?? 0;
+    if (ts < fromTS) {
+      prevUnrealized = unrealized;
+      continue;
+    }
+    if (ts > toTS) break;
+    const delta =
+      r.unrealizedDelta !== undefined
+        ? r.unrealizedDelta
+        : unrealized - prevUnrealized;
+    total += (r.realized ?? 0) + delta;
+    prevUnrealized = unrealized;
   }
   return total;
 }
