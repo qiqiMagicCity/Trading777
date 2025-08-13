@@ -23,16 +23,6 @@ declare global {
     NEXT_PUBLIC_FREEZE_DATE?: string;
   }
 }
-export function toNY(value?: string | number | Date): Date;
-export function toNY(
-  year: number,
-  month: number,
-  date?: number,
-  hours?: number,
-  minutes?: number,
-  seconds?: number,
-  ms?: number,
-): Date;
 
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
 export function toNY(
