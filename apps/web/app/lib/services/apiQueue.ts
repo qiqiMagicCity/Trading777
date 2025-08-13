@@ -12,11 +12,11 @@ export class ApiQueue {
   /** 等待执行的任务队列 */
   private queue: Array<{
     /** 要执行的异步函数 */
-    fn: () => Promise<any>;
+    fn: () => Promise<unknown>;
     /** 成功回调 */
-    resolve: (value: any) => void;
+    resolve: (value: unknown) => void;
     /** 失败回调 */
-    reject: (error?: any) => void;
+    reject: (error?: unknown) => void;
   }> = [];
 
   /** 令牌填充定时器 ID */

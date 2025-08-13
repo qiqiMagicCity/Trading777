@@ -14,6 +14,8 @@ import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 
+type TradeWithOptionalTime = EnrichedTrade & { time?: string };
+
 export function isDebug() {
   return (
     typeof window !== "undefined" &&
@@ -685,8 +687,8 @@ export function calcMetrics(
   const evalDateNY = nowNY();
   const todayStr = getLatestTradingDayStr(evalDateNY);
   const evalEnd = endOfDayNY(evalDateNY);
-  const safeTrades = trades.filter((t) => {
-    const d = toNY((t as any).time ?? t.date);
+  const safeTrades = trades.filter((t: TradeWithOptionalTime) => {
+    const d = toNY(t.time ?? t.date);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
 
