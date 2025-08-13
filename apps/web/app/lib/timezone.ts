@@ -24,9 +24,22 @@ declare global {
   }
 }
 
+type DateArgs =
+  | []
+  | [value: string | number | Date]
+  | [
+      year: number,
+      month: number,
+      date?: number,
+      hours?: number,
+      minutes?: number,
+      seconds?: number,
+      ms?: number,
+    ];
+
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
 export function toNY(
-  ...args: ConstructorParameters<typeof Date>
+  ...args: DateArgs
 ): Date {
   let date: Date;
 
