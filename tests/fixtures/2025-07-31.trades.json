@@ -1,0 +1,9 @@
+[
+  {"t":"09:00","sym":"AAPL","type":"BUY","qty":100,"price":190},
+  {"t":"10:00","sym":"AAPL","type":"SELL","qty":50,"price":195},
+  {"t":"11:00","sym":"GOOGL","type":"SHORT","qty":30,"price":185},
+  {"t":"12:00","sym":"GOOGL","type":"COVER","qty":30,"price":180},
+  {"t":"13:00","sym":"MSFT","type":"BUY","qty":40,"price":510},
+  {"t":"14:00","sym":"MSFT","type":"SELL","qty":40,"price":515}
+]
+

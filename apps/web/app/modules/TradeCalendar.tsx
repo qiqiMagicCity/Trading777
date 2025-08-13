@@ -39,8 +39,7 @@ export function TradeCalendar({ trades, title, id, isIntraday = false }: TradeCa
       const [year, mon, day] = d.date.split('-').map(Number);
       const key = `${year}-${String(mon).padStart(2, '0')}`;
       if (!byMonth[key]) byMonth[key] = [];
-      // @ts-ignore - ensure pnl is treated as number
-      byMonth[key].push({ day, pnl: (d.realized ?? 0) });
+      byMonth[key].push({ day, pnl: d.realized ?? 0 });
     });
     return byMonth;
   }, [dailyData]);

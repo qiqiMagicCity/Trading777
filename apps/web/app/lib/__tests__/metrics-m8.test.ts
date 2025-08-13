@@ -10,14 +10,14 @@ describe("M8 cumulative trade counts", () => {
         price: 10,
         quantity: 1,
         date: "2024-01-01T09:30:00Z",
-      } as any,
+      } as unknown as EnrichedTrade,
       {
         symbol: "BBB",
         action: "short",
         price: 20,
         quantity: 1,
         date: "2024-01-01T10:30:00Z",
-      } as any,
+      } as unknown as EnrichedTrade,
     ];
 
     const initialPositions: InitialPosition[] = [
