@@ -24,7 +24,7 @@ declare global {
   }
 }
 
-type DateArgs =
+export type DateArgs =
   | []
   | [value: string | number | Date]
   | [
