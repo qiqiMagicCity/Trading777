@@ -323,25 +323,26 @@ export async function findPositions(): Promise<Position[]> {
   return db.getAll(POSITIONS_STORE_NAME);
 }
 
-const toNum = (v: any) => (Number.isFinite(+v) ? +v : 0);
+const toNum = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 export async function loadDailyResults(): Promise<DailyResult[]> {
   try {
     const res = await fetch("/dailyResult.json", { cache: "no-store" });
-    const raw = await res.json();
-    const arr: any[] = Array.isArray(raw)
+    const raw: unknown = await res.json();
+    const arr: unknown[] = Array.isArray(raw)
       ? raw
-      : Array.isArray(raw?.items)
-        ? raw.items
+      : Array.isArray((raw as { items?: unknown[] })?.items)
+        ? (raw as { items: unknown[] }).items
         : [];
     const map = new Map<string, DailyResult>();
     for (const x of arr) {
-      const d = String(x.date ?? "").slice(0, 10);
+      const item = x as Record<string, unknown>;
+      const d = String(item.date ?? "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
       map.set(d, {
         date: d,
-        realized: toNum(x.realized),
-        unrealized: toNum(x.unrealized),
+        realized: toNum(item.realized),
+        unrealized: toNum(item.unrealized),
       });
     }
     return [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
