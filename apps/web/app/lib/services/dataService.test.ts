@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { openDB } from "idb";
-import { importData, clearAndImportData, closeDb } from "./dataService";
+import { importData, clearAndImportData, closeDb, type RawTrade, type Position } from "./dataService";
 import { createHash } from "crypto";
 
 describe("dataService trade import", () => {
@@ -13,8 +13,8 @@ describe("dataService trade import", () => {
   });
 
   test("importData skips malformed trades without aborting", async () => {
-    const rawData: any = {
-      positions: [],
+    const rawData = {
+      positions: [] as Position[],
       trades: [
         {
           date: "2025-01-01",
@@ -22,22 +22,22 @@ describe("dataService trade import", () => {
           side: "BUY",
           qty: 10,
           price: 100,
-        },
+        } as RawTrade,
         {
           date: "2025-01-02",
           symbol: "MSFT",
-          side: "INVALID" as any,
+          side: "INVALID" as unknown as RawTrade["side"],
           qty: 5,
           price: 200,
-        },
-        { date: "2025-01-03", symbol: "TSLA", qty: 3, price: 300 },
+        } as unknown as RawTrade,
+        { date: "2025-01-03", symbol: "TSLA", qty: 3, price: 300 } as unknown as RawTrade,
         {
           date: "2025-01-04",
           symbol: "GOOG",
           side: "SELL",
           qty: 2,
           price: 150,
-        },
+        } as RawTrade,
       ],
     };
 
@@ -49,23 +49,23 @@ describe("dataService trade import", () => {
   });
 
   test("clearAndImportData skips malformed trades", async () => {
-    const rawData: any = {
-      positions: [],
+    const rawData = {
+      positions: [] as Position[],
       trades: [
         {
           date: "2025-02-01",
           symbol: "MSFT",
-          side: "INVALID" as any,
+          side: "INVALID" as unknown as RawTrade["side"],
           qty: 1,
           price: 200,
-        },
+        } as unknown as RawTrade,
         {
           date: "2025-02-02",
           symbol: "GOOG",
           side: "SELL",
           qty: 1,
           price: 150,
-        },
+        } as RawTrade,
       ],
     };
 
@@ -115,7 +115,7 @@ describe("dataService trade import", () => {
     await clearAndImportData(rawData);
     expect(global.localStorage.getItem("dataset-hash")).toBe(expectedHash);
     // cleanup
-    // @ts-ignore
+    // @ts-expect-error: Remove mock localStorage used in tests
     delete global.localStorage;
   });
 

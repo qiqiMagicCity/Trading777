@@ -17,6 +17,12 @@
 if (typeof process !== "undefined") {
   process.env.TZ = process.env.TZ || "America/New_York";
 }
+
+declare global {
+  interface Window {
+    NEXT_PUBLIC_FREEZE_DATE?: string;
+  }
+}
 export function toNY(): Date;
 export function toNY(value: string | number | Date): Date;
 export function toNY(
@@ -30,7 +36,9 @@ export function toNY(
 ): Date;
 
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
-export function toNY(...args: any[]): Date {
+type DateConstructorArgs = ConstructorParameters<typeof Date>;
+
+export function toNY(...args: DateConstructorArgs): Date {
   let date: Date;
 
   if (args.length === 0) {
@@ -42,7 +50,7 @@ export function toNY(...args: any[]): Date {
     // 与 new Date(year, month, ...) 行为保持一致
     // (服务器已通过 TZ=America/New_York 保证本地时区为纽约，否则仍再转一次)
     // eslint-disable-next-line prefer-spread
-    date = new (Date as any)(...args);
+    date = new Date(...args);
   }
 
   // 若环境时区已经是纽约，则无需转换
@@ -82,8 +90,7 @@ export const formatNY = (
 export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   const freeze =
     (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
-    // @ts-ignore
-    (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_FREEZE_DATE);
+    (typeof window !== 'undefined' && window.NEXT_PUBLIC_FREEZE_DATE);
   if (freeze) return freeze as string;
 
   const d = toNY(base);
@@ -150,10 +157,18 @@ export const startOfYearNY = (dateInput: string | Date): Date => {
   return d;
 };
 
-// Attach helper to global for quick usage in dev tools
-// @ts-ignore
-(globalThis as any).toNY = toNY;
-(globalThis as any).nowNY = nowNY;
-(globalThis as any).formatNY = formatNY;
-(globalThis as any).getLatestTradingDayStr = getLatestTradingDayStr;
-(globalThis as any).endOfDayNY = endOfDayNY;
+// Attach helpers to global for quick usage in dev tools
+type TimezoneGlobal = typeof globalThis & {
+  toNY: typeof toNY;
+  nowNY: typeof nowNY;
+  formatNY: typeof formatNY;
+  getLatestTradingDayStr: typeof getLatestTradingDayStr;
+  endOfDayNY: typeof endOfDayNY;
+};
+
+const g = globalThis as TimezoneGlobal;
+g.toNY = toNY;
+g.nowNY = nowNY;
+g.formatNY = formatNY;
+g.getLatestTradingDayStr = getLatestTradingDayStr;
+g.endOfDayNY = endOfDayNY;
