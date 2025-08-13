@@ -1,5 +1,6 @@
 export type HistPos = { sym:string; side:'LONG'|'SHORT'; qty:number; price?:number; cost?:number };
 export type Trade   = { t:string; sym:string; type:'BUY'|'SELL'|'SHORT'|'COVER'; qty:number; price:number };
+import shadowCalc from './shadowCalc';
 
 type Lot  = { qty:number; cost:number };
 type Book = Map<string, Lot[]>;
@@ -31,6 +32,7 @@ export function runAll(
   M5:{behavior:number; fifoRealized:number};
   M6:{total:number};
   M10:{winRate:number};
+  shadowDiff: Record<string, number>;
   openLots: Array<{ sym:string; side:'LONG'|'SHORT'; qty:number; cost:number }>;
   invariants: { m1Recalc:number; closedQtyConsistency:boolean; realizedConsistencyDiff:number };
 }{
@@ -103,12 +105,34 @@ export function runAll(
   const closedQtyConsistency = closedByBehavior===closedByTodayFifo;
   const realizedConsistencyDiff = Math.abs(realized.reduce((s,v)=>s+v,0)-(M4+M52));
 
-  return {
+  const main = {
     M1:{total:r2(M1v)}, M2:{total:r2(M2v)}, M3:{total:r2(M3v)},
     M4:{total:r2(M4)}, M5:{behavior:r2(M51), fifoRealized:r2(M52)},
     M6:{total:r2(M4+M52+M3v)}, M10:{winRate},
     openLots,
     invariants:{ m1Recalc:r2(m1Recalc), closedQtyConsistency, realizedConsistencyDiff }
   };
+
+  const shadow = shadowCalc(hist, trades, prices);
+  const diff: Record<string, number> = {};
+  const cmpMoney = (k: string, a: number, b: number) => {
+    if (Math.abs(a - b) > 0.01) diff[k] = r2(b - a);
+  };
+  const cmpRate = (k: string, a: number, b: number) => {
+    if (Math.abs(a - b) > 0.0001) diff[k] = b - a;
+  };
+  cmpMoney('M1', main.M1.total, shadow.M1);
+  cmpMoney('M2', main.M2.total, shadow.M2);
+  cmpMoney('M3', main.M3.total, shadow.M3);
+  cmpMoney('M4', main.M4.total, shadow.M4);
+  cmpMoney('M5.fifo', main.M5.fifoRealized, shadow.M5.fifo);
+  cmpMoney('M6', main.M6.total, shadow.M6);
+  const mainM9 = r2(main.M4.total + main.M5.fifoRealized);
+  cmpMoney('M9', mainM9, shadow.M9);
+  cmpRate('winRate', main.M10.winRate, shadow.winRate);
+  if (process.env.NODE_ENV !== 'production' && Object.keys(diff).length) {
+    console.log('shadow diff', diff);
+  }
+  return { ...main, shadowDiff: diff };
 }
 export default runAll;
