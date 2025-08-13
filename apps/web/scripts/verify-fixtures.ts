@@ -64,13 +64,15 @@ function eqMoney(a?: number, b?: number) { return typeof a === "number" && typeo
     const M9got = r2((Number(M4got) || 0) + (Number(M5fifo) || 0));
 
     if (hasExpected) {
-      const checks: Array<[string, number | undefined, number | undefined]> = [
-        ["M3", M3got, expected["M3"]],
-        ["M4", M4got, expected["M4"]],
-        ["M5.fifo", M5fifo, expected["M5.fifo"]],
-        ["M6", M6got, expected["M6"]],
-        ["M9", M9got, expected["M9"]],
-      ].filter(([, , exp]) => typeof exp === "number");
+      const checks = (
+        [
+          ["M3", M3got, expected["M3"]],
+          ["M4", M4got, expected["M4"]],
+          ["M5.fifo", M5fifo, expected["M5.fifo"]],
+          ["M6", M6got, expected["M6"]],
+          ["M9", M9got, expected["M9"]],
+        ] as [string, number | undefined, number | undefined][]
+      ).filter(([, , exp]) => typeof exp === "number");
 
       for (const [k, got, exp] of checks) {
         if (!eqMoney(got, exp)) {
