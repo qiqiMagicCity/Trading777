@@ -2,6 +2,16 @@
  * Token-bucket API 限流队列
  * 实现令牌桶算法来控制 API 请求速率，防止触发第三方 API 的速率限制
  */
+
+interface QueueItem<T = unknown> {
+  /** 要执行的异步函数 */
+  fn: () => Promise<T>;
+  /** 成功回调 */
+  resolve: (value: T | PromiseLike<T>) => void;
+  /** 失败回调 */
+  reject: (error?: unknown) => void;
+}
+
 export class ApiQueue {
   /** 令牌桶容量（最大令牌数） */
   private capacity: number;
@@ -10,14 +20,7 @@ export class ApiQueue {
   private tokens: number;
 
   /** 等待执行的任务队列 */
-  private queue: Array<{
-    /** 要执行的异步函数 */
-    fn: () => Promise<unknown>;
-    /** 成功回调 */
-    resolve: (value: unknown) => void;
-    /** 失败回调 */
-    reject: (error?: unknown) => void;
-  }> = [];
+  private queue: QueueItem[] = [];
 
   /** 令牌填充定时器 ID */
   private refillIntervalId: NodeJS.Timeout;
@@ -52,7 +55,9 @@ export class ApiQueue {
    */
   enqueue<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject });
+      const item: QueueItem<T> = { fn, resolve, reject };
+      // Cast to non-generic QueueItem for storage
+      this.queue.push(item as QueueItem);
       this.process();
     });
   }
@@ -114,4 +119,4 @@ export class ApiQueue {
  * 全局 API 队列实例
  * 用于限制对外部 API 的请求速率
  */
-export const apiQueue = new ApiQueue(); 
+export const apiQueue = new ApiQueue();
