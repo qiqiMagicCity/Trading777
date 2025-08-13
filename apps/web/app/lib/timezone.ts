@@ -158,13 +158,13 @@ export const startOfYearNY = (dateInput: string | Date): Date => {
 };
 
 // Attach helpers to global for quick usage in dev tools
-interface TimezoneGlobal extends typeof globalThis {
+type TimezoneGlobal = typeof globalThis & {
   toNY: typeof toNY;
   nowNY: typeof nowNY;
   formatNY: typeof formatNY;
   getLatestTradingDayStr: typeof getLatestTradingDayStr;
   endOfDayNY: typeof endOfDayNY;
-}
+};
 
 const g = globalThis as TimezoneGlobal;
 g.toNY = toNY;
