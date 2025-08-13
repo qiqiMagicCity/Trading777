@@ -23,8 +23,7 @@ declare global {
     NEXT_PUBLIC_FREEZE_DATE?: string;
   }
 }
-export function toNY(): Date;
-export function toNY(value: string | number | Date): Date;
+export function toNY(value?: string | number | Date): Date;
 export function toNY(
   year: number,
   month: number,
@@ -36,9 +35,7 @@ export function toNY(
 ): Date;
 
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
-type DateConstructorArgs = ConstructorParameters<typeof Date>;
-
-export function toNY(...args: DateConstructorArgs): Date {
+export function toNY(...args: any[]): Date {
   let date: Date;
 
   if (args.length === 0) {
@@ -89,8 +86,8 @@ export const formatNY = (
  */
 export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   const freeze =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
-    (typeof window !== 'undefined' && window.NEXT_PUBLIC_FREEZE_DATE);
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
+    (typeof window !== "undefined" && window.NEXT_PUBLIC_FREEZE_DATE);
   if (freeze) return freeze as string;
 
   const d = toNY(base);
