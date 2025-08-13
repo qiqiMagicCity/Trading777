@@ -342,9 +342,21 @@ export async function loadDailyResults(): Promise<DailyResult[]> {
         date: d,
         realized: toNum(x.realized),
         unrealized: toNum(x.unrealized),
+        unrealizedDelta:
+          x.unrealizedDelta !== undefined
+            ? toNum(x.unrealizedDelta)
+            : undefined,
       });
     }
-    return [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+    const list = [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+    let prev = 0;
+    for (const r of list) {
+      if (r.unrealizedDelta === undefined) {
+        r.unrealizedDelta = (r.unrealized ?? 0) - prev;
+      }
+      prev = r.unrealized ?? 0;
+    }
+    return list;
   } catch (e) {
     console.warn("loadDailyResults failed", e);
     return [];

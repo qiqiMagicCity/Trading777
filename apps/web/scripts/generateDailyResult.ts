@@ -12,6 +12,7 @@ export function generateDailyResult(
   trades: EnrichedTrade[],
   positions: Position[],
   date: string,
+  prevUnrealized = 0,
 ): DailyResult {
   const realized = trades
     // Ensure trade has a valid date before checking prefix
@@ -32,5 +33,6 @@ export function generateDailyResult(
     date,
     realized,
     unrealized,
+    unrealizedDelta: unrealized - prevUnrealized,
   };
 }
