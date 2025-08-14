@@ -265,7 +265,8 @@ function lowerBound(arr: number[], target: number) {
     r = arr.length;
   while (l < r) {
     const m = (l + r) >> 1;
-    if (arr[m] < target) l = m + 1;
+    const midVal = arr[m]!;
+    if (midVal < target) l = m + 1;
     else r = m;
   }
   return l;
@@ -276,7 +277,8 @@ function upperBound(arr: number[], target: number) {
     r = arr.length;
   while (l < r) {
     const m = (l + r) >> 1;
-    if (arr[m] <= target) l = m + 1;
+    const midVal = arr[m]!;
+    if (midVal <= target) l = m + 1;
     else r = m;
   }
   return l - 1;
