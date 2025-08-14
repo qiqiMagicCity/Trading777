@@ -311,9 +311,9 @@ export function sumPeriod(
   const startIdx = lowerBound(dates, fromTS);
   const endIdx = upperBound(dates, toTS);
   let total = 0;
-  if (endIdx >= startIdx && endIdx >= 0) {
-    const prev = startIdx === 0 ? 0 : prefix[startIdx - 1];
-    total = prefix[endIdx] - prev;
+  if (endIdx >= startIdx && endIdx >= 0 && endIdx < prefix.length) {
+    const prev = startIdx === 0 ? 0 : prefix[startIdx - 1]!;
+    total = prefix[endIdx]! - prev;
   }
 
   sumPeriodCache.lastFrom = fromStr;
