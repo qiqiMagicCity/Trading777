@@ -217,6 +217,10 @@ function isValidTradeDate(
 type SumPeriodCache = {
   /** 原始 daily 引用，用于判断是否需要重建缓存 */
   daily: DailyResult[];
+  /** 缓存时 daily 的长度 */
+  dailyLength: number;
+  /** 缓存时最后一条记录的日期 */
+  lastDate?: string;
   /** 按日期排序后的时间戳数组 */
   dates: number[];
   /** 累计收益前缀和 */
@@ -247,7 +251,13 @@ function rebuildSumPeriodCache(daily: DailyResult[]): SumPeriodCache {
     prefix.push(acc);
     prevUnrealized = unrealized;
   }
-  return { daily, dates, prefix };
+  return {
+    daily,
+    dailyLength: daily.length,
+    lastDate: daily[daily.length - 1]?.date,
+    dates,
+    prefix,
+  };
 }
 
 function lowerBound(arr: number[], target: number) {
@@ -277,7 +287,13 @@ export function sumPeriod(
   fromStr: string,
   toStr: string,
 ) {
-  if (!sumPeriodCache || sumPeriodCache.daily !== daily) {
+  const lastDate = daily[daily.length - 1]?.date;
+  if (
+    !sumPeriodCache ||
+    sumPeriodCache.daily !== daily ||
+    sumPeriodCache.dailyLength !== daily.length ||
+    sumPeriodCache.lastDate !== lastDate
+  ) {
     sumPeriodCache = rebuildSumPeriodCache(daily);
   } else if (
     sumPeriodCache.lastFrom === fromStr &&
