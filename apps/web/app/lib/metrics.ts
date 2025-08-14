@@ -188,6 +188,29 @@ function isOnOrBeforeNY(
   return !isNaN(d.getTime()) && d.getTime() <= end.getTime();
 }
 
+function isValidTradeDate(
+  dateStr: string | undefined,
+  todayStr: string,
+  context: string,
+  trade: EnrichedTrade,
+): boolean {
+  if (!dateStr) {
+    console.warn(`${context}: missing trade date`, trade);
+    return false;
+  }
+  const d = toNY(dateStr);
+  if (isNaN(d.getTime())) {
+    console.warn(`${context}: invalid trade date`, dateStr, trade);
+    return false;
+  }
+  const end = toNY(`${todayStr}T23:59:59.999`);
+  if (d.getTime() > end.getTime()) {
+    console.warn(`${context}: future trade date`, dateStr, trade);
+    return false;
+  }
+  return true;
+}
+
 function sumPeriod(daily: DailyResult[], fromStr: string, toStr: string) {
   const fromTS = toNY(fromStr).getTime();
   const toTS = toNY(toStr).getTime();
@@ -290,7 +313,9 @@ export function calcTodayFifoPnL(
   let pnl = 0;
   const sorted = enrichedTrades
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => isOnOrBeforeNY(t.date, todayStr))
+    .filter(({ t }) =>
+      isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t),
+    )
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
@@ -350,7 +375,7 @@ export function calcTodayFifoPnL(
 /**
  * 计算历史交易盈亏（FIFO视角）——用于 M4
  */
-function calcHistoryFifoPnL(
+export function calcHistoryFifoPnL(
   enrichedTrades: EnrichedTrade[],
   todayStr: string,
   initialPositions: InitialPosition[] = [],
@@ -378,7 +403,9 @@ function calcHistoryFifoPnL(
   let pnl = 0;
   const sorted = enrichedTrades
     .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => isOnOrBeforeNY(t.date, todayStr))
+    .filter(({ t }) =>
+      isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t),
+    )
     .sort((a, b) => {
       const timeA = toNY(a.t.date).getTime();
       const timeB = toNY(b.t.date).getTime();
