@@ -2,12 +2,12 @@
   "name": "trading-app",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "build": "npx --yes turbo run build",
+    "dev": "npx --yes turbo run dev",
+    "lint": "npx --yes turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types",
-    "test": "jest"
+    "check-types": "npx --yes turbo run check-types",
+    "test": "npx --yes jest"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
