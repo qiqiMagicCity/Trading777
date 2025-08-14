@@ -1,7 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
-  "globalEnv": ["FINNHUB_API_KEY"],
+  "globalEnv": ["FINNHUB_API_KEY", "NODE_ENV", "TZ"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
