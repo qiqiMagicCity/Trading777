@@ -211,28 +211,97 @@ function isValidTradeDate(
   return true;
 }
 
-function sumPeriod(daily: DailyResult[], fromStr: string, toStr: string) {
-  const fromTS = toNY(fromStr).getTime();
-  const toTS = toNY(toStr).getTime();
-  let total = 0;
-  let prevUnrealized = 0;
+/**
+ * 缓存结构用于快速计算区间盈亏
+ */
+type SumPeriodCache = {
+  /** 原始 daily 引用，用于判断是否需要重建缓存 */
+  daily: DailyResult[];
+  /** 按日期排序后的时间戳数组 */
+  dates: number[];
+  /** 累计收益前缀和 */
+  prefix: number[];
+  /** 最近一次查询的起始、结束日期及结果 */
+  lastFrom?: string;
+  lastTo?: string;
+  lastResult?: number;
+};
 
+let sumPeriodCache: SumPeriodCache | null = null;
+
+function rebuildSumPeriodCache(daily: DailyResult[]): SumPeriodCache {
   const sorted = daily.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const dates: number[] = [];
+  const prefix: number[] = [];
+  let prevUnrealized = 0;
+  let acc = 0;
   for (const r of sorted) {
     const ts = toNY(r.date).getTime();
     const unrealized = r.unrealized ?? 0;
-    if (ts < fromTS) {
-      prevUnrealized = unrealized;
-      continue;
-    }
-    if (ts > toTS) break;
     const delta =
       r.unrealizedDelta !== undefined
         ? r.unrealizedDelta
         : unrealized - prevUnrealized;
-    total += (r.realized ?? 0) + delta;
+    acc += (r.realized ?? 0) + delta;
+    dates.push(ts);
+    prefix.push(acc);
     prevUnrealized = unrealized;
   }
+  return { daily, dates, prefix };
+}
+
+function lowerBound(arr: number[], target: number) {
+  let l = 0,
+    r = arr.length;
+  while (l < r) {
+    const m = (l + r) >> 1;
+    if (arr[m] < target) l = m + 1;
+    else r = m;
+  }
+  return l;
+}
+
+function upperBound(arr: number[], target: number) {
+  let l = 0,
+    r = arr.length;
+  while (l < r) {
+    const m = (l + r) >> 1;
+    if (arr[m] <= target) l = m + 1;
+    else r = m;
+  }
+  return l - 1;
+}
+
+export function sumPeriod(
+  daily: DailyResult[],
+  fromStr: string,
+  toStr: string,
+) {
+  if (!sumPeriodCache || sumPeriodCache.daily !== daily) {
+    sumPeriodCache = rebuildSumPeriodCache(daily);
+  } else if (
+    sumPeriodCache.lastFrom === fromStr &&
+    sumPeriodCache.lastTo === toStr
+  ) {
+    return sumPeriodCache.lastResult ?? 0;
+  }
+
+  const fromTS = toNY(fromStr).getTime();
+  const toTS = toNY(toStr).getTime();
+  const { dates, prefix } = sumPeriodCache;
+
+  const startIdx = lowerBound(dates, fromTS);
+  const endIdx = upperBound(dates, toTS);
+  let total = 0;
+  if (endIdx >= startIdx && endIdx >= 0) {
+    const prev = startIdx === 0 ? 0 : prefix[startIdx - 1];
+    total = prefix[endIdx] - prev;
+  }
+
+  sumPeriodCache.lastFrom = fromStr;
+  sumPeriodCache.lastTo = toStr;
+  sumPeriodCache.lastResult = total;
+
   return total;
 }
 
