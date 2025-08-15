@@ -16,6 +16,15 @@ malformed or empty dates.
 
 Copy the repository root `env.example` file to `.env` and fill in the required API keys before running the application.
 
+### Environment Variables
+
+The price services expect the following variables to be defined in `.env` or your Vercel project settings:
+
+- `NEXT_PUBLIC_FINNHUB_TOKEN` – Finnhub API token
+- `NEXT_PUBLIC_TIINGO_TOKEN` – Tiingo API token
+
+If these tokens are missing, external price lookups are skipped to prevent build and deployment failures.
+
 First, run the development server:
 
 ```bash
