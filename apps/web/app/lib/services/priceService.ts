@@ -91,6 +91,9 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
 
 /** Finnhub: 实时报价 */
 async function fetchFinnhubRealtimeQuote(symbol: string): Promise<number | null> {
+  const token = await getFinnhubToken();
+  if (!token) { console.warn('未设置 Finnhub 令牌'); return null; }
+
   const url = `/api/quote?symbol=${encodeURIComponent(symbol)}`;
   try {
     const response = await apiQueue.enqueue(() => fetch(url));
