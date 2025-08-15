@@ -29,8 +29,13 @@ export function toNY(
   ms?: number,
 ): Date;
 
+type ToNYArgs =
+  | []
+  | [string | number | Date]
+  | [number, number, number?, number?, number?, number?, number?];
+
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
-export function toNY(...args: ConstructorParameters<typeof Date>): Date {
+export function toNY(...args: ToNYArgs): Date {
   let date: Date;
 
   if (args.length === 0) {

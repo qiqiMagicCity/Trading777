@@ -118,7 +118,10 @@ export default function AnalysisPage() {
 
     if (chartRef.current) {
       chartRef.current.data.labels = dates;
-      chartRef.current.data.datasets[0].data = lineValues;
+      const dataset = chartRef.current.data.datasets[0];
+      if (dataset) {
+        dataset.data = lineValues;
+      }
       chartRef.current.update();
     } else {
       chartRef.current = new Chart(ctx, {
