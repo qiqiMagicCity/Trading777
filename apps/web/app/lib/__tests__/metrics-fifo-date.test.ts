@@ -8,10 +8,10 @@ describe("FIFO date validation", () => {
 
   it("skips malformed and future dates for today's FIFO PnL", () => {
     const trades: EnrichedTrade[] = [
-      { symbol: "AAPL", action: "buy", price: 90, quantity: 1, date: "2024-01-02T09:00:00Z" } as any,
-      { symbol: "AAPL", action: "sell", price: 110, quantity: 1, date: "2024-01-02T10:00:00Z" } as any,
-      { symbol: "AAPL", action: "buy", price: 100, quantity: 1, date: "bad-date" } as any,
-      { symbol: "AAPL", action: "sell", price: 120, quantity: 1, date: "2024-01-03T10:00:00Z" } as any,
+      { symbol: "AAPL", action: "buy", price: 90, quantity: 1, date: "2024-01-02T09:00:00Z" } as unknown as EnrichedTrade,
+      { symbol: "AAPL", action: "sell", price: 110, quantity: 1, date: "2024-01-02T10:00:00Z" } as unknown as EnrichedTrade,
+      { symbol: "AAPL", action: "buy", price: 100, quantity: 1, date: "bad-date" } as unknown as EnrichedTrade,
+      { symbol: "AAPL", action: "sell", price: 120, quantity: 1, date: "2024-01-03T10:00:00Z" } as unknown as EnrichedTrade,
     ];
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     const pnl = calcTodayFifoPnL(trades, "2024-01-02");
@@ -21,10 +21,10 @@ describe("FIFO date validation", () => {
 
   it("skips malformed and future dates for historical FIFO PnL", () => {
     const trades: EnrichedTrade[] = [
-      { symbol: "AAPL", action: "buy", price: 90, quantity: 1, date: "2024-01-01T10:00:00Z" } as any,
-      { symbol: "AAPL", action: "sell", price: 110, quantity: 1, date: "2024-01-02T10:00:00Z" } as any,
-      { symbol: "AAPL", action: "buy", price: 100, quantity: 1, date: "bad-date" } as any,
-      { symbol: "AAPL", action: "sell", price: 120, quantity: 1, date: "2024-01-03T10:00:00Z" } as any,
+      { symbol: "AAPL", action: "buy", price: 90, quantity: 1, date: "2024-01-01T10:00:00Z" } as unknown as EnrichedTrade,
+      { symbol: "AAPL", action: "sell", price: 110, quantity: 1, date: "2024-01-02T10:00:00Z" } as unknown as EnrichedTrade,
+      { symbol: "AAPL", action: "buy", price: 100, quantity: 1, date: "bad-date" } as unknown as EnrichedTrade,
+      { symbol: "AAPL", action: "sell", price: 120, quantity: 1, date: "2024-01-03T10:00:00Z" } as unknown as EnrichedTrade,
     ];
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
     const pnl = calcHistoryFifoPnL(trades, "2024-01-02");

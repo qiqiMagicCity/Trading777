@@ -11,7 +11,8 @@ interface RankingTableProps {
 export function RankingTable({ trades, bySymbol = true }: RankingTableProps) {
   const [showProfits, setShowProfits] = useState<boolean>(true);
 
-  const ranked = useMemo(() => {
+  type RankedRow = { symbol: string; pnl: number } | EnrichedTrade;
+  const ranked: RankedRow[] = useMemo(() => {
     if (bySymbol) {
       // 累加每个标的的已实现盈亏
       const map: Record<string, number> = {};
@@ -20,17 +21,19 @@ export function RankingTable({ trades, bySymbol = true }: RankingTableProps) {
         map[t.symbol] = (map[t.symbol] || 0) + pnl;
       });
       const arr = Object.entries(map).map(([symbol, pnl]) => ({ symbol, pnl }));
-      arr.sort((a, b) => showProfits ? b.pnl - a.pnl : a.pnl - b.pnl);
-      return arr.slice(0, 10);
+      arr.sort((a, b) => (showProfits ? b.pnl - a.pnl : a.pnl - b.pnl));
+      return arr.slice(0, 10) as RankedRow[];
     } else {
       // 原按单笔交易排序
-      const tradesWithPnl = trades.filter(t => t.realizedPnl !== undefined && t.realizedPnl !== 0);
+      const tradesWithPnl = trades.filter(
+        t => t.realizedPnl !== undefined && t.realizedPnl !== 0,
+      );
       const sorted = [...tradesWithPnl].sort((a, b) => {
         const pnlA = a.realizedPnl || 0;
         const pnlB = b.realizedPnl || 0;
         return showProfits ? pnlB - pnlA : pnlA - pnlB;
       });
-      return sorted.slice(0, 10);
+      return sorted.slice(0, 10) as RankedRow[];
     }
   }, [trades, bySymbol, showProfits]);
 
@@ -59,8 +62,8 @@ export function RankingTable({ trades, bySymbol = true }: RankingTableProps) {
         </thead>
         <tbody>
           {ranked.map((row, idx) => {
-            const pnl = bySymbol ? (row as any).pnl : (row as any).realizedPnl;
-            const sym = bySymbol ? (row as any).symbol : (row as any).symbol;
+            const pnl = 'pnl' in row ? row.pnl : row.realizedPnl || 0;
+            const sym = row.symbol;
             const cls = pnl > 0 ? 'green' : pnl < 0 ? 'red' : '';
             return (
               <tr key={idx}>

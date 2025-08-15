@@ -43,6 +43,7 @@ export interface Trade {
   price: number;
   quantity: number;
   date: string;
+  time?: string | number | Date;
   action: "buy" | "sell" | "short" | "cover";
 }
 
@@ -323,16 +324,26 @@ export async function findPositions(): Promise<Position[]> {
   return db.getAll(POSITIONS_STORE_NAME);
 }
 
-const toNum = (v: any) => (Number.isFinite(+v) ? +v : 0);
+const toNum = (v: unknown): number => {
+  const num = Number(v);
+  return Number.isFinite(num) ? num : 0;
+};
+
+interface RawDaily {
+  date?: unknown;
+  realized?: unknown;
+  unrealized?: unknown;
+  unrealizedDelta?: unknown;
+}
 
 export async function loadDailyResults(): Promise<DailyResult[]> {
   try {
     const res = await fetch("/dailyResult.json", { cache: "no-store" });
-    const raw = await res.json();
-    const arr: any[] = Array.isArray(raw)
-      ? raw
-      : Array.isArray(raw?.items)
-        ? raw.items
+    const raw = (await res.json()) as unknown;
+    const arr: RawDaily[] = Array.isArray(raw)
+      ? (raw as RawDaily[])
+      : Array.isArray((raw as { items?: RawDaily[] })?.items)
+        ? ((raw as { items: RawDaily[] }).items)
         : [];
     const map = new Map<string, DailyResult>();
     for (const x of arr) {

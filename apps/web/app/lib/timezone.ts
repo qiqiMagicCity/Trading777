@@ -30,7 +30,7 @@ export function toNY(
 ): Date;
 
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
-export function toNY(...args: any[]): Date {
+export function toNY(...args: ConstructorParameters<typeof Date>): Date {
   let date: Date;
 
   if (args.length === 0) {
@@ -40,9 +40,16 @@ export function toNY(...args: any[]): Date {
     date = v instanceof Date ? new Date(v.getTime()) : new Date(v);
   } else {
     // 与 new Date(year, month, ...) 行为保持一致
-    // (服务器已通过 TZ=America/New_York 保证本地时区为纽约，否则仍再转一次)
-    // eslint-disable-next-line prefer-spread
-    date = new (Date as any)(...args);
+    const [year, month, ...rest] = args as [
+      number,
+      number,
+      number?,
+      number?,
+      number?,
+      number?,
+      number?,
+    ];
+    date = new Date(year, month, rest[0], rest[1], rest[2], rest[3], rest[4]);
   }
 
   // 若环境时区已经是纽约，则无需转换
@@ -83,7 +90,8 @@ export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   const freeze =
     (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
     // @ts-ignore
-    (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_FREEZE_DATE);
+    (typeof window !== 'undefined' &&
+      (window as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE);
   if (freeze) return freeze as string;
 
   const d = toNY(base);
@@ -151,9 +159,10 @@ export const startOfYearNY = (dateInput: string | Date): Date => {
 };
 
 // Attach helper to global for quick usage in dev tools
-// @ts-ignore
-(globalThis as any).toNY = toNY;
-(globalThis as any).nowNY = nowNY;
-(globalThis as any).formatNY = formatNY;
-(globalThis as any).getLatestTradingDayStr = getLatestTradingDayStr;
-(globalThis as any).endOfDayNY = endOfDayNY;
+Object.assign(globalThis as Record<string, unknown>, {
+  toNY,
+  nowNY,
+  formatNY,
+  getLatestTradingDayStr,
+  endOfDayNY,
+});

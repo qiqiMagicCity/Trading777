@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
     if (!symbol || !date || typeof close !== 'number') {
       return new Response(JSON.stringify({ error: 'symbol,date,close required' }), { status: 400 });
     }
-    let data: any = {};
+    let data: Record<string, Record<string, number>> = {};
     try {
       const txt = await fs.readFile(FILE_PATH, 'utf8');
-      data = JSON.parse(txt || '{}');
+      data = JSON.parse(txt || '{}') as Record<string, Record<string, number>>;
     } catch {}
     if (!data[date]) data[date] = {};
     data[date][symbol] = close;

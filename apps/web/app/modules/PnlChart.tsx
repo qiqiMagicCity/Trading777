@@ -13,7 +13,9 @@ export function PnlChart({ trades }: PnlChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [chartLoaded, setChartLoaded] = useState(false);
   const [activeView, setActiveView] = useState<'day' | 'week' | 'month'>('day');
-  const chartInstanceRef = useRef<any>(null);
+  interface ChartInstance { destroy(): void }
+  type ChartCtor = new (ctx: CanvasRenderingContext2D, config: unknown) => ChartInstance;
+  const chartInstanceRef = useRef<ChartInstance | null>(null);
 
   useEffect(() => {
     if (!canvasRef.current || !chartLoaded) return;
@@ -83,7 +85,7 @@ export function PnlChart({ trades }: PnlChartProps) {
     });
 
     // Create the chart
-    const Chart = (window as any).Chart;
+    const Chart = (window as unknown as { Chart?: ChartCtor }).Chart;
     if (!Chart) return;
 
     chartInstanceRef.current = new Chart(ctx, {
@@ -115,8 +117,9 @@ export function PnlChart({ trades }: PnlChartProps) {
         scales: {
           y: {
             ticks: {
-              callback: function (value: any) {
-                return '$' + value.toLocaleString();
+              callback: (value: unknown) => {
+                const num = typeof value === 'number' ? value : Number(value);
+                return '$' + num.toLocaleString();
               }
             }
           }
@@ -124,9 +127,8 @@ export function PnlChart({ trades }: PnlChartProps) {
         plugins: {
           tooltip: {
             callbacks: {
-              label: function (context: any) {
-                return context.dataset.label + ': $' + context.parsed.y.toLocaleString();
-              }
+              label: (context: { dataset: { label: string }; parsed: { y: number } }) =>
+                context.dataset.label + ': $' + context.parsed.y.toLocaleString()
             }
           }
         }

@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
+import type { Trade } from '@/lib/services/dataService';
 import { nowNY, toNY } from '@/lib/timezone';
 
 interface Props {
   onClose: () => void;
   onAdded: () => void;
-  trade?: any; // Assuming trade object structure
+  trade?: Trade;
 }
 
 function buildOptionSymbol(root: string, dateStr: string, cp: string, strike: number): string {
