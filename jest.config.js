@@ -11,4 +11,4 @@ module.exports = {
       tsconfig: 'apps/web/tsconfig.json',
     }],
   },
-}; 
+};
