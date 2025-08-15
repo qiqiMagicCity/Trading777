@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { findTrades } from '@/lib/services/dataService';
@@ -84,7 +85,14 @@ export default function StockPage() {
   return (
     <div>
       <div style={{ textAlign: 'center', marginTop: '20px' }}>
-        <img id="stock-logo" src={`/logos/${symbol}.png`} alt="Logo" style={{ height: '150px', objectFit: 'contain' }} />
+        <Image
+          id="stock-logo"
+          src={`/logos/${symbol}.png`}
+          alt="Logo"
+          width={150}
+          height={150}
+          style={{ height: '150px', objectFit: 'contain' }}
+        />
         <h2 className="section-title" id="title" style={{ marginTop: '10px' }}>
           {symbol}{zhName ? ` (${zhName})` : ''} 交易详情
         </h2>
