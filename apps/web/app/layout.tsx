@@ -1,11 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import Script from "next/script";
 import { Header } from "@/components/layout/Header";
 import Providers from "./providers";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Trading777 v7.80",
@@ -18,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN">
-      <body className={inter.className} suppressHydrationWarning>
+      <html lang="zh-CN">
+        <body suppressHydrationWarning>
         <Script id="freeze-date" strategy="beforeInteractive">
           {`window.NEXT_PUBLIC_FREEZE_DATE=${JSON.stringify(process.env.NEXT_PUBLIC_FREEZE_DATE || "")};`}
         </Script>
