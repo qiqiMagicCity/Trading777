@@ -17,6 +17,11 @@
 if (typeof process !== "undefined") {
   process.env.TZ = process.env.TZ || "America/New_York";
 }
+type ToNYArgs =
+  | []
+  | [string | number | Date]
+  | [number, number, number?, number?, number?, number?, number?];
+
 export function toNY(): Date;
 export function toNY(value: string | number | Date): Date;
 export function toNY(
@@ -28,11 +33,6 @@ export function toNY(
   seconds?: number,
   ms?: number,
 ): Date;
-
-type ToNYArgs =
-  | []
-  | [string | number | Date]
-  | [number, number, number?, number?, number?, number?, number?];
 
 /** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
 export function toNY(...args: ToNYArgs): Date {
@@ -93,10 +93,9 @@ export const formatNY = (
  */
 export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   const freeze =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
-    // @ts-ignore
-    (typeof window !== 'undefined' &&
-      (window as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE);
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
+    (typeof window !== "undefined" &&
+      (window as unknown as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE);
   if (freeze) return freeze as string;
 
   const d = toNY(base);
