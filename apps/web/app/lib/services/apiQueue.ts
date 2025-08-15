@@ -12,11 +12,11 @@ export class ApiQueue {
   /** 等待执行的任务队列 */
   private queue: Array<{
     /** 要执行的异步函数 */
-    fn: () => Promise<any>;
+    fn: () => Promise<unknown>;
     /** 成功回调 */
-    resolve: (value: any) => void;
+    resolve: (value: unknown) => void;
     /** 失败回调 */
-    reject: (error?: any) => void;
+    reject: (error?: unknown) => void;
   }> = [];
 
   /** 令牌填充定时器 ID */
@@ -52,7 +52,11 @@ export class ApiQueue {
    */
   enqueue<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject });
+      this.queue.push({
+        fn: fn as () => Promise<unknown>,
+        resolve: resolve as (value: unknown) => void,
+        reject: reject as (error?: unknown) => void,
+      });
       this.process();
     });
   }

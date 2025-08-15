@@ -17,7 +17,12 @@ import { useStore } from '@/lib/store';
 
 const AnalysisDebugTable = dynamic(() => import('./AnalysisDebugTable'), { ssr: false });
 
-declare const Chart: any;
+interface ChartInstance {
+  data: { labels: string[]; datasets: Array<{ data: number[] }> };
+  update: () => void;
+}
+type ChartCtor = new (ctx: CanvasRenderingContext2D, config: unknown) => ChartInstance;
+declare const Chart: ChartCtor;
 
 export default function AnalysisPage() {
   const [isChartReady, setIsChartReady] = useState(false);
@@ -41,7 +46,7 @@ export default function AnalysisPage() {
   const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const pnlCanvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<ChartInstance | null>(null);
   const metricsLoadedRef = useRef(false);
 
   useEffect(() => {

@@ -813,7 +813,7 @@ export function calcMetrics(
   const todayStr = getLatestTradingDayStr(evalDateNY);
   const evalEnd = endOfDayNY(evalDateNY);
   const safeTrades = trades.filter((t) => {
-    const d = toNY((t as any).time ?? t.date);
+    const d = toNY(t.time ?? t.date);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
 
