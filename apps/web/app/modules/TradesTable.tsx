@@ -2,6 +2,7 @@
 
 import type { EnrichedTrade } from "@/lib/fifo";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { toNY } from '@/lib/timezone';
 
 function formatNumber(value: number | undefined, decimals = 2) {
@@ -64,7 +65,15 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
             <tr key={idx}>
               <td>{trade.date}</td>
               <td>{weekday}</td>
-              <td><img className="logo" src={`/logos/${trade.symbol}.png`} alt={trade.symbol} /></td>
+              <td>
+                <Image
+                  className="logo"
+                  src={`/logos/${trade.symbol}.png`}
+                  alt={trade.symbol}
+                  width={36}
+                  height={36}
+                />
+              </td>
               <td>{trade.symbol}</td>
               <td className="cn">{nameMap[trade.symbol] || '--'}</td>
               <td className={colorSide}>{trade.action ? trade.action.toUpperCase() : 'UNKNOWN'}</td>

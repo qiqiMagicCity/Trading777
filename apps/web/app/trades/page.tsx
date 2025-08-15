@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { findTrades, deleteTrade } from '@/lib/services/dataService';
 import { computeFifo, type EnrichedTrade } from '@/lib/fifo';
 import AddTradeModal from '@/components/AddTradeModal';
@@ -102,7 +103,15 @@ export default function TradesPage() {
             return (
               <tr key={idx}>
                 <td>{idx + 1}</td>
-                <td><img className="logo" src={`/logos/${trade.symbol}.png`} alt={trade.symbol} /></td>
+                <td>
+                  <Image
+                    className="logo"
+                    src={`/logos/${trade.symbol}.png`}
+                    alt={trade.symbol}
+                    width={36}
+                    height={36}
+                  />
+                </td>
                 <td>{trade.symbol}</td>
                 <td className="cn">{nameMap[trade.symbol] || '--'}</td>
                 <td>{trade.date}</td>
