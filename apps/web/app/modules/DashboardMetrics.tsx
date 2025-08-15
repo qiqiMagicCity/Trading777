@@ -45,15 +45,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   // 从全局状态获取指标
   const metrics = useStore((state) => state.metrics);
 
-  // 如果指标未加载，显示加载中
-  if (!metrics) {
-    return (
-      <section id="stats" className="stats-grid">
-        正在加载指标...
-      </section>
-    );
-  }
-
   // 定义指标名称映射
   const metricNames: Record<keyof Metrics, string> = useMemo(
     () => ({
@@ -96,6 +87,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
   // 格式化指标值并确定颜色
   const formattedMetrics = useMemo(() => {
+    if (!metrics) return [];
     return order.map((key) => {
       const value = metrics[key];
       let formattedValue: ReactNode;
@@ -168,6 +160,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       };
     });
   }, [metrics, metricNames, order]);
+
+  if (!metrics) {
+    return <section id="stats" className="stats-grid">正在加载指标...</section>;
+  }
 
   return (
     <section id="stats" className="my-5">
