@@ -34,7 +34,6 @@ type ToNYArgs =
   | [string | number | Date]
   | [number, number, number?, number?, number?, number?, number?];
 
-/** 实现 – 同 Date 构造函数，但最终始终转换为纽约时间 */
 export function toNY(...args: ToNYArgs): Date {
   let date: Date;
 
@@ -44,7 +43,6 @@ export function toNY(...args: ToNYArgs): Date {
     const v = args[0];
     date = v instanceof Date ? new Date(v.getTime()) : new Date(v);
   } else {
-    // 与 new Date(year, month, ...) 行为保持一致
     const [year, month, ...rest] = args as [
       number,
       number,
@@ -57,7 +55,6 @@ export function toNY(...args: ToNYArgs): Date {
     date = new Date(year, month, rest[0], rest[1], rest[2], rest[3], rest[4]);
   }
 
-  // 若环境时区已经是纽约，则无需转换
   const localeString = date.toLocaleString("en-US", {
     timeZone: "America/New_York",
   });
