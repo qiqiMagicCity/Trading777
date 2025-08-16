@@ -119,7 +119,9 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
     if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
       return cached.price;
     }
-  } catch {}
+  } catch (_err) {
+    // 忽略 localStorage 访问或 JSON 解析错误
+  }
 
   const url = `https://api.tiingo.com/iex/?token=${token}&tickers=${encodeURIComponent(symbol)}`;
   try {
@@ -129,7 +131,11 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
     const first = Array.isArray(json) && json.length ? json[0] : undefined;
     if (first && typeof first.last === 'number') {
       const price = first.last;
-      try { localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() })); } catch {}
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() }));
+      } catch (_err) {
+        // 忽略写入 localStorage 的错误
+      }
       return price;
     }
   } catch (err) {
@@ -150,7 +156,9 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
     if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
       return cached.price;
     }
-  } catch {}
+  } catch (_err) {
+    // 忽略 localStorage 访问或 JSON 解析错误
+  }
 
   const url = `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(symbol)}/prices?token=${token}&startDate=${date}&endDate=${date}`;
   try {
@@ -160,7 +168,11 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
     const first = Array.isArray(json) && json.length ? json[0] : undefined;
     if (first && typeof first.close === 'number') {
       const price = first.close;
-      try { localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() })); } catch {}
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() }));
+      } catch (_err) {
+        // 忽略写入 localStorage 的错误
+      }
       await putPrice({ symbol, date, close: price, source: 'tiingo' });
       return price;
     }

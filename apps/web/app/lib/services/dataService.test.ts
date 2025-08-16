@@ -116,7 +116,7 @@ describe("dataService trade import", () => {
     await clearAndImportData(rawData);
     expect(global.localStorage.getItem("dataset-hash")).toBe(expectedHash);
     // cleanup
-    // @ts-ignore
+    // @ts-expect-error - cleanup mocked localStorage
     delete global.localStorage;
   });
 

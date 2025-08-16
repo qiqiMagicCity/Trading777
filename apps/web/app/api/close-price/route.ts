@@ -14,7 +14,12 @@ export async function POST(req: NextRequest) {
     try {
       const txt = await fs.readFile(FILE_PATH, 'utf8');
       data = JSON.parse(txt || '{}') as Record<string, Record<string, number>>;
-    } catch {}
+    }
+    // 文件可能不存在或 JSON 无法解析，此处忽略以便初始化为空对象
+    // eslint-disable-next-line no-empty
+    catch (_err) {
+      // intentionally empty
+    }
     if (!data[date]) data[date] = {};
     data[date][symbol] = close;
     await fs.writeFile(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
