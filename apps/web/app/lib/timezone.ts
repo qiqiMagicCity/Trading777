@@ -17,18 +17,6 @@
 if (typeof process !== "undefined") {
   process.env.TZ = process.env.TZ || "America/New_York";
 }
-export function toNY(): Date;
-export function toNY(value: string | number | Date): Date;
-export function toNY(
-  year: number,
-  month: number,
-  date?: number,
-  hours?: number,
-  minutes?: number,
-  seconds?: number,
-  ms?: number,
-): Date;
-
 type ToNYArgs =
   | []
   | [string | number | Date]
