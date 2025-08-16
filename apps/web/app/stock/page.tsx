@@ -48,7 +48,7 @@ export default function StockPage() {
         fetch('/data/symbol_name_map.json')
           .then((r) => r.json())
           .then((j) => setNameMap(j))
-          .catch(() => { });
+          .catch(err => console.error('加载符号名称失败', err));
       } catch (e) {
         console.error(e);
       } finally {
