@@ -13,6 +13,7 @@ import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
+import { logger } from "@/lib/logger";
 
 export function isDebug() {
   return (
@@ -804,7 +805,7 @@ export function calcMetrics(
   initialPositions: InitialPosition[] = [],
 ): Metrics {
   if (DEBUG)
-    console.info("M7_INPUT", _count(trades), {
+    logger.debug("M7_INPUT", _count(trades), {
       sample: trades.slice(0, 3),
     });
 
@@ -818,7 +819,7 @@ export function calcMetrics(
   });
 
   if (DEBUG)
-    console.info("M7_FILTERED", _count(safeTrades), {
+    logger.debug("M7_FILTERED", _count(safeTrades), {
       evalEndNY: evalEnd.toISOString?.(),
     });
 
@@ -864,7 +865,7 @@ export function calcMetrics(
   );
 
   if (DEBUG)
-    console.info("M6_DEBUG", {
+    logger.debug("M6_DEBUG", {
       M4: todayHistoricalRealizedPnl,
       M3: floatPnl,
       fifo: pnlFifo,

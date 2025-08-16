@@ -161,7 +161,7 @@
     else curve.push(newPoint);
     saveCurve(curve);
 
-    console.log("资金收益曲线已自动更新", newPoint);
+    // 自动更新资金收益曲线
   }
   run();
 })();

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import type { Trade } from '@/lib/services/dataService';
 import { nowNY, toNY } from '@/lib/timezone';
+import { logger } from '@/lib/logger';
 
 interface Props {
   onClose: () => void;
@@ -57,7 +58,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   // ---------- 同步传入的 trade 数据 ----------
   useEffect(() => {
     if (trade) {
-      console.log('[AddTradeModal] 编辑模式载入:', trade);
+      logger.debug('[AddTradeModal] 编辑模式载入:', trade);
       setSymbol(trade.symbol);
       if (!trade.action) {
         console.warn('Editing trade has invalid action, defaulting to BUY.');
@@ -114,10 +115,10 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
     };
 
     if (editing && trade?.id != null) {
-      console.log('[AddTradeModal] 更新交易:', { ...baseTrade, id: trade.id });
+      logger.debug('[AddTradeModal] 更新交易:', { ...baseTrade, id: trade.id });
       await updateTrade({ ...baseTrade, id: trade.id });
     } else {
-      console.log('[AddTradeModal] 新增交易:', baseTrade);
+      logger.debug('[AddTradeModal] 新增交易:', baseTrade);
       await addTrade(baseTrade);
     }
 

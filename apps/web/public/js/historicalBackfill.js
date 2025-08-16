@@ -26,7 +26,6 @@ export async function runHistoricalBackfill(progressCallback = () => {}) {
       const candles = await fetchDailyCandles(sym, startEpoch, endEpoch);
       if (candles?.c?.length) {
         await saveDailyClosesBulk(sym, candles.t, candles.c);
-        console.log('[Backfill] saved', sym, candles.c.length, 'days');
       } else {
         console.warn('[Backfill] empty candle', sym, candles);
       }
@@ -35,7 +34,6 @@ export async function runHistoricalBackfill(progressCallback = () => {}) {
     }
     await new Promise(r => setTimeout(r, DELAY_PER_CALL_MS));
   }
-  console.log('[Backfill] completed');
 }
 
 // CLI support (Node): `node js/historicalBackfill.js`

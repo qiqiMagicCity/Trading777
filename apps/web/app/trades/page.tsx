@@ -6,6 +6,7 @@ import { findTrades, deleteTrade } from '@/lib/services/dataService';
 import { computeFifo, type EnrichedTrade } from '@/lib/fifo';
 import AddTradeModal from '@/components/AddTradeModal';
 import { toNY } from '@/lib/timezone';
+import { logger } from '@/lib/logger';
 
 export default function TradesPage() {
   const [trades, setTrades] = useState<EnrichedTrade[]>([]);
@@ -24,7 +25,7 @@ export default function TradesPage() {
         }
         const validTrades = fetchedTrades.filter(t => !!t.action);
         if (validTrades.length === 0) {
-          console.info('No valid trades found in fetched data');
+          logger.info('No valid trades found in fetched data');
         }
         setTrades(computeFifo(validTrades));
 
@@ -50,7 +51,7 @@ export default function TradesPage() {
     }
     const valid = fetched.filter(t => !!t.action);
     if (valid.length === 0) {
-      console.info('No valid trades found when reloading');
+      logger.info('No valid trades found when reloading');
     }
     setTrades(computeFifo(valid));
   };
@@ -128,7 +129,7 @@ export default function TradesPage() {
                 <td>{formatNumber(trade.averageCost)}</td>
                 <td>
                   <button className="btn-action btn-edit" data-tooltip="编辑" onClick={() => {
-                    console.log('编辑交易:', trade);
+                    logger.debug('编辑交易:', trade);
                     setEditingTrade(trade);
                   }}>✏️</button>
                 </td>
@@ -136,7 +137,7 @@ export default function TradesPage() {
                   <button className="btn-action btn-del" data-tooltip="删除" onClick={async () => {
                     if (confirm('确定删除该交易?')) {
                       if (trade.id != null) {
-                        console.log('删除交易:', trade.id);
+                        logger.debug('删除交易:', trade.id);
                         await deleteTrade(trade.id);
                         await reload();
                       }
