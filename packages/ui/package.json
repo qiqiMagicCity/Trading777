@@ -12,6 +12,9 @@
     "check-types": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
+  "turbo": {
+    "outputs": ["dist/**"]
+  },
   "devDependencies": {
     "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
