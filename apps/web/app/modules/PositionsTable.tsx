@@ -49,7 +49,7 @@ export function PositionsTable({ positions, trades }: Props) {
     fetch('/data/symbol_name_map.json')
       .then((res) => res.json())
       .then((json) => setNameMap(json))
-      .catch(() => { });
+      .catch(err => console.error('加载符号名称失败', err));
   }, []);
 
   const getTradeCount = (symbol: string) => {
