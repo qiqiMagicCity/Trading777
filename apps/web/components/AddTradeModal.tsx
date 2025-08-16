@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
 import { nowNY, toNY } from '@/lib/timezone';
+import { logger } from '@/lib/logger';
 
 type Side = 'BUY' | 'SELL' | 'SHORT' | 'COVER';
 
@@ -22,7 +23,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
 
   useEffect(() => {
     if (trade) {
-      console.log('编辑交易:', trade);
+      logger.debug('编辑交易:', trade);
       setSymbol(trade.symbol);
       // 将action转换为大写，确保匹配Side类型
       const action = trade.action;
@@ -37,7 +38,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       try {
         const formattedDate = toNY(trade.date).toISOString().slice(0, 10);
         setDate(formattedDate);
-        console.log('设置日期:', formattedDate, '原始日期:', trade.date);
+        logger.debug('设置日期:', formattedDate, '原始日期:', trade.date);
       } catch (e) {
         console.error('日期格式错误:', trade.date, e);
         // 回退到当前日期
@@ -56,7 +57,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
     // 确保action是小写的
     const action = side.toLowerCase() as 'buy' | 'sell' | 'short' | 'cover';
 
-    console.log('提交交易:', {
+    logger.debug('提交交易:', {
       id: editing ? trade?.id : undefined,
       symbol,
       price,

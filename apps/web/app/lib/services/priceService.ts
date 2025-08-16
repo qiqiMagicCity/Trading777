@@ -3,6 +3,7 @@
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
+import { logger } from '@/lib/logger';
 
 // 将收盘价写入服务器端 JSON 文件
 async function saveToFile(symbol: string, date: string, close: number) {
@@ -228,7 +229,7 @@ let _freezeLogged = false;
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   if (freezeDate) {
     if (!_freezeLogged) {
-      console.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
+      logger.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
       _freezeLogged = true;
     }
     return fetchDailyClose(symbol, freezeDate);

@@ -1,5 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -144,13 +145,13 @@ export async function importData(rawData: {
       /* ignore */
     }
   } else {
-    console.log("Dataset unchanged. Skipping import.");
+    logger.info("Dataset unchanged. Skipping import.");
     return;
   }
 
   const db = await getDb();
 
-  console.log("Importing data...");
+  logger.info("Importing data...");
   const tx = db.transaction(
     [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
     "readwrite",
@@ -205,7 +206,7 @@ export async function importData(rawData: {
 
   await Promise.all([...tradePromises, ...positionPromises]);
   await tx.done;
-  console.log("Data imported successfully.");
+  logger.info("Data imported successfully.");
 }
 
 export async function clearAllData(): Promise<void> {
@@ -220,7 +221,7 @@ export async function clearAllData(): Promise<void> {
     tx.objectStore(PRICES_STORE_NAME).clear(),
   ]);
   await tx.done;
-  console.log("All trade, position, and price data cleared.");
+  logger.info("All trade, position, and price data cleared.");
 }
 
 export async function clearAndImportData(rawData: {
@@ -230,7 +231,7 @@ export async function clearAndImportData(rawData: {
   await clearAllData();
 
   const db = await getDb();
-  console.log("Importing data...");
+  logger.info("Importing data...");
   const tx = db.transaction(
     [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
     "readwrite",
@@ -289,7 +290,7 @@ export async function clearAndImportData(rawData: {
   } catch {
     /* ignore */
   }
-  console.log("Data imported successfully after clearing.");
+  logger.info("Data imported successfully after clearing.");
 }
 
 export async function exportData(): Promise<{
@@ -442,9 +443,9 @@ export async function addTrade(trade: Trade): Promise<number> {
 export async function updateTrade(trade: Trade): Promise<void> {
   if (trade.id == null) throw new Error("Trade id is required for update");
   const db = await getDb();
-  console.log("更新交易:", trade);
+  logger.info("更新交易:", trade);
   await db.put(TRADES_STORE_NAME, trade);
-  console.log("交易更新成功");
+  logger.info("交易更新成功");
 }
 
 export async function deleteTrade(id: number): Promise<void> {

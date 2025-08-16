@@ -8,6 +8,7 @@ import Image from "next/image";
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/metrics';
+import { logger } from '@/lib/logger';
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '--';
@@ -65,8 +66,8 @@ export function PositionsTable({ positions, trades }: Props) {
   // 计算市值和浮动盈亏
   const marketValues = useMemo(() => {
     // 添加日志帮助调试
-    console.log('持仓数据:', positions);
-    console.log('Price API results:', positions.map((pos, idx) => ({
+    logger.debug('持仓数据:', positions);
+    logger.debug('Price API results:', positions.map((pos, idx) => ({
       symbol: pos.symbol,
       qty: pos.qty,
       avgPrice: pos.avgPrice,
@@ -86,7 +87,7 @@ export function PositionsTable({ positions, trades }: Props) {
       // 按 (实时价格 - 成本价格) × 数量 计算浮动盈亏
       const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
 
-      console.log(`${pos.symbol} 市值计算:`, {
+      logger.debug(`${pos.symbol} 市值计算:`, {
         lastPrice,
         qty: pos.qty,
         isShort,
@@ -102,14 +103,14 @@ export function PositionsTable({ positions, trades }: Props) {
 
   // 计算总计
   const totals = useMemo(() => {
-    console.log('计算总计，marketValues:', marketValues);
+    logger.debug('计算总计，marketValues:', marketValues);
 
     const totalMarketValue = marketValues.reduce((sum, item) => sum + item.market, 0);
     const totalUnrealized = marketValues.reduce((sum, item) => sum + item.unrealized, 0);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
     const totalPnL = totalUnrealized + totalRealized;
 
-    console.log('总计结果:', {
+    logger.debug('总计结果:', {
       totalMarketValue,
       totalUnrealized,
       totalRealized,

@@ -1,6 +1,7 @@
 import { performance } from "perf_hooks";
 import { sumPeriod } from "@/lib/metrics";
 import type { DailyResult } from "@/lib/types";
+import { logger } from "@/lib/logger";
 
 function generateDaily(count: number): DailyResult[] {
   const start = new Date("2000-01-01T00:00:00Z");
@@ -72,7 +73,7 @@ describe("sumPeriod benchmark", () => {
     const cachedTime = performance.now() - t2;
 
     // 输出用于观察
-    console.log("naive:", naiveTime, "cached:", cachedTime);
+    logger.info("naive:", naiveTime, "cached:", cachedTime);
 
     expect(cachedTime).toBeLessThan(naiveTime);
   });
