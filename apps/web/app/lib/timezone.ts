@@ -78,10 +78,9 @@ export const formatNY = (
  */
 export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   const freeze =
-    (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
-    // @ts-ignore
-    (typeof window !== 'undefined' &&
-      (window as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE);
+    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_FREEZE_DATE) ||
+    (typeof window !== "undefined" &&
+      (window as unknown as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE);
   if (freeze) return freeze as string;
 
   const d = toNY(base);
