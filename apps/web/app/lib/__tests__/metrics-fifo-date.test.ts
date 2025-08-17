@@ -1,4 +1,5 @@
 import { calcTodayFifoPnL, calcHistoryFifoPnL } from "@/lib/metrics";
+import { sortTrades } from "@/lib/sortTrades";
 import type { EnrichedTrade } from "@/lib/fifo";
 
 describe("FIFO date validation", () => {
@@ -14,7 +15,7 @@ describe("FIFO date validation", () => {
       { symbol: "AAPL", action: "sell", price: 120, quantity: 1, date: "2024-01-03T10:00:00Z" } as unknown as EnrichedTrade,
     ];
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
-    const pnl = calcTodayFifoPnL(trades, "2024-01-02");
+    const pnl = calcTodayFifoPnL(sortTrades(trades), "2024-01-02");
     expect(pnl).toBe(20);
     expect(warn).toHaveBeenCalledTimes(2);
   });
@@ -27,7 +28,7 @@ describe("FIFO date validation", () => {
       { symbol: "AAPL", action: "sell", price: 120, quantity: 1, date: "2024-01-03T10:00:00Z" } as unknown as EnrichedTrade,
     ];
     const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
-    const pnl = calcHistoryFifoPnL(trades, "2024-01-02");
+    const pnl = calcHistoryFifoPnL(sortTrades(trades), "2024-01-02");
     expect(pnl).toBe(20);
     expect(warn).toHaveBeenCalledTimes(2);
   });
