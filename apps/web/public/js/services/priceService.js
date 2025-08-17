@@ -81,7 +81,9 @@ export async function fetchRealtimePrice(symbol){
     if(cached && Date.now() - cached.ts < RT_CACHE_MS){
       return cached.price;
     }
-  }catch{}
+  }catch (err){
+    console.warn('[priceService] 解析实时缓存失败', err);
+  }
 
   try{
     const url = `/api/quote?symbol=${symbol}`;
@@ -128,7 +130,8 @@ export function getTrackedSymbols(){
   try{
     const trades = JSON.parse(localStorage.getItem('trades')||'[]');
     return [...new Set(trades.map(t=>t.symbol).filter(Boolean))];
-  }catch{
+  }catch (err){
+    console.warn('[priceService] 解析追踪列表失败', err);
     return [];
   }
 }
