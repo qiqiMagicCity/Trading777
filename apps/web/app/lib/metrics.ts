@@ -10,6 +10,7 @@ import {
   startOfYearNY,
 } from "@/lib/timezone";
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
+import { sortTrades } from "./sortTrades";
 import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
@@ -374,7 +375,7 @@ export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
  * 计算日内交易盈亏（FIFO视角）
  */
 export function calcTodayFifoPnL(
-  enrichedTrades: EnrichedTrade[],
+  sortedTrades: EnrichedTrade[],
   todayStr: string,
   initialPositions: InitialPosition[] = [],
 ): number {
@@ -399,20 +400,9 @@ export function calcTodayFifoPnL(
     }
   }
   let pnl = 0;
-  const sorted = enrichedTrades
-    .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) =>
-      isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t),
-    )
-    .sort((a, b) => {
-      const timeA = toNY(a.t.date).getTime();
-      const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? Infinity : timeA;
-      const bTime = isNaN(timeB) ? Infinity : timeB;
-      return aTime - bTime || a.idx - b.idx;
-    })
-    .map(({ t }) => t);
-  for (const t of sorted) {
+  for (const t of sortedTrades) {
+    if (!isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t))
+      continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
     if (action === "buy") {
@@ -464,7 +454,7 @@ export function calcTodayFifoPnL(
  * 计算历史交易盈亏（FIFO视角）——用于 M4
  */
 export function calcHistoryFifoPnL(
-  enrichedTrades: EnrichedTrade[],
+  sortedTrades: EnrichedTrade[],
   todayStr: string,
   initialPositions: InitialPosition[] = [],
 ): number {
@@ -489,20 +479,9 @@ export function calcHistoryFifoPnL(
     }
   }
   let pnl = 0;
-  const sorted = enrichedTrades
-    .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) =>
-      isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t),
-    )
-    .sort((a, b) => {
-      const timeA = toNY(a.t.date).getTime();
-      const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? Infinity : timeA;
-      const bTime = isNaN(timeB) ? Infinity : timeB;
-      return aTime - bTime || a.idx - b.idx;
-    })
-    .map(({ t }) => t);
-  for (const t of sorted) {
+  for (const t of sortedTrades) {
+    if (!isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t))
+      continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
     if (action === "buy") {
@@ -707,7 +686,7 @@ export function calcM9(days: DailyResult[]): number {
  * Collect all closed lots (FIFO) up to a given date.
  */
 export function collectCloseLots(
-  trades: EnrichedTrade[],
+  sortedTrades: EnrichedTrade[],
   initialPositions: InitialPosition[] = [],
   untilDateStr?: string,
 ): { pnl: number }[] {
@@ -731,25 +710,13 @@ export function collectCloseLots(
     ? endOfDayNY(toNY(`${untilDateStr}T12:00:00Z`))
     : undefined;
 
-  const sorted = trades
-    .map((t, idx) => ({ t, idx }))
-    .filter(({ t }) => {
-      if (!untilEnd) return true;
-      const d = toNY(t.date);
-      return !isNaN(d.getTime()) && d.getTime() <= untilEnd.getTime();
-    })
-    .sort((a, b) => {
-      const timeA = toNY(a.t.date).getTime();
-      const timeB = toNY(b.t.date).getTime();
-      const aTime = isNaN(timeA) ? Infinity : timeA;
-      const bTime = isNaN(timeB) ? Infinity : timeB;
-      return aTime - bTime || a.idx - b.idx;
-    })
-    .map(({ t }) => t);
-
   const closes: { pnl: number }[] = [];
 
-  for (const t of sorted) {
+  for (const t of sortedTrades) {
+    if (untilEnd) {
+      const d = toNY(t.date);
+      if (isNaN(d.getTime()) || d.getTime() > untilEnd.getTime()) continue;
+    }
     const { symbol, action, price } = t;
     const quantity = Math.abs(t.quantity);
 
@@ -825,6 +792,8 @@ export function calcMetrics(
 
   const counts = _count(safeTrades);
 
+  const sortedTrades = sortTrades(safeTrades);
+
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
 
@@ -849,12 +818,12 @@ export function calcMetrics(
   }, 0);
 
   // M5: 日内交易（先计算，后续 M4 需要用到 pnlFifo）
-  const pnlTrade = calcTodayTradePnL(safeTrades, todayStr);
-  const pnlFifo = calcTodayFifoPnL(safeTrades, todayStr, initialPositions);
+  const pnlTrade = calcTodayTradePnL(sortedTrades, todayStr);
+  const pnlFifo = calcTodayFifoPnL(sortedTrades, todayStr, initialPositions);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
-    safeTrades,
+    sortedTrades,
     todayStr,
     initialPositions,
   );
@@ -889,7 +858,7 @@ export function calcMetrics(
   const historicalRealizedPnl = calcM9(historicalDailyResults);
 
   // M10: 胜率
-  const closes = collectCloseLots(safeTrades, initialPositions, todayStr);
+  const closes = collectCloseLots(sortedTrades, initialPositions, todayStr);
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13: 周期性指标
