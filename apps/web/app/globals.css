@@ -24,7 +24,6 @@
 
   /* Typography */
   --font-base: 1rem;
-  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 /* === END: _tokens.css === */
 
@@ -37,7 +36,6 @@
 body {
   background-color: var(--c-bg);
   color: #ffffff;
-  font-family: var(--font-family-sans);
   margin: 0;
   font-size: 115%;
 }

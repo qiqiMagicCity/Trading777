@@ -32,9 +32,21 @@ export default {
         base: 'var(--font-base)',
       },
       fontFamily: {
-        sans: ['var(--font-family-sans)'],
-      }
+        sans: [
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'Roboto',
+          'Noto Sans',
+          'Ubuntu',
+          'Cantarell',
+          'Helvetica Neue',
+          'Arial',
+          'sans-serif',
+        ],
+      },
     }
   },
   plugins: []
-} satisfies Config; 
+} satisfies Config;
