@@ -13,4 +13,4 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --omit=dev
-      - run: npx --yes turbo run build --output-logs=stream
+      - run: npx --yes turbo run build --output-logs=errors-only
