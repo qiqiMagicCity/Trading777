@@ -7,7 +7,8 @@
     "lint": "npx --yes turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "npx --yes turbo run check-types",
-    "test": "npx --yes jest"
+    "test": "npx --yes jest",
+    "verify:golden": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-golden.ts"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -15,6 +16,7 @@
     "jest": "^30.0.5",
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.0",
+    "tsx": "^4.19.0",
     "typescript": "5.8.3"
   },
   "engines": {
