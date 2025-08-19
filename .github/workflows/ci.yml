@@ -12,5 +12,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --omit=dev
-      - run: npx --yes turbo run build --output-logs=errors-only
+      - run: npm ci --no-audit --no-fund
+      - run: npm run verify:golden
+      - run: npx --yes turbo run build --filter=!web --output-logs=errors-only
