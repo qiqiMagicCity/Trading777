@@ -8,7 +8,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "npx --yes turbo run check-types",
     "test": "npx --yes jest",
-    "verify:golden": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-golden.ts"
+    "verify:golden": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-golden.ts",
+    "ci:pr": "npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

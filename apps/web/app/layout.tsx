@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className="font-sans" suppressHydrationWarning>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <Script id="freeze-date" strategy="beforeInteractive">
           {`window.NEXT_PUBLIC_FREEZE_DATE=${JSON.stringify(process.env.NEXT_PUBLIC_FREEZE_DATE || "")};`}
         </Script>
