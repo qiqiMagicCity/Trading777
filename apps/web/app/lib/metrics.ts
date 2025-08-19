@@ -144,6 +144,19 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+export function assertM6(metrics: Metrics) {
+  if (!DEBUG) return;
+  const expected = round2(metrics.M4 + metrics.M3 + metrics.M5.fifo);
+  if (metrics.M6 !== expected)
+    logger.warn("M6 mismatch", {
+      M4: metrics.M4,
+      M3: metrics.M3,
+      fifo: metrics.M5.fifo,
+      M6: metrics.M6,
+      expected,
+    });
+}
+
 function _count(list: { action?: string }[] | undefined) {
   const res = { B: 0, S: 0, P: 0, C: 0, total: 0 };
   if (!Array.isArray(list)) return res;
@@ -864,7 +877,7 @@ export function calcMetrics(
   // M11-13: 周期性指标
   const { wtd, mtd, ytd } = calcWtdMtdYtd(historicalDailyResults, todayStr);
 
-  return {
+  const metrics: Metrics = {
     M1: totalCost,
     M2: currentValue,
     M3: floatPnl,
@@ -899,6 +912,10 @@ export function calcMetrics(
     M12: mtd,
     M13: ytd,
   };
+
+  assertM6(metrics);
+
+  return metrics;
 }
 
 /**
