@@ -11,7 +11,8 @@ let p1 = computePeriods(A as any, '2025-08-04');
 if (Math.abs(p1.M12 - (7850+1102.5+50-10)) > 1e-6) throw new Error('baseline wrong');
 
 // 原地修改 A 的第一天 → 缓存必须失效
-A[0].realized += 100;
+const first = A[0]!;     // 保证非空（我们显式构造了 A 的两条记录）
+first.realized += 100;
 let p2 = computePeriods(A as any, '2025-08-04');
 if (Math.abs(p2.M12 - (7950+1102.5+50-10)) > 1e-6) throw new Error('in-place mutation not reflected');
 
