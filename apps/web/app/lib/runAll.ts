@@ -3,6 +3,7 @@ import type { Trade, Position } from "./services/dataService";
 import { calcMetrics, debugTodayRealizedBreakdown } from "./metrics";
 import { computePeriods } from "./metrics-periods";
 import { nyDateStr } from "./time";
+import { calcM5Split } from "./m5-intraday";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -108,6 +109,12 @@ export function runAll(
   const M11 = periods.M11;
   const M12 = periods.M12;
   const M13 = periods.M13;
+  // ---- 用新的日内拆分结果覆盖 M4/M5，并重算 M6 ----
+  const m5split = calcM5Split(enriched as any, evalISO, initialPositions);
+  const M4_override   = m5split.historyRealized;
+  const M5_1_override = m5split.trade;
+  const M5_2_override = m5split.fifo;
+  const M6_override   = M4_override + metrics.M3 + M5_2_override;
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
@@ -115,10 +122,10 @@ export function runAll(
     M1: round2(metrics.M1),
     M2: round2(metrics.M2),
     M3: round2(metrics.M3),
-    M4: round2(metrics.M4),
-    M5_1: round2(metrics.M5.trade),
-    M5_2: round2(metrics.M5.fifo),
-    M6: round2(metrics.M6),
+    M4: round2(M4_override),
+    M5_1: round2(M5_1_override),
+    M5_2: round2(M5_2_override),
+    M6: round2(M6_override),
     M7: metrics.M7,
     M8: metrics.M8,
     M9,
