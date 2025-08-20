@@ -1,4 +1,5 @@
 import { nyDateStr } from './time';
+import { consumeLots, type Lot } from './fifo-engine';
 
 export type EnrichedTrade = {
   symbol: string;
@@ -8,7 +9,6 @@ export type EnrichedTrade = {
   date: string;       // ISO string
 };
 
-type Lot = { qty: number; price: number; isToday: boolean };
 
 export type M5Split = {
   trade: number;           // M5.1 交易视角（仅 today-闭环）
@@ -68,43 +68,19 @@ export function calcM5Split(
       q.push({ qty: t.quantity, price: t.price, isToday: today });
       shortQ.set(sym, q);
     } else if (t.action === 'sell') {
-      let remain = t.quantity;
       const q = longQ.get(sym) ?? [];
-      while (remain > 0 && q.length > 0) {
-        const lot = q[0]!;
-        const use = Math.min(remain, lot.qty);
+      const remain = consumeLots(q, t.quantity, (use, lot) => {
         const pnl = realizedPnLLong(t.price, lot.price, use);
-        if (lot.isToday) {
-          // 行为视角与 FIFO 视角在“同一开仓批次”下金额相同
-          m5_trade += pnl;
-          m5_fifo  += pnl;
-        } else {
-          m4_hist += pnl;
-        }
-        lot.qty -= use;
-        remain  -= use;
-        if (lot.qty === 0) q.shift();
-      }
-      // 如果 remain > 0，说明出现“反向开仓”（数据异常或允许反向开新仓）
-      // 这里不计入任何已实现值（它是新开仓），直接忽略剩余；也可以选择把它作为 SHORT 开仓，但非本任务重点。
+        if (lot.isToday) { m5_trade += pnl; m5_fifo += pnl; } else { m4_hist += pnl; }
+      });
+      // remain>0 代表反向开仓，当前策略：忽略（不计已实现），保持与原实现一致
       longQ.set(sym, q);
     } else if (t.action === 'cover') {
-      let remain = t.quantity;
       const q = shortQ.get(sym) ?? [];
-      while (remain > 0 && q.length > 0) {
-        const lot = q[0]!;
-        const use = Math.min(remain, lot.qty);
+      const remain = consumeLots(q, t.quantity, (use, lot) => {
         const pnl = realizedPnLShort(lot.price, t.price, use);
-        if (lot.isToday) {
-          m5_trade += pnl;
-          m5_fifo  += pnl;
-        } else {
-          m4_hist += pnl;
-        }
-        lot.qty -= use;
-        remain  -= use;
-        if (lot.qty === 0) q.shift();
-      }
+        if (lot.isToday) { m5_trade += pnl; m5_fifo += pnl; } else { m4_hist += pnl; }
+      });
       shortQ.set(sym, q);
     }
   }
