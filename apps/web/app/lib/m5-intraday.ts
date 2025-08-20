@@ -71,7 +71,7 @@ export function calcM5Split(
       let remain = t.quantity;
       const q = longQ.get(sym) ?? [];
       while (remain > 0 && q.length > 0) {
-        const lot = q[0];
+        const lot = q[0]!;
         const use = Math.min(remain, lot.qty);
         const pnl = realizedPnLLong(t.price, lot.price, use);
         if (lot.isToday) {
@@ -92,7 +92,7 @@ export function calcM5Split(
       let remain = t.quantity;
       const q = shortQ.get(sym) ?? [];
       while (remain > 0 && q.length > 0) {
-        const lot = q[0];
+        const lot = q[0]!;
         const use = Math.min(remain, lot.qty);
         const pnl = realizedPnLShort(lot.price, t.price, use);
         if (lot.isToday) {
