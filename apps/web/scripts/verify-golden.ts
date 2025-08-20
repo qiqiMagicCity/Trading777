@@ -13,6 +13,7 @@ function readJSON(name: string) {
 const trades = readJSON("trades.json");
 const positions = readJSON("initial_positions.json");
 const prices = readJSON("close_prices.json");
+const daily = readJSON("dailyResult.json");
 const date = "2025-08-01";
 
 function assertClose(actual: number, expected: number, name: string, tol = 0.01) {
@@ -28,7 +29,9 @@ function assertDeepEqual(actual: unknown, expected: unknown, name: string) {
 }
 
 try {
-  const res = runAll(date, positions, trades, prices);
+  const res = runAll(date, positions, trades, prices, { dailyResults: daily }, {
+    evalDate: '2025-08-01',
+  });
 
   assertClose(res.M1, 111170, "M1");
   assertClose(res.M2, 111420.5, "M2");
