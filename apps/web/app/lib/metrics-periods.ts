@@ -1,4 +1,5 @@
 import { nyDateStr, startOfWeekNY, startOfMonthNY, startOfYearNY } from './time';
+import { sumPeriodCached } from './period-sum-cache';
 
 export type Daily = { date: string; realized: number; unrealized: number };
 
@@ -24,8 +25,8 @@ export function computePeriods(daily: Daily[], evalDate: Date | string) {
   const y0 = nyDateStr(startOfYearNY(evalDate));
   return {
     M9:  sumM9(daily),
-    M11: sumPeriod(daily, w0, endISO),
-    M12: sumPeriod(daily, m0, endISO),
-    M13: sumPeriod(daily, y0, endISO),
+    M11: sumPeriodCached(daily, w0, endISO),
+    M12: sumPeriodCached(daily, m0, endISO),
+    M13: sumPeriodCached(daily, y0, endISO),
   };
 }
