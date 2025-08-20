@@ -15,6 +15,7 @@ import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
+import { isSameWeek, isSameMonth, isSameYear } from "date-fns";
 
 export function isDebug() {
   return (
@@ -340,14 +341,20 @@ export function sumPeriod(
 
 export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
   const evalDate = toNY(evalDateStr);
-  const wStart = startOfWeekNY(evalDate);
-  const mStart = startOfMonthNY(evalDate);
-  const yStart = startOfYearNY(evalDate);
-  const endStr = evalDateStr;
+  const calc = (fn: (d: Date) => boolean) =>
+    daily.reduce((total, r) => {
+      const d = toNY(r.date);
+      if (fn(d)) total += (r.realized ?? 0) + (r.unrealizedDelta ?? 0);
+      return total;
+    }, 0);
   return {
-    wtd: sumPeriod(daily, wStart.toISOString().slice(0, 10), endStr),
-    mtd: sumPeriod(daily, mStart.toISOString().slice(0, 10), endStr),
-    ytd: sumPeriod(daily, yStart.toISOString().slice(0, 10), endStr),
+    wtd: calc((d) =>
+      isSameYear(d, evalDate) && isSameWeek(d, evalDate, { weekStartsOn: 1 })
+    ),
+    mtd: calc((d) =>
+      isSameMonth(d, evalDate) && isSameYear(d, evalDate)
+    ),
+    ytd: calc((d) => isSameYear(d, evalDate)),
   };
 }
 
