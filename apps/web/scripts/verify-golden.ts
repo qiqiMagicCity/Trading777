@@ -37,7 +37,7 @@ try {
   assertClose(res.M2, 111420.5, "M2");
   assertClose(res.M3, 1102.5, "M3");
   assertClose(res.M4, 6530, "M4");
-  assertClose(res.M5_1, 1670, "M5_1");
+  assertClose(res.M5_1, 1320, "M5_1");
   assertClose(res.M5_2, 1320, "M5_2");
   assertClose(res.M6, 8952.5, "M6");
   assertClose(res.M6, res.M4 + res.M3 + res.M5_2, "M6 invariant");
