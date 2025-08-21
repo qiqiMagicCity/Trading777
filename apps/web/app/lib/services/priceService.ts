@@ -4,6 +4,25 @@ import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
+import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
+
+// Node 降级缓存
+const mem = new Map<string, string>();
+function cacheGet(key: string): string | null {
+  const ls = safeLocalStorage();
+  if (!ls) return mem.get(key) ?? null;
+  return lsGet(key);
+}
+function cacheSet(key: string, val: string): void {
+  const ls = safeLocalStorage();
+  if (!ls) { mem.set(key, val); return; }
+  lsSet(key, val);
+}
+
+export function __testCacheRW() {
+  cacheSet('__test', '1');
+  if (cacheGet('__test') !== '1') throw new Error('cache RW failed');
+}
 
 // 将收盘价写入服务器端 JSON 文件
 async function saveToFile(symbol: string, date: string, close: number) {
@@ -116,7 +135,7 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
 
   const cacheKey = `tiingo_rt_${symbol}`;
   try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null') as { price: number; ts: number } | null;
+    const cached = JSON.parse(cacheGet(cacheKey) || 'null') as { price: number; ts: number } | null;
     if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
       return cached.price;
     }
@@ -133,7 +152,7 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
     if (first && typeof first.last === 'number') {
       const price = first.last;
       try {
-        localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() }));
+        cacheSet(cacheKey, JSON.stringify({ price, ts: Date.now() }));
       } catch (_err) {
         // 忽略写入 localStorage 的错误
       }
@@ -153,7 +172,7 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
 
   const cacheKey = `tiingo_close_${symbol}_${date}`;
   try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null') as { price: number; ts: number } | null;
+    const cached = JSON.parse(cacheGet(cacheKey) || 'null') as { price: number; ts: number } | null;
     if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
       return cached.price;
     }
@@ -170,7 +189,7 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
     if (first && typeof first.close === 'number') {
       const price = first.close;
       try {
-        localStorage.setItem(cacheKey, JSON.stringify({ price, ts: Date.now() }));
+        cacheSet(cacheKey, JSON.stringify({ price, ts: Date.now() }));
       } catch (_err) {
         // 忽略写入 localStorage 的错误
       }

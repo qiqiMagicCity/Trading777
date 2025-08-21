@@ -1,19 +1,22 @@
 'use client';
 
+import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
 import { importData, findTrades } from './lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
+import { lsGet } from './lib/env';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
-  const [dataReady, setDataReady] = useState(false);
+  const [queryClient] = React.useState(() => new QueryClient());
+  const [dataReady, setDataReady] = React.useState(false);
+  const [datasetHash, setDatasetHash] = React.useState<string | null>(null);
 
   // Ensure initial demo data is loaded into IndexedDB so every page sees the same dataset
-  useEffect(() => {
+  React.useEffect(() => {
+    setDatasetHash(lsGet('dataset-hash'));
     async function initData() {
       try {
-        const storedHash = localStorage.getItem('dataset-hash');
+        const storedHash = lsGet('dataset-hash');
         const trades = await findTrades();
         if (!storedHash && trades.length === 0) {
           const tradesFile = await loadJson('trades');
