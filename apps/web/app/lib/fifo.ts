@@ -1,5 +1,6 @@
 import type { Trade } from './services/dataService';
 import { toNY } from './timezone';
+import { MoneyDecimal as M, avgPrice, realizedPnLLong, realizedPnLShort } from './money';
 
 const EPSILON = 1e-6;
 
@@ -85,14 +86,18 @@ export function computeFifo(
         while (remainingQuantity > EPSILON && state.positionList.length > 0) {
           const lot = state.positionList[0]!;
           const matchedQuantity = Math.min(remainingQuantity, lot.quantity);
-          realizedPnl += (lot.price - price) * matchedQuantity;
+          realizedPnl = new M(realizedPnl)
+            .plus(realizedPnLShort(lot.price, price, matchedQuantity))
+            .toNumber();
           lot.quantity -= matchedQuantity;
           remainingQuantity -= matchedQuantity;
           if (lot.quantity <= EPSILON) {
             state.positionList.shift();
           }
         }
-        state.accumulatedRealizedPnl += realizedPnl;
+        state.accumulatedRealizedPnl = new M(state.accumulatedRealizedPnl)
+          .plus(realizedPnl)
+          .toNumber();
         if (remainingQuantity > EPSILON) {
           state.positionList = [{ price, quantity: remainingQuantity }];
           state.direction = 'LONG';
@@ -109,14 +114,18 @@ export function computeFifo(
         while (remainingQuantity > EPSILON && state.positionList.length > 0) {
           const lot = state.positionList[0]!;
           const matchedQuantity = Math.min(remainingQuantity, lot.quantity);
-          realizedPnl += (price - lot.price) * matchedQuantity;
+          realizedPnl = new M(realizedPnl)
+            .plus(realizedPnLLong(price, lot.price, matchedQuantity))
+            .toNumber();
           lot.quantity -= matchedQuantity;
           remainingQuantity -= matchedQuantity;
           if (lot.quantity <= EPSILON) {
             state.positionList.shift();
           }
         }
-        state.accumulatedRealizedPnl += realizedPnl;
+        state.accumulatedRealizedPnl = new M(state.accumulatedRealizedPnl)
+          .plus(realizedPnl)
+          .toNumber();
         if (remainingQuantity > EPSILON) {
           state.positionList = [{ price, quantity: remainingQuantity }];
           state.direction = 'SHORT';
@@ -126,11 +135,29 @@ export function computeFifo(
       }
     }
 
-    const totalQuantity = state.positionList.reduce((sum, p) => sum + p.quantity, 0);
-    const costOfPositions = state.positionList.reduce((sum, p) => sum + p.price * p.quantity, 0);
+    const totalQuantityDec = state.positionList.reduce(
+      (sum, p) => sum.plus(p.quantity),
+      new M(0)
+    );
+    const costOfPositionsDec = state.positionList.reduce(
+      (sum, p) => sum.plus(new M(p.price).mul(p.quantity)),
+      new M(0)
+    );
 
-    const averageCost = totalQuantity > EPSILON ? costOfPositions / totalQuantity : 0;
-    const breakEvenPrice = totalQuantity > EPSILON ? (costOfPositions - state.accumulatedRealizedPnl) / totalQuantity : 0;
+    const totalQuantity = totalQuantityDec.toNumber();
+    const costOfPositions = costOfPositionsDec.toNumber();
+
+    const averageCost = totalQuantity > EPSILON ? avgPrice(costOfPositions, totalQuantity, 4) : 0;
+    const breakEvenPrice =
+      totalQuantity > EPSILON
+        ? avgPrice(
+            costOfPositionsDec
+              .minus(state.accumulatedRealizedPnl)
+              .toNumber(),
+            totalQuantity,
+            4,
+          )
+        : 0;
 
     const date = toNY(trade.date);
     const weekday = ((date.getUTCDay() + 6) % 7) + 1; // Monday: 1, Sunday: 7
@@ -140,7 +167,7 @@ export function computeFifo(
       id: trade.id, // 确保保留原始ID
       weekday,
       tradeCount: state.tradeCount,
-      amount: price * quantity,
+      amount: new M(price).mul(quantity).toNumber(),
       breakEvenPrice,
       realizedPnl,
       quantityAfter: state.direction === 'SHORT' ? -totalQuantity : totalQuantity,
