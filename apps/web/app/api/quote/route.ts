@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { ENV } from '../../lib/env';
 
 export async function GET(request: NextRequest) {
   const symbol = request.nextUrl.searchParams.get('symbol');
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const token = process.env.FINNHUB_API_KEY;
+  const token = ENV.FINNHUB_API_KEY;
   if (!token) {
     return new Response(JSON.stringify({ error: 'FINNHUB_API_KEY not configured' }), {
       status: 500,
