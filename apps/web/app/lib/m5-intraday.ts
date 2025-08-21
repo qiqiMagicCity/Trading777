@@ -1,5 +1,6 @@
 import { nyDateStr } from './time';
 import { consumeLots, type Lot } from './fifo-engine';
+import { realizedPnLLong, realizedPnLShort } from './money';
 
 export type EnrichedTrade = {
   symbol: string;
@@ -15,13 +16,6 @@ export type M5Split = {
   fifo: number;            // M5.2 FIFO 视角（仅 today-闭环）
   historyRealized: number; // M4 今天历史平仓盈利
 };
-
-function realizedPnLLong(sell: number, cost: number, qty: number) {
-  return (sell - cost) * qty;
-}
-function realizedPnLShort(short: number, cover: number, qty: number) {
-  return (short - cover) * qty;
-}
 
 /**
  * 核心：在“全历史 FIFO 队列”上配对，但只把 isToday=true 的开仓配对部分计入 M5；
@@ -69,18 +63,20 @@ export function calcM5Split(
       shortQ.set(sym, q);
     } else if (t.action === 'sell') {
       const q = longQ.get(sym) ?? [];
-      const remain = consumeLots(q, t.quantity, (use, lot) => {
+      const _remain = consumeLots(q, t.quantity, (use, lot) => {
         const pnl = realizedPnLLong(t.price, lot.price, use);
         if (lot.isToday) { m5_trade += pnl; m5_fifo += pnl; } else { m4_hist += pnl; }
       });
+      void _remain;
       // remain>0 代表反向开仓，当前策略：忽略（不计已实现），保持与原实现一致
       longQ.set(sym, q);
     } else if (t.action === 'cover') {
       const q = shortQ.get(sym) ?? [];
-      const remain = consumeLots(q, t.quantity, (use, lot) => {
+      const _remain = consumeLots(q, t.quantity, (use, lot) => {
         const pnl = realizedPnLShort(lot.price, t.price, use);
         if (lot.isToday) { m5_trade += pnl; m5_fifo += pnl; } else { m4_hist += pnl; }
       });
+      void _remain;
       shortQ.set(sym, q);
     }
   }

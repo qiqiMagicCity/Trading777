@@ -15,6 +15,7 @@ import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
+import { add as mAdd, round2 as mRound2 } from './money';
 
 export function isDebug() {
   return (
@@ -140,13 +141,10 @@ function sum(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0);
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
 
 export function assertM6(metrics: Metrics) {
   if (!DEBUG) return;
-  const expected = round2(metrics.M4 + metrics.M3 + metrics.M5.fifo);
+  const expected = mRound2(mAdd(metrics.M4, metrics.M3, metrics.M5.fifo));
   if (metrics.M6 !== expected)
     logger.warn("M6 mismatch", {
       M4: metrics.M4,
@@ -842,8 +840,8 @@ export function calcMetrics(
   );
 
   // M6: 今日总盈利变化
-  const todayTotalPnlChange = round2(
-    todayHistoricalRealizedPnl + pnlFifo + floatPnl,
+  const todayTotalPnlChange = mRound2(
+    mAdd(todayHistoricalRealizedPnl, pnlFifo, floatPnl),
   );
 
   if (DEBUG)
