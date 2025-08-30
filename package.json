@@ -9,6 +9,8 @@
     "check-types": "npx --yes turbo run check-types",
     "test": "npx --yes jest apps/web/app/lib",
     "verify:golden": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-golden.ts",
+    "snapshot:daily": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/snapshot.ts",
+    "verify:history": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-history.ts",
     "ci:pr": "npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only"
   },
   "devDependencies": {
