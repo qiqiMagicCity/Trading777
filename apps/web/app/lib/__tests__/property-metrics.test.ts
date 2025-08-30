@@ -19,19 +19,19 @@ describe('property based metrics', () => {
       side: fc.constantFrom('BUY', 'SELL', 'SHORT', 'COVER'),
       symbol: fc.constantFrom(...symbols),
       qty: fc.integer({ min: 1, max: 5 }),
-      price: fc.float({ min: 1, max: 100 }),
+      price: fc.float({ min: 1, max: 100, noNaN: true, noDefaultInfinity: true }),
     });
 
     const dailyArb = fc.record({
       date: fc.constantFrom('2024-01-01', '2024-01-02', '2024-01-03'),
-      realized: fc.float({ min: -1000, max: 1000 }),
-      unrealized: fc.float({ min: -1000, max: 1000 }),
+      realized: fc.float({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true }),
+      unrealized: fc.float({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true }),
     });
 
     const closePriceArb = fc.tuple(
-      fc.float({ min: 1, max: 100 }),
-      fc.float({ min: 1, max: 100 }),
-      fc.float({ min: 1, max: 100 }),
+      fc.float({ min: 1, max: 100, noNaN: true, noDefaultInfinity: true }),
+      fc.float({ min: 1, max: 100, noNaN: true, noDefaultInfinity: true }),
+      fc.float({ min: 1, max: 100, noNaN: true, noDefaultInfinity: true }),
     ).map(([a, b, c]) => ({
       AAA: { [evalISO]: a },
       BBB: { [evalISO]: b },
@@ -58,7 +58,7 @@ describe('property based metrics', () => {
 
           const expectedM4 = round2(split.historyRealized);
           const expectedM5_2 = round2(split.fifo);
-          const expectedM9 = dailyResults.reduce((s, d) => s + (d.realized || 0), 0);
+          const expectedM9 = dailyResults.reduce((s, d) => s + d.realized, 0);
 
           expect(result.M4).toBeCloseTo(expectedM4, 10);
           expect(result.M5_2).toBeCloseTo(expectedM5_2, 10);
