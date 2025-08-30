@@ -15,7 +15,7 @@ import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
-import { add as mAdd, round2 as mRound2 } from './money';
+import { add as mAdd, round2 as mRound2 } from "./money";
 
 export function isDebug() {
   return (
@@ -141,18 +141,32 @@ function sum(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0);
 }
 
+function reportMonitoring(message: string, details?: unknown): void {
+  const url = process.env.NEXT_PUBLIC_MONITOR_URL;
+  if (!url || typeof fetch !== "function") return;
+  void fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, details }),
+  }).catch((err) => {
+    logger.error("reportMonitoring failed", err);
+  });
+}
 
 export function assertM6(metrics: Metrics) {
   if (!DEBUG) return;
   const expected = mRound2(mAdd(metrics.M4, metrics.M3, metrics.M5.fifo));
-  if (metrics.M6 !== expected)
-    logger.warn("M6 mismatch", {
+  if (metrics.M6 !== expected) {
+    const data = {
       M4: metrics.M4,
       M3: metrics.M3,
       fifo: metrics.M5.fifo,
       M6: metrics.M6,
       expected,
-    });
+    };
+    logger.warn("M6 mismatch", data);
+    reportMonitoring("M6 mismatch", data);
+  }
 }
 
 function _count(list: { action?: string }[] | undefined) {
@@ -412,8 +426,7 @@ export function calcTodayFifoPnL(
   }
   let pnl = 0;
   for (const t of sortedTrades) {
-    if (!isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t))
-      continue;
+    if (!isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t)) continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
     if (action === "buy") {
@@ -491,8 +504,7 @@ export function calcHistoryFifoPnL(
   }
   let pnl = 0;
   for (const t of sortedTrades) {
-    if (!isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t))
-      continue;
+    if (!isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t)) continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
     if (action === "buy") {
@@ -776,7 +788,7 @@ export function collectCloseLots(
 /**
  * 计算所有交易指标
  */
-export function calcMetrics(
+function calcMetricsInternal(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
@@ -914,6 +926,30 @@ export function calcMetrics(
   assertM6(metrics);
 
   return metrics;
+}
+
+export function calcMetrics(
+  trades: EnrichedTrade[],
+  positions: Position[],
+  dailyResults: DailyResult[] = [],
+  initialPositions: InitialPosition[] = [],
+): Metrics {
+  try {
+    return calcMetricsInternal(
+      trades,
+      positions,
+      dailyResults,
+      initialPositions,
+    );
+  } catch (err) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    logger.error("calcMetrics failed", e);
+    reportMonitoring("calcMetrics failed", {
+      error: e.message,
+      stack: e.stack,
+    });
+    throw err;
+  }
 }
 
 /**
