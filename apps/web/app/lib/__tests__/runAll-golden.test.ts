@@ -22,11 +22,11 @@ describe('runAll golden case', () => {
     expect(res.M1).toBeCloseTo(111170, 2);
     expect(res.M2).toBeCloseTo(111420.5, 2);
     expect(res.M3).toBeCloseTo(1102.5, 2);
-    expect(res.M4).toBeCloseTo(6530, 2);
-    expect(res.M5_1).toBeCloseTo(1320, 2);
-    expect(res.M5_2).toBeCloseTo(1320, 2);
-    expect(res.M6).toBeCloseTo(8952.5, 2);
-    expect(res.M6).toBeCloseTo(res.M4 + res.M3 + res.M5_2, 2);
+    expect(res.M4.total).toBeCloseTo(6530, 2);
+    expect(res.M5.behavior).toBeCloseTo(1670, 2);
+    expect(res.M5.fifo).toBeCloseTo(1320, 2);
+    expect(res.M6.total).toBeCloseTo(8952.5, 2);
+    expect(res.M6.total).toBeCloseTo(res.M4.total + res.M3 + res.M5.fifo, 2);
     expect(res.M7).toEqual({ B: 6, S: 8, P: 4, C: 4, total: 22 });
     expect(res.M8).toEqual({ B: 8, S: 8, P: 5, C: 4, total: 25 });
     expect(res.M9).toBeCloseTo(7850, 2);

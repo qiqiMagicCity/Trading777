@@ -9,6 +9,7 @@ module.exports = {
     },
   },
   moduleNameMapper: {
+    '^@/app/(.*)$': '<rootDir>/apps/web/app/$1',
     '^@/(.*)$': '<rootDir>/apps/web/app/$1',
   },
   roots: ['<rootDir>/apps/web/app', '<rootDir>/tests'],

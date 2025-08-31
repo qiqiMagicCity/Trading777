@@ -124,11 +124,13 @@ export type PriceMap = Record<string, Record<string, number>>;
 export type RealizedBreakdownRow = {
   time: string;
   symbol: string;
-  side: "sell" | "cover";
-  into: "M4" | "M5.2";
+  action: "SELL" | "COVER";
+  into: "M4" | "M5.1" | "M5.2";
   qty: number;
   openPrice: number;
+  fifoCost: number;
   closePrice: number;
+  lotTag: "T" | "H";
   pnl: number;
 };
 
@@ -619,23 +621,53 @@ export function debugTodayRealizedBreakdown(
       const q = Math.min(lot.qty, remain);
       if (isCloseToday) {
         const openToday = isTodayNY(lot.date, evalDateStr);
-        const into = openToday ? "M5.2" : "M4";
+        const lotTag = openToday ? "T" : "H";
         const openPrice = lot.price;
+        const fifoCost = lot.price;
         const closePrice = price;
         const pnl =
           action === "sell"
             ? (closePrice - openPrice) * q
             : (openPrice - closePrice) * q;
-        rows.push({
-          time: date,
-          symbol,
-          side: action,
-          into,
-          qty: q,
-          openPrice,
-          closePrice,
-          pnl,
-        });
+        if (openToday) {
+          rows.push({
+            time: date,
+            symbol,
+            action: action.toUpperCase() as "SELL" | "COVER",
+            into: "M5.1",
+            qty: q,
+            openPrice,
+            fifoCost,
+            closePrice,
+            lotTag,
+            pnl,
+          });
+          rows.push({
+            time: date,
+            symbol,
+            action: action.toUpperCase() as "SELL" | "COVER",
+            into: "M5.2",
+            qty: q,
+            openPrice,
+            fifoCost,
+            closePrice,
+            lotTag,
+            pnl,
+          });
+        } else {
+          rows.push({
+            time: date,
+            symbol,
+            action: action.toUpperCase() as "SELL" | "COVER",
+            into: "M4",
+            qty: q,
+            openPrice,
+            fifoCost,
+            closePrice,
+            lotTag,
+            pnl,
+          });
+        }
       }
       lot.qty -= q;
       remain -= q;

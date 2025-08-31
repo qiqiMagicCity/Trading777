@@ -60,8 +60,8 @@ describe('property based metrics', () => {
           const expectedM5_2 = round2(split.fifo);
           const expectedM9 = dailyResults.reduce((s, d) => s + d.realized, 0);
 
-          expect(result.M4).toBeCloseTo(expectedM4, 10);
-          expect(result.M5_2).toBeCloseTo(expectedM5_2, 10);
+          expect(result.M4.total).toBeCloseTo(expectedM4, 10);
+          expect(result.M5.fifo).toBeCloseTo(expectedM5_2, 10);
           expect(result.M9).toBeCloseTo(expectedM9, 10);
         }
       )
