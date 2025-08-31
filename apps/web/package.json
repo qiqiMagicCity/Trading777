@@ -11,6 +11,7 @@
     "check-types": "tsc --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "replay": "tsx scripts/replay.ts",
+    "backtest": "tsx scripts/replay.ts",
     "check:monitor": "MONITOR=1 npm run replay"
   },
   "dependencies": {
