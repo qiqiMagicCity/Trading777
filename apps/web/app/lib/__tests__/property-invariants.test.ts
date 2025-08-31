@@ -65,7 +65,7 @@ describe('property based invariants', () => {
           const drPrefix = sortedDaily.filter(d => d.date <= date);
           const res = runAll(date, [], cumulativeTrades, closePrices, { dailyResults: drPrefix });
 
-          expect(res.M6).toBeCloseTo(res.M4 + res.M3 + res.M5_2, 10);
+          expect(res.M6.total).toBeCloseTo(res.M4.total + res.M3 + res.M5.fifo, 10);
 
           const fifo = computeFifo(
             cumulativeTrades.map(t => ({

@@ -37,7 +37,7 @@ export type ClosePriceMap = Record<string, Record<string, number>>; // symbol ->
  * 为兼容旧版 calcMetrics/调试函数里对“今天”的判定：
  * 在本函数调用范围内临时设置 process.env.NEXT_PUBLIC_FREEZE_DATE=evalISO，完成后恢复。
  */
-export function runAll(
+function runAllImpl(
   _date: string,
   initialPositions: InitialPosition[],
   rawTrades: RawTrade[],
@@ -121,7 +121,7 @@ export function runAll(
   // ---- 用新的日内拆分结果覆盖 M4/M5，并重算 M6 ----
   const m5split = calcM5Split(enriched as any, evalISO, initialPositions);
   const M4_override   = m5split.historyRealized;
-  const M5_1_override = m5split.trade;
+  const M5_behavior   = metrics.M5.trade;
   const M5_2_override = m5split.fifo;
   const M6_override   = M4_override + metrics.M3 + M5_2_override;
 
@@ -131,10 +131,9 @@ export function runAll(
     M1: round2(metrics.M1),
     M2: round2(metrics.M2),
     M3: round2(metrics.M3),
-    M4: round2(M4_override),
-    M5_1: round2(M5_1_override),
-    M5_2: round2(M5_2_override),
-    M6: round2(M6_override),
+    M4: { total: round2(M4_override) },
+    M5: { behavior: round2(M5_behavior), fifo: round2(M5_2_override) },
+    M6: { total: round2(M6_override) },
     M7: metrics.M7,
     M8: metrics.M8,
     M9,
@@ -172,6 +171,48 @@ export function runAll(
   }
 
   return result;
+}
+
+export function runAll(
+  arg1:
+    | string
+    | {
+        date?: string;
+        trades: RawTrade[];
+        prices: ClosePriceMap;
+        positions?: InitialPosition[];
+        dailyResults?: { date: string; realized: number; unrealized: number }[];
+        evalDate?: Date | string;
+      },
+  initialPositions: InitialPosition[] = [],
+  rawTrades: RawTrade[] = [],
+  closePrices: ClosePriceMap = {},
+  input: { dailyResults?: { date: string; realized: number; unrealized: number }[] } = {},
+  opts: { evalDate?: Date | string } = {},
+) {
+  if (typeof arg1 === "object" && !Array.isArray(arg1)) {
+    const {
+      date = arg1.evalDate ? nyDateStr(arg1.evalDate) : nyDateStr(arg1.trades[0]?.date || new Date()),
+      trades,
+      prices,
+      positions = [
+        { symbol: "NFLX", qty: 100, avgPrice: 1100 },
+        { symbol: "TSLA", qty: 50, avgPrice: 290 },
+        { symbol: "AMZN", qty: -80, avgPrice: 220 },
+      ],
+      dailyResults = [],
+      evalDate,
+    } = arg1;
+    return runAllImpl(
+      date,
+      positions,
+      trades,
+      prices,
+      { dailyResults },
+      { evalDate },
+    );
+  }
+  return runAllImpl(arg1 as string, initialPositions, rawTrades, closePrices, input, opts);
 }
 
 export default runAll;
