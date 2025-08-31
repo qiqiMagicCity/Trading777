@@ -11,7 +11,8 @@
     "check-types": "tsc --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "replay": "tsx scripts/replay.ts",
-    "check:monitor": "MONITOR=1 npm run replay"
+    "check:monitor": "MONITOR=1 npm run replay",
+    "backtest": "tsx scripts/replay.ts"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.12",
