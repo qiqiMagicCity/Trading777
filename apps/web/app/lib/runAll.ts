@@ -4,6 +4,15 @@ import { calcMetrics, debugTodayRealizedBreakdown } from "./metrics";
 import { computePeriods } from "./metrics-periods";
 import { nyDateStr } from "./time";
 import { calcM5Split } from "./m5-intraday";
+import {
+  assertM6Equality,
+  assertNoOverClose,
+  assertLotConservation,
+  assertNoNegativeLots,
+  snapshotArtifacts,
+} from "./monitor";
+import fs from "fs";
+import path from "path";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -118,7 +127,7 @@ export function runAll(
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
-  return {
+  const result = {
     M1: round2(metrics.M1),
     M2: round2(metrics.M2),
     M3: round2(metrics.M3),
@@ -134,7 +143,35 @@ export function runAll(
     M12,
     M13,
     aux: { breakdown: breakdown.rows },
-  };
+  } as const;
+
+  if (process.env.MONITOR === "1") {
+    snapshotArtifacts(
+      {
+        initialPositions,
+        rawTrades,
+        closePrices,
+        dailyResults: input.dailyResults || [],
+      },
+      result,
+    );
+    try {
+      assertM6Equality(result);
+      assertNoOverClose(enriched);
+      assertLotConservation(initialPositions, enriched);
+      assertNoNegativeLots(enriched);
+    } catch (err: any) {
+      const outDir = path.resolve(process.cwd(), ".artifacts/outputs");
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(outDir, "failure.json"),
+        JSON.stringify({ error: err?.message || String(err) }, null, 2),
+      );
+      throw err;
+    }
+  }
+
+  return result;
 }
 
 export default runAll;
