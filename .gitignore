@@ -52,3 +52,4 @@ Thumbs.db
 
 # Data snapshots
 apps/web/data/snapshots/
+apps/web/data/real/
