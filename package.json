@@ -7,7 +7,7 @@
     "lint": "npx --yes turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "npx --yes turbo run check-types",
-    "test": "npx --yes jest apps/web/app/lib",
+    "test": "npx --yes jest",
     "verify:golden": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-golden.ts",
     "snapshot:daily": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/snapshot.ts",
     "verify:history": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-history.ts",
