@@ -1,0 +1,5 @@
+[
+  { "date": "2025-07-31T10:00:00-04:00", "side": "BUY",   "symbol": "TSLA", "qty": 50,  "price": 290 },
+  { "date": "2025-07-31T10:10:00-04:00", "side": "BUY",   "symbol": "NFLX", "qty": 100, "price": 1100 },
+  { "date": "2025-07-31T10:20:00-04:00", "side": "SHORT", "symbol": "AMZN", "qty": 80,  "price": 220 }
+]
