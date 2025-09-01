@@ -16,6 +16,8 @@ import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { add as mAdd, round2 as mRound2 } from "./money";
+import type { MetricsContract } from "./types/metrics";
+
 
 export function isDebug() {
   return (
@@ -975,4 +977,25 @@ export function formatCurrency(value: number): string {
 export function formatNumber(value: number, decimals: number = 2): string {
   if (isNaN(value)) return "N/A";
   return value.toFixed(decimals);
+}
+
+export function normalizeMetrics(input:any): MetricsContract {
+  const pickTotal = (v:any)=> typeof v==='number' ? v : (v?.total ?? 0);
+  const M1 = Number(input?.M1 ?? 0);
+  const M2 = Number(input?.M2 ?? 0);
+  const M3 = Number(input?.M3 ?? 0);
+  const M4 = { total: pickTotal(input?.M4) };
+  const M5 = {
+    behavior: Number(input?.M5?.behavior ?? input?.M5_1 ?? 0),
+    fifo:      Number(input?.M5?.fifo      ?? input?.M5_2 ?? 0),
+  };
+  const M6 = { total: pickTotal(input?.M6) };
+  const aux = { breakdown: input?.aux?.breakdown ?? [] };
+  return { M1, M2, M3, M4, M5, M6, M7:input?.M7, M8:input?.M8, M9:input?.M9, M10:input?.M10, M11:input?.M11, M12:input?.M12, M13:input?.M13, aux };
+}
+
+// 兼容监控的扁平投影（监控/脚本可能用到）
+export function projectToM6(input:any){
+  const m = normalizeMetrics(input);
+  return { M3: m.M3, M4: m.M4.total, M5_2: m.M5.fifo, M6: m.M6.total };
 }

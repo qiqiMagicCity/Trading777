@@ -11,7 +11,7 @@ import { TradesTable } from '@/modules/TradesTable';
 import { SymbolTags } from '@/modules/SymbolTags';
 import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
-import { calcMetrics } from '@/lib/metrics';
+import { calcMetrics, normalizeMetrics } from '@/app/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
 import { getLatestTradingDayStr } from '@/lib/timezone';
@@ -140,8 +140,9 @@ export default function DashboardPage() {
           qty,
           avgPrice,
         }));
-        const metrics = calcMetrics(enriched, posList, dailyResults, initPos);
-        useStore.getState().setMetrics(metrics);
+        const rawMetrics = calcMetrics(enriched, posList, dailyResults, initPos);
+        const metrics = normalizeMetrics(rawMetrics);
+        useStore.getState().setMetrics(metrics as any);
 
         setTrades(dbTrades);
         setPositions(posList);
@@ -233,8 +234,9 @@ export default function DashboardPage() {
         qty,
         avgPrice,
       }));
-      const metrics = calcMetrics(enriched, posList, dailyResults, initPos);
-      useStore.getState().setMetrics(metrics);
+      const rawMetrics = calcMetrics(enriched, posList, dailyResults, initPos);
+      const metrics = normalizeMetrics(rawMetrics);
+      useStore.getState().setMetrics(metrics as any);
 
       setTrades(dbTrades);
       setPositions(posList);

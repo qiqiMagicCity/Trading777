@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import runAll, { RawTrade, ClosePriceMap } from "../app/lib/runAll";
+import { normalizeMetrics } from "@/app/lib/metrics";
 import type { InitialPosition } from "../app/lib/fifo";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,8 +47,10 @@ for (const date of dates) {
     { evalDate: date },
   );
 
-  const realized = Math.round((res.M4 + res.M5_2) * 100) / 100;
-  const unrealized = Math.round(res.M3 * 100) / 100;
+  const m = normalizeMetrics(res);
+  const realized = Math.round((m.M4.total + m.M5.fifo) * 100) / 100;
+  const unrealized = Math.round(m.M3 * 100) / 100;
+  const m6 = m.M6.total;
   dailyResults.push({ date, realized, unrealized });
 }
 

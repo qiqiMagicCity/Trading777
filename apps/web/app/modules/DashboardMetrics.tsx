@@ -3,8 +3,8 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { useStore } from "@/lib/store";
-import { formatCurrency } from "@/lib/metrics";
-import type { Metrics } from "@/lib/metrics";
+import { formatCurrency, normalizeMetrics } from "@/app/lib/metrics";
+import type { MetricsContract } from "@/app/lib/types/metrics";
 import { useMemo, type ReactNode } from "react";
 
 /**
@@ -43,10 +43,11 @@ function MetricCard({
  */
 export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   // 从全局状态获取指标
-  const metrics = useStore((state) => state.metrics);
+  const rawMetrics = useStore((state) => state.metrics);
+  const metrics = normalizeMetrics(rawMetrics);
 
   // 定义指标名称映射
-  const metricNames: Record<keyof Metrics, string> = useMemo(
+  const metricNames: Partial<Record<keyof MetricsContract, string>> = useMemo(
     () => ({
       M1: "持仓成本",
       M2: "持仓市值",
@@ -66,7 +67,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   );
 
   // 按顺序渲染所有指标卡片
-  const order: (keyof Metrics)[] = useMemo(
+  const order: (keyof MetricsContract)[] = useMemo(
     () => [
       "M1",
       "M2",
@@ -95,15 +96,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
       // 根据不同指标类型格式化值
       if (key === "M5") {
-        const m5 = value as Metrics["M5"];
+        const m5 = value as MetricsContract["M5"];
         formattedValue = (
           <>
             <span
               className={
-                m5.trade > 0 ? "green" : m5.trade < 0 ? "red" : undefined
+                m5.behavior > 0 ? "green" : m5.behavior < 0 ? "red" : undefined
               }
             >
-              交易: {formatCurrency(m5.trade)}
+              交易: {formatCurrency(m5.behavior)}
             </span>
             <br />
             <span
@@ -116,7 +117,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           </>
         );
       } else if (key === "M7" || key === "M8") {
-        const counts = value as Metrics["M7"] | Metrics["M8"];
+        const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
         formattedValue = (
           <>
             <span className="green">B/{counts.B}</span>{" "}
@@ -127,7 +128,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           </>
         );
       } else if (key === "M10") {
-        const m10 = value as Metrics["M10"];
+        const m10 = value as MetricsContract["M10"];
         formattedValue = (
           <>
             <span className="green">W/{m10.win}</span>{" "}
@@ -139,7 +140,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           </>
         );
       } else {
-        const numValue = value as number;
+        const numValue = (key === "M4" || key === "M6") ? (value as { total: number }).total : (value as number);
         formattedValue = formatCurrency(numValue);
 
         // 设置颜色
@@ -172,7 +173,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           {formattedMetrics.slice(0, 8).map((metric) => (
             <MetricCard
               key={metric.key}
-              title={metric.title}
+              title={metric.title!}
               value={metric.value}
               colorClass={metric.colorClass}
             />
@@ -182,7 +183,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           {formattedMetrics.slice(8).map((metric) => (
             <MetricCard
               key={metric.key}
-              title={metric.title}
+              title={metric.title!}
               value={metric.value}
               colorClass={metric.colorClass}
             />
