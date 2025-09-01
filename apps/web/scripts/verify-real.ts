@@ -10,14 +10,26 @@ function readTextIfExists(p: string): string | undefined {
   try { return fs.readFileSync(p, "utf8"); } catch { return undefined; }
 }
 function parseCsv(text?: string): any[] {
-  if (!text) return [];
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+  // 空文本或不存在则返回空表，避免 TS “possibly undefined”
+  if (!text || text.length === 0) return [];
+  // 去除 UTF-8 BOM，再做行拆分
+  const s = text.replace(/^\uFEFF/, "");
+  const lines = s.split(/\r?\n/).filter(Boolean);
   if (lines.length === 0) return [];
-  const headers = lines[0].split(",").map(h => h.trim());
-  return lines.slice(1).map(line => {
+  // 使用解构拿到表头，避免对 lines[0] 的未定义访问告警
+  const [headerLine, ...dataLines] = lines;
+  if (!headerLine) return [];
+  const headers = headerLine.split(",").map(h => h.trim());
+
+  return dataLines.map((line) => {
     const cols = line.split(",").map(c => c.trim());
     const obj: Record<string, string> = {};
-    headers.forEach((h, i) => obj[h] = cols[i]);
+    // 列数不够时以空串兜底，避免 undefined
+    for (let i = 0; i < headers.length; i++) {
+      const key = headers[i];
+      if (!key) continue;
+      obj[key] = cols[i] ?? "";
+    }
     return obj;
   });
 }
@@ -86,7 +98,19 @@ async function main() {
     const dayTrades = trades.filter(t => t.date === d);
     const dayPrices = prices.filter(p => p.date === d);
     // 基于当日重算
-    const res = runAll({ trades: dayTrades, prices: dayPrices });
+    const rawTrades = dayTrades.map((t) => ({
+      date: t.date,
+      side: t.side,
+      symbol: t.symbol,
+      qty: t.qty,
+      price: t.price,
+    }));
+    const priceMap: Record<string, Record<string, number>> = {};
+    for (const p of dayPrices) {
+      const sym = priceMap[p.symbol] ?? (priceMap[p.symbol] = {});
+      sym[p.date] = p.close;
+    }
+    const res = runAll(d, [], rawTrades, priceMap);
     const m = normalizeMetrics(res);
     const realize = round2(m.M4.total + m.M5.fifo);
     const unrl   = round2(m.M3);
