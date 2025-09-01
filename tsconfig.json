@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/app/*": ["apps/web/app/*"],
+      "@/*": ["apps/web/app/*"]
+    }
+  }
+}

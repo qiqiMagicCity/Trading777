@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import runAll from '@/lib/runAll';
 import { computeFifo } from '@/lib/fifo';
 import { calcM5Split } from '@/lib/m5-intraday';
+import { normalizeMetrics } from "@/app/lib/metrics";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -45,6 +46,7 @@ describe('property based metrics', () => {
         closePriceArb,
         (rawTrades, dailyResults, closePrices) => {
           const result = runAll(evalISO, [], rawTrades, closePrices, { dailyResults });
+          const m = normalizeMetrics(result);
 
           const fifoTrades = rawTrades.map(t => ({
             symbol: t.symbol,
@@ -57,12 +59,12 @@ describe('property based metrics', () => {
           const split = calcM5Split(enriched as any, evalISO, []);
 
           const expectedM4 = round2(split.historyRealized);
-          const expectedM5_2 = round2(split.fifo);
+          const expectedM5Fifo = round2(split.fifo);
           const expectedM9 = dailyResults.reduce((s, d) => s + d.realized, 0);
 
-          expect(result.M4).toBeCloseTo(expectedM4, 10);
-          expect(result.M5_2).toBeCloseTo(expectedM5_2, 10);
-          expect(result.M9).toBeCloseTo(expectedM9, 10);
+          expect(m.M4.total).toBeCloseTo(expectedM4, 10);
+          expect(m.M5.fifo).toBeCloseTo(expectedM5Fifo, 10);
+          expect(m.M9).toBeCloseTo(expectedM9, 10);
         }
       )
     );

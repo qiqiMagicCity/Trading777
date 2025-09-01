@@ -50,8 +50,8 @@ function naiveSumPeriod(
 describe("sumPeriod benchmark", () => {
   it("uses cached result for repeated range", () => {
     const daily = generateDaily(20000);
-    const from = daily[1000].date;
-    const to = daily[15000].date;
+    const from = daily[1000]!.date;
+    const to = daily[15000]!.date;
 
     // warm up and verify correctness
     const naiveRes = naiveSumPeriod(daily, from, to);

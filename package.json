@@ -11,7 +11,10 @@
     "verify:golden": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-golden.ts",
     "snapshot:daily": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/snapshot.ts",
     "verify:history": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-history.ts",
-    "ci:pr": "npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only"
+    "ci:pr": "npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only",
+    "check:types": "tsc -p apps/web/tsconfig.json --noEmit",
+    "ci": "npm run check:types -w web && npm run test -w web && npm run build -w web",
+    "guard": "npm run ci"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

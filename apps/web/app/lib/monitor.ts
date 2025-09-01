@@ -1,21 +1,7 @@
 import type { InitialPosition, EnrichedTrade } from "./fifo";
 import type { RawTrade, ClosePriceMap } from "./runAll";
-
-/** Assert M6 equals M4 + M3 + M5_2 within 0.01 tolerance */
-export function assertM6Equality(res: {
-  M3: number;
-  M4: number;
-  M5_2: number;
-  M6: number;
-}) {
-  const lhs = res.M6;
-  const rhs = res.M4 + res.M3 + res.M5_2;
-  if (Math.abs(lhs - rhs) > 0.01) {
-    throw new Error(
-      `M6 mismatch: got ${lhs}, expected ${rhs} (M4+M3+M5_2)`
-    );
-  }
-}
+import { assertM6Equality } from "./invariants";
+import fs from "node:fs"; import path from "node:path";
 
 /**
  * Ensure closing trades never exceed available lots.
@@ -98,8 +84,6 @@ export function snapshotArtifacts(
   },
   output: unknown
 ) {
-  const path = require("path");
-  const fs = require("fs");
   const inDir = path.resolve(process.cwd(), ".artifacts/inputs");
   const outDir = path.resolve(process.cwd(), ".artifacts/outputs");
   fs.mkdirSync(inDir, { recursive: true });
@@ -125,3 +109,4 @@ export function snapshotArtifacts(
     JSON.stringify(output, null, 2)
   );
 }
+export { assertM6Equality };

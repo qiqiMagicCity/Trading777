@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import runAll from '@/lib/runAll';
 import { computeFifo } from '@/lib/fifo';
+import { normalizeMetrics } from "@/app/lib/metrics";
 
 describe('property based invariants', () => {
   it('M6 matches, positions non-negative, M9 monotonic', () => {
@@ -65,7 +66,8 @@ describe('property based invariants', () => {
           const drPrefix = sortedDaily.filter(d => d.date <= date);
           const res = runAll(date, [], cumulativeTrades, closePrices, { dailyResults: drPrefix });
 
-          expect(res.M6).toBeCloseTo(res.M4 + res.M3 + res.M5_2, 10);
+          const m = normalizeMetrics(res);
+          expect(m.M6.total).toBeCloseTo(m.M4.total + m.M3 + m.M5.fifo, 10);
 
           const fifo = computeFifo(
             cumulativeTrades.map(t => ({
