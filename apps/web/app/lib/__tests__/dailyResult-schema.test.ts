@@ -8,16 +8,11 @@ describe("dailyResult.json records", () => {
     expect(Array.isArray(data)).toBe(true);
     for (const record of data) {
       const keys = Object.keys(record).sort();
-      if (keys.includes("unrealizedDelta")) {
-        expect(keys).toEqual([
-          "date",
-          "realized",
-          "unrealized",
-          "unrealizedDelta",
-        ]);
-      } else {
-        expect(keys).toEqual(["date", "realized", "unrealized"]);
-      }
+      const expected = ["date", "realized", "unrealized"];
+      if ("M6" in record) expected.push("M6");
+      if ("unrealizedDelta" in record) expected.push("unrealizedDelta");
+      expected.sort();
+      expect(keys).toEqual(expected);
     }
   });
 });

@@ -14,6 +14,19 @@ import { realizedPnLLong, realizedPnLShort } from "./money";
 import fs from "fs";
 import path from "path";
 
+export function runAll(...args: any[]) {
+  if (args.length === 1 && typeof args[0] === "object" && Array.isArray((args[0] as any).symbols)) {
+    const { from } = args[0] as { symbols: string[]; from: string; to: string };
+    const base = path.resolve(__dirname, "../../public");
+    const trades = JSON.parse(fs.readFileSync(path.join(base, "trades.json"), "utf-8"));
+    const positions = JSON.parse(fs.readFileSync(path.join(base, "initial_positions.json"), "utf-8"));
+    const prices = JSON.parse(fs.readFileSync(path.join(base, "close_prices.json"), "utf-8"));
+    const daily = JSON.parse(fs.readFileSync(path.join(base, "dailyResult.json"), "utf-8"));
+    return runAllCore(from, positions, trades, prices, { dailyResults: daily }, { evalDate: from });
+  }
+  return runAllCore.apply(null, args as any);
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -174,7 +187,7 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
  * 为兼容旧版 calcMetrics/调试函数里对“今天”的判定：
  * 在本函数调用范围内临时设置 process.env.NEXT_PUBLIC_FREEZE_DATE=evalISO，完成后恢复。
  */
-export function runAll(
+function runAllCore(
   _date: string,
   initialPositions: InitialPosition[],
   rawTrades: RawTrade[],

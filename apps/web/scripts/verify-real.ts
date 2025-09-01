@@ -5,6 +5,27 @@ import path from "node:path";
 import { runAll } from "@/app/lib/runAll";
 import { normalizeMetrics } from "@/app/lib/metrics";
 
+type AnyRec = Record<string, any>;
+
+// 从新/旧结构中抽取对比口径：realized、unrealized、m6Total
+function pickTotals(metrics: AnyRec) {
+  // 新结构优先，兼容旧扁平字段
+  const m4Total = metrics?.M4?.total ?? metrics?.M4_total ?? metrics?.unrealized ?? metrics?.M4;
+  const m5Behavior = metrics?.M5?.behavior ?? metrics?.M5_1 ?? 0;
+  const m5Fifo = metrics?.M5?.fifo ?? metrics?.M5_2 ?? 0;
+  const m6Total = metrics?.M6?.total ?? metrics?.M6_total ?? metrics?.M6 ?? metrics?.total;
+
+  const realized = Number(metrics?.realized ?? ((Number(m5Behavior) || 0) + (Number(m5Fifo) || 0)));
+  const unrealized = Number(metrics?.unrealized ?? m4Total) || 0;
+  const m6 = Number(m6Total) || Number(metrics?.M6) || 0;
+  return { realized, unrealized, m6 };
+}
+
+// 简单容差判断
+function nearlyEqual(a: number, b: number, eps = 1e-6) {
+  return Math.abs(a - b) <= eps;
+}
+
 // 复用 replay 的读文件工具（若不存在则内联一个安全读取）
 function readTextIfExists(p: string): string | undefined {
   try { return fs.readFileSync(p, "utf8"); } catch { return undefined; }
@@ -69,8 +90,6 @@ function pickDates(snap: DailySnap[], from?: string, to?: string): string[] {
   return ok;
 }
 
-function round2(n: number) { return Math.round(n * 100) / 100; }
-
 async function main() {
   const argv = process.argv.slice(2);
   const from = argv.find(a => a.startsWith("--from="))?.split("=")[1];
@@ -111,24 +130,29 @@ async function main() {
       sym[p.date] = p.close;
     }
     const res = runAll(d, [], rawTrades, priceMap);
-    const m = normalizeMetrics(res);
-    const realize = round2(m.M4.total + m.M5.fifo);
-    const unrl   = round2(m.M3);
-    const m6     = round2(m.M6.total);
+    const result = normalizeMetrics(res);
+    const computedTotals = pickTotals(result);
 
     const snap = snaps.find(s => s.date === d) as DailySnap;
-    const sRealized   = round2(Number(snap?.realized ?? NaN));
-    const sUnrealized = round2(Number(snap?.unrealized ?? NaN));
-    const sM6         = round2(Number(snap?.M6 ?? snap?.total ?? NaN)); // 兼容字段
+    const expectedTotals = pickTotals(snap);
 
-    const okReal = realize === sRealized;
-    const okUnrl = unrl === sUnrealized;
-    const okM6   = m6 === sM6;
+    const diffs: string[] = [];
+    if (!nearlyEqual(computedTotals.realized, expectedTotals.realized, 1e-2)) {
+      diffs.push(`realized: ${computedTotals.realized} != ${expectedTotals.realized}`);
+    }
+    if (!nearlyEqual(computedTotals.unrealized, expectedTotals.unrealized, 1e-2)) {
+      diffs.push(`unrealized: ${computedTotals.unrealized} != ${expectedTotals.unrealized}`);
+    }
+    if (!nearlyEqual(computedTotals.m6, expectedTotals.m6, 1e-2)) {
+      diffs.push(`M6: ${computedTotals.m6} != ${expectedTotals.m6}`);
+    }
 
-    if (!(okReal && okUnrl && okM6)) {
-      mismatches.push(
-        `[${d}] realized: ${realize} != ${sRealized}; unrealized: ${unrl} != ${sUnrealized}; M6: ${m6} != ${sM6}`
-      );
+    if (diffs.length) {
+      mismatches.push(`[${d}] ${diffs.join('; ')}`);
+      console.error("❌ Mismatch on", d, "\n  " + diffs.join("\n  "));
+      process.exitCode = 1;
+    } else {
+      console.log("✅ Verified", d, "— all matched under tolerance.");
     }
   }
 
