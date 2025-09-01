@@ -1,0 +1,21 @@
+name: verify-real
+on:
+  workflow_dispatch:
+    inputs:
+      from: { description: "Start date YYYY-MM-DD", required: false }
+      to:   { description: "End date YYYY-MM-DD",   required: false }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm run backtest -w web -- --from=${{ inputs.from }} --to=${{ inputs.to }}
+      - run: npm run verify:real -w web -- --from=${{ inputs.from }} --to=${{ inputs.to }}
+      - name: Upload verify report
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-report
+          path: data/real/verify-report.md
