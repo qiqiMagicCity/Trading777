@@ -1,20 +1,5 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  preset: 'ts-jest/presets/default-esm',
-  testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.ts', '.tsx'],
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    },
-  },
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/apps/web/app/$1',
-  },
-  roots: ['<rootDir>/apps/web/app', '<rootDir>/tests'],
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: 'apps/web/tsconfig.json',
-    }],
-  },
+  // 在仓库根运行 jest 时，委托到子项目
+  projects: ["<rootDir>/apps/web"],
 };

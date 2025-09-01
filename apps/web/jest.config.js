@@ -13,7 +13,6 @@ const config = {
     "^@/(.*)$": "<rootDir>/app/$1"
   },
   transformIgnorePatterns: ["/node_modules/"],
-  testMatch: ["**/__tests__/**/*.test.(ts|tsx|js)"],
-  verbose: false
+  testMatch: ["**/__tests__/**/*.test.(ts|tsx|js)"]
 };
 export default config;
