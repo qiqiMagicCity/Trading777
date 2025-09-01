@@ -1,21 +1,25 @@
 name: verify-real
+
 on:
-  workflow_dispatch:
-    inputs:
-      from: { description: "Start date YYYY-MM-DD", required: false }
-      to:   { description: "End date YYYY-MM-DD",   required: false }
+  workflow_dispatch: {}
+  schedule:
+    # 工作日美东收盘后跑：02:30 UTC ≈ 22:30 ET(夏令) / 21:30 ET(冬令)；按需再调
+    - cron: "30 2 * * 1-5"
+
 jobs:
   verify:
+    name: verify:real
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with: { node-version: '22' }
       - run: npm ci
-      - run: npm run backtest -w web -- --from=${{ inputs.from }} --to=${{ inputs.to }}
-      - run: npm run verify:real -w web -- --from=${{ inputs.from }} --to=${{ inputs.to }}
+      - run: npm run backtest -w web -- --from=2025-08-01 --to=2025-08-01
+      - run: npm run verify:real -w web -- --from=2025-08-01 --to=2025-08-01
       - name: Upload verify report
         uses: actions/upload-artifact@v4
         with:
           name: verify-report
           path: data/real/verify-report.md
+
