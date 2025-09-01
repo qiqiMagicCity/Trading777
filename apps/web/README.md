@@ -66,3 +66,15 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - 文档：./../../docs/REAL_BACKTEST.md
 - 快速命令：`npm run backtest:smoke -w web`（黄金用例）
 - 自定义区间：`npm run backtest -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD`
+
+## Real Data Verify
+
+[![Verify Real Data](https://github.com/qiqiMagicCity/Trading777/actions/workflows/verify-real.yml/badge.svg)](https://github.com/qiqiMagicCity/Trading777/actions/workflows/verify-real.yml)
+
+- 手动触发：在 GitHub Actions 里运行 **Verify Real**。
+- 本地运行：
+  ```bash
+  npm run backtest -w web -- --from=2025-08-01 --to=2025-08-01
+  npm run verify:real -w web -- --from=2025-08-01 --to=2025-08-01
+  ```
+- 校验项：聚合后的 M4/M5.2/M9 与 breakdown 汇总一致；前台 M5.1=1670、M5.2=1320 与黄金案例对齐。出现不一致会在 `data/real/verify-report.md` 给出差异列表。
