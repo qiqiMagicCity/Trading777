@@ -1,30 +1,19 @@
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type Lvl = "debug" | "info" | "warn" | "error";
+const lvlOrder: Record<Lvl, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+const env = process.env.NODE_ENV || "";
+const level: Lvl = (process.env.LOG_LEVEL as Lvl) || (env === "test" ? "warn" : "info");
 
-const levels: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
-
-const envLevel =
-  (typeof process !== 'undefined' && (process.env.LOG_LEVEL as LogLevel)) || 'info';
-const currentLevel = levels[envLevel] ?? levels.info;
-
-function log(level: LogLevel, ...args: unknown[]) {
-  if (levels[level] < currentLevel) return;
-  if (level === 'warn') {
-    console.warn(...args);
-  } else if (level === 'error') {
-    console.error(...args);
-  } else {
-    console.log(...args);
-  }
+function log(l: Lvl, ...args: any[]) {
+  if (lvlOrder[l] < lvlOrder[level]) return;
+  // 只打印，不抛错，避免影响测试断言
+  // eslint-disable-next-line no-console
+  (console as any)[l === "error" ? "error" : "log"](...args);
 }
 
 export const logger = {
-  debug: (...args: unknown[]) => log('debug', ...args),
-  info: (...args: unknown[]) => log('info', ...args),
-  warn: (...args: unknown[]) => log('warn', ...args),
-  error: (...args: unknown[]) => log('error', ...args),
+  debug: (...a: any[]) => log("debug", ...a),
+  info:  (...a: any[]) => log("info",  ...a),
+  warn:  (...a: any[]) => log("warn",  ...a),
+  error: (...a: any[]) => log("error", ...a),
 };
+export default logger;
