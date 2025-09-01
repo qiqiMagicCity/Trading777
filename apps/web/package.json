@@ -11,10 +11,12 @@
     "check-types": "tsc --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "replay": "tsx scripts/replay.ts",
+    "backtest": "tsx ./scripts/replay.ts",
     "check:monitor": "MONITOR=1 npm run replay",
     "test": "jest",
     "check:types": "tsc --noEmit",
-    "backtest:smoke": "node ./scripts/replay.js --from=2025-08-01 --to=2025-08-01 || node ./scripts/replay.ts --from=2025-08-01 --to=2025-08-01"
+    "backtest:smoke": "node ./scripts/replay.js --from=2025-08-01 --to=2025-08-01 || node ./scripts/replay.ts --from=2025-08-01 --to=2025-08-01",
+    "verify:real": "tsx ./scripts/verify-real.ts"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.12",
@@ -45,6 +47,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.0.0",
     "tailwindcss-animate": "^1.0.7",
+    "ts-node": "^10.9.2",
     "typescript": "5.8.2"
   }
 }

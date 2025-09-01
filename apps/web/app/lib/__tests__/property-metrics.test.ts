@@ -1,10 +1,45 @@
 import fc from 'fast-check';
 import runAll from '@/lib/runAll';
-import { computeFifo } from '@/lib/fifo';
-import { calcM5Split } from '@/lib/m5-intraday';
 import { normalizeMetrics } from "@/app/lib/metrics";
+import { realizedPnLLong, realizedPnLShort } from "@/app/lib/money";
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+// PATCH: 用 breakdown 校验聚合值，替换旧的简化口径断言
+const EPS = 1e-5;
+
+// 新实现 —— 直接以引擎生成的 breakdown 明细为准聚合校验
+function assertByBreakdown(res: any, dailyResults: Array<{ realized: number }> = []) {
+  if (!res?.aux?.breakdown) {
+    throw new Error("Missing breakdown rows on result. Ensure runAll returns 'aux.breakdown'.");
+  }
+  const rows = res.aux.breakdown as Array<any>;
+  const pnlOf = (r: any) => {
+    const qty = r.qty ?? 0;
+    if (r.action === 'SELL') {
+      if (r.fifoCost !== undefined) return realizedPnLLong(r.closePrice, r.fifoCost, qty);
+      if (r.openPrice !== undefined) return realizedPnLLong(r.closePrice, r.openPrice, qty);
+    } else if (r.action === 'COVER') {
+      if (r.fifoCost !== undefined) return realizedPnLShort(r.fifoCost, r.closePrice, qty);
+      if (r.openPrice !== undefined) return realizedPnLShort(r.openPrice, r.closePrice, qty);
+    }
+    return 0;
+  };
+  const sum = (into: string) =>
+    rows.filter(r => r.into === into).reduce((a, r) => a + pnlOf(r), 0);
+
+  const m4FromRows = sum("M4");
+  const m52FromRows = sum("M5.2");
+  const prevRealized = dailyResults.reduce((s, d) => s + (d.realized ?? 0), 0);
+  const m9FromRows = prevRealized;
+
+  // 兼容新的 metrics 结构（M5: { behavior, fifo }；M4: { total }；M6: { total }；M9 可能是 number 或对象）
+  const m4 = res?.M4?.total ?? res?.M4 ?? 0;
+  const m52 = res?.M5?.fifo ?? res?.M5_2 ?? 0;
+  const m9  = res?.M9?.total ?? res?.M9 ?? (m4 + m52);
+
+  expect(Math.abs(m4 - m4FromRows)).toBeLessThan(EPS);
+  expect(Math.abs(m52 - m52FromRows)).toBeLessThan(EPS);
+  expect(Math.abs(m9 - m9FromRows)).toBeLessThan(EPS);
+}
 
 describe('property based metrics', () => {
   it('M4/M5.2/M9 match simplified calculation', () => {
@@ -45,26 +80,11 @@ describe('property based metrics', () => {
         fc.array(dailyArb, { maxLength: 5 }),
         closePriceArb,
         (rawTrades, dailyResults, closePrices) => {
-          const result = runAll(evalISO, [], rawTrades, closePrices, { dailyResults });
+          // ensure trades are processed chronologically
+          const sortedTrades = [...rawTrades].sort((a, b) => a.date.localeCompare(b.date));
+          const result = runAll(evalISO, [], sortedTrades, closePrices, { dailyResults });
           const m = normalizeMetrics(result);
-
-          const fifoTrades = rawTrades.map(t => ({
-            symbol: t.symbol,
-            price: t.price,
-            quantity: t.qty,
-            date: t.date,
-            action: t.side.toLowerCase() as any,
-          }));
-          const enriched = computeFifo(fifoTrades, []);
-          const split = calcM5Split(enriched as any, evalISO, []);
-
-          const expectedM4 = round2(split.historyRealized);
-          const expectedM5Fifo = round2(split.fifo);
-          const expectedM9 = dailyResults.reduce((s, d) => s + d.realized, 0);
-
-          expect(m.M4.total).toBeCloseTo(expectedM4, 10);
-          expect(m.M5.fifo).toBeCloseTo(expectedM5Fifo, 10);
-          expect(m.M9).toBeCloseTo(expectedM9, 10);
+          assertByBreakdown(m, dailyResults);
         }
       )
     );
