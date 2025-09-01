@@ -14,6 +14,42 @@ import { realizedPnLLong, realizedPnLShort } from "./money";
 import fs from "fs";
 import path from "path";
 
+// 统一解析 public 文件路径
+function resolvePublicFile(relName: string): string | null {
+  const candidates = [
+    path.join(process.cwd(), "apps/web/public", relName),
+    path.join(process.cwd(), "public", relName),
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+function readJsonSafe<T = any>(relName: string, fallback: T): T {
+  const p = resolvePublicFile(relName);
+  if (!p) return fallback;
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+export function runAll(...args: any[]) {
+  if (args.length === 1 && typeof args[0] === "object" && Array.isArray((args[0] as any).symbols)) {
+    const { from } = args[0] as { symbols: string[]; from: string; to: string };
+    const trades = readJsonSafe("trades.json", [] as RawTrade[]);
+    const positions = readJsonSafe("positions.json", [] as InitialPosition[]);
+    const prices = readJsonSafe("prices.json", {} as ClosePriceMap);
+    const daily = readJsonSafe("dailyResult.json", [] as any[]);
+    return runAllCore(from, positions, trades, prices, { dailyResults: daily }, { evalDate: from });
+  }
+  return runAllCore.apply(null, args as any);
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -174,7 +210,7 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
  * 为兼容旧版 calcMetrics/调试函数里对“今天”的判定：
  * 在本函数调用范围内临时设置 process.env.NEXT_PUBLIC_FREEZE_DATE=evalISO，完成后恢复。
  */
-export function runAll(
+function runAllCore(
   _date: string,
   initialPositions: InitialPosition[],
   rawTrades: RawTrade[],
