@@ -24,21 +24,29 @@ async function main() {
   // 新口径：realized = M5.behavior + M5.fifo；unrealized = M4.total
   const realized = (m.M5?.behavior ?? 0) + (m.M5?.fifo ?? 0);
   const unrealized = m.M4?.total ?? 0;
-  const m9 = (m as any).M9?.total ?? (m as any).M9 ?? (realized + unrealized);
+  const m9FromComponents = realized + unrealized;
 
-  const diff = Math.abs(m9 - (realized + unrealized));
+  // 读取原始结果里的 M9（兼容旧字段）
+  const rawM9 = (result as any).M9?.total ?? (result as any).M9;
+  let m9 = Number(rawM9);
+  if (!m9 || Number.isNaN(m9)) m9 = m9FromComponents;
+
+  const diff = Math.abs(m9 - m9FromComponents);
   if (diff > EPS) {
-    console.error(
-      `Failed M9: expected M9 == realized+unrealized; diff=${diff.toFixed(6)}\n` +
-      `M9=${m9}, realized=${realized}, unrealized=${unrealized}`
-    );
+    console.warn("M9 mismatch under unified contract:");
+    console.warn(`- M9 (raw) = ${m9}`);
+    console.warn(`- realized (M5.behavior + M5.fifo) = ${realized}`);
+    console.warn(`- unrealized (M4.total) = ${unrealized}`);
+    console.warn(`- diff = ${diff}`);
     process.exit(1);
   }
 
-  console.log("verify-golden ✅: M6 equality holds, and M9 matches realized + unrealized.");
+  console.info(
+    "verify-golden ✅: M6 equality holds, and M9 matches realized + unrealized."
+  );
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.warn(e);
   process.exit(1);
 });

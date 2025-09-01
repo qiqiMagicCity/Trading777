@@ -18,7 +18,7 @@
     "backtest:smoke": "node ./scripts/replay.js --from=2025-08-01 --to=2025-08-01 || node ./scripts/replay.ts --from=2025-08-01 --to=2025-08-01",
     "verify:real": "tsx ./scripts/verify-real.ts",
     "verify:golden": "tsx ./scripts/verify-golden.ts",
-    "guard": "npm run check-types && tsx --tsconfig tsconfig.json apps/web/scripts/verify-golden.ts"
+    "guard": "npm run check-types && npm run build && npm test && npm run verify:golden"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.12",
