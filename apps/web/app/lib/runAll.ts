@@ -17,7 +17,7 @@ import path from "path";
 export function runAll(...args: any[]) {
   if (args.length === 1 && typeof args[0] === "object" && Array.isArray((args[0] as any).symbols)) {
     const { from } = args[0] as { symbols: string[]; from: string; to: string };
-    const base = path.resolve(__dirname, "../../public");
+    const base = path.resolve(process.cwd(), "public");
     const trades = JSON.parse(fs.readFileSync(path.join(base, "trades.json"), "utf-8"));
     const positions = JSON.parse(fs.readFileSync(path.join(base, "initial_positions.json"), "utf-8"));
     const prices = JSON.parse(fs.readFileSync(path.join(base, "close_prices.json"), "utf-8"));
