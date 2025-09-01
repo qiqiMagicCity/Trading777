@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint --max-warnings 0",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "replay": "tsx scripts/replay.ts",
     "backtest": "tsx ./scripts/replay.ts",
@@ -17,7 +17,8 @@
     "check:types": "tsc --noEmit",
     "backtest:smoke": "node ./scripts/replay.js --from=2025-08-01 --to=2025-08-01 || node ./scripts/replay.ts --from=2025-08-01 --to=2025-08-01",
     "verify:real": "tsx ./scripts/verify-real.ts",
-    "verify:golden": "tsx ./scripts/verify-golden.ts"
+    "verify:golden": "tsx ./scripts/verify-golden.ts",
+    "guard": "npm run check-types && tsx --tsconfig tsconfig.json apps/web/scripts/verify-golden.ts"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.12",
