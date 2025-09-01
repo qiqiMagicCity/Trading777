@@ -13,7 +13,8 @@
     "replay": "tsx scripts/replay.ts",
     "check:monitor": "MONITOR=1 npm run replay",
     "test": "jest",
-    "check:types": "tsc --noEmit"
+    "check:types": "tsc --noEmit",
+    "backtest:smoke": "node ./scripts/replay.js --from=2025-08-01 --to=2025-08-01 || node ./scripts/replay.ts --from=2025-08-01 --to=2025-08-01"
   },
   "dependencies": {
     "@radix-ui/react-tabs": "^1.1.12",
