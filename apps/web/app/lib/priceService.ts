@@ -1,7 +1,7 @@
-export class MissingPriceError extends Error {
-  constructor(message = 'missing price') {
+export class NoPriceError extends Error {
+  constructor(message = 'no price') {
     super(message);
-    this.name = 'MissingPriceError';
+    this.name = 'NoPriceError';
   }
 }
 
@@ -19,7 +19,7 @@ export interface SafePriceResult {
  * Return a safe price with fallback to last close.
  * If quote is provided and finite, use it and stale=false.
  * If quote is missing but lastClose is provided, use lastClose and mark stale=true.
- * Otherwise throw {@link MissingPriceError}.
+ * Otherwise throw {@link NoPriceError}.
  */
 export function getSafePrice({ quote, lastClose }: SafePriceInput): SafePriceResult {
   if (typeof quote === 'number' && Number.isFinite(quote)) {
@@ -28,5 +28,5 @@ export function getSafePrice({ quote, lastClose }: SafePriceInput): SafePriceRes
   if (typeof lastClose === 'number' && Number.isFinite(lastClose)) {
     return { price: lastClose, stale: true };
   }
-  throw new MissingPriceError();
+  throw new NoPriceError();
 }

@@ -5,6 +5,8 @@ import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
+import { NoPriceError } from '../priceService';
+import { nyDateStr } from '../time';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -40,7 +42,6 @@ async function saveToFile(symbol: string, date: string, close: number) {
 /** 环境变量中的 API 令牌 & 冻结日 */
 const finnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
 const tiingoToken  = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
-const freezeDate   = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 /** 从文件加载的 API 令牌缓存 */
 interface ApiKeys { finnhub?: string; tiingo?: string; }
@@ -235,37 +236,47 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    // 3) 兜底：默认值
-    return { price: 1, stale: true };
+    // 3) 找不到价格
+    throw new NoPriceError(`missing close for ${key} ${date}`);
   } catch (error) {
     console.error(`获取 ${key} 在 ${date} 的每日收盘价时出错:`, error);
-    return { price: 1, stale: true };
+    throw new NoPriceError(`missing close for ${key} ${date}`);
   }
 }
 
 /** 实时报价（冻结模式下直接返回冻结日收盘价） */
 let _freezeLogged = false;
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
+  const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
   if (freezeDate) {
     if (!_freezeLogged) {
       logger.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
       _freezeLogged = true;
     }
-    return fetchDailyClose(symbol, freezeDate);
+    const frozen = await fetchDailyClose(symbol, freezeDate);
+    return { price: frozen.price, stale: true };
   }
 
   try {
     const finnhubPrice = await fetchFinnhubRealtimeQuote(symbol);
     if (finnhubPrice !== null) return { price: finnhubPrice, stale: false };
+  } catch (e) {
+    console.warn(`Finnhub 实时报价失败 (${symbol})`, e);
+  }
 
+  try {
     const tiingoPrice = await fetchTiingoRealtimeQuote(symbol);
     if (tiingoPrice !== null) return { price: tiingoPrice, stale: false };
+  } catch (e) {
+    console.warn(`Tiingo 实时报价失败 (${symbol})`, e);
+  }
 
-    console.warn(`无法获取 ${symbol} 的实时价格，使用默认值 1`);
-    return { price: 1, stale: true };
-  } catch (error) {
-    console.error(`获取 ${symbol} 的实时报价时出错:`, error);
-    return { price: 1, stale: true };
+  try {
+    const yesterday = nyDateStr(Date.now() - 24 * 60 * 60 * 1000);
+    const close = await fetchDailyClose(symbol, yesterday);
+    return { price: close.price, stale: true };
+  } catch (err) {
+    throw new NoPriceError(`no price for ${symbol}`);
   }
 }
 

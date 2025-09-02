@@ -1,4 +1,4 @@
-import { getSafePrice, MissingPriceError } from '../priceService';
+import { getSafePrice, NoPriceError } from '../priceService';
 
 describe('getSafePrice', () => {
   it('uses quote when available', () => {
@@ -8,6 +8,6 @@ describe('getSafePrice', () => {
     expect(getSafePrice({ lastClose: 10 })).toEqual({ price: 10, stale: true });
   });
   it('throws when both missing', () => {
-    expect(() => getSafePrice({})).toThrow(MissingPriceError);
+    expect(() => getSafePrice({})).toThrow(NoPriceError);
   });
 });
