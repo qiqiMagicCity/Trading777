@@ -38,6 +38,40 @@ function readJsonSafe<T = any>(relName: string, fallback: T): T {
   }
 }
 
+/**
+ * 从 public 中的 prices.json 与 trades.json 读取日期集合，
+ * 与传入区间取交集并去重排序。
+ *
+ * @param from 起始日期（含）
+ * @param to   结束日期（含）
+ * @param tradesOpt 可选：直接传入的原始成交数组，测试用
+ * @param pricesOpt 可选：直接传入的收盘价映射，测试用
+ */
+export function getReplayDays(
+  from: string,
+  to: string,
+  tradesOpt?: RawTrade[],
+  pricesOpt?: any,
+): string[] {
+  const trades = tradesOpt ?? readJsonSafe("trades.json", [] as RawTrade[]);
+  const prices = normalizeClosePriceMap(
+    pricesOpt ?? readJsonSafe("prices.json", {} as any),
+  );
+  const within = (d: string) => (!from || d >= from) && (!to || d <= to);
+  const set = new Set<string>();
+  for (const sym of Object.keys(prices)) {
+    const byDate = prices[sym] || {};
+    for (const d of Object.keys(byDate)) {
+      if (within(d)) set.add(d);
+    }
+  }
+  for (const t of trades) {
+    const d = nyDateStr(t.date);
+    if (within(d)) set.add(d);
+  }
+  return Array.from(set).sort();
+}
+
 export function runAll(...args: any[]) {
   if (args.length === 1 && typeof args[0] === "object" && Array.isArray((args[0] as any).symbols)) {
     const { from } = args[0] as { symbols: string[]; from: string; to: string };
@@ -62,6 +96,22 @@ export type RawTrade = {
 };
 
 export type ClosePriceMap = Record<string, Record<string, number>>; // symbol -> { date: price }
+
+export function normalizeClosePriceMap(input: any): ClosePriceMap {
+  const out: ClosePriceMap = {};
+  for (const [k, v] of Object.entries(input || {})) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(k)) {
+      const date = k;
+      const mp = v as Record<string, number>;
+      for (const [sym, price] of Object.entries(mp)) {
+        (out[sym] ??= {})[date] = Number(price);
+      }
+    } else {
+      out[k] = v as Record<string, number>;
+    }
+  }
+  return out;
+}
 
 // --- M5/M4 计算核心工具 ---
 type Lot = { qty: number; cost: number; isToday: boolean; openPrice: number; time: string };
