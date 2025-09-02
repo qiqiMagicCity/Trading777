@@ -9,6 +9,7 @@ import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
+import { PriceBadge } from '@/components/PriceBadge';
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '--';
@@ -178,11 +179,9 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>
                   {isLoading && <span className="loading">加载中...</span>}
                   {isError && <span className="error">获取失败</span>}
-                    {!isLoading && !isError && (
-                      <span className={isStale ? 'gray' : undefined}>
-                        {formatNumber(lastPrice)}{isStale ? ' *' : ''}
-                      </span>
-                    )}
+                  {!isLoading && !isError && (
+                    <PriceBadge price={lastPrice} stale={isStale} />
+                  )}
                 </td>
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>

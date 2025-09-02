@@ -17,7 +17,7 @@ if (JSON.stringify(seen) !== JSON.stringify([[20,50],[5,55]])) throw new Error('
 if (rem !== 0) throw new Error('short remain should be 0');
 
 // Overflow case
-const o: Lot[] = [{ qty: 5, price: 1 }];
+const o: Lot[] = [{ qty: 5, price: 2 }];
 rem = consumeLots(o, 9, () => {});
 if (rem !== 4) throw new Error('overflow remain should be 4');
 
