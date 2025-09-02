@@ -7,18 +7,16 @@ import { normalizeMetrics } from "@/app/lib/metrics";
 
 type AnyRec = Record<string, any>;
 
-// 从新/旧结构中抽取对比口径：realized、unrealized、m6Total
+// 从新/旧结构中抽取对比口径
 function pickTotals(metrics: AnyRec) {
-  // 新结构优先，兼容旧扁平字段
-  const m4Total = metrics?.M4?.total ?? metrics?.M4_total ?? metrics?.unrealized ?? metrics?.M4;
-  const m5Behavior = metrics?.M5?.behavior ?? metrics?.M5_1 ?? 0;
-  const m5Fifo = metrics?.M5?.fifo ?? metrics?.M5_2 ?? 0;
-  const m6Total = metrics?.M6?.total ?? metrics?.M6_total ?? metrics?.M6 ?? metrics?.total;
-
-  const realized = Number(metrics?.realized ?? ((Number(m5Behavior) || 0) + (Number(m5Fifo) || 0)));
-  const unrealized = Number(metrics?.unrealized ?? m4Total) || 0;
-  const m6 = Number(m6Total) || Number(metrics?.M6) || 0;
-  return { realized, unrealized, m6 };
+  const M4 = Number(metrics?.M4?.total ?? metrics?.M4 ?? 0);
+  const M5_1 = Number(metrics?.M5?.behavior ?? metrics?.M5_1 ?? 0);
+  const M5_2 = Number(metrics?.M5?.fifo ?? metrics?.M5_2 ?? 0);
+  const realized = Number(metrics?.realized ?? (M4 + M5_2));
+  const unrealized = Number(metrics?.unrealized ?? metrics?.M3 ?? 0);
+  const M9 = Number(metrics?.M9?.total ?? metrics?.M9 ?? 0);
+  const m6 = Number(metrics?.M6?.total ?? metrics?.M6 ?? 0);
+  return { realized, unrealized, m6, M4, M5_1, M5_2, M9 };
 }
 
 // 简单容差判断
@@ -75,6 +73,14 @@ function loadRealPrices(): any[] {
   return csv.map(r => ({ date: r.date, symbol: r.symbol, close: Number(r.close) }));
 }
 
+function loadRealPositions(): { symbol: string; qty: number; avgPrice: number }[] {
+  const base = path.resolve(process.cwd(), "data/real");
+  const json = readTextIfExists(path.join(base, "positions.json"));
+  if (json) return JSON.parse(json);
+  const csv = parseCsv(readTextIfExists(path.join(base, "positions.csv")));
+  return csv.map(r => ({ symbol: r.symbol, qty: Number(r.qty), avgPrice: Number(r.price ?? r.avg ?? r.Avg ?? 0) }));
+}
+
 type DailySnap = { date: string; realized: number; unrealized: number; M6?: number; [k:string]: any };
 function loadDailyResult(): DailySnap[] {
   const base = path.resolve(process.cwd(), "data/real");
@@ -97,6 +103,7 @@ async function main() {
 
   const trades = loadRealTrades();
   const prices = loadRealPrices();
+  const positions = loadRealPositions();
   const snaps  = loadDailyResult();
 
   if (trades.length === 0 && prices.length === 0 && snaps.length === 0) {
@@ -111,40 +118,51 @@ async function main() {
 
   const dates = pickDates(snaps, from, to);
   const mismatches: string[] = [];
+  const summaryRows = ["| date | M4 | M5.2 | M9 |", "| --- | ---: | ---: | ---: |"];
+  const m5Rows = ["| date | M5.1 | M5.2 |", "| --- | ---: | ---: |"];
+  const diffRows = [
+    "| date | exp.realized | cmp.realized | diff.r | exp.unrealized | cmp.unrealized | diff.u |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ];
+
+  // 构建全量价格映射
+  const priceMap: Record<string, Record<string, number>> = {};
+  for (const p of prices) {
+    const sym = priceMap[p.symbol] ?? (priceMap[p.symbol] = {});
+    sym[p.date] = p.close;
+  }
+
+  let tradesAccum: any[] = [];
+  const dailySoFar: DailySnap[] = [];
 
   for (const d of dates) {
-    // 过滤出当日数据
     const dayTrades = trades.filter(t => t.date === d);
-    const dayPrices = prices.filter(p => p.date === d);
-    // 基于当日重算
-    const rawTrades = dayTrades.map((t) => ({
-      date: t.date,
-      side: t.side,
-      symbol: t.symbol,
-      qty: t.qty,
-      price: t.price,
-    }));
-    const priceMap: Record<string, Record<string, number>> = {};
-    for (const p of dayPrices) {
-      const sym = priceMap[p.symbol] ?? (priceMap[p.symbol] = {});
-      sym[p.date] = p.close;
-    }
-    const res = runAll(d, [], rawTrades, priceMap);
+    tradesAccum = tradesAccum.concat(dayTrades.map(t => ({ date: t.date, side: t.side, symbol: t.symbol, qty: t.qty, price: t.price })));
+    const res = runAll(d, positions, tradesAccum, priceMap, { dailyResults: dailySoFar }, { evalDate: d });
     const result = normalizeMetrics(res);
-    const computedTotals = pickTotals(result);
+    const computed = pickTotals(result);
 
     const snap = snaps.find(s => s.date === d) as DailySnap;
-    const expectedTotals = pickTotals(snap);
+    const expected = pickTotals(snap);
+
+    summaryRows.push(`| ${d} | ${computed.M4.toFixed(2)} | ${computed.M5_2.toFixed(2)} | ${computed.M9.toFixed(2)} |`);
+    m5Rows.push(`| ${d} | ${computed.M5_1.toFixed(2)} | ${computed.M5_2.toFixed(2)} |`);
+
+    const diffReal = computed.realized - expected.realized;
+    const diffUnreal = computed.unrealized - expected.unrealized;
+    diffRows.push(
+      `| ${d} | ${expected.realized.toFixed(2)} | ${computed.realized.toFixed(2)} | ${diffReal.toExponential()} | ${expected.unrealized.toFixed(2)} | ${computed.unrealized.toFixed(2)} | ${diffUnreal.toExponential()} |`,
+    );
 
     const diffs: string[] = [];
-    if (!nearlyEqual(computedTotals.realized, expectedTotals.realized, 1e-2)) {
-      diffs.push(`realized: ${computedTotals.realized} != ${expectedTotals.realized}`);
+    if (!nearlyEqual(computed.realized, expected.realized)) {
+      diffs.push(`realized: ${computed.realized} != ${expected.realized}`);
     }
-    if (!nearlyEqual(computedTotals.unrealized, expectedTotals.unrealized, 1e-2)) {
-      diffs.push(`unrealized: ${computedTotals.unrealized} != ${expectedTotals.unrealized}`);
+    if (!nearlyEqual(computed.unrealized, expected.unrealized)) {
+      diffs.push(`unrealized: ${computed.unrealized} != ${expected.unrealized}`);
     }
-    if (!nearlyEqual(computedTotals.m6, expectedTotals.m6, 1e-2)) {
-      diffs.push(`M6: ${computedTotals.m6} != ${expectedTotals.m6}`);
+    if (!nearlyEqual(computed.m6, expected.m6)) {
+      diffs.push(`M6: ${computed.m6} != ${expected.m6}`);
     }
 
     if (diffs.length) {
@@ -154,17 +172,28 @@ async function main() {
     } else {
       console.log("✅ Verified", d, "— all matched under tolerance.");
     }
+
+    dailySoFar.push({ date: d, realized: computed.realized, unrealized: computed.unrealized });
   }
 
-  // 写报告
   const report = [
     "# Real Data Verify Report",
     "",
     `区间: ${from ?? dates[0]} ~ ${to ?? dates[dates.length-1]}`,
+    "",
+    "## Daily Totals (M4/M5.2/M9)",
+    ...summaryRows,
+    "",
+    "## M5 Breakdown",
+    ...m5Rows,
+    "",
+    "## Expected vs Computed",
+    ...diffRows,
+    "",
     `总天数: ${dates.length}`,
     `不一致天数: ${mismatches.length}`,
     "",
-    ...(mismatches.length ? ["## 差异明细", ...mismatches] : ["所有日期均一致。"])
+    ...(mismatches.length ? ["## 差异明细", ...mismatches] : ["所有日期均一致。"]),
   ].join("\n");
 
   const out = path.resolve(process.cwd(), "data/real/verify-report.md");

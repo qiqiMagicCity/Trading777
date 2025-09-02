@@ -22,9 +22,8 @@ describe("runAll golden case", () => {
     expect(Number.isFinite(m.M6.total)).toBe(true);
 
     // 3) 新口径：realized + unrealized === M9
-    const realized = (m.M5.behavior ?? 0) + (m.M5.fifo ?? 0);
-    const unrealized = m.M4.total ?? 0;
-    const m9FromComponents = realized + unrealized;
+    const realized = (m.M4.total ?? 0) + (m.M5.fifo ?? 0);
+    const m9FromComponents = realized;
 
     const rawM9 = (res as any).M9?.total ?? (res as any).M9;
     let m9 = Number(rawM9);
