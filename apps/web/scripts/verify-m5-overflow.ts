@@ -1,4 +1,4 @@
-import runAll from '../app/lib/runAll';
+import { runAll } from '../app/lib/runAll';
 
 const initial = [
   { symbol: 'NFLX', qty: 100, avgPrice: 1100 }, // 历史多头
@@ -13,7 +13,7 @@ const trades = [
   { date: '2025-08-01T10:40:00-04:00', side: 'SELL',  symbol: 'NFLX', qty: 120, price: 1155 },
 ];
 
-const res = runAll('2025-08-01', initial as any, trades as any, closePrices as any, { dailyResults: [] }, { evalDate: '2025-08-01' });
+const res = await runAll('2025-08-01', initial as any, trades as any, closePrices as any, { dailyResults: [] }, { evalDate: '2025-08-01' });
 
 console.log('M4=', res.M4, 'M5_1=', res.M5_1, 'M5_2=', res.M5_2);
 

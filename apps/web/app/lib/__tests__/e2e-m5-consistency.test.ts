@@ -16,8 +16,8 @@ const daily = JSON.parse(
   fs.readFileSync(path.join(__dirname, "fixtures/dailyResult.json"), "utf8"),
 );
 
-test("页面口径与算法一致（黄金案例）", () => {
-  const res = runAll(
+test("页面口径与算法一致（黄金案例）", async () => {
+  const res = await runAll(
     "2025-08-01",
     positions as any,
     trades as any,

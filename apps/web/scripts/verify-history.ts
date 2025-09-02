@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import runAll, { RawTrade, ClosePriceMap } from "../app/lib/runAll";
+import { runAll, RawTrade, ClosePriceMap } from "../app/lib/runAll";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,7 +30,7 @@ for (const date of dates) {
   const dayTrades: RawTrade[] = readJSON(path.join(dayDir, "trades.json"));
   trades = trades.concat(dayTrades);
 
-  const res = runAll(
+  const res = await runAll(
     date,
     positions,
     trades,

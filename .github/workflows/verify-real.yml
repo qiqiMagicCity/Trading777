@@ -16,7 +16,9 @@ jobs:
         with: { node-version: '22' }
       - run: npm ci
       - run: npm run backtest -w web -- --from=2025-08-01 --to=2025-08-01
+      - run: npm run guard -w web
       - run: npm run verify:real -w web -- --from=2025-08-01 --to=2025-08-01
+      - run: npm run guard -w web
       - name: Upload verify report
         uses: actions/upload-artifact@v4
         with:

@@ -16,8 +16,8 @@ const daily = JSON.parse(
   fs.readFileSync(path.join(__dirname, "fixtures/dailyResult.json"), "utf8"),
 );
 
-test("黄金案例：M5 拆分与总值正确", () => {
-  const res = runAll(
+test("黄金案例：M5 拆分与总值正确", async () => {
+  const res = await runAll(
     "2025-08-01",
     positions as any,
     trades as any,

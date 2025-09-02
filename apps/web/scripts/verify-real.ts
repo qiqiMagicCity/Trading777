@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { runAll } from "@/app/lib/runAll";
 import { normalizeMetrics } from "@/app/lib/metrics";
+import { assertSchema } from "@/app/lib/schemas/assertSchema";
+import { Trades, Prices, Positions, DailyResults } from "@/app/lib/schemas/real";
 
 type AnyRec = Record<string, any>;
 
@@ -57,28 +59,30 @@ function parseCsv(text?: string): any[] {
 function loadRealTrades(): any[] {
   const base = path.resolve(process.cwd(), "data/real");
   const json = readTextIfExists(path.join(base, "trades.json"));
-  if (json) return JSON.parse(json);
+  if (json) return assertSchema(JSON.parse(json), Trades);
   const csv = parseCsv(readTextIfExists(path.join(base, "trades.csv")));
-  // 统一字段：date,time,symbol,side,qty,price
-  return csv.map(r => ({
+  const arr = csv.map(r => ({
     date: r.date, time: r.time, symbol: r.symbol,
     side: r.side, qty: Number(r.qty), price: Number(r.price)
   }));
+  return assertSchema(arr, Trades);
 }
 function loadRealPrices(): any[] {
   const base = path.resolve(process.cwd(), "data/real");
   const json = readTextIfExists(path.join(base, "prices.json"));
-  if (json) return JSON.parse(json);
+  if (json) return assertSchema(JSON.parse(json), Prices);
   const csv = parseCsv(readTextIfExists(path.join(base, "prices.csv")));
-  return csv.map(r => ({ date: r.date, symbol: r.symbol, close: Number(r.close) }));
+  const arr = csv.map(r => ({ date: r.date, symbol: r.symbol, close: Number(r.close) }));
+  return assertSchema(arr, Prices);
 }
 
 function loadRealPositions(): { symbol: string; qty: number; avgPrice: number }[] {
   const base = path.resolve(process.cwd(), "data/real");
   const json = readTextIfExists(path.join(base, "positions.json"));
-  if (json) return JSON.parse(json);
+  if (json) return assertSchema(JSON.parse(json), Positions);
   const csv = parseCsv(readTextIfExists(path.join(base, "positions.csv")));
-  return csv.map(r => ({ symbol: r.symbol, qty: Number(r.qty), avgPrice: Number(r.price ?? r.avg ?? r.Avg ?? 0) }));
+  const arr = csv.map(r => ({ symbol: r.symbol, qty: Number(r.qty), avgPrice: Number(r.price ?? r.avg ?? r.Avg ?? 0) }));
+  return assertSchema(arr, Positions);
 }
 
 type DailySnap = { date: string; realized: number; unrealized: number; M6?: number; [k:string]: any };
@@ -86,7 +90,7 @@ function loadDailyResult(): DailySnap[] {
   const base = path.resolve(process.cwd(), "data/real");
   const text = readTextIfExists(path.join(base, "dailyResult.json"));
   if (!text) return [];
-  try { return JSON.parse(text); } catch { return []; }
+  try { return assertSchema(JSON.parse(text), DailyResults); } catch { return []; }
 }
 
 // 取区间
@@ -138,7 +142,7 @@ async function main() {
   for (const d of dates) {
     const dayTrades = trades.filter(t => t.date === d);
     tradesAccum = tradesAccum.concat(dayTrades.map(t => ({ date: t.date, side: t.side, symbol: t.symbol, qty: t.qty, price: t.price })));
-    const res = runAll(d, positions, tradesAccum, priceMap, { dailyResults: dailySoFar }, { evalDate: d });
+    const res = await runAll(d, positions, tradesAccum, priceMap, { dailyResults: dailySoFar }, { evalDate: d });
     const result = normalizeMetrics(res);
     const computed = pickTotals(result);
 
