@@ -13,6 +13,9 @@ import {
 import { realizedPnLLong, realizedPnLShort } from "./money";
 import fs from "fs";
 import path from "path";
+import { readPublicJson } from "./io/readPublicJson";
+import { assertSchema } from "./schemas/assertSchema";
+import { Trades, Positions, PriceMap, DailyResults } from "./schemas/real";
 
 // 统一解析 public 文件路径
 function resolvePublicFile(relName: string): string | null {
@@ -28,14 +31,8 @@ function resolvePublicFile(relName: string): string | null {
   return null;
 }
 
-function readJsonSafe<T = any>(relName: string, fallback: T): T {
-  const p = resolvePublicFile(relName);
-  if (!p) return fallback;
-  try {
-    return JSON.parse(fs.readFileSync(p, "utf8"));
-  } catch {
-    return fallback;
-  }
+async function readJsonSafe<T>(relName: string, fallback: T): Promise<T> {
+  return readPublicJson(relName, fallback);
 }
 
 /**
@@ -53,9 +50,9 @@ export function getReplayDays(
   tradesOpt?: RawTrade[],
   pricesOpt?: any,
 ): string[] {
-  const trades = tradesOpt ?? readJsonSafe("trades.json", [] as RawTrade[]);
+  const trades = tradesOpt ?? [];
   const prices = normalizeClosePriceMap(
-    pricesOpt ?? readJsonSafe("prices.json", {} as any),
+    pricesOpt ?? {},
   );
   const within = (d: string) => (!from || d >= from) && (!to || d <= to);
   const set = new Set<string>();
@@ -72,13 +69,14 @@ export function getReplayDays(
   return Array.from(set).sort();
 }
 
-export function runAll(...args: any[]) {
+export async function runAll(...args: any[]) {
   if (args.length === 1 && typeof args[0] === "object" && Array.isArray((args[0] as any).symbols)) {
     const { from } = args[0] as { symbols: string[]; from: string; to: string };
-    const trades = readJsonSafe("trades.json", [] as RawTrade[]);
-    const positions = readJsonSafe("positions.json", [] as InitialPosition[]);
-    const prices = readJsonSafe("prices.json", {} as ClosePriceMap);
-    const daily = readJsonSafe("dailyResult.json", [] as any[]);
+    const trades = assertSchema(await readJsonSafe("trades.json", [] as RawTrade[]), Trades) as RawTrade[];
+    const positions = assertSchema(await readJsonSafe("positions.json", [] as InitialPosition[]), Positions);
+    const pricesMap = await readJsonSafe("prices.json", {} as any);
+    const prices = normalizeClosePriceMap(assertSchema(pricesMap, PriceMap));
+    const daily = assertSchema(await readJsonSafe("dailyResult.json", [] as any[]), DailyResults);
     return runAllCore(from, positions, trades, prices, { dailyResults: daily }, { evalDate: from });
   }
   return runAllCore.apply(null, args as any);

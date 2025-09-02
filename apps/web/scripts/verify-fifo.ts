@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import runAll, { RawTrade, ClosePriceMap } from '../app/lib/runAll';
+import { runAll, RawTrade, ClosePriceMap } from '../app/lib/runAll';
 import { computeFifo, type InitialPosition } from '../app/lib/fifo';
 import { calcM5Split } from '../app/lib/m5-intraday';
 import { calcM9FromDaily } from '../app/lib/metrics';
@@ -23,7 +23,7 @@ const dailyResults: { date: string; realized: number; unrealized: number }[] = r
 const evalDate =
   dailyResults[dailyResults.length - 1]?.date || '2025-08-01';
 
-const main = runAll(
+const main = await runAll(
   evalDate,
   initialPositions,
   trades,

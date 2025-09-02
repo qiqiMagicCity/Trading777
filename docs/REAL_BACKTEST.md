@@ -41,9 +41,15 @@ npm run backtest -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD
 
 ## 产出
 - `data/real/dailyResult.json`：按日快照，字段含 realized（M4+M5.2）、unrealized（M3）、以及 M1–M13。
+- 每条快照包含 `stale` 布尔字段：若当日价格来自昨收回退则为 `true`。
 - UI 与脚本口径通过 `normalizeMetrics` 统一，M6 恒等式：M6 = M4 + M3 + M5.2。
 
 ## 校验（重要）
 - 本地：`npm run verify:real -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD`
 - CI：在 GitHub Actions 里触发 **verify-real** 工作流，选填 from/to。
 - 通过标准：对每个交易日，realized == (M4.total + M5.fifo)，unrealized == M3，且 M6 等式成立。报告输出到 `data/real/verify-report.md`。
+
+## 环境变量
+
+- `READ_PUBLIC_MODE=import`：在无文件系统的运行环境（如 serverless）下强制通过动态导入读取 `public` 目录中的 JSON。
+- `PUBLIC_DATA_BASE`：当本地和导入均失败时，指向远端基础 URL（如 GitHub Raw/S3）以兜底读取 JSON。

@@ -1,5 +1,7 @@
 import fs from "fs";
 import path from "path";
+import { assertSchema } from "@/app/lib/schemas/assertSchema";
+import { Trades, Prices, Positions } from "@/app/lib/schemas/real";
 
 // 简单 CSV 解析（首行表头，逗号分隔，忽略空行/BOM）
 function parseCsv(text: string): Record<string,string>[] {
@@ -55,7 +57,7 @@ function seed() {
       const symbol = r.symbol ?? r.Symbol ?? r.ticker ?? "";
       return { datetime: dt, date, time, symbol, side, qty, price };
     });
-    writeJson(path.join(pubDir, "trades.json"), rows);
+    writeJson(path.join(pubDir, "trades.json"), assertSchema(rows, Trades));
   } else {
     console.log("⚠️  apps/web/data/real/trades.csv 不存在，跳过 trades.json 生成");
   }
@@ -63,12 +65,12 @@ function seed() {
   // prices.csv -> prices.json （收盘价：date,symbol,close）
   if (pricesCsv) {
     const rows = parseCsv(pricesCsv);
-    // 归并为 { [date]: { [symbol]: close } }
+    const arr = assertSchema(rows.map(r => ({ date: r.date ?? r.Date ?? "", symbol: r.symbol ?? r.Symbol ?? r.ticker ?? "", close: Number(r.close ?? r.Close ?? r.price ?? 0) })), Prices);
     const byDate: Record<string, Record<string, number>> = {};
-    rows.forEach(r => {
-      const d = r.date ?? r.Date ?? "";
-      const s = r.symbol ?? r.Symbol ?? r.ticker ?? "";
-      const c = Number(r.close ?? r.Close ?? r.price ?? 0);
+    arr.forEach(r => {
+      const d = r.date;
+      const s = r.symbol;
+      const c = r.close;
       byDate[d] ??= {};
       byDate[d][s] = c;
     });
@@ -84,7 +86,7 @@ function seed() {
       qty: Number(r.qty ?? r.Qty ?? r.quantity ?? 0),
       avgPrice: Number(r.price ?? r.Price ?? r.avg ?? r.Avg ?? 0),
     }));
-    writeJson(path.join(pubDir, "positions.json"), rows);
+    writeJson(path.join(pubDir, "positions.json"), assertSchema(rows, Positions));
   } else {
     console.log("⚠️  apps/web/data/real/positions.csv 不存在，跳过 positions.json 生成");
   }

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import runAll, { RawTrade, ClosePriceMap, getReplayDays, normalizeClosePriceMap } from "../app/lib/runAll";
+import { runAll, RawTrade, ClosePriceMap, getReplayDays, normalizeClosePriceMap } from "../app/lib/runAll";
 import { normalizeMetrics } from "@/app/lib/metrics";
 import type { InitialPosition } from "../app/lib/fifo";
 import { nyDateStr } from "../app/lib/time";
@@ -35,7 +35,7 @@ const map = new Map<string, any>(existing.map(r => [r.date, r]));
 const dailyResults: { date: string; realized: number; unrealized: number; M6: number }[] = [];
 for (const day of days) {
   const relevantTrades = allTrades.filter(t => nyDateStr(t.date) <= day);
-  const res = runAll(day, positions, relevantTrades, prices, { dailyResults }, { evalDate: day });
+  const res = await runAll(day, positions, relevantTrades, prices, { dailyResults }, { evalDate: day });
   const m = normalizeMetrics(res);
   const totalRealized = m.M4.total + m.M5.fifo;
   const prevRealized = dailyResults.reduce((s, r) => s + r.realized, 0);

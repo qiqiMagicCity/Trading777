@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import runAll from '../apps/web/app/lib/runAll';
+import { runAll } from '../apps/web/app/lib/runAll';
 
 describe('reliability multi-day baseline', () => {
   const readJSON = (name: string) =>
@@ -8,7 +8,7 @@ describe('reliability multi-day baseline', () => {
       fs.readFileSync(path.resolve(__dirname, 'fixtures', name), 'utf-8'),
     );
 
-  it('handles cross-day FIFO and period boundaries', () => {
+  it('handles cross-day FIFO and period boundaries', async () => {
     const trades0731 = readJSON('2025-07-31.trades.json');
     const trades0801 = readJSON('2025-08-01.trades.json');
     const close = readJSON('closing-prices.json');
@@ -18,7 +18,7 @@ describe('reliability multi-day baseline', () => {
     ];
     const evalDate = new Date('2025-08-01T16:00:00-04:00');
 
-    const res = runAll(
+    const res = await runAll(
       '2025-08-01',
       [],
       [...trades0731, ...trades0801],
