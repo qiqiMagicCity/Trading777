@@ -133,10 +133,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           <>
             <span className="green">W/{m10.win}</span>{" "}
             <span className="red">L/{m10.loss}</span>{" "}
-            <span>F/{m10.flat}</span>{" "}
-            <span className={m10.rate >= 0.5 ? "green" : "red"}>
-              {(m10.rate * 100).toFixed(1)}%
-            </span>
+            <span>{(m10.rate * 100).toFixed(1)}%</span>
           </>
         );
       } else {
