@@ -377,20 +377,30 @@ function runAllCore(
       if (today) st.behShort.push({ qty: t.qty, cost: t.price, isToday: true, openPrice: t.price, time: t.date });
     } else if (t.side === 'SELL') {
       const preview = fifoPreview(st.longLots, t.qty);
-      const todayClosed = Math.min(behAvail(st.behLong), t.qty);
-      fifoApply(st.longLots, preview);
+      const previewTodayQty = preview.reduce((s, x) => (x.isToday ? s + x.qty : s), 0);
+      const behAvailable = behAvail(st.behLong);
+      const todayClosed = Math.min(previewTodayQty, behAvailable);
+      if (process.env.MONITOR === '1') {
+        console.log('[runAll SELL]', { previewTodayQty, behAvail: behAvailable, todayClosed });
+      }
       for (const r of preview.filter((r) => !r.isToday)) {
         postM4_Long(r.qty, t.price, r.cost, t.symbol, t.date);
       }
+      fifoApply(st.longLots, preview);
       const todayLots = behConsume(st.behLong, todayClosed);
       postM5_Long(todayLots, preview, t.price, t.symbol, t.date);
     } else if (t.side === 'COVER') {
       const preview = fifoPreview(st.shortLots, t.qty);
-      const todayClosed = Math.min(behAvail(st.behShort), t.qty);
-      fifoApply(st.shortLots, preview);
+      const previewTodayQty = preview.reduce((s, x) => (x.isToday ? s + x.qty : s), 0);
+      const behAvailable = behAvail(st.behShort);
+      const todayClosed = Math.min(previewTodayQty, behAvailable);
+      if (process.env.MONITOR === '1') {
+        console.log('[runAll COVER]', { previewTodayQty, behAvail: behAvailable, todayClosed });
+      }
       for (const r of preview.filter((r) => !r.isToday)) {
         postM4_Short(r.qty, t.price, r.cost, t.symbol, t.date);
       }
+      fifoApply(st.shortLots, preview);
       const todayLots = behConsume(st.behShort, todayClosed);
       postM5_Short(todayLots, preview, t.price, t.symbol, t.date);
     }
