@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades, clearAllData, loadDailyResults } from '@/lib/services/dataService';
+import { importData, findTrades, clearAllData, getAllPrices, setDailyResultsCache } from '@/lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
@@ -16,6 +16,7 @@ import { calcMetrics, normalizeMetrics } from '@/app/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
 import { getLatestTradingDayStr } from '@/lib/timezone';
+import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, closePricesFromRows } from '@/lib/dailyResults';
 
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
@@ -113,8 +114,24 @@ export default function DashboardPage() {
           return;
         }
 
-        // 获取每日结果数据用于计算周期性指标
-        const dailyResults = await loadDailyResults();
+        const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+        const [fileClosePrices, cachedPrices] = await Promise.all([
+          loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
+          getAllPrices(),
+        ]);
+        const mergedClosePrices = mergeClosePriceMaps(
+          normalizeClosePriceMap(fileClosePrices),
+          closePricesFromRows(cachedPrices),
+        );
+
+        const dailyResults = generateDailyResults({
+          trades: enriched,
+          positions: posList,
+          closePrices: mergedClosePrices,
+          evalDate: evalDateStr,
+        });
+        setDailyResultsCache(dailyResults);
 
         // 计算指标并存入全局状态
         const rawMetrics = calcMetrics(enriched, posList, dailyResults);
@@ -177,8 +194,24 @@ export default function DashboardPage() {
         return;
       }
 
-      // 获取每日结果数据用于计算周期性指标
-      const dailyResults = await loadDailyResults();
+      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+      const [fileClosePrices, cachedPrices] = await Promise.all([
+        loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
+        getAllPrices(),
+      ]);
+      const mergedClosePrices = mergeClosePriceMaps(
+        normalizeClosePriceMap(fileClosePrices),
+        closePricesFromRows(cachedPrices),
+      );
+
+      const dailyResults = generateDailyResults({
+        trades: enriched,
+        positions: posList,
+        closePrices: mergedClosePrices,
+        evalDate: evalDateStr,
+      });
+      setDailyResultsCache(dailyResults);
 
       // 计算指标并更新全局状态
       const rawMetrics = calcMetrics(enriched, posList, dailyResults);

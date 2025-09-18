@@ -69,6 +69,8 @@ interface TradingDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<TradingDB>> | undefined;
 
+let cachedDailyResults: DailyResult[] = [];
+
 function getDb(): Promise<IDBPDatabase<TradingDB>> {
   if (!dbPromise) {
     dbPromise = openDB<TradingDB>(DB_NAME, DB_VERSION, {
@@ -251,6 +253,7 @@ export async function clearAllData(): Promise<void> {
     tx.objectStore(PRICES_STORE_NAME).clear(),
   ]);
   await tx.done;
+  clearDailyResultsCache();
   logger.info("All trade, position, and price data cleared.");
 }
 
@@ -291,6 +294,7 @@ export async function clearAndImportData(rawData: {
 
   await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
   await tx.done;
+  clearDailyResultsCache();
   try {
     const newHash = await computeDataHash(rawData);
     localStorage.setItem("dataset-hash", newHash);
@@ -339,54 +343,16 @@ export async function findPositions(): Promise<Position[]> {
   return replay.positions;
 }
 
-const toNum = (v: unknown): number => {
-  const num = Number(v);
-  return Number.isFinite(num) ? num : 0;
-};
-
-interface RawDaily {
-  date?: unknown;
-  realized?: unknown;
-  unrealized?: unknown;
-  unrealizedDelta?: unknown;
+export async function loadDailyResults(): Promise<DailyResult[]> {
+  return cachedDailyResults.slice();
 }
 
-export async function loadDailyResults(): Promise<DailyResult[]> {
-  try {
-    const res = await fetch("/dailyResult.json", { cache: "no-store" });
-    const raw = (await res.json()) as unknown;
-    const arr: RawDaily[] = Array.isArray(raw)
-      ? (raw as RawDaily[])
-      : Array.isArray((raw as { items?: RawDaily[] })?.items)
-        ? ((raw as { items: RawDaily[] }).items)
-        : [];
-    const map = new Map<string, DailyResult>();
-    for (const x of arr) {
-      const d = String(x.date ?? "").slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
-      map.set(d, {
-        date: d,
-        realized: toNum(x.realized),
-        unrealized: toNum(x.unrealized),
-        unrealizedDelta:
-          x.unrealizedDelta !== undefined
-            ? toNum(x.unrealizedDelta)
-            : undefined,
-      });
-    }
-    const list = [...map.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
-    let prev = 0;
-    for (const r of list) {
-      if (r.unrealizedDelta === undefined) {
-        r.unrealizedDelta = (r.unrealized ?? 0) - prev;
-      }
-      prev = r.unrealized ?? 0;
-    }
-    return list;
-  } catch (e) {
-    console.warn("loadDailyResults failed", e);
-    return [];
-  }
+export function setDailyResultsCache(results: DailyResult[]): void {
+  cachedDailyResults = results.slice();
+}
+
+export function clearDailyResultsCache(): void {
+  cachedDailyResults = [];
 }
 
 export function getEvalDateStr(
@@ -439,6 +405,7 @@ export async function importClosePrices(
     }
   }
   await Promise.all(promises);
+  clearDailyResultsCache();
   return imported;
 }
 
@@ -450,6 +417,7 @@ export async function getAllPrices(): Promise<CachedPrice[]> {
 export async function addTrade(trade: Trade): Promise<number> {
   const db = await getDb();
   const id = await db.add(TRADES_STORE_NAME, trade as Trade);
+  clearDailyResultsCache();
   return id;
 }
 
@@ -460,9 +428,11 @@ export async function updateTrade(trade: Trade): Promise<void> {
   logger.info("更新交易:", trade);
   await db.put(TRADES_STORE_NAME, trade);
   logger.info("交易更新成功");
+  clearDailyResultsCache();
 }
 
 export async function deleteTrade(id: number): Promise<void> {
   const db = await getDb();
   await db.delete(TRADES_STORE_NAME, id);
+  clearDailyResultsCache();
 }
