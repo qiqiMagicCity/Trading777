@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades, clearAllData, findPositions, loadDailyResults } from '@/lib/services/dataService';
+import { importData, findTrades, clearAllData, loadDailyResults } from '@/lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
-import { computeFifo, type InitialPosition } from '@/lib/fifo';
+import type { EnrichedTrade } from '@/lib/fifo';
+import { buildEnrichedTrades, replayPortfolio } from '@/app/lib/tradeReplay';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
 import { PositionsTable } from '@/modules/PositionsTable';
 import { TradesTable } from '@/modules/TradesTable';
@@ -42,7 +43,7 @@ async function computeDataHash(data: unknown): Promise<string> {
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [initialPositions, setInitialPositions] = useState<InitialPosition[]>([]);
+  const [enrichedTrades, setEnrichedTrades] = useState<EnrichedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -75,29 +76,10 @@ export default function DashboardPage() {
           }
         }
 
-        let dbTrades = await findTrades();
-        const dbPositions = await findPositions();
-
-        const enriched = computeFifo(dbTrades, dbPositions);
-
-        // 以历史仓位为基础，逐笔应用交易得到最新持仓
-        const posMap = new Map<string, Position>(
-          dbPositions.map(p => [p.symbol, { ...p }])
-        );
-        for (const t of enriched) {
-          if (t.quantityAfter !== 0) {
-            posMap.set(t.symbol, {
-              symbol: t.symbol,
-              qty: t.quantityAfter,
-              avgPrice: t.averageCost,
-              last: t.averageCost,
-              priceOk: true,
-            });
-          } else {
-            posMap.delete(t.symbol);
-          }
-        }
-        const posList: Position[] = Array.from(posMap.values());
+        const dbTrades = await findTrades();
+        const replay = replayPortfolio(dbTrades);
+        const enriched = buildEnrichedTrades(replay.baseline);
+        const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
 
         // 为每个持仓获取最新价格
         for (const pos of posList) {
@@ -135,18 +117,13 @@ export default function DashboardPage() {
         const dailyResults = await loadDailyResults();
 
         // 计算指标并存入全局状态
-        const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
-          symbol,
-          qty,
-          avgPrice,
-        }));
-        const rawMetrics = calcMetrics(enriched, posList, dailyResults, initPos);
+        const rawMetrics = calcMetrics(enriched, posList, dailyResults);
         const metrics = normalizeMetrics(rawMetrics);
         useStore.getState().setMetrics(metrics as any);
 
         setTrades(dbTrades);
         setPositions(posList);
-        setInitialPositions(initPos);
+        setEnrichedTrades(enriched);
       } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
@@ -158,13 +135,6 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const enrichedTrades = useMemo(() => {
-    if (trades.length > 0) {
-      return computeFifo(trades, initialPositions);
-    }
-    return [];
-  }, [trades, initialPositions]);
-
   // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
     const set = new Set(trades.map(t => t.symbol));
@@ -174,27 +144,9 @@ export default function DashboardPage() {
   async function reloadData() {
     try {
       const dbTrades = await findTrades();
-      const dbPositions = await findPositions();
-      const enriched = computeFifo(dbTrades, dbPositions);
-
-      // 以历史仓位为基础，逐笔应用交易得到最新持仓
-      const posMap = new Map<string, Position>(
-        dbPositions.map(p => [p.symbol, { ...p }])
-      );
-      for (const t of enriched) {
-        if (t.quantityAfter !== 0) {
-          posMap.set(t.symbol, {
-            symbol: t.symbol,
-            qty: t.quantityAfter,
-            avgPrice: t.averageCost,
-            last: t.averageCost,
-            priceOk: true,
-          });
-        } else {
-          posMap.delete(t.symbol);
-        }
-      }
-      const posList: Position[] = Array.from(posMap.values());
+      const replay = replayPortfolio(dbTrades);
+      const enriched = buildEnrichedTrades(replay.baseline);
+      const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
 
       for (const pos of posList) {
         try {
@@ -229,18 +181,13 @@ export default function DashboardPage() {
       const dailyResults = await loadDailyResults();
 
       // 计算指标并更新全局状态
-      const initPos = dbPositions.map(({ symbol, qty, avgPrice }) => ({
-        symbol,
-        qty,
-        avgPrice,
-      }));
-      const rawMetrics = calcMetrics(enriched, posList, dailyResults, initPos);
+      const rawMetrics = calcMetrics(enriched, posList, dailyResults);
       const metrics = normalizeMetrics(rawMetrics);
       useStore.getState().setMetrics(metrics as any);
 
       setTrades(dbTrades);
       setPositions(posList);
-      setInitialPositions(initPos);
+      setEnrichedTrades(enriched);
     } catch (e) { console.error(e); }
   }
 

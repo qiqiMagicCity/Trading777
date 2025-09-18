@@ -1,6 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
+import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -46,6 +47,7 @@ export interface Trade {
   date: string;
   time?: string | number | Date;
   action: "buy" | "sell" | "short" | "cover";
+  isInitialPosition?: boolean;
 }
 
 interface TradingDB extends DBSchema {
@@ -125,6 +127,59 @@ async function computeDataHash(data: unknown): Promise<string> {
   return hash.toString();
 }
 
+function toISODate(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getBaselineDate(rawTrades: RawTrade[]): string {
+  let minTime = Number.POSITIVE_INFINITY;
+  for (const trade of rawTrades) {
+    const d = new Date(`${trade.date}T00:00:00Z`);
+    const time = d.getTime();
+    if (Number.isFinite(time) && time < minTime) {
+      minTime = time;
+    }
+  }
+  if (!Number.isFinite(minTime)) {
+    return "1900-01-01";
+  }
+  const baselineDate = new Date(minTime - 24 * 60 * 60 * 1000);
+  return toISODate(baselineDate);
+}
+
+function mapRawTrade(rawTrade: RawTrade): Trade | undefined {
+  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
+    BUY: "buy",
+    SELL: "sell",
+    SHORT: "short",
+    COVER: "cover",
+  };
+  const sideValue = rawTrade?.side;
+  const sideKey =
+    typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
+  const action = sideKey
+    ? sideMap[sideKey as keyof typeof sideMap]
+    : undefined;
+  if (!action) {
+    console.warn(
+      `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
+    );
+    return undefined;
+  }
+  const quantity =
+    action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
+  return {
+    symbol: rawTrade.symbol,
+    price: rawTrade.price,
+    quantity,
+    date: rawTrade.date,
+    action,
+  };
+}
+
 export async function importData(rawData: {
   positions: Position[];
   trades: RawTrade[];
@@ -152,59 +207,34 @@ export async function importData(rawData: {
   const db = await getDb();
 
   logger.info("Importing data...");
-  const tx = db.transaction(
-    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
-    "readwrite",
-  );
-
-  // Import trades
+  const tx = db.transaction(TRADES_STORE_NAME, "readwrite");
   const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-  const tradePromises: Promise<unknown>[] = [];
-  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-    BUY: "buy",
-    SELL: "sell",
-    SHORT: "short",
-    COVER: "cover",
-  };
+
+  const baselineDate = getBaselineDate(rawData.trades);
+
+  const tradesToImport: Trade[] = [];
   for (const rawTrade of rawData.trades) {
-    const sideValue = rawTrade?.side;
-    const sideKey =
-      typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
-    const action = sideKey
-      ? sideMap[sideKey as keyof typeof sideMap]
-      : undefined;
-    if (!action) {
-      console.warn(
-        `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
-      );
-      continue;
+    const trade = mapRawTrade(rawTrade);
+    if (trade) {
+      tradesToImport.push(trade);
     }
-    const quantity = action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
-    const trade: Trade = {
-      symbol: rawTrade.symbol,
-      price: rawTrade.price,
-      quantity,
-      date: rawTrade.date,
-      action,
-    };
-    tradePromises.push(tradeStore.add(trade));
   }
 
-  // Import positions, enforcing negative quantity for symbols with short trades
-  const shortSymbols = new Set(
-    rawData.trades
-      .filter((t) => t.side?.toUpperCase() === "SHORT")
-      .map((t) => t.symbol),
-  );
-  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map((position) => {
-    const qty = shortSymbols.has(position.symbol)
-      ? -Math.abs(position.qty)
-      : position.qty;
-    return positionStore.put({ ...position, qty });
-  });
+  for (const position of rawData.positions) {
+    const qty = Math.abs(position.qty);
+    if (qty === 0) continue;
+    const isShort = position.qty < 0;
+    tradesToImport.push({
+      symbol: position.symbol,
+      price: position.avgPrice,
+      quantity: isShort ? -qty : qty,
+      date: baselineDate,
+      action: isShort ? "short" : "buy",
+      isInitialPosition: true,
+    });
+  }
 
-  await Promise.all([...tradePromises, ...positionPromises]);
+  await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
   await tx.done;
   logger.info("Data imported successfully.");
 }
@@ -232,57 +262,34 @@ export async function clearAndImportData(rawData: {
 
   const db = await getDb();
   logger.info("Importing data...");
-  const tx = db.transaction(
-    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
-    "readwrite",
-  );
-
+  const tx = db.transaction(TRADES_STORE_NAME, "readwrite");
   const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-  const tradePromises: Promise<unknown>[] = [];
-  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-    BUY: "buy",
-    SELL: "sell",
-    SHORT: "short",
-    COVER: "cover",
-  };
+
+  const baselineDate = getBaselineDate(rawData.trades);
+
+  const tradesToImport: Trade[] = [];
   for (const rawTrade of rawData.trades) {
-    const sideValue = rawTrade?.side;
-    const sideKey =
-      typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
-    const action = sideKey
-      ? sideMap[sideKey as keyof typeof sideMap]
-      : undefined;
-    if (!action) {
-      console.warn(
-        `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
-      );
-      continue;
+    const trade = mapRawTrade(rawTrade);
+    if (trade) {
+      tradesToImport.push(trade);
     }
-    const quantity = action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
-    const trade: Trade = {
-      symbol: rawTrade.symbol,
-      price: rawTrade.price,
-      quantity,
-      date: rawTrade.date,
-      action,
-    };
-    tradePromises.push(tradeStore.add(trade));
   }
 
-  const shortSymbols = new Set(
-    rawData.trades
-      .filter((t) => t.side?.toUpperCase() === "SHORT")
-      .map((t) => t.symbol),
-  );
-  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
-  const positionPromises = rawData.positions.map((position) => {
-    const qty = shortSymbols.has(position.symbol)
-      ? -Math.abs(position.qty)
-      : position.qty;
-    return positionStore.add({ ...position, qty });
-  });
+  for (const position of rawData.positions) {
+    const qty = Math.abs(position.qty);
+    if (qty === 0) continue;
+    const isShort = position.qty < 0;
+    tradesToImport.push({
+      symbol: position.symbol,
+      price: position.avgPrice,
+      quantity: isShort ? -qty : qty,
+      date: baselineDate,
+      action: isShort ? "short" : "buy",
+      isInitialPosition: true,
+    });
+  }
 
-  await Promise.all([...tradePromises, ...positionPromises]);
+  await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
   await tx.done;
   try {
     const newHash = await computeDataHash(rawData);
@@ -297,11 +304,17 @@ export async function exportData(): Promise<{
   positions: Position[];
   trades: Trade[];
 }> {
-  const [positions, trades] = await Promise.all([
-    findPositions(),
-    findTrades(),
-  ]);
-  return { positions, trades };
+  const trades = await findTrades();
+  const initialPositions = extractInitialPositionsFromTrades(trades).map(
+    ({ symbol, qty, avgPrice }) => ({
+      symbol,
+      qty,
+      avgPrice,
+      last: avgPrice,
+      priceOk: true,
+    }),
+  );
+  return { positions: initialPositions, trades };
 }
 
 export async function findTrades(): Promise<Trade[]> {
@@ -321,8 +334,9 @@ export async function findTrades(): Promise<Trade[]> {
 }
 
 export async function findPositions(): Promise<Position[]> {
-  const db = await getDb();
-  return db.getAll(POSITIONS_STORE_NAME);
+  const trades = await findTrades();
+  const replay = replayPortfolio(trades);
+  return replay.positions;
 }
 
 const toNum = (v: unknown): number => {
