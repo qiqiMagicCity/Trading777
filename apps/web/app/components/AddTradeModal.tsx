@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 
 interface Props {
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: () => Promise<void> | void;
   trade?: Trade;
 }
 
@@ -71,8 +71,11 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       logger.debug('[AddTradeModal] 新增交易:', baseTrade);
       await addTrade(baseTrade);
     }
-
-    onAdded();
+    try {
+      await onAdded();
+    } catch (err) {
+      logger.error('[AddTradeModal] 刷新交易数据失败', err);
+    }
     onClose();
   };
 

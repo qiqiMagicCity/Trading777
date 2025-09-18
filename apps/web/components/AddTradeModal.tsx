@@ -8,7 +8,7 @@ type Side = 'BUY' | 'SELL' | 'SHORT' | 'COVER';
 
 interface Props {
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: () => Promise<void> | void;
   trade?: EnrichedTrade;
 }
 
@@ -84,7 +84,11 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
         action
       });
     }
-    onAdded();
+    try {
+      await onAdded();
+    } catch (err) {
+      logger.error('[AddTradeModal] 刷新交易数据失败', err);
+    }
     onClose();
   };
 
