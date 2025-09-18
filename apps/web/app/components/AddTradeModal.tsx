@@ -28,7 +28,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   useEffect(() => {
     if (trade) {
       logger.debug('[AddTradeModal] 编辑模式载入:', trade);
-      setSymbol(trade.symbol);
+      setSymbol(trade.symbol.toUpperCase());
       if (!trade.action) {
         console.warn('Editing trade has invalid action, defaulting to BUY.');
       }
@@ -95,7 +95,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
           <label>股票代码</label>
           <input
             value={symbol}
-            onChange={e => setSymbol(e.target.value)}
+            onChange={e => setSymbol(e.target.value.toUpperCase())}
             required
           />
 
