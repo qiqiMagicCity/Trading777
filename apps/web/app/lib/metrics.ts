@@ -1,4 +1,4 @@
-import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
+import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import {
   nowNY,
@@ -30,6 +30,28 @@ export function isDebug() {
 
 // Only enable verbose logging outside production
 const DEBUG = isDebug();
+
+const EPSILON = 1e-6;
+
+function seedInitialLots(
+  trades: EnrichedTrade[],
+  longFifo: Record<string, { qty: number; price: number; date: string }[]>,
+  shortFifo: Record<string, { qty: number; price: number; date: string }[]>,
+) {
+  for (const trade of trades) {
+    if (!trade.isInitialPosition) continue;
+    const qty = Math.abs(trade.quantity);
+    if (qty <= EPSILON) continue;
+    const lot = { qty, price: trade.price, date: trade.date };
+    if (trade.action === "short") {
+      if (!shortFifo[trade.symbol]) shortFifo[trade.symbol] = [];
+      shortFifo[trade.symbol]!.push(lot);
+    } else {
+      if (!longFifo[trade.symbol]) longFifo[trade.symbol] = [];
+      longFifo[trade.symbol]!.push(lot);
+    }
+  }
+}
 
 /**
  * 交易系统指标接口
@@ -404,7 +426,6 @@ export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
 export function calcTodayFifoPnL(
   sortedTrades: EnrichedTrade[],
   todayStr: string,
-  initialPositions: InitialPosition[] = [],
 ): number {
   const longFifo: Record<
     string,
@@ -414,18 +435,7 @@ export function calcTodayFifoPnL(
     string,
     { qty: number; price: number; date: string }[]
   > = {};
-  for (const pos of initialPositions) {
-    const qty = Math.abs(pos.qty);
-    if (qty === 0) continue;
-    const lot = { qty, price: pos.avgPrice, date: "" };
-    if (pos.qty >= 0) {
-      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol]!.push(lot);
-    } else {
-      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol]!.push(lot);
-    }
-  }
+  seedInitialLots(sortedTrades, longFifo, shortFifo);
   let pnl = 0;
   for (const t of sortedTrades) {
     if (!isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t)) continue;
@@ -482,7 +492,6 @@ export function calcTodayFifoPnL(
 export function calcHistoryFifoPnL(
   sortedTrades: EnrichedTrade[],
   todayStr: string,
-  initialPositions: InitialPosition[] = [],
 ): number {
   const longFifo: Record<
     string,
@@ -492,18 +501,7 @@ export function calcHistoryFifoPnL(
     string,
     { qty: number; price: number; date: string }[]
   > = {};
-  for (const pos of initialPositions) {
-    const qty = Math.abs(pos.qty);
-    if (qty === 0) continue;
-    const lot = { qty, price: pos.avgPrice, date: "" };
-    if (pos.qty >= 0) {
-      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol]!.push(lot);
-    } else {
-      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol]!.push(lot);
-    }
-  }
+  seedInitialLots(sortedTrades, longFifo, shortFifo);
   let pnl = 0;
   for (const t of sortedTrades) {
     if (!isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t)) continue;
@@ -557,7 +555,6 @@ export function calcHistoryFifoPnL(
 export function debugTodayRealizedBreakdown(
   trades: EnrichedTrade[],
   evalDateStr: string,
-  initialPositions: InitialPosition[] = [],
 ): { rows: RealizedBreakdownRow[]; sumM4: number; sumM52: number } {
   const longFifo: Record<
     string,
@@ -567,19 +564,7 @@ export function debugTodayRealizedBreakdown(
     string,
     { qty: number; price: number; date: string }[]
   > = {};
-
-  for (const pos of initialPositions) {
-    const qty = Math.abs(pos.qty);
-    if (qty === 0) continue;
-    const lot = { qty, price: pos.avgPrice, date: "" };
-    if (pos.qty >= 0) {
-      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol]!.push(lot);
-    } else {
-      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol]!.push(lot);
-    }
-  }
+  seedInitialLots(trades, longFifo, shortFifo);
 
   const sorted = trades
     .map((t, idx) => ({ t, idx }))
@@ -668,10 +653,7 @@ export function debugTodayRealizedBreakdown(
 /**
  * 累计交易次数（含历史持仓一次）
  */
-function calcCumulativeTradeCounts(
-  trades: EnrichedTrade[],
-  initialPositions: InitialPosition[] = [],
-) {
+function calcCumulativeTradeCounts(trades: EnrichedTrade[]) {
   let B = 0;
   let S = 0;
   let P = 0;
@@ -690,16 +672,9 @@ function calcCumulativeTradeCounts(
         break;
       case "cover":
         C++;
-        break;
+      break;
     }
   }
-
-  for (const pos of initialPositions) {
-    if (!pos.symbol || !isFinite(pos.qty)) continue;
-    if (pos.qty > 0) B++;
-    else if (pos.qty < 0) P++;
-  }
-
   return { B, S, P, C, total: B + S + P + C };
 }
 
@@ -712,22 +687,22 @@ export function calcM9(days: DailyResult[]): number {
  */
 export function collectCloseLots(
   sortedTrades: EnrichedTrade[],
-  initialPositions: InitialPosition[] = [],
   untilDateStr?: string,
 ): { pnl: number }[] {
   const longFifo: Record<string, { qty: number; price: number }[]> = {};
   const shortFifo: Record<string, { qty: number; price: number }[]> = {};
 
-  for (const pos of initialPositions) {
-    const qty = Math.abs(pos.qty);
+  for (const trade of sortedTrades) {
+    if (!trade.isInitialPosition) continue;
+    const qty = Math.abs(trade.quantity);
     if (qty === 0) continue;
-    const lot = { qty, price: pos.avgPrice };
-    if (pos.qty >= 0) {
-      if (!longFifo[pos.symbol]) longFifo[pos.symbol] = [];
-      longFifo[pos.symbol]!.push(lot);
+    const lot = { qty, price: trade.price };
+    if (trade.action === "short") {
+      if (!shortFifo[trade.symbol]) shortFifo[trade.symbol] = [];
+      shortFifo[trade.symbol]!.push(lot);
     } else {
-      if (!shortFifo[pos.symbol]) shortFifo[pos.symbol] = [];
-      shortFifo[pos.symbol]!.push(lot);
+      if (!longFifo[trade.symbol]) longFifo[trade.symbol] = [];
+      longFifo[trade.symbol]!.push(lot);
     }
   }
 
@@ -794,7 +769,6 @@ function calcMetricsInternal(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
-  initialPositions: InitialPosition[] = [],
 ): Metrics {
   if (DEBUG)
     logger.debug("M7_INPUT", _count(trades), {
@@ -844,13 +818,12 @@ function calcMetricsInternal(
 
   // M5: 日内交易（先计算，后续 M4 需要用到 pnlFifo）
   const pnlTrade = calcTodayTradePnL(sortedTrades, todayStr);
-  const pnlFifo = calcTodayFifoPnL(sortedTrades, todayStr, initialPositions);
+  const pnlFifo = calcTodayFifoPnL(sortedTrades, todayStr);
 
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
     sortedTrades,
     todayStr,
-    initialPositions,
   );
 
   // M6: 今日总盈利变化
@@ -871,10 +844,7 @@ function calcMetricsInternal(
   const todayTradeCounts = counts.total;
 
   // M8: 累计交易次数（含历史持仓）
-  const allTradesByType = calcCumulativeTradeCounts(
-    safeTrades,
-    initialPositions,
-  );
+  const allTradesByType = calcCumulativeTradeCounts(safeTrades);
   const totalTrades = allTradesByType.total;
 
   const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
@@ -883,7 +853,7 @@ function calcMetricsInternal(
   const historicalRealizedPnl = calcM9(historicalDailyResults);
 
   // M10: 胜率
-  const closes = collectCloseLots(sortedTrades, initialPositions, todayStr);
+  const closes = collectCloseLots(sortedTrades, todayStr);
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13: 周期性指标
@@ -934,15 +904,9 @@ export function calcMetrics(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
-  initialPositions: InitialPosition[] = [],
 ): Metrics {
   try {
-    return calcMetricsInternal(
-      trades,
-      positions,
-      dailyResults,
-      initialPositions,
-    );
+    return calcMetricsInternal(trades, positions, dailyResults);
   } catch (err) {
     const e = err instanceof Error ? err : new Error(String(err));
     logger.error("calcMetrics failed", e);

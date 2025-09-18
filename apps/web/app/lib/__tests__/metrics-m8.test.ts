@@ -1,5 +1,5 @@
 import { calcMetrics } from "@/lib/metrics";
-import type { EnrichedTrade, InitialPosition } from "@/lib/fifo";
+import type { EnrichedTrade } from "@/lib/fifo";
 
 describe("M8 cumulative trade counts", () => {
   it("includes initial positions in totals", () => {
@@ -10,24 +10,61 @@ describe("M8 cumulative trade counts", () => {
         price: 10,
         quantity: 1,
         date: "2024-01-01T09:30:00Z",
-      } as unknown as EnrichedTrade,
+        weekday: 2,
+        tradeCount: 1,
+        amount: 10,
+        breakEvenPrice: 10,
+        realizedPnl: 0,
+        quantityAfter: 1,
+        averageCost: 10,
+        isInitialPosition: true,
+      },
       {
         symbol: "BBB",
         action: "short",
         price: 20,
-        quantity: 1,
+        quantity: -1,
         date: "2024-01-01T10:30:00Z",
-      } as unknown as EnrichedTrade,
+        weekday: 2,
+        tradeCount: 1,
+        amount: 20,
+        breakEvenPrice: 20,
+        realizedPnl: 0,
+        quantityAfter: -1,
+        averageCost: 20,
+        isInitialPosition: true,
+      },
+      {
+        symbol: "CCC",
+        action: "buy",
+        price: 30,
+        quantity: 2,
+        date: "2024-01-02T09:30:00Z",
+        weekday: 3,
+        tradeCount: 1,
+        amount: 60,
+        breakEvenPrice: 30,
+        realizedPnl: 0,
+        quantityAfter: 2,
+        averageCost: 30,
+      },
+      {
+        symbol: "DDD",
+        action: "short",
+        price: 40,
+        quantity: -2,
+        date: "2024-01-02T10:30:00Z",
+        weekday: 3,
+        tradeCount: 1,
+        amount: 80,
+        breakEvenPrice: 40,
+        realizedPnl: 0,
+        quantityAfter: -2,
+        averageCost: 40,
+      },
     ];
 
-    const initialPositions: InitialPosition[] = [
-      { symbol: "CCC", qty: 5, avgPrice: 15 },
-      { symbol: "DDD", qty: -3, avgPrice: 25 },
-      { symbol: "", qty: 2, avgPrice: 10 },
-      { symbol: "EEE", qty: NaN, avgPrice: 8 },
-    ];
-
-    const metrics = calcMetrics(trades, [], [], initialPositions);
+    const metrics = calcMetrics(trades, [], []);
     expect(metrics.M8).toEqual({ B: 2, S: 0, P: 2, C: 0, total: 4 });
   });
 });

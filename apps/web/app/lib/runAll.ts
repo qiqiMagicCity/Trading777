@@ -1,4 +1,4 @@
-import { computeFifo, type InitialPosition } from "./fifo";
+import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
 import { computePeriods } from "./metrics-periods";
@@ -11,6 +11,7 @@ import {
   snapshotArtifacts,
 } from "./monitor";
 import { realizedPnLLong, realizedPnLShort } from "./money";
+import { buildEnrichedTrades, replayPortfolio } from "./tradeReplay";
 import fs from "fs";
 import path from "path";
 import { readPublicJson } from "./io/readPublicJson";
@@ -120,6 +121,24 @@ type SymState = {
   behLong: Lot[]; // 当日 BUY 行为栈
   behShort: Lot[]; // 当日 SHORT 行为栈
 };
+
+function computeBaselineDate(rawTrades: RawTrade[], fallbackISO: string): string {
+  let minTime = Number.POSITIVE_INFINITY;
+  for (const t of rawTrades) {
+    const time = new Date(t.date).getTime();
+    if (Number.isFinite(time) && time < minTime) {
+      minTime = time;
+    }
+  }
+  if (!Number.isFinite(minTime)) {
+    const fallback = new Date(`${fallbackISO}T00:00:00Z`);
+    fallback.setUTCDate(fallback.getUTCDate() - 1);
+    return fallback.toISOString().slice(0, 10);
+  }
+  const base = new Date(minTime);
+  base.setUTCDate(base.getUTCDate() - 1);
+  return base.toISOString().slice(0, 10);
+}
 
 function fifoPreview(lots: Lot[], qty: number): ConsumeRow[] {
   const rows: ConsumeRow[] = [];
@@ -271,7 +290,7 @@ function runAllCore(
   const evalDate: Date | string = (opts as any)?.evalDate ?? (envFreeze || _date) ?? new Date();
   const evalISO = nyDateStr(evalDate);
 
-  // ---- trades 规范化并跑 FIFO ----
+  // ---- trades 规范化并通过交易回放构建基线 ----
   const trades: Trade[] = rawTrades.map((t) => ({
     symbol: t.symbol,
     price: t.price,
@@ -280,32 +299,34 @@ function runAllCore(
     action: t.side.toLowerCase() as Trade["action"],
   }));
 
-  const enriched = computeFifo(trades, initialPositions);
-
-  // ---- 聚合未平仓持仓（期初 + FIFO 结果）----
-  const posMap = new Map<string, { qty: number; avgPrice: number }>();
-  for (const p of initialPositions) {
-    posMap.set(p.symbol, { qty: p.qty, avgPrice: p.avgPrice });
-  }
-  for (const t of enriched) {
-    posMap.set(t.symbol, {
-      qty: t.quantityAfter,
-      avgPrice: t.averageCost,
+  const baselineDate = computeBaselineDate(rawTrades, evalISO);
+  const baselineTrades: Trade[] = [];
+  for (const pos of initialPositions) {
+    if (!pos.symbol || !Number.isFinite(pos.qty) || pos.qty === 0) continue;
+    const qtyAbs = Math.abs(pos.qty);
+    const isShort = pos.qty < 0;
+    baselineTrades.push({
+      symbol: pos.symbol,
+      price: pos.avgPrice,
+      quantity: isShort ? -qtyAbs : qtyAbs,
+      date: `${baselineDate}T00:00:00Z`,
+      action: isShort ? "short" : "buy",
+      isInitialPosition: true,
     });
   }
 
-  const positions: Position[] = [];
-  for (const [symbol, { qty, avgPrice }] of posMap.entries()) {
-    if (!qty) continue;
-    const last = closePrices[symbol]?.[evalISO];
-    positions.push({
-      symbol,
-      qty,
-      avgPrice,
-      last: last ?? avgPrice,
+  const replay = replayPortfolio([...baselineTrades, ...trades]);
+  const enriched = buildEnrichedTrades(replay.baseline);
+  const baselinePositions = replay.baseline.initialPositions;
+
+  const positions: Position[] = replay.positions.map((pos) => {
+    const last = closePrices[pos.symbol]?.[evalISO];
+    return {
+      ...pos,
+      last: last ?? pos.avgPrice,
       priceOk: last !== undefined,
-    });
-  }
+    };
+  });
 
   // ---- 兼容旧 calcMetrics 对“今天”判断：作用域内临时设置 FREEZE_DATE ----
   const prevFreeze = process.env.NEXT_PUBLIC_FREEZE_DATE;
@@ -313,12 +334,7 @@ function runAllCore(
 
   let metrics;
   try {
-    metrics = calcMetrics(
-      enriched,
-      positions,
-      input.dailyResults || [],
-      initialPositions,
-    );
+    metrics = calcMetrics(enriched, positions, input.dailyResults || []);
   } finally {
     if (prevFreeze === undefined) {
       delete process.env.NEXT_PUBLIC_FREEZE_DATE;
@@ -340,7 +356,7 @@ function runAllCore(
   M51 = 0;
   M52 = 0;
 
-  for (const p of initialPositions) {
+  for (const p of baselinePositions) {
     const st = getSym(p.symbol);
     if (p.qty > 0) {
       st.longLots.push({ qty: p.qty, cost: p.avgPrice, isToday: false, openPrice: p.avgPrice, time: evalISO });
@@ -412,7 +428,7 @@ function runAllCore(
   if (process.env.MONITOR === "1") {
     snapshotArtifacts(
       {
-        initialPositions,
+        initialPositions: baselinePositions,
         rawTrades,
         closePrices,
         dailyResults: input.dailyResults || [],
@@ -422,7 +438,7 @@ function runAllCore(
     try {
       assertM6Equality(result);
       assertNoOverClose(enriched);
-      assertLotConservation(initialPositions, enriched);
+      assertLotConservation(baselinePositions, enriched);
       assertNoNegativeLots(enriched);
     } catch (err: any) {
       const outDir = path.resolve(process.cwd(), ".artifacts/outputs");
