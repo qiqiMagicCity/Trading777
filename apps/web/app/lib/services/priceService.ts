@@ -6,7 +6,7 @@ import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
-import { nyDateStr, startOfDayNY } from '../time';
+import { nyDateStr } from '../time';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -223,9 +223,10 @@ async function getPrevCloseWithin(
   closeMap?: Record<string, Record<string, number>>
 ): Promise<{ date: string; price: number } | null> {
   const key = symbol.trim().toUpperCase();
-  const anchorInput = date.includes('T') ? date : `${date}T12:00:00Z`;
-  const base = startOfDayNY(anchorInput).getTime();
+  const anchorDate = date.includes('T') ? nyDateStr(date) : date;
+  const base = new Date(`${anchorDate}T00:00:00Z`).getTime();
   if (!Number.isFinite(base)) return null;
+  const middayOffset = 12 * 60 * 60 * 1000;
 
   let map = closeMap;
 
@@ -239,7 +240,7 @@ async function getPrevCloseWithin(
   }
 
   for (let offset = 1; offset <= maxLookback; offset += 1) {
-    const prevDate = nyDateStr(base - offset * DAY_MS);
+    const prevDate = nyDateStr(base + middayOffset - offset * DAY_MS);
 
     try {
       const cached = await getPrice(key, prevDate);
