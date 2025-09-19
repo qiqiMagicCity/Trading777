@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { runAll } from '../apps/web/app/lib/runAll';
+import { computePeriods } from '../apps/web/app/lib/metrics-periods';
 
 describe('reliability multi-day baseline', () => {
   const readJSON = (name: string) =>
@@ -50,5 +51,21 @@ describe('reliability multi-day baseline', () => {
     const hasM52 = nflxRows.some((r: any) => r.into === 'M5.2' && r.qty === 20);
     expect(hasM4).toBe(true);
     expect(hasM52).toBe(true);
+  });
+
+  it('ignores future-dated daily results for M9 while preserving other period windows', () => {
+    const dailyResults = [
+      { date: '2025-07-31', realized: 600, unrealized: 0 },
+      { date: '2025-08-01', realized: 7850, unrealized: 1102.5 },
+      { date: '2025-08-02', realized: 999, unrealized: 50 },
+    ];
+    const evalDate = new Date('2025-08-01T16:00:00-04:00');
+
+    const { M9, M11, M12, M13 } = computePeriods(dailyResults, evalDate);
+
+    expect(M9).toBe(8450);
+    expect(M11).toBeCloseTo(9552.5, 5);
+    expect(M12).toBeCloseTo(8952.5, 5);
+    expect(M13).toBeCloseTo(9552.5, 5);
   });
 });
