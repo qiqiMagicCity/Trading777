@@ -6,7 +6,7 @@ import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
-import { nyDateStr } from '../time';
+import { nyDateStr, toNY } from '../time';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -216,6 +216,22 @@ export interface QuoteResult {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_LOOKBACK_DAYS = 7;
 
+/** 纽约收盘后判定（DST 安全）。默认 0 分钟缓冲，可用 CLOSE_GRACE_MIN 调整。 */
+function isAfterNyClose(ts: number = Date.now()): boolean {
+  const graceMin = Number(process.env.CLOSE_GRACE_MIN ?? '0');
+  const nowNY = toNY(ts);
+  const cutoffLocal = new Date(
+    nowNY.getFullYear(),
+    nowNY.getMonth(),
+    nowNY.getDate(),
+    16, // 美股收盘永远是纽约时间 16:00（DST 自动处理）
+    graceMin,
+    0,
+    0
+  );
+  return nowNY.getTime() >= cutoffLocal.getTime();
+}
+
 async function getPrevCloseWithin(
   symbol: string,
   date: string,
@@ -273,6 +289,23 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     if (cachedPrice && typeof cachedPrice.close === 'number') {
       saveToFile(key, date, cachedPrice.close);
       return { price: cachedPrice.close, stale: false };
+    }
+
+    // 如果是“今天”且已过纽约收盘，则用实时报价当作今日收盘价（绕过 /api/candle 403）
+    const todayNY = nyDateStr(Date.now());
+    if (date === todayNY && isAfterNyClose()) {
+      try {
+        const rt =
+          (await fetchFinnhubRealtimeQuote(key)) ??
+          (await fetchTiingoRealtimeQuote(key));
+        if (typeof rt === 'number' && rt > 0) {
+          await putPrice({ symbol: key, date, close: rt, source: 'close_rt' });
+          saveToFile(key, date, rt);
+          return { price: rt, stale: false };
+        }
+      } catch (_) {
+        // 获取不到就继续走文件/回溯逻辑
+      }
     }
 
     let closeMap: Record<string, Record<string, number>> | undefined;
