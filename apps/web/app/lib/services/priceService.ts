@@ -205,42 +205,113 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
 }
 
 /** 统一返回结构 */
-export interface QuoteResult { price: number; stale: boolean; }
+export interface QuoteResult {
+  price?: number;
+  stale?: boolean;
+  priceOk?: boolean;
+  change?: number | null;
+  changePct?: number | null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_LOOKBACK_DAYS = 7;
+
+async function getPrevCloseWithin(
+  symbol: string,
+  date: string,
+  maxLookback = MAX_LOOKBACK_DAYS,
+  closeMap?: Record<string, Record<string, number>>
+): Promise<{ date: string; price: number } | null> {
+  const key = symbol.trim().toUpperCase();
+  const anchorDate = date.includes('T') ? nyDateStr(date) : date;
+  const base = new Date(`${anchorDate}T00:00:00Z`).getTime();
+  if (!Number.isFinite(base)) return null;
+  const middayOffset = 12 * 60 * 60 * 1000;
+
+  let map = closeMap;
+
+  if (!map) {
+    try {
+      map = await loadJson('close_prices') as Record<string, Record<string, number>>;
+    } catch (err) {
+      console.warn('[priceService] 读取 close_prices.json 失败', err);
+      map = undefined;
+    }
+  }
+
+  for (let offset = 1; offset <= maxLookback; offset += 1) {
+    const prevDate = nyDateStr(base + middayOffset - offset * DAY_MS);
+
+    try {
+      const cached = await getPrice(key, prevDate);
+      if (cached && typeof cached.close === 'number') {
+        return { date: prevDate, price: cached.close };
+      }
+    } catch (err) {
+      console.warn('[priceService] 读取缓存价格失败', err);
+    }
+
+    const filePrice = map?.[key]?.[prevDate];
+    if (typeof filePrice === 'number') {
+      return { date: prevDate, price: filePrice };
+    }
+  }
+
+  return null;
+}
 
 /**
  * 获取“每日收盘价”
  * 顺序：缓存 -> close_prices.json -> 默认值(1)
  * close_prices.json 结构：{ [SYMBOL]: { [YYYY-MM-DD]: price } }
  */
-export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult> {
+export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult | null> {
   const key = symbol.trim().toUpperCase();
 
   try {
-    // 1) 缓存
     const cachedPrice = await getPrice(key, date);
-    if (cachedPrice) {
+    if (cachedPrice && typeof cachedPrice.close === 'number') {
       saveToFile(key, date, cachedPrice.close);
       return { price: cachedPrice.close, stale: false };
     }
 
-    // 2) 文件
+    let closeMap: Record<string, Record<string, number>> | undefined;
     try {
-      const closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
-      const filePrice = closeMap?.[key]?.[date];
-      if (typeof filePrice === 'number') {
-        await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
-        return { price: filePrice, stale: false };
-      }
-      console.warn('MISSING_CLOSE', { symbol: key, date, available: closeMap ? Object.keys(closeMap) : [] });
+      closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    // 3) 找不到价格
-    throw new NoPriceError(`missing close for ${key} ${date}`);
+    const filePrice = closeMap?.[key]?.[date];
+    if (typeof filePrice === 'number') {
+      await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
+      return { price: filePrice, stale: false };
+    }
+
+    if (process.env.MONITOR === '1') {
+      const available = closeMap ? Object.keys(closeMap) : [];
+      console.warn('MISSING_CLOSE', { symbol: key, date, available });
+    }
+
+    const fallback = await getPrevCloseWithin(key, date, MAX_LOOKBACK_DAYS, closeMap);
+    if (fallback) {
+      if (process.env.MONITOR === '1') {
+        console.warn('[priceService] 使用前一收盘价作为回退', { symbol: key, date, fallbackDate: fallback.date, price: fallback.price });
+      }
+      return { price: fallback.price, stale: true };
+    }
+
+    if (process.env.PRICE_STRICT === '1') {
+      throw new NoPriceError(`missing close for ${key} ${date}`);
+    }
+
+    return null;
   } catch (error) {
     console.error(`获取 ${key} 在 ${date} 的每日收盘价时出错:`, error);
-    throw new NoPriceError(`missing close for ${key} ${date}`);
+    if (process.env.PRICE_STRICT === '1') {
+      throw error instanceof NoPriceError ? error : new NoPriceError(`missing close for ${key} ${date}`);
+    }
+    return null;
   }
 }
 
@@ -253,8 +324,16 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
       logger.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
       _freezeLogged = true;
     }
-    const frozen = await fetchDailyClose(symbol, freezeDate);
-    return { price: frozen.price, stale: true };
+    try {
+      const frozen = await fetchDailyClose(symbol, freezeDate);
+      if (frozen && typeof frozen.price === 'number') {
+        return { price: frozen.price, stale: true };
+      }
+    } catch (err) {
+      if (err instanceof NoPriceError) throw err;
+      throw new NoPriceError(`no price for ${symbol}`);
+    }
+    return { priceOk: false, change: null, changePct: null };
   }
 
   try {
@@ -271,13 +350,21 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     console.warn(`Tiingo 实时报价失败 (${symbol})`, e);
   }
 
+  const yesterday = nyDateStr(Date.now() - DAY_MS);
   try {
-    const yesterday = nyDateStr(Date.now() - 24 * 60 * 60 * 1000);
     const close = await fetchDailyClose(symbol, yesterday);
-    return { price: close.price, stale: true };
+    if (close && typeof close.price === 'number') {
+      return { price: close.price, stale: true };
+    }
   } catch (err) {
-    throw new NoPriceError(`no price for ${symbol}`);
+    if (err instanceof NoPriceError) throw err;
+    console.error(`[priceService] 获取昨日收盘价失败 (${symbol})`, err);
+    if (process.env.PRICE_STRICT === '1') {
+      throw new NoPriceError(`no price for ${symbol}`);
+    }
   }
+
+  return { priceOk: false, change: null, changePct: null };
 }
 
 /** 兼容旧版别名 */

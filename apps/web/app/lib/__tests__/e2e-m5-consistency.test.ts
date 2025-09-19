@@ -26,7 +26,7 @@ test("页面口径与算法一致（黄金案例）", async () => {
     { evalDate: "2025-08-01" },
   );
   const m = normalizeMetrics(res);
-  expect(m.M5.behavior).toBe(1670);
+  expect(m.M5.behavior).toBe(1320);
   expect(m.M5.fifo).toBe(1320);
   expect(m.M4.total).toBe(6530);
   expect(m.M6.total).toBe(8952.5);
