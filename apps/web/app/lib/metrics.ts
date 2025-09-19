@@ -950,7 +950,9 @@ export function normalizeMetrics(input:any): MetricsContract {
   const M3 = Number(input?.M3 ?? 0);
   const M4 = { total: pickTotal(input?.M4) };
   const M5 = {
-    behavior: Number(input?.M5?.behavior ?? input?.M5_1 ?? 0),
+    behavior: Number(
+      input?.M5?.behavior ?? input?.M5?.trade ?? input?.M5_1 ?? 0,
+    ),
     fifo:      Number(input?.M5?.fifo      ?? input?.M5_2 ?? 0),
   };
   const M6 = { total: pickTotal(input?.M6) };
