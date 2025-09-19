@@ -64,7 +64,7 @@ export function getReplayDays(
     }
   }
   for (const t of trades) {
-    const d = nyDateStr(t.date);
+    const d = nyDateStrSafe(t.date);
     if (within(d)) set.add(d);
   }
   return Array.from(set).sort();
@@ -110,6 +110,15 @@ export function normalizeClosePriceMap(input: any): ClosePriceMap {
     }
   }
   return out;
+}
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function nyDateStrSafe(input: string): string {
+  if (DATE_ONLY_RE.test(input)) {
+    return nyDateStr(`${input}T12:00:00Z`);
+  }
+  return nyDateStr(input);
 }
 
 // --- M5/M4 计算核心工具 ---
@@ -368,7 +377,7 @@ function runAllCore(
   const sortedTrades = [...rawTrades].sort((a, b) => a.date.localeCompare(b.date));
   for (const t of sortedTrades) {
     const st = getSym(t.symbol);
-    const today = nyDateStr(t.date) === evalISO;
+    const today = nyDateStrSafe(t.date) === evalISO;
     if (t.side === 'BUY') {
       st.longLots.push({ qty: t.qty, cost: t.price, isToday: today, openPrice: t.price, time: t.date });
       if (today) st.behLong.push({ qty: t.qty, cost: t.price, isToday: true, openPrice: t.price, time: t.date });
