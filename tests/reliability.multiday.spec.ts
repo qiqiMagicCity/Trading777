@@ -34,8 +34,9 @@ describe('reliability multi-day baseline', () => {
     expect(res.M5_1).toBeCloseTo(1670, 2);
     expect(res.M5_2).toBeCloseTo(1320, 2);
     expect(res.M6).toBeCloseTo(8952.5, 2);
-    expect(res.M7).toEqual({ B: 8, S: 8, P: 5, C: 4, total: 25 });
+    expect(res.M7).toEqual({ B: 6, S: 8, P: 4, C: 4, total: 22 });
     expect(res.M8).toEqual({ B: 8, S: 8, P: 5, C: 4, total: 25 });
+    expect(res.M7).not.toEqual(res.M8);
     expect(res.M9).toBe(8450);
     expect(res.M10).toEqual({ W: 11, L: 2, winRatePct: 84.6 });
     expect(res.M11).toBeCloseTo(9552.5, 2);
