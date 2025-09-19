@@ -217,10 +217,15 @@ function _count(list: { action?: string }[] | undefined) {
 }
 
 /** 判断日期字符串是否为今日（纽约时区） */
-function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
-  if (!dateStr) return false;
+function isTodayNY(
+  dateInput: string | number | Date | undefined,
+  todayStr: string,
+): boolean {
+  if (dateInput === undefined || dateInput === null) return false;
   const d1 =
-    dateStr.length === 10 ? toNY(`${dateStr}T12:00:00Z`) : toNY(dateStr);
+    typeof dateInput === "string" && dateInput.length === 10
+      ? toNY(`${dateInput}T12:00:00Z`)
+      : toNY(dateInput);
   const d2 = toNY(`${todayStr}T12:00:00Z`);
   return (
     !isNaN(d1.getTime()) &&
@@ -784,12 +789,19 @@ function calcMetricsInternal(
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
 
-  if (DEBUG)
-    logger.debug("M7_FILTERED", _count(safeTrades), {
-      evalEndNY: evalEnd.toISOString?.(),
-    });
+  const todayTrades = safeTrades.filter((t) =>
+    isTodayNY(t.time ?? t.date, todayStr),
+  );
+  const counts = _count(todayTrades);
 
-  const counts = _count(safeTrades);
+  if (DEBUG)
+    logger.debug(
+      "M7_FILTERED",
+      { all: _count(safeTrades), today: counts },
+      {
+        evalEndNY: evalEnd.toISOString?.(),
+      },
+    );
 
   const sortedTrades = sortTrades(safeTrades);
 
