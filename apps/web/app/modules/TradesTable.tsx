@@ -3,9 +3,11 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { toNY } from '@/lib/timezone';
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 const pad = (value: number | string): string => value.toString().padStart(2, '0');
+
+const NY_TIME_ZONE = 'America/New_York';
 
 const normalizeTimeText = (timeText: string): string => {
   const sanitized = timeText.replace('Z', '').split('.')[0] ?? '';
@@ -23,25 +25,72 @@ const parseTimeValue = (value: EnrichedTrade['time']): Date | null => {
     return Number.isNaN(fromNumber.getTime()) ? null : fromNumber;
   }
   if (typeof value === 'string') {
-    const sanitized = value.replace('Z', '').split('.')[0] ?? value;
-    const direct = new Date(sanitized);
-    if (!Number.isNaN(direct.getTime())) {
-      return direct;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const withoutZ = trimmed.replace(/Z$/i, '');
+    const noFractions = withoutZ.replace(/\.\d+/, '');
+    const normalized = noFractions.includes('T')
+      ? noFractions.replace(' ', 'T')
+      : `${noFractions.replace(' ', 'T')}T00:00:00`;
+
+    try {
+      const nyUtc = fromZonedTime(normalized, NY_TIME_ZONE);
+      if (!Number.isNaN(nyUtc.getTime())) {
+        return nyUtc;
+      }
+    } catch {
+      // ignore and fall back to manual parsing
     }
-    if (sanitized.includes('T')) {
-      const [datePart, timePart] = sanitized.split('T');
+
+    if (normalized.includes('T')) {
+      const [datePart, timePart] = normalized.split('T');
       if (datePart && timePart) {
-        const [year, month, day] = datePart.split('-').map((n) => parseInt(n, 10));
-        const [hour = 0, minute = 0, second = 0] = timePart.split(':').map((n) => parseInt(n, 10));
-        if ([year, month, day].every((n) => !Number.isNaN(n))) {
-          const constructed = new Date(year, (month ?? 1) - 1, day ?? 1, hour ?? 0, minute ?? 0, second ?? 0);
-          return Number.isNaN(constructed.getTime()) ? null : constructed;
+        const [yearRaw, monthRaw, dayRaw] = datePart.split('-');
+        const [hourRaw = '0', minuteRaw = '0', secondRaw = '0'] = timePart.split(':');
+        const year = parseInt(yearRaw ?? '', 10);
+        const month = parseInt(monthRaw ?? '', 10);
+        const day = parseInt(dayRaw ?? '', 10);
+        const hour = parseInt(hourRaw ?? '0', 10);
+        const minute = parseInt(minuteRaw ?? '0', 10);
+        const second = parseInt(secondRaw ?? '0', 10);
+        if ([year, month, day, hour, minute, second].every((n) => !Number.isNaN(n))) {
+          const constructed = new Date(year, month - 1, day, hour, minute, second);
+          if (!Number.isNaN(constructed.getTime())) {
+            try {
+              const nyConstructed = fromZonedTime(constructed, NY_TIME_ZONE);
+              if (!Number.isNaN(nyConstructed.getTime())) {
+                return nyConstructed;
+              }
+            } catch {
+              return constructed;
+            }
+          }
         }
       }
     }
     return null;
   }
   return null;
+};
+
+const getWeekdayIndex = (trade: EnrichedTrade): number | null => {
+  const parsedTime = parseTimeValue(trade.time);
+  if (parsedTime) {
+    try {
+      return toZonedTime(parsedTime, NY_TIME_ZONE).getDay();
+    } catch {
+      const fallback = parsedTime.getDay();
+      return Number.isNaN(fallback) ? null : fallback;
+    }
+  }
+  try {
+    const midnightUtc = fromZonedTime(`${trade.date}T00:00:00`, NY_TIME_ZONE);
+    return toZonedTime(midnightUtc, NY_TIME_ZONE).getDay();
+  } catch {
+    const direct = new Date(trade.date);
+    const fallback = direct.getDay();
+    return Number.isNaN(fallback) ? null : fallback;
+  }
 };
 
 const getTimeDisplay = (trade: EnrichedTrade): string => {
@@ -65,8 +114,12 @@ const getSortValue = (trade: EnrichedTrade): number => {
       return time;
     }
   }
-  const fallback = toNY(`${trade.date}T00:00:00`);
-  return fallback.getTime();
+  try {
+    return fromZonedTime(`${trade.date}T00:00:00`, NY_TIME_ZONE).getTime();
+  } catch {
+    const direct = new Date(trade.date);
+    return Number.isNaN(direct.getTime()) ? 0 : direct.getTime();
+  }
 };
 
 function formatNumber(value: number | undefined, decimals = 2) {
@@ -117,8 +170,8 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
       </thead>
       <tbody>
         {sortedRecent.map((trade, idx) => {
-          const dateObj = toNY(trade.time ?? trade.date);
-          const weekday = weekdayMap[dateObj.getUTCDay()];
+          const weekdayIndex = getWeekdayIndex(trade);
+          const weekday = typeof weekdayIndex === 'number' ? (weekdayMap[weekdayIndex] ?? '--') : '--';
           const colorSide = (trade.action === 'buy' || trade.action === 'cover')
             ? 'green'
             : (trade.action === 'sell' || trade.action === 'short')
