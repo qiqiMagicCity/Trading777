@@ -3,8 +3,17 @@ import { sumPeriodCached } from './period-sum-cache';
 
 export type Daily = { date: string; realized: number; unrealized: number };
 
-export function sumM9(daily: Daily[]): number {
-  return (daily || []).reduce((s, d) => s + (d?.realized ?? 0), 0);
+export function sumM9(daily: Daily[], endISO?: string): number {
+  return (daily || []).reduce((s, d) => {
+    if (endISO && d?.date) {
+      const dt = new Date(d.date);
+      if (Number.isFinite(dt.valueOf())) {
+        const day = nyDateStr(dt);
+        if (day > endISO) return s;
+      }
+    }
+    return s + (d?.realized ?? 0);
+  }, 0);
 }
 
 export function sumPeriod(daily: Daily[], startISO: string, endISO: string): number {
@@ -24,7 +33,7 @@ export function computePeriods(daily: Daily[], evalDate: Date | string) {
   const m0 = nyDateStr(startOfMonthNY(evalDate));
   const y0 = nyDateStr(startOfYearNY(evalDate));
   return {
-    M9:  sumM9(daily),
+    M9:  sumM9(daily, endISO),
     M11: sumPeriodCached(daily, w0, endISO),
     M12: sumPeriodCached(daily, m0, endISO),
     M13: sumPeriodCached(daily, y0, endISO),
