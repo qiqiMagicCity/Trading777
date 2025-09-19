@@ -86,12 +86,15 @@ export default function DashboardPage() {
         for (const pos of posList) {
           try {
             let result = await fetchRealtimeQuote(pos.symbol);
-            if (!result || result.price === 1) {
+            if (!result || typeof result.price !== 'number' || result.price === 1) {
               const today = getLatestTradingDayStr();
-              result = await fetchDailyClose(pos.symbol, today);
+              const dailyClose = await fetchDailyClose(pos.symbol, today);
+              if (dailyClose) {
+                result = dailyClose;
+              }
             }
 
-            if (result && result.price && result.price !== 1) {
+            if (result && typeof result.price === 'number' && result.price !== 1) {
               pos.last = result.price;
               pos.priceOk = !result.stale;
             } else {
@@ -168,11 +171,14 @@ export default function DashboardPage() {
       for (const pos of posList) {
         try {
           let result = await fetchRealtimeQuote(pos.symbol);
-          if (!result || result.price === 1) {
+          if (!result || typeof result.price !== 'number' || result.price === 1) {
             const today = getLatestTradingDayStr();
-            result = await fetchDailyClose(pos.symbol, today);
+            const dailyClose = await fetchDailyClose(pos.symbol, today);
+            if (dailyClose) {
+              result = dailyClose;
+            }
           }
-          if (result && result.price && result.price !== 1) {
+          if (result && typeof result.price === 'number' && result.price !== 1) {
             pos.last = result.price;
             pos.priceOk = !result.stale;
           } else {
