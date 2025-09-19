@@ -12,6 +12,48 @@ interface Props {
   trade?: Trade;
 }
 
+const pad = (value: number | string): string => value.toString().padStart(2, '0');
+
+const normalizeTimePart = (timePart: string | undefined): string => {
+  const sanitized = (timePart ?? '').replace('Z', '').split('.')[0] ?? '';
+  const [h = '00', m = '00', s = '00'] = sanitized.split(':');
+  return `${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
+};
+
+const toInputDateTime = (value: string | number | Date): string => {
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` +
+      `T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+  }
+
+  if (typeof value === 'number') {
+    return toInputDateTime(new Date(value));
+  }
+
+  if (typeof value === 'string') {
+    if (value.includes('T')) {
+      const [datePart, timePart] = value.split('T');
+      if (!datePart) return '';
+      return `${datePart}T${normalizeTimePart(timePart)}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return `${value}T00:00:00`;
+    }
+  }
+
+  return '';
+};
+
+const sanitizeDateTimeInput = (raw: string): string => {
+  if (!raw) return raw;
+  if (!raw.includes('T')) {
+    return toInputDateTime(`${raw}T00:00:00`);
+  }
+  const [datePart, timePart] = raw.split('T');
+  if (!datePart) return raw;
+  return `${datePart}T${normalizeTimePart(timePart)}`;
+};
+
 export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const editing = !!trade;
   const [symbol, setSymbol] = useState('');
@@ -20,9 +62,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const [price, setPrice] = useState<number>(0);
 
   // Get current NY time for default
-  const defaultDatetime = nowNY().toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM format
-
-  const [datetime, setDatetime] = useState(defaultDatetime);
+  const [datetime, setDatetime] = useState(() => toInputDateTime(nowNY()));
 
   // ---------- 同步传入的 trade 数据 ----------
   useEffect(() => {
@@ -36,10 +76,13 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       setQty(trade.quantity);
       setPrice(trade.price);
 
-      // 处理日期 -> datetime-local 格式 (YYYY-MM-DDTHH:MM)
+      // 处理日期 -> datetime-local 格式 (YYYY-MM-DDTHH:MM:SS)
       try {
-        const iso = toNY(trade.date).toISOString(); // YYYY-MM-DDTHH:MM:SSZ
-        setDatetime(iso.slice(0, 16));
+        const baseDateTime = trade.time
+          ? toInputDateTime(trade.time)
+          : toInputDateTime(`${trade.date}T${normalizeTimePart('00:00:00')}`);
+        const fallback = toInputDateTime(toNY(trade.date));
+        setDatetime(baseDateTime || fallback);
       } catch (e) {
         console.error('无法解析日期:', trade.date, e);
       }
@@ -54,7 +97,15 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       return;
     }
 
-    const tradeDate = datetime.slice(0, 10); // YYYY-MM-DD
+    const normalizedDateTime = sanitizeDateTimeInput(datetime);
+    if (!normalizedDateTime || normalizedDateTime.length < 10) {
+      alert('请输入有效的交易时间');
+      return;
+    }
+    const tradeDate = normalizedDateTime.slice(0, 10); // YYYY-MM-DD
+    const tradeTimestamp = normalizedDateTime.length >= 19
+      ? normalizedDateTime.slice(0, 19)
+      : `${normalizedDateTime}T00:00:00`;
 
     const baseTrade = {
       symbol: symbol.toUpperCase(),
@@ -62,6 +113,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       quantity: qty,
       date: tradeDate,
       action: side.toLowerCase() as 'buy' | 'sell' | 'short' | 'cover',
+      time: tradeTimestamp,
     };
 
     if (editing && trade?.id != null) {
@@ -87,15 +139,21 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
           <label>交易时间</label>
           <input
             type="datetime-local"
+            step={1}
             value={datetime}
-            onChange={e => setDatetime(e.target.value)}
+            onChange={e => setDatetime(sanitizeDateTimeInput(e.target.value))}
             required
           />
 
           <label>股票代码</label>
           <input
             value={symbol}
-            onChange={e => setSymbol(e.target.value.toUpperCase())}
+            onChange={e => {
+              const upper = e.target.value.toUpperCase();
+              const sanitized = upper.replace(/[^A-Z]/g, '');
+              setSymbol(sanitized);
+            }}
+            pattern="[A-Z]*"
             required
           />
 
