@@ -1,3 +1,5 @@
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
+
 /**
  * timezone.ts – Helpers to ensure the site consistently uses New York (America/New_York) time,
  * regardless of server or browser locale.
@@ -23,30 +25,50 @@ type ToNYArgs =
   | [number, number, number?, number?, number?, number?, number?];
 
 export function toNY(...args: ToNYArgs): Date {
-  let date: Date;
+  const TZ = "America/New_York";
 
   if (args.length === 0) {
-    date = new Date();
-  } else if (args.length === 1) {
-    const v = args[0];
-    date = v instanceof Date ? new Date(v.getTime()) : new Date(v);
-  } else {
-    const [year, month, ...rest] = args as [
-      number,
-      number,
-      number?,
-      number?,
-      number?,
-      number?,
-      number?,
-    ];
-    date = new Date(year, month, rest[0], rest[1], rest[2], rest[3], rest[4]);
+    return toZonedTime(new Date(), TZ);
   }
 
-  const localeString = date.toLocaleString("en-US", {
-    timeZone: "America/New_York",
-  });
-  return new Date(localeString);
+  if (args.length === 1) {
+    const v = args[0];
+    const date = v instanceof Date ? new Date(v.getTime()) : new Date(v);
+    return Number.isNaN(date.getTime()) ? new Date(NaN) : toZonedTime(date, TZ);
+  }
+
+  const [year, month, ...rest] = args as [
+    number,
+    number,
+    number?,
+    number?,
+    number?,
+    number?,
+    number?,
+  ];
+
+  const day = rest[0] ?? 1;
+  const hour = rest[1] ?? 0;
+  const minute = rest[2] ?? 0;
+  const second = rest[3] ?? 0;
+  const millisecond = rest[4] ?? 0;
+
+  const localIso = `${year.toString().padStart(4, "0")}-${(month + 1)
+    .toString()
+    .padStart(2, "0")}-${day
+    .toString()
+    .padStart(2, "0")}T${hour
+    .toString()
+    .padStart(2, "0")}:${minute
+    .toString()
+    .padStart(2, "0")}:${second
+    .toString()
+    .padStart(2, "0")}.${millisecond
+    .toString()
+    .padStart(3, "0")}`;
+
+  const utcDate = fromZonedTime(localIso, TZ);
+  return toZonedTime(utcDate, TZ);
 }
 
 /** 当前纽约时间对象 */

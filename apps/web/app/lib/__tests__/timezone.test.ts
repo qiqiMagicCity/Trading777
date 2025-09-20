@@ -12,6 +12,18 @@ describe("getLatestTradingDayStr", () => {
       "2024-05-06",
     );
   });
+
+  it("keeps same trading day during late evening", () => {
+    expect(getLatestTradingDayStr(new Date("2024-05-17T20:57:00-04:00"))).toBe(
+      "2024-05-17",
+    );
+  });
+
+  it("carries Friday forward through the weekend", () => {
+    expect(getLatestTradingDayStr(new Date("2024-05-18T20:00:00-04:00"))).toBe(
+      "2024-05-17",
+    );
+  });
 });
 
 describe("DST transitions", () => {
