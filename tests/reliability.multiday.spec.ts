@@ -62,8 +62,13 @@ describe('reliability multi-day baseline', () => {
     const evalDate = new Date('2025-08-01T16:00:00-04:00');
 
     const { M9, M11, M12, M13 } = computePeriods(dailyResults, evalDate);
+    const realizedThroughEval = dailyResults
+      .slice(0, 2)
+      .reduce((sum, row) => sum + row.realized, 0);
+    const totalRealized = dailyResults.reduce((sum, row) => sum + row.realized, 0);
 
-    expect(M9).toBe(8450);
+    expect(totalRealized).toBeGreaterThan(realizedThroughEval);
+    expect(M9).toBe(realizedThroughEval);
     expect(M11).toBeCloseTo(9552.5, 5);
     expect(M12).toBeCloseTo(8952.5, 5);
     expect(M13).toBeCloseTo(9552.5, 5);

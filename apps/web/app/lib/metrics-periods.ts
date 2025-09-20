@@ -1,4 +1,4 @@
-import { nyDateStr, startOfWeekNY, startOfMonthNY, startOfYearNY } from './time';
+import { nyDateStr, nyDateStrSafe, startOfWeekNY, startOfMonthNY, startOfYearNY } from './time';
 import { sumPeriodCached } from './period-sum-cache';
 
 export type Daily = { date: string; realized: number; unrealized: number };
@@ -8,7 +8,7 @@ export function sumM9(daily: Daily[], endISO?: string): number {
     if (endISO && d?.date) {
       const dt = new Date(d.date);
       if (Number.isFinite(dt.valueOf())) {
-        const day = nyDateStr(dt);
+        const day = typeof d.date === 'string' ? nyDateStrSafe(d.date) : nyDateStr(dt);
         if (day > endISO) return s;
       }
     }

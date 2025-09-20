@@ -2,7 +2,7 @@ import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
 import { computePeriods } from "./metrics-periods";
-import { nyDateStr } from "./time";
+import { nyDateStr, nyDateStrSafe } from "./time";
 import {
   assertM6Equality,
   assertNoOverClose,
@@ -110,15 +110,6 @@ export function normalizeClosePriceMap(input: any): ClosePriceMap {
     }
   }
   return out;
-}
-
-const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function nyDateStrSafe(input: string): string {
-  if (DATE_ONLY_RE.test(input)) {
-    return nyDateStr(`${input}T12:00:00Z`);
-  }
-  return nyDateStr(input);
 }
 
 // --- M5/M4 计算核心工具 ---
