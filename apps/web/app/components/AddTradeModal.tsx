@@ -145,6 +145,15 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
             required
           />
 
+          <label>单价</label>
+          <input
+            type="number"
+            step="0.01"
+            value={price || ''}
+            onChange={e => setPrice(parseFloat(e.target.value || '0'))}
+            required
+          />
+
           <label>股票代码</label>
           <input
             value={symbol}
@@ -154,6 +163,14 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
               setSymbol(sanitized);
             }}
             pattern="[A-Z]*"
+            required
+          />
+
+          <label>数量(张)</label>
+          <input
+            type="number"
+            value={qty || ''}
+            onChange={e => setQty(parseInt(e.target.value || '0', 10))}
             required
           />
 
@@ -167,23 +184,6 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
             <option value="SHORT">SHORT</option>
             <option value="COVER">COVER</option>
           </select>
-
-          <label>数量(张)</label>
-          <input
-            type="number"
-            value={qty || ''}
-            onChange={e => setQty(parseInt(e.target.value || '0', 10))}
-            required
-          />
-
-          <label>单价</label>
-          <input
-            type="number"
-            step="0.01"
-            value={price || ''}
-            onChange={e => setPrice(parseFloat(e.target.value || '0'))}
-            required
-          />
 
           <div style={{ marginTop: 12, textAlign: 'right' }}>
             <button type="button" className="btn" style={{ marginRight: 6 }} onClick={onClose}>取消</button>
