@@ -132,6 +132,19 @@ describe('priceService safe fallbacks', () => {
     expect(result).toMatchObject({ price: 99, stale: true, priceOk: true });
   });
 
+  it('still falls back when the local price cache lookup fails', async () => {
+    getPriceMock.mockRejectedValue(new Error('indexedDB is not defined'));
+    loadJsonMock.mockResolvedValue({ AAPL: { '2025-08-01': 211.2 } });
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await fetchRealtimeQuote('AAPL');
+    expect(result).toMatchObject({ price: 211.2, stale: true, priceOk: true });
+    expect(
+      warnSpy.mock.calls.some(([msg]) => typeof msg === 'string' && msg.includes('从缓存读取收盘价失败')),
+    ).toBe(true);
+    warnSpy.mockRestore();
+  });
+
   it('falls back to the nearest future close when history starts after the requested date', async () => {
     getPriceMock.mockResolvedValue(undefined);
     loadJsonMock.mockResolvedValue({ AAPL: { '2025-08-01': 211.2 } });

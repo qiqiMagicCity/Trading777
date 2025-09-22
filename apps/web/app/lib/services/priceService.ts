@@ -368,7 +368,12 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
   const key = symbol.trim().toUpperCase();
 
   try {
-    const cachedPrice = await getPrice(key, date);
+    let cachedPrice: CachedPrice | undefined;
+    try {
+      cachedPrice = await getPrice(key, date);
+    } catch (err) {
+      console.warn('[priceService] 从缓存读取收盘价失败', err);
+    }
     if (cachedPrice && typeof cachedPrice.close === 'number') {
       saveToFile(key, date, cachedPrice.close);
       return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
@@ -382,7 +387,11 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
           (await fetchFinnhubRealtimeQuote(key)) ??
           (await fetchTiingoRealtimeQuote(key));
         if (typeof rt === 'number' && rt > 0) {
-          await putPrice({ symbol: key, date, close: rt, source: 'close_rt' });
+          try {
+            await putPrice({ symbol: key, date, close: rt, source: 'close_rt' });
+          } catch (err) {
+            console.warn('[priceService] 写入实时收盘价缓存失败', err);
+          }
           saveToFile(key, date, rt);
           return { price: rt, stale: false, priceOk: true, updatedAt: Date.now() };
         }
@@ -400,7 +409,11 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
 
     const filePrice = closeMap?.[key]?.[date];
     if (typeof filePrice === 'number') {
-      await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
+      try {
+        await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
+      } catch (err) {
+        console.warn('[priceService] 写入导入收盘价缓存失败', err);
+      }
       return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
