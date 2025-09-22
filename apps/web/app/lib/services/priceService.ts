@@ -21,6 +21,61 @@ function cacheSet(key: string, val: string): void {
   lsSet(key, val);
 }
 
+export function __clearPriceServiceCachesForTest() {
+  mem.clear();
+  _runtimeKeys = null;
+}
+
+export function __setRuntimeApiKeysForTest(keys: ApiKeys | null) {
+  _runtimeKeys = keys;
+}
+
+interface RealtimeCacheEntry {
+  price: number;
+  ts: number;
+}
+
+function rtCacheKey(symbol: string): string {
+  return `rt_last_${symbol.trim().toUpperCase()}`;
+}
+
+function readRealtimeCache(symbol: string): RealtimeCacheEntry | null {
+  try {
+    const raw = cacheGet(rtCacheKey(symbol));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RealtimeCacheEntry> | null;
+    if (!parsed || typeof parsed.price !== 'number' || !Number.isFinite(parsed.price)) {
+      return null;
+    }
+    const ts = typeof parsed.ts === 'number' && Number.isFinite(parsed.ts) ? parsed.ts : 0;
+    return { price: parsed.price, ts };
+  } catch (err) {
+    console.warn('[priceService] 读取实时价格缓存失败', err);
+    return null;
+  }
+}
+
+function writeRealtimeCache(symbol: string, price: number): RealtimeCacheEntry {
+  const entry: RealtimeCacheEntry = { price, ts: Date.now() };
+  try {
+    cacheSet(rtCacheKey(symbol), JSON.stringify(entry));
+  } catch (err) {
+    console.warn('[priceService] 写入实时价格缓存失败', err);
+  }
+  return entry;
+}
+
+export function getCachedRealtimeQuote(symbol: string): QuoteResult | null {
+  const cached = readRealtimeCache(symbol);
+  if (!cached) return null;
+  return {
+    price: cached.price,
+    stale: true,
+    priceOk: true,
+    updatedAt: cached.ts,
+  };
+}
+
 export function __testCacheRW() {
   cacheSet('__test', '1');
   if (cacheGet('__test') !== '1') throw new Error('cache RW failed');
@@ -211,6 +266,7 @@ export interface QuoteResult {
   priceOk?: boolean;
   change?: number | null;
   changePct?: number | null;
+  updatedAt?: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -288,7 +344,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     const cachedPrice = await getPrice(key, date);
     if (cachedPrice && typeof cachedPrice.close === 'number') {
       saveToFile(key, date, cachedPrice.close);
-      return { price: cachedPrice.close, stale: false };
+      return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
     // 如果是“今天”且已过纽约收盘，则用实时报价当作今日收盘价（绕过 /api/candle 403）
@@ -301,7 +357,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
         if (typeof rt === 'number' && rt > 0) {
           await putPrice({ symbol: key, date, close: rt, source: 'close_rt' });
           saveToFile(key, date, rt);
-          return { price: rt, stale: false };
+          return { price: rt, stale: false, priceOk: true, updatedAt: Date.now() };
         }
       } catch (_) {
         // 获取不到就继续走文件/回溯逻辑
@@ -318,7 +374,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     const filePrice = closeMap?.[key]?.[date];
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
-      return { price: filePrice, stale: false };
+      return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
     if (process.env.MONITOR === '1') {
@@ -331,7 +387,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       if (process.env.MONITOR === '1') {
         console.warn('[priceService] 使用前一收盘价作为回退', { symbol: key, date, fallbackDate: fallback.date, price: fallback.price });
       }
-      return { price: fallback.price, stale: true };
+      return { price: fallback.price, stale: true, priceOk: true, updatedAt: Date.now() };
     }
 
     if (process.env.PRICE_STRICT === '1') {
@@ -352,6 +408,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
 let _freezeLogged = false;
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
+  const cachedRealtime = readRealtimeCache(symbol);
   if (freezeDate) {
     if (!_freezeLogged) {
       logger.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
@@ -360,7 +417,8 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     try {
       const frozen = await fetchDailyClose(symbol, freezeDate);
       if (frozen && typeof frozen.price === 'number') {
-        return { price: frozen.price, stale: true };
+        const entry = writeRealtimeCache(symbol, frozen.price);
+        return { price: frozen.price, stale: true, priceOk: true, updatedAt: entry.ts };
       }
     } catch (err) {
       if (err instanceof NoPriceError) throw err;
@@ -371,14 +429,20 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
 
   try {
     const finnhubPrice = await fetchFinnhubRealtimeQuote(symbol);
-    if (finnhubPrice !== null) return { price: finnhubPrice, stale: false };
+    if (finnhubPrice !== null) {
+      const entry = writeRealtimeCache(symbol, finnhubPrice);
+      return { price: finnhubPrice, stale: false, priceOk: true, updatedAt: entry.ts };
+    }
   } catch (e) {
     console.warn(`Finnhub 实时报价失败 (${symbol})`, e);
   }
 
   try {
     const tiingoPrice = await fetchTiingoRealtimeQuote(symbol);
-    if (tiingoPrice !== null) return { price: tiingoPrice, stale: false };
+    if (tiingoPrice !== null) {
+      const entry = writeRealtimeCache(symbol, tiingoPrice);
+      return { price: tiingoPrice, stale: false, priceOk: true, updatedAt: entry.ts };
+    }
   } catch (e) {
     console.warn(`Tiingo 实时报价失败 (${symbol})`, e);
   }
@@ -387,7 +451,8 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   try {
     const close = await fetchDailyClose(symbol, yesterday);
     if (close && typeof close.price === 'number') {
-      return { price: close.price, stale: true };
+      const entry = writeRealtimeCache(symbol, close.price);
+      return { price: close.price, stale: true, priceOk: true, updatedAt: entry.ts };
     }
   } catch (err) {
     if (err instanceof NoPriceError) throw err;
@@ -395,6 +460,10 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     if (process.env.PRICE_STRICT === '1') {
       throw new NoPriceError(`no price for ${symbol}`);
     }
+  }
+
+  if (cachedRealtime) {
+    return { price: cachedRealtime.price, stale: true, priceOk: true, updatedAt: cachedRealtime.ts };
   }
 
   return { priceOk: false, change: null, changePct: null };

@@ -14,7 +14,7 @@ import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
 import { calcMetrics, normalizeMetrics } from '@/app/lib/metrics';
 import { useStore } from '@/lib/store';
-import { fetchRealtimeQuote, fetchDailyClose } from '@/lib/services/priceService';
+import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { getLatestTradingDayStr } from '@/lib/timezone';
 import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, closePricesFromRows } from '@/lib/dailyResults';
 
@@ -84,26 +84,46 @@ export default function DashboardPage() {
 
         // 为每个持仓获取最新价格
         for (const pos of posList) {
+          const cached = getCachedRealtimeQuote(pos.symbol);
+          if (cached?.price !== undefined) {
+            pos.last = cached.price;
+            pos.priceOk = true;
+            pos.stale = true;
+            pos.lastUpdatedAt = cached.updatedAt;
+          }
+
           try {
             let result = await fetchRealtimeQuote(pos.symbol);
-            if (!result || typeof result.price !== 'number' || result.price === 1) {
+            if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
               const today = getLatestTradingDayStr();
               const dailyClose = await fetchDailyClose(pos.symbol, today);
               if (dailyClose) {
-                result = dailyClose;
+                result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
               }
             }
 
             if (result && typeof result.price === 'number' && result.price !== 1) {
               pos.last = result.price;
-              pos.priceOk = !result.stale;
+              pos.priceOk = result.priceOk !== false;
+              pos.stale = Boolean(result.stale);
+              pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+            } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+              pos.priceOk = true;
+              pos.stale = true;
             } else {
               pos.last = NaN;
               pos.priceOk = false;
+              pos.stale = true;
             }
           } catch (e) {
-            pos.last = NaN;
-            pos.priceOk = false;
+            if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+              pos.priceOk = true;
+              pos.stale = true;
+            } else {
+              pos.last = NaN;
+              pos.priceOk = false;
+              pos.stale = true;
+            }
           }
         }
 
@@ -169,25 +189,45 @@ export default function DashboardPage() {
       const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
 
       for (const pos of posList) {
+        const cached = getCachedRealtimeQuote(pos.symbol);
+        if (cached?.price !== undefined) {
+          pos.last = cached.price;
+          pos.priceOk = true;
+          pos.stale = true;
+          pos.lastUpdatedAt = cached.updatedAt;
+        }
+
         try {
           let result = await fetchRealtimeQuote(pos.symbol);
-          if (!result || typeof result.price !== 'number' || result.price === 1) {
+          if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
             const today = getLatestTradingDayStr();
             const dailyClose = await fetchDailyClose(pos.symbol, today);
             if (dailyClose) {
-              result = dailyClose;
+              result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
             }
           }
           if (result && typeof result.price === 'number' && result.price !== 1) {
             pos.last = result.price;
-            pos.priceOk = !result.stale;
+            pos.priceOk = result.priceOk !== false;
+            pos.stale = Boolean(result.stale);
+            pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+          } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+            pos.priceOk = true;
+            pos.stale = true;
           } else {
             pos.last = NaN;
             pos.priceOk = false;
+            pos.stale = true;
           }
         } catch (e) {
-          pos.last = NaN;
-          pos.priceOk = false;
+          if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+            pos.priceOk = true;
+            pos.stale = true;
+          } else {
+            pos.last = NaN;
+            pos.priceOk = false;
+            pos.stale = true;
+          }
         }
       }
 

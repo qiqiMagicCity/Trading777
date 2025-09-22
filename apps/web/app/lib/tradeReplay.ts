@@ -143,6 +143,7 @@ function replayPositions(trades: Trade[]): Position[] {
       avgPrice: average,
       last: average,
       priceOk: true,
+      stale: false,
     });
   }
 

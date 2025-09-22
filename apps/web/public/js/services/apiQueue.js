@@ -1,18 +1,22 @@
 /**
  * apiQueue.js - Token‑bucket rate limited fetch queue (60 req/min default)
  */
-const DEFAULT_RATE = 60;  // per minute
+const DEFAULT_RATE = 30;  // per minute
 const RETRY_DELAY_MS = 15 * 1000;
 
 class ApiQueue {
   constructor(ratePerMin = DEFAULT_RATE) {
-    this.capacity = ratePerMin;
-    this.tokens = ratePerMin;
+    const rate = Math.max(1, Number(ratePerMin) || DEFAULT_RATE);
+    this.capacity = rate;
+    this.tokens = rate;
+    this.refillPerSecond = rate / 60;
     this.queue = [];
     setInterval(() => this._refill(), 1000);
   }
   _refill() {
-    if (this.tokens < this.capacity) this.tokens++;
+    if (this.tokens < this.capacity) {
+      this.tokens = Math.min(this.capacity, this.tokens + this.refillPerSecond);
+    }
     this._process();
   }
   enqueue(fn) {
@@ -22,9 +26,9 @@ class ApiQueue {
     });
   }
   _process() {
-    if (!this.queue.length || this.tokens <= 0) return;
+    if (!this.queue.length || this.tokens < 1) return;
     const task = this.queue.shift();
-    this.tokens--;
+    this.tokens = Math.max(0, this.tokens - 1);
     (async () => {
       try {
         const res = await task.fn();

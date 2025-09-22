@@ -9,6 +9,9 @@ export class ApiQueue {
   /** 当前可用令牌数 */
   private tokens: number;
 
+  /** 每秒补充的令牌数量（可为小数） */
+  private refillPerSecond: number;
+
   /** 等待执行的任务队列 */
   private queue: Array<{
     /** 要执行的异步函数 */
@@ -20,17 +23,19 @@ export class ApiQueue {
   }> = [];
 
   /** 令牌填充定时器 ID */
-  private refillIntervalId: NodeJS.Timeout;
+  private refillIntervalId: ReturnType<typeof setInterval>;
 
   /**
    * 创建一个 API 请求队列
    * @param ratePerMin 每分钟允许的请求数，默认为 60
    */
   constructor(ratePerMin = 60) {
-    this.capacity = ratePerMin;
-    this.tokens = ratePerMin;
+    const rate = Math.max(1, ratePerMin);
+    this.capacity = rate;
+    this.tokens = rate;
+    this.refillPerSecond = rate / 60;
 
-    // 每秒添加一个令牌，直到达到容量上限
+    // 每秒按比例添加令牌，直到达到容量上限
     this.refillIntervalId = setInterval(() => this.refill(), 1_000);
   }
 
@@ -40,7 +45,7 @@ export class ApiQueue {
    */
   private refill(): void {
     if (this.tokens < this.capacity) {
-      this.tokens++;
+      this.tokens = Math.min(this.capacity, this.tokens + this.refillPerSecond);
     }
     this.process();
   }
@@ -67,14 +72,14 @@ export class ApiQueue {
    */
   private process(): void {
     // 如果队列为空或没有可用令牌，则不执行任务
-    if (!this.queue.length || this.tokens <= 0) return;
+    if (!this.queue.length || this.tokens < 1) return;
 
     // 取出队列头部的任务
     const task = this.queue.shift();
     if (!task) return;
 
     // 消耗一个令牌
-    this.tokens--;
+    this.tokens = Math.max(0, this.tokens - 1);
 
     // 执行任务
     (async () => {
@@ -118,4 +123,12 @@ export class ApiQueue {
  * 全局 API 队列实例
  * 用于限制对外部 API 的请求速率
  */
-export const apiQueue = new ApiQueue(); 
+const envRate = (
+  process?.env?.NEXT_PUBLIC_API_RATE_LIMIT ??
+  process?.env?.API_RATE_LIMIT ??
+  process?.env?.API_REQUESTS_PER_MIN ??
+  '30'
+);
+const parsedRate = Number(envRate);
+const defaultRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 30;
+export const apiQueue = new ApiQueue(defaultRate);

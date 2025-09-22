@@ -27,6 +27,8 @@ export interface Position {
   avgPrice: number;
   last: number;
   priceOk: boolean;
+  stale?: boolean;
+  lastUpdatedAt?: number;
 }
 
 // New interface for cached prices

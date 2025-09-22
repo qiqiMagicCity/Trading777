@@ -325,6 +325,7 @@ function runAllCore(
       ...pos,
       last: last ?? pos.avgPrice,
       priceOk: last !== undefined,
+      stale: last === undefined,
     };
   });
 

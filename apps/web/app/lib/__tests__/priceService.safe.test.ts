@@ -9,7 +9,7 @@ jest.mock('@/app/lib/dataSource', () => ({
   loadJson: jest.fn(),
 }));
 
-import { fetchRealtimeQuote, fetchDailyClose } from '../services/priceService';
+import { fetchRealtimeQuote, fetchDailyClose, __clearPriceServiceCachesForTest, __setRuntimeApiKeysForTest } from '../services/priceService';
 import { NoPriceError } from '../priceService';
 import { getPrice } from '../services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
@@ -21,6 +21,8 @@ const originalFetch = (global as any).fetch;
 describe('priceService safe fallbacks', () => {
   const originalMonitor = process.env.MONITOR;
   const originalPriceStrict = process.env.PRICE_STRICT;
+  const originalFinnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
+  const originalTiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
 
   beforeEach(() => {
     getPriceMock.mockReset();
@@ -29,6 +31,9 @@ describe('priceService safe fallbacks', () => {
     (global as any).fetch = fetchMock;
     delete process.env.MONITOR;
     delete process.env.PRICE_STRICT;
+    delete process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
+    delete process.env.NEXT_PUBLIC_TIINGO_TOKEN;
+    __clearPriceServiceCachesForTest();
   });
 
   afterEach(() => {
@@ -41,6 +46,16 @@ describe('priceService safe fallbacks', () => {
       delete process.env.PRICE_STRICT;
     } else {
       process.env.PRICE_STRICT = originalPriceStrict;
+    }
+    if (originalFinnhubToken === undefined) {
+      delete process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
+    } else {
+      process.env.NEXT_PUBLIC_FINNHUB_TOKEN = originalFinnhubToken;
+    }
+    if (originalTiingoToken === undefined) {
+      delete process.env.NEXT_PUBLIC_TIINGO_TOKEN;
+    } else {
+      process.env.NEXT_PUBLIC_TIINGO_TOKEN = originalTiingoToken;
     }
     if (originalFetch === undefined) {
       delete (global as any).fetch;
@@ -56,6 +71,32 @@ describe('priceService safe fallbacks', () => {
     expect(result?.price).toBe(123);
     expect(result?.price).not.toBe(1);
     expect(result?.stale).toBe(true);
+    expect(result?.priceOk).toBe(true);
+  });
+
+  it('reuses cached realtime price when upstream APIs fail', async () => {
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({});
+
+    __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
+
+    let apiCallCount = 0;
+    (global as any).fetch = jest.fn(async () => {
+      apiCallCount += 1;
+      if (apiCallCount === 1) {
+        return { ok: true, json: async () => ({ c: 256 }) };
+      }
+      return { ok: false, statusText: 'rate limit', json: async () => ({}) };
+    });
+
+    const first = await fetchRealtimeQuote('AAPL');
+    expect(first.price).toBe(256);
+    expect(first.stale).toBe(false);
+
+    const second = await fetchRealtimeQuote('AAPL');
+    expect(second.price).toBe(256);
+    expect(second.stale).toBe(true);
+    expect(second.priceOk).toBe(true);
   });
 
   it('looks back up to seven days for fallback close and logs when enabled', async () => {
@@ -66,7 +107,8 @@ describe('priceService safe fallbacks', () => {
     loadJsonMock.mockResolvedValue({ AAPL: { '2024-04-09': 110 } });
 
     const result = await fetchDailyClose('AAPL', '2024-04-10');
-    expect(result).toEqual({ price: 110, stale: true });
+    expect(result?.price).toBe(110);
+    expect(result?.stale).toBe(true);
     expect(
       warnSpy.mock.calls.some(([msg]) => typeof msg === 'string' && msg.includes('使用前一收盘价作为回退')),
     ).toBe(true);
