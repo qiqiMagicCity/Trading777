@@ -270,7 +270,7 @@ export interface QuoteResult {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_LOOKBACK_DAYS = 7;
+const MAX_LOOKBACK_DAYS = 365;
 
 /** 纽约收盘后判定（DST 安全）。默认 0 分钟缓冲，可用 CLOSE_GRACE_MIN 调整。 */
 function isAfterNyClose(ts: number = Date.now()): boolean {
@@ -301,6 +301,7 @@ async function getPrevCloseWithin(
   const middayOffset = 12 * 60 * 60 * 1000;
 
   let map = closeMap;
+  let nearestFuture: { date: string; price: number } | null = null;
 
   if (!map) {
     try {
@@ -326,6 +327,32 @@ async function getPrevCloseWithin(
     const filePrice = map?.[key]?.[prevDate];
     if (typeof filePrice === 'number') {
       return { date: prevDate, price: filePrice };
+    }
+  }
+
+  const symbolMap = map?.[key];
+  if (symbolMap && typeof symbolMap === 'object') {
+    let latest: { date: string; price: number } | null = null;
+    for (const [candidateDate, candidatePrice] of Object.entries(symbolMap)) {
+      if (typeof candidatePrice !== 'number') continue;
+      if (candidateDate >= anchorDate) {
+        if (
+          candidateDate > anchorDate &&
+          (!nearestFuture || candidateDate < nearestFuture.date)
+        ) {
+          nearestFuture = { date: candidateDate, price: candidatePrice };
+        }
+        continue;
+      }
+      if (!latest || candidateDate > latest.date) {
+        latest = { date: candidateDate, price: candidatePrice };
+      }
+    }
+    if (latest) {
+      return latest;
+    }
+    if (nearestFuture) {
+      return nearestFuture;
     }
   }
 
@@ -385,7 +412,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     const fallback = await getPrevCloseWithin(key, date, MAX_LOOKBACK_DAYS, closeMap);
     if (fallback) {
       if (process.env.MONITOR === '1') {
-        console.warn('[priceService] 使用前一收盘价作为回退', { symbol: key, date, fallbackDate: fallback.date, price: fallback.price });
+        console.warn('[priceService] 使用备选收盘价作为回退', { symbol: key, date, fallbackDate: fallback.date, price: fallback.price });
       }
       return { price: fallback.price, stale: true, priceOk: true, updatedAt: Date.now() };
     }
