@@ -124,6 +124,27 @@ describe('priceService safe fallbacks', () => {
     expect(result).toBeNull();
   });
 
+  it('falls back to a future close price when dataset is ahead of the request date', async () => {
+    process.env.MONITOR = '1';
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({ AAPL: { '2025-08-01': 130 } });
+
+    const result = await fetchDailyClose('AAPL', '2024-04-10');
+    expect(result).toMatchObject({ price: 130, stale: true, priceOk: true });
+    expect(
+      warnSpy.mock.calls.some(
+        ([msg, payload]) =>
+          typeof msg === 'string' &&
+          msg.includes('使用未来收盘价作为回退') &&
+          payload && (payload as { fallbackDate?: string }).fallbackDate === '2025-08-01',
+      ),
+    ).toBe(true);
+
+    warnSpy.mockRestore();
+  });
+
   it('returns the latest historical close when realtime quotes are unavailable for an outdated dataset', async () => {
     getPriceMock.mockResolvedValue(undefined);
     loadJsonMock.mockResolvedValue({ AAPL: { '2024-01-15': 99 } });
