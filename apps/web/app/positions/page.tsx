@@ -43,6 +43,7 @@ export default function PositionsPage() {
           avgPrice: t.averageCost,
           last: 0,
           priceOk: true,
+          stale: true,
         }));
 
         setPositions(posList);

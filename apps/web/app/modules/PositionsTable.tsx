@@ -40,7 +40,18 @@ export function PositionsTable({ positions, trades }: Props) {
       refetchInterval: 1000 * 60 * 5, // 每5分钟自动刷新
       retry: 2, // 失败时重试2次
       refetchOnWindowFocus: true,
-      refetchOnMount: true
+      refetchOnMount: true,
+      initialData: () => {
+        const last = Number.isFinite(pos.last) ? pos.last : undefined;
+        if (last === undefined) return undefined;
+        return {
+          price: last,
+          stale: pos.stale,
+          priceOk: pos.priceOk,
+          updatedAt: pos.lastUpdatedAt,
+        };
+      },
+      initialDataUpdatedAt: pos.lastUpdatedAt,
     })),
   });
 
@@ -80,19 +91,24 @@ export function PositionsTable({ positions, trades }: Props) {
 
     return positions.map((pos, idx) => {
       const result = results[idx];
-      const lastPrice = result?.data?.price !== undefined ? result.data.price : pos.avgPrice;
+      const fallbackPrice = Number.isFinite(pos.last) ? pos.last : pos.avgPrice;
+      const lastPrice =
+        result?.data && typeof result.data.price === 'number'
+          ? result.data.price
+          : fallbackPrice;
+      const resolvedPrice = Number.isFinite(lastPrice) ? lastPrice : pos.avgPrice;
 
       // 修改：对于空头持仓，市值应该是正数（使用绝对值）
       const isShort = pos.qty < 0;
-      const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
+      const marketValue = isShort ? Math.abs(resolvedPrice * pos.qty) : resolvedPrice * pos.qty;
       // 按 (实时价格 - 成本价格) × 数量 计算浮动盈亏
-      const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
+      const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
 
       logger.debug(`${pos.symbol} 市值计算:`, {
-        lastPrice,
+        lastPrice: resolvedPrice,
         qty: pos.qty,
         isShort,
-        rawMarket: lastPrice * pos.qty,
+        rawMarket: resolvedPrice * pos.qty,
         market: marketValue,
         avgPrice: pos.avgPrice,
         unrealized
@@ -144,17 +160,23 @@ export function PositionsTable({ positions, trades }: Props) {
         <tbody>
           {positions.map((pos, idx) => {
             const result = results[idx];
-            const lastPrice = result?.data?.price !== undefined ? result.data.price : pos.avgPrice;
-            const isStale = result?.data?.stale;
-            const isLoading = result?.isLoading;
+            const fallbackPrice = Number.isFinite(pos.last) ? pos.last : pos.avgPrice;
+            const lastPrice =
+              result?.data && typeof result.data.price === 'number'
+                ? result.data.price
+                : fallbackPrice;
+            const resolvedPrice = Number.isFinite(lastPrice) ? lastPrice : pos.avgPrice;
+            const isStale = result?.data?.stale ?? pos.stale;
+            const isPending = result?.isFetching ?? false;
             const isError = result?.isError;
 
             // 使用回退价格计算市值和浮动盈亏
             const isShort = pos.qty < 0;
-            const marketValue = isShort ? Math.abs(lastPrice * pos.qty) : lastPrice * pos.qty;
+            const marketValue = isShort ? Math.abs(resolvedPrice * pos.qty) : resolvedPrice * pos.qty;
             // 当前浮盈亏 = (实时价格 - 持仓单价) × 数量
-            const unrealized = (lastPrice - pos.avgPrice) * pos.qty;
-            const unrealizedPercent = lastPrice && pos.avgPrice ? (lastPrice - pos.avgPrice) / pos.avgPrice : undefined;
+            const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
+            const unrealizedPercent =
+              resolvedPrice && pos.avgPrice ? (resolvedPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
             const realized = getRealized(pos.symbol);
             const totalPNL = unrealized + realized;
@@ -177,10 +199,9 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{pos.symbol}</td>
                 <td>{nameMap[pos.symbol] || '--'}</td>
                 <td>
-                  {isLoading && <span className="loading">加载中...</span>}
-                  {isError && <span className="error">获取失败</span>}
-                  {!isLoading && !isError && (
-                    <PriceBadge price={lastPrice} stale={isStale} />
+                  <PriceBadge price={resolvedPrice} stale={isStale} pending={isPending} />
+                  {isError && !isPending && (
+                    <span className="ml-2 text-xs text-red-500">获取失败</span>
                   )}
                 </td>
                 <td>{pos.qty}</td>
