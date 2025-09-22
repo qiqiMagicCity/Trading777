@@ -270,7 +270,7 @@ export interface QuoteResult {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_LOOKBACK_DAYS = 7;
+const MAX_LOOKBACK_DAYS = 365;
 
 /** 纽约收盘后判定（DST 安全）。默认 0 分钟缓冲，可用 CLOSE_GRACE_MIN 调整。 */
 function isAfterNyClose(ts: number = Date.now()): boolean {
@@ -326,6 +326,21 @@ async function getPrevCloseWithin(
     const filePrice = map?.[key]?.[prevDate];
     if (typeof filePrice === 'number') {
       return { date: prevDate, price: filePrice };
+    }
+  }
+
+  const symbolMap = map?.[key];
+  if (symbolMap && typeof symbolMap === 'object') {
+    let latest: { date: string; price: number } | null = null;
+    for (const [candidateDate, candidatePrice] of Object.entries(symbolMap)) {
+      if (typeof candidatePrice !== 'number') continue;
+      if (candidateDate >= anchorDate) continue;
+      if (!latest || candidateDate > latest.date) {
+        latest = { date: candidateDate, price: candidatePrice };
+      }
+    }
+    if (latest) {
+      return latest;
     }
   }
 
