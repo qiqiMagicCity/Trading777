@@ -99,14 +99,14 @@ describe('priceService safe fallbacks', () => {
     expect(second.priceOk).toBe(true);
   });
 
-  it('looks back up to seven days for fallback close and logs when enabled', async () => {
+  it('falls back to the latest available close even when data is stale', async () => {
     process.env.MONITOR = '1';
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     getPriceMock.mockResolvedValue(undefined);
-    loadJsonMock.mockResolvedValue({ AAPL: { '2024-04-09': 110 } });
+    loadJsonMock.mockResolvedValue({ AAPL: { '2024-03-01': 105, '2024-04-09': 110 } });
 
-    const result = await fetchDailyClose('AAPL', '2024-04-10');
+    const result = await fetchDailyClose('AAPL', '2024-05-20');
     expect(result?.price).toBe(110);
     expect(result?.stale).toBe(true);
     expect(
@@ -122,6 +122,14 @@ describe('priceService safe fallbacks', () => {
 
     const result = await fetchDailyClose('AAPL', '2024-04-10');
     expect(result).toBeNull();
+  });
+
+  it('returns the latest historical close when realtime quotes are unavailable for an outdated dataset', async () => {
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({ AAPL: { '2024-01-15': 99 } });
+
+    const result = await fetchRealtimeQuote('AAPL');
+    expect(result).toMatchObject({ price: 99, stale: true, priceOk: true });
   });
 
   it('returns priceOk false when realtime and fallback quotes are missing', async () => {
