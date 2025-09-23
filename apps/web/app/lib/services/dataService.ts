@@ -57,6 +57,8 @@ export interface Trade {
   isInitialPosition?: boolean;
 }
 
+type ImportableTrade = RawTrade | Trade;
+
 interface TradingDB extends DBSchema {
   [TRADES_STORE_NAME]: {
     key: number;
@@ -143,7 +145,7 @@ function toISODate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function getBaselineDate(rawTrades: RawTrade[]): string {
+function getBaselineDate(rawTrades: ImportableTrade[]): string {
   let minTime = Number.POSITIVE_INFINITY;
   for (const trade of rawTrades) {
     const d = new Date(`${trade.date}T00:00:00Z`);
@@ -159,34 +161,170 @@ function getBaselineDate(rawTrades: RawTrade[]): string {
   return toISODate(baselineDate);
 }
 
-function mapRawTrade(rawTrade: RawTrade): Trade | undefined {
-  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
+function normalizeSideKey(value: string): string {
+  return value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+}
+
+function normalizeActionKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function parseNumeric(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const sanitized = trimmed.replace(/,/g, "");
+    const parsed = Number(sanitized);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
+  const sideMap: Record<string, Trade["action"]> = {
     BUY: "buy",
+    B: "buy",
+    LONG: "buy",
     SELL: "sell",
+    S: "sell",
+    SELL_TO_CLOSE: "sell",
+    SELLTOCLOSE: "sell",
     SHORT: "short",
+    SS: "short",
+    SELL_SHORT: "short",
+    SELLSHORT: "short",
+    SELL_TO_OPEN: "short",
+    SELLTOOPEN: "short",
     COVER: "cover",
+    C: "cover",
+    BUY_TO_COVER: "cover",
+    BUYTOCOVER: "cover",
+    BUY_TO_CLOSE: "cover",
+    BUYTOCLOSE: "cover",
   };
-  const sideValue = rawTrade?.side;
-  const sideKey =
-    typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
-  const action = sideKey
-    ? sideMap[sideKey as keyof typeof sideMap]
-    : undefined;
+  const actionMap: Record<string, Trade["action"]> = {
+    buy: "buy",
+    long: "buy",
+    purchase: "buy",
+    sell: "sell",
+    sell_to_close: "sell",
+    selltoclose: "sell",
+    short: "short",
+    sell_short: "short",
+    sellshort: "short",
+    sell_to_open: "short",
+    selltoopen: "short",
+    short_sell: "short",
+    shortsell: "short",
+    cover: "cover",
+    buy_to_cover: "cover",
+    buytocover: "cover",
+    buy_to_close: "cover",
+    buytoclose: "cover",
+  };
+
+  let action: Trade["action"] | undefined;
+
+  if ("side" in rawTrade && typeof rawTrade.side === "string") {
+    const sideKey = normalizeSideKey(rawTrade.side);
+    action = sideMap[sideKey];
+    if (!action) {
+      action = sideMap[sideKey.replace(/[^A-Z]/g, "")];
+    }
+  }
+
+  if (!action && "action" in rawTrade && typeof rawTrade.action === "string") {
+    const actionKey = normalizeActionKey(rawTrade.action);
+    action = actionMap[actionKey] ?? actionMap[actionKey.replace(/[^a-z]/g, "")];
+  }
+
   if (!action) {
     console.warn(
-      `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
+      `Unknown or missing trade side/action: ${String(
+        (rawTrade as RawTrade).side ?? (rawTrade as Trade).action,
+      )}, skipping.`,
     );
     return undefined;
   }
-  const quantity =
-    action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
-  return {
-    symbol: rawTrade.symbol,
-    price: rawTrade.price,
+
+  let qtyValue: number | undefined;
+  if ("qty" in rawTrade) {
+    qtyValue = parseNumeric((rawTrade as RawTrade).qty);
+  }
+  if (qtyValue === undefined && "quantity" in rawTrade) {
+    qtyValue = parseNumeric((rawTrade as Trade).quantity);
+  }
+  if (qtyValue === undefined && "shares" in (rawTrade as { shares?: unknown })) {
+    qtyValue = parseNumeric((rawTrade as { shares?: unknown }).shares);
+  }
+
+  if (!Number.isFinite(qtyValue)) {
+    console.warn(
+      `Missing or invalid trade quantity for ${String(rawTrade.symbol)}, skipping.`,
+    );
+    return undefined;
+  }
+
+  const priceValue = parseNumeric((rawTrade as { price?: unknown }).price);
+  if (!Number.isFinite(priceValue)) {
+    console.warn(
+      `Missing or invalid trade price for ${String(rawTrade.symbol)}, skipping.`,
+    );
+    return undefined;
+  }
+
+  const symbol =
+    typeof rawTrade.symbol === "string" ? rawTrade.symbol.trim() : "";
+  if (!symbol) {
+    console.warn("Missing trade symbol, skipping.");
+    return undefined;
+  }
+
+  const date =
+    typeof rawTrade.date === "string" ? rawTrade.date.trim() : "";
+  if (!date) {
+    console.warn(
+      `Missing trade date for ${symbol}, skipping.`,
+    );
+    return undefined;
+  }
+
+  const normalizedQty = Math.abs(qtyValue as number);
+  const quantity = action === "short" ? -normalizedQty : normalizedQty;
+
+  const trade: Trade = {
+    symbol,
+    price: priceValue as number,
     quantity,
-    date: rawTrade.date,
+    date,
     action,
   };
+
+  if ("time" in rawTrade && rawTrade.time !== undefined) {
+    const timeValue = (rawTrade as Trade).time;
+    if (typeof timeValue === "string") {
+      const trimmed = timeValue.trim();
+      if (trimmed) {
+        trade.time = trimmed;
+      }
+    } else if (timeValue !== undefined) {
+      trade.time = timeValue;
+    }
+  }
+
+  if (
+    "isInitialPosition" in rawTrade &&
+    typeof rawTrade.isInitialPosition === "boolean"
+  ) {
+    trade.isInitialPosition = rawTrade.isInitialPosition;
+  }
+
+  return trade;
 }
 
 function normalizePositionsForStore(rawPositions: Position[]): Position[] {
@@ -215,7 +353,7 @@ function normalizePositionsForStore(rawPositions: Position[]): Position[] {
 
 export async function importData(rawData: {
   positions: Position[];
-  trades: RawTrade[];
+  trades: ImportableTrade[];
 }) {
   const newHash = await computeDataHash(rawData);
   let storedHash: string | null = null;
@@ -301,7 +439,7 @@ export async function clearAllData(): Promise<void> {
 
 export async function clearAndImportData(rawData: {
   positions: Position[];
-  trades: RawTrade[];
+  trades: ImportableTrade[];
 }): Promise<void> {
   await clearAllData();
 

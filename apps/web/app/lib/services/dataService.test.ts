@@ -9,7 +9,7 @@ import {
   DATASET_SOURCE_CUSTOM,
   DATASET_SOURCE_BUILTIN,
 } from "./dataService";
-import type { RawTrade, Position } from "./dataService";
+import type { RawTrade, Position, Trade } from "./dataService";
 import { createHash } from "crypto";
 
 describe("dataService trade import", () => {
@@ -84,6 +84,132 @@ describe("dataService trade import", () => {
     db.close();
     expect(trades).toHaveLength(1);
     expect(trades[0]).toMatchObject({ symbol: "GOOG", action: "sell" });
+  });
+
+  test("clearAndImportData accepts exported trade format", async () => {
+    const exportedTrade: Trade = {
+      id: 99,
+      symbol: "TSLA",
+      price: 725,
+      quantity: 2,
+      date: "2025-02-10",
+      action: "sell",
+      time: "10:30",
+    };
+
+    await clearAndImportData({ positions: [], trades: [exportedTrade] });
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      symbol: "TSLA",
+      action: "sell",
+      quantity: 2,
+    });
+  });
+
+  test("clearAndImportData accepts metadata rich backup payload", async () => {
+    const payload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "TSDD",
+          price: 11.04,
+          quantity: 10000,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:18:31",
+          id: 26,
+        },
+        {
+          symbol: "BA",
+          price: "216.27",
+          quantity: "350",
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:03",
+          id: 27,
+        },
+        {
+          symbol: "GOOGL",
+          price: 170.73,
+          quantity: 400,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:27",
+          id: 28,
+        },
+        {
+          symbol: "AMD",
+          price: 151.72,
+          quantity: 380,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:57",
+          id: 29,
+        },
+        {
+          symbol: "PYPL",
+          price: 68.54,
+          quantity: 555,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:20",
+          id: 30,
+        },
+        {
+          symbol: "UAL",
+          price: 103.7,
+          quantity: 300,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:39",
+          id: 31,
+        },
+        {
+          symbol: "DIS",
+          price: 116.83,
+          quantity: 250,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:59",
+          id: 32,
+        },
+        {
+          symbol: "NVDL",
+          price: 84.12,
+          quantity: 330,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:22:24",
+          id: 33,
+        },
+      ],
+      equityCurve: [],
+      generated: "2025-09-23T10:15:01.450Z",
+    } as const;
+
+    await clearAndImportData(payload as any);
+
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+
+    expect(trades).toHaveLength(8);
+    const baTrade = trades.find((t) => t.symbol === "BA");
+    expect(baTrade).toMatchObject({
+      action: "buy",
+      quantity: 350,
+      price: 216.27,
+      time: "2025-05-23T05:20:03",
+    });
+    const tsddTrade = trades.find((t) => t.symbol === "TSDD");
+    expect(tsddTrade).toMatchObject({
+      quantity: 10000,
+      action: "buy",
+      date: "2025-05-23",
+    });
   });
 
   test("clearAndImportData stores dataset hash", async () => {
