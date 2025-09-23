@@ -332,15 +332,29 @@ async function getPrevCloseWithin(
   const symbolMap = map?.[key];
   if (symbolMap && typeof symbolMap === 'object') {
     let latest: { date: string; price: number } | null = null;
+    let earliestFuture: { date: string; price: number } | null = null;
     for (const [candidateDate, candidatePrice] of Object.entries(symbolMap)) {
       if (typeof candidatePrice !== 'number') continue;
-      if (candidateDate >= anchorDate) continue;
+      if (candidateDate >= anchorDate) {
+        if (candidateDate > anchorDate) {
+          if (
+            !earliestFuture ||
+            new Date(candidateDate).getTime() < new Date(earliestFuture.date).getTime()
+          ) {
+            earliestFuture = { date: candidateDate, price: candidatePrice };
+          }
+        }
+        continue;
+      }
       if (!latest || candidateDate > latest.date) {
         latest = { date: candidateDate, price: candidatePrice };
       }
     }
     if (latest) {
       return latest;
+    }
+    if (earliestFuture) {
+      return earliestFuture;
     }
   }
 
@@ -354,6 +368,7 @@ async function getPrevCloseWithin(
  */
 export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult | null> {
   const key = symbol.trim().toUpperCase();
+  const normalizedDate = date.includes('T') ? nyDateStr(date) : date;
 
   try {
     const cachedPrice = await getPrice(key, date);
@@ -400,7 +415,9 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     const fallback = await getPrevCloseWithin(key, date, MAX_LOOKBACK_DAYS, closeMap);
     if (fallback) {
       if (process.env.MONITOR === '1') {
-        console.warn('[priceService] 使用前一收盘价作为回退', { symbol: key, date, fallbackDate: fallback.date, price: fallback.price });
+        const isFutureFallback = fallback.date >= normalizedDate;
+        const tag = isFutureFallback ? '[priceService] 使用未来收盘价作为回退' : '[priceService] 使用前一收盘价作为回退';
+        console.warn(tag, { symbol: key, date: normalizedDate, fallbackDate: fallback.date, price: fallback.price });
       }
       return { price: fallback.price, stale: true, priceOk: true, updatedAt: Date.now() };
     }
