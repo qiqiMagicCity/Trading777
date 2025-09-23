@@ -9,7 +9,7 @@ import {
   DATASET_SOURCE_CUSTOM,
   DATASET_SOURCE_BUILTIN,
 } from "./dataService";
-import type { RawTrade, Position } from "./dataService";
+import type { RawTrade, Position, Trade } from "./dataService";
 import { createHash } from "crypto";
 
 describe("dataService trade import", () => {
@@ -84,6 +84,29 @@ describe("dataService trade import", () => {
     db.close();
     expect(trades).toHaveLength(1);
     expect(trades[0]).toMatchObject({ symbol: "GOOG", action: "sell" });
+  });
+
+  test("clearAndImportData accepts exported trade format", async () => {
+    const exportedTrade: Trade = {
+      id: 99,
+      symbol: "TSLA",
+      price: 725,
+      quantity: 2,
+      date: "2025-02-10",
+      action: "sell",
+      time: "10:30",
+    };
+
+    await clearAndImportData({ positions: [], trades: [exportedTrade] });
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      symbol: "TSLA",
+      action: "sell",
+      quantity: 2,
+    });
   });
 
   test("clearAndImportData stores dataset hash", async () => {

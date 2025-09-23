@@ -57,6 +57,8 @@ export interface Trade {
   isInitialPosition?: boolean;
 }
 
+type ImportableTrade = RawTrade | Trade;
+
 interface TradingDB extends DBSchema {
   [TRADES_STORE_NAME]: {
     key: number;
@@ -143,7 +145,7 @@ function toISODate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function getBaselineDate(rawTrades: RawTrade[]): string {
+function getBaselineDate(rawTrades: ImportableTrade[]): string {
   let minTime = Number.POSITIVE_INFINITY;
   for (const trade of rawTrades) {
     const d = new Date(`${trade.date}T00:00:00Z`);
@@ -159,34 +161,89 @@ function getBaselineDate(rawTrades: RawTrade[]): string {
   return toISODate(baselineDate);
 }
 
-function mapRawTrade(rawTrade: RawTrade): Trade | undefined {
+function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
   const sideMap: Record<RawTrade["side"], Trade["action"]> = {
     BUY: "buy",
     SELL: "sell",
     SHORT: "short",
     COVER: "cover",
   };
-  const sideValue = rawTrade?.side;
-  const sideKey =
-    typeof sideValue === "string" ? sideValue.toUpperCase() : undefined;
-  const action = sideKey
-    ? sideMap[sideKey as keyof typeof sideMap]
-    : undefined;
+  const actionMap: Record<string, Trade["action"]> = {
+    buy: "buy",
+    sell: "sell",
+    short: "short",
+    cover: "cover",
+  };
+
+  let action: Trade["action"] | undefined;
+
+  if ("side" in rawTrade && typeof rawTrade.side === "string") {
+    const sideKey = rawTrade.side.trim().toUpperCase();
+    action = sideMap[sideKey as keyof typeof sideMap];
+  }
+
+  if (!action && "action" in rawTrade && typeof rawTrade.action === "string") {
+    const actionKey = rawTrade.action.trim().toLowerCase();
+    action = actionMap[actionKey];
+  }
+
   if (!action) {
     console.warn(
-      `Unknown or missing trade side: ${String(sideValue)}, skipping.`,
+      `Unknown or missing trade side/action: ${String(
+        (rawTrade as RawTrade).side ?? (rawTrade as Trade).action,
+      )}, skipping.`,
     );
     return undefined;
   }
-  const quantity =
-    action === "short" ? -Math.abs(rawTrade.qty) : Math.abs(rawTrade.qty);
-  return {
+
+  let qtyValue: number | undefined;
+  if ("qty" in rawTrade && typeof rawTrade.qty === "number") {
+    qtyValue = rawTrade.qty;
+  } else if (
+    "quantity" in rawTrade &&
+    typeof rawTrade.quantity === "number"
+  ) {
+    qtyValue = rawTrade.quantity;
+  }
+
+  if (!Number.isFinite(qtyValue)) {
+    console.warn(
+      `Missing or invalid trade quantity for ${rawTrade.symbol}, skipping.`,
+    );
+    return undefined;
+  }
+
+  const priceValue = Number(rawTrade.price);
+  if (!Number.isFinite(priceValue)) {
+    console.warn(
+      `Missing or invalid trade price for ${rawTrade.symbol}, skipping.`,
+    );
+    return undefined;
+  }
+
+  const normalizedQty = Math.abs(qtyValue as number);
+  const quantity = action === "short" ? -normalizedQty : normalizedQty;
+
+  const trade: Trade = {
     symbol: rawTrade.symbol,
-    price: rawTrade.price,
+    price: priceValue,
     quantity,
     date: rawTrade.date,
     action,
   };
+
+  if ("time" in rawTrade && rawTrade.time !== undefined) {
+    trade.time = rawTrade.time as Trade["time"];
+  }
+
+  if (
+    "isInitialPosition" in rawTrade &&
+    typeof rawTrade.isInitialPosition === "boolean"
+  ) {
+    trade.isInitialPosition = rawTrade.isInitialPosition;
+  }
+
+  return trade;
 }
 
 function normalizePositionsForStore(rawPositions: Position[]): Position[] {
@@ -215,7 +272,7 @@ function normalizePositionsForStore(rawPositions: Position[]): Position[] {
 
 export async function importData(rawData: {
   positions: Position[];
-  trades: RawTrade[];
+  trades: ImportableTrade[];
 }) {
   const newHash = await computeDataHash(rawData);
   let storedHash: string | null = null;
@@ -301,7 +358,7 @@ export async function clearAllData(): Promise<void> {
 
 export async function clearAndImportData(rawData: {
   positions: Position[];
-  trades: RawTrade[];
+  trades: ImportableTrade[];
 }): Promise<void> {
   await clearAllData();
 
