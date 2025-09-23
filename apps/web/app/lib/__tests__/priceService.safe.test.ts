@@ -116,6 +116,14 @@ describe('priceService safe fallbacks', () => {
     warnSpy.mockRestore();
   });
 
+  it('reads legacy date-first close price maps and numeric strings', async () => {
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({ '2024-05-20': { aapl: '321.45', msft: 310 } });
+
+    const result = await fetchDailyClose('AAPL', '2024-05-20');
+    expect(result).toMatchObject({ price: 321.45, stale: false, priceOk: true });
+  });
+
   it('returns null when close is unavailable and strict mode is off', async () => {
     getPriceMock.mockResolvedValue(undefined);
     loadJsonMock.mockResolvedValue({});

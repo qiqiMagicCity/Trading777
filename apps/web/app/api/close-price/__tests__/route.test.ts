@@ -51,12 +51,12 @@ describe('POST /api/close-price', () => {
     const filePath = path.join(process.cwd(), 'apps/web/public/close_prices.json');
     await fs.writeFile(
       filePath,
-      JSON.stringify({ '2024-05-20': { AAPL: 190 }, '2024-05-21': { msft: 300 } }, null, 2),
+      JSON.stringify({ '2024-05-20': { AAPL: '190' }, '2024-05-21': { msft: '300' } }, null, 2),
       'utf8',
     );
 
     const { POST } = await import('../route');
-    await POST({ json: async () => ({ symbol: 'msft', date: '2024-05-22', close: 310 }) } as any);
+    await POST({ json: async () => ({ symbol: ' msft ', date: '2024-05-22T00:00:00Z', close: 310 }) } as any);
 
     const saved = JSON.parse(await fs.readFile(filePath, 'utf8'));
     expect(saved).toEqual({

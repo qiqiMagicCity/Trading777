@@ -2,6 +2,7 @@
 
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
+import { normalizeClosePriceData } from '@/app/lib/closePrices';
 import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
@@ -300,11 +301,12 @@ async function getPrevCloseWithin(
   if (!Number.isFinite(base)) return null;
   const middayOffset = 12 * 60 * 60 * 1000;
 
-  let map = closeMap;
+  let map = closeMap ? normalizeClosePriceData(closeMap) : undefined;
 
   if (!map) {
     try {
-      map = await loadJson('close_prices') as Record<string, Record<string, number>>;
+      const raw = await loadJson('close_prices');
+      map = normalizeClosePriceData(raw);
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
       map = undefined;
@@ -394,13 +396,14 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       }
     }
 
-    let closeMap: Record<string, Record<string, number>> | undefined;
+    let closeMapRaw: unknown;
     try {
-      closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
+      closeMapRaw = await loadJson('close_prices');
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
+    const closeMap = normalizeClosePriceData(closeMapRaw);
     const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
