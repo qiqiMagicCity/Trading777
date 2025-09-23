@@ -9,7 +9,9 @@ import {
   DATASET_HASH_KEY,
   DATASET_SOURCE_KEY,
   DATASET_SOURCE_BUILTIN,
+  DATASET_SOURCE_CUSTOM,
   resolveDatasetSource,
+  computeDataHash,
 } from '@/lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
@@ -29,27 +31,6 @@ import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, clos
 
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
-async function computeDataHash(data: unknown): Promise<string> {
-  const json = JSON.stringify(data);
-  try {
-    if (typeof crypto?.subtle !== 'undefined') {
-      const buffer = new TextEncoder().encode(json);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-  } catch {
-    /* ignore */
-  }
-  let hash = 0;
-  for (let i = 0; i < json.length; i++) {
-    const chr = json.charCodeAt(i);
-    hash = (hash << 5) - hash + chr;
-    hash |= 0;
-  }
-  return hash.toString();
-}
-
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -67,7 +48,7 @@ export default function DashboardPage() {
         const initPositionsFile = await loadJson('initial_positions');
         const rawData = { trades: tradesFile, positions: initPositionsFile };
 
-        const newHash = await computeDataHash(rawData);
+        const builtinHash = await computeDataHash(rawData);
 
         let storedHash: string | null = null;
         let datasetSource: string | null = null;
@@ -78,18 +59,29 @@ export default function DashboardPage() {
           /* ignore */
         }
 
-        datasetSource = resolveDatasetSource(newHash, storedHash, datasetSource);
+        datasetSource = resolveDatasetSource(
+          builtinHash,
+          storedHash,
+          datasetSource,
+        );
+
+        const hasCustomHash = storedHash !== null && storedHash !== builtinHash;
+        const isCustomDataset =
+          datasetSource === DATASET_SOURCE_CUSTOM || hasCustomHash;
 
         let dbTrades = await findTrades();
 
-        if (dbTrades.length === 0) {
+        if (dbTrades.length === 0 && !isCustomDataset) {
           await importData(rawData);
-          storedHash = newHash;
+          storedHash = builtinHash;
           datasetSource = DATASET_SOURCE_BUILTIN;
           dbTrades = await findTrades();
-        } else if (datasetSource === DATASET_SOURCE_BUILTIN && newHash !== storedHash) {
+        } else if (
+          datasetSource === DATASET_SOURCE_BUILTIN &&
+          builtinHash !== storedHash
+        ) {
           await importData(rawData);
-          storedHash = newHash;
+          storedHash = builtinHash;
           dbTrades = await findTrades();
         }
         const replay = replayPortfolio(dbTrades);

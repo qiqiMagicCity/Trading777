@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { importData } from "@/lib/services/dataService";
-import { findTrades } from "@/lib/services/dataService";
+import {
+  importData,
+  findTrades,
+  computeDataHash,
+  DATASET_HASH_KEY,
+  DATASET_SOURCE_KEY,
+  DATASET_SOURCE_CUSTOM,
+  resolveDatasetSource,
+} from "@/lib/services/dataService";
 import { loadJson } from "@/app/lib/dataSource";
 import type { Position } from "@/lib/services/dataService";
 import { computeFifo, type EnrichedTrade } from "@/lib/fifo";
@@ -19,13 +26,37 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        // 先查询是否已有交易数据，若没有则导入示例数据
+        // 先查询是否已有交易数据，若没有则导入示例数据（仅当未导入自定义数据时）
         let allTrades = await findTrades();
         if (allTrades.length === 0) {
-          const tradesFile = await loadJson('trades');
-          const initPositionsFile = await loadJson('initial_positions');
-          await importData({ trades: tradesFile, positions: initPositionsFile });
-          allTrades = await findTrades();
+          const tradesFile = await loadJson("trades");
+          const initPositionsFile = await loadJson("initial_positions");
+          const rawData = { trades: tradesFile, positions: initPositionsFile };
+
+          let storedHash: string | null = null;
+          let datasetSource: string | null = null;
+          try {
+            storedHash = localStorage.getItem(DATASET_HASH_KEY);
+            datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
+          } catch {
+            /* ignore */
+          }
+
+          const builtinHash = await computeDataHash(rawData);
+          datasetSource = resolveDatasetSource(
+            builtinHash,
+            storedHash,
+            datasetSource,
+          );
+          const hasCustomHash =
+            storedHash !== null && storedHash !== builtinHash;
+          const isCustomDataset =
+            datasetSource === DATASET_SOURCE_CUSTOM || hasCustomHash;
+
+          if (!isCustomDataset) {
+            await importData(rawData);
+            allTrades = await findTrades();
+          }
         }
 
         const enriched = computeFifo(allTrades);

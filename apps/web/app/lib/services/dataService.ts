@@ -167,7 +167,7 @@ export async function closeDb(): Promise<void> {
   }
 }
 
-async function computeDataHash(data: unknown): Promise<string> {
+export async function computeDataHash(data: unknown): Promise<string> {
   const json = JSON.stringify(data);
   try {
     if (typeof crypto?.subtle !== "undefined") {
