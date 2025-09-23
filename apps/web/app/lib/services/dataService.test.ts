@@ -109,6 +109,7 @@ describe("dataService trade import", () => {
     });
   });
 
+  // --- 回归：接受“富含元数据”的备份载荷（含字符串数值、action/quantity 等别名） ---
   test("clearAndImportData accepts metadata rich backup payload", async () => {
     const payload = {
       positions: [],

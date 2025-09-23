@@ -1,636 +1,396 @@
-import { openDB, DBSchema, IDBPDatabase } from "idb";
-import type { DailyResult } from "@/lib/types";
-import { logger } from "@/lib/logger";
-import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
+import "fake-indexeddb/auto";
+import { openDB } from "idb";
+import {
+  importData,
+  clearAndImportData,
+  closeDb,
+  DATASET_HASH_KEY,
+  DATASET_SOURCE_KEY,
+  DATASET_SOURCE_CUSTOM,
+  DATASET_SOURCE_BUILTIN,
+} from "./dataService";
+import type { RawTrade, Position, Trade } from "./dataService";
+import { createHash } from "crypto";
 
-const DB_NAME = "TradingApp";
-const DB_VERSION = 3; // Incremented version for schema change
-const TRADES_STORE_NAME = "trades";
-const POSITIONS_STORE_NAME = "positions";
-const PRICES_STORE_NAME = "prices"; // New store for prices
+describe("dataService trade import", () => {
+  beforeEach(async () => {
+    await indexedDB.deleteDatabase("TradingApp");
+  });
 
-export const DATASET_HASH_KEY = "dataset-hash";
-export const DATASET_SOURCE_KEY = "dataset-source";
-export const DATASET_SOURCE_BUILTIN = "builtin";
-export const DATASET_SOURCE_CUSTOM = "custom";
+  afterEach(async () => {
+    await closeDb();
+  });
 
-// Matches the structure in trades.json -> trades array
-export interface RawTrade {
-  date: string; // "2025-07-04"
-  symbol: string;
-  side: "BUY" | "SELL" | "SHORT" | "COVER";
-  qty: number;
-  price: number;
-  pl?: number;
-  closed?: boolean;
-}
+  test("importData skips malformed trades without aborting", async () => {
+    const rawData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-01-01",
+          symbol: "AAPL",
+          side: "BUY",
+          qty: 10,
+          price: 100,
+        },
+        {
+          date: "2025-01-02",
+          symbol: "MSFT",
+          side: "INVALID" as unknown as RawTrade["side"],
+          qty: 5,
+          price: 200,
+        },
+        { date: "2025-01-03", symbol: "TSLA", qty: 3, price: 300 } as unknown as RawTrade,
+        {
+          date: "2025-01-04",
+          symbol: "GOOG",
+          side: "SELL",
+          qty: 2,
+          price: 150,
+        },
+      ],
+    };
 
-// Matches the structure in trades.json -> positions array
-export interface Position {
-  symbol: string;
-  qty: number;
-  avgPrice: number;
-  last: number;
-  priceOk: boolean;
-  stale?: boolean;
-  lastUpdatedAt?: number;
-}
-
-// New interface for cached prices
-export interface CachedPrice {
-  symbol: string;
-  date: string;
-  close: number;
-  source: "finnhub" | "alphavantage" | "import" | "tiingo" | "close_rt";
-}
-
-// Interface for metricsDaily records
-// Internal representation, adapted for the app
-export interface Trade {
-  id?: number;
-  symbol: string;
-  price: number;
-  quantity: number;
-  date: string;
-  time?: string | number | Date;
-  action: "buy" | "sell" | "short" | "cover";
-  isInitialPosition?: boolean;
-}
-
-type ImportableTrade = RawTrade | Trade;
-
-interface TradingDB extends DBSchema {
-  [TRADES_STORE_NAME]: {
-    key: number;
-    value: Trade;
-    indexes: { "by-date": string };
-  };
-  [POSITIONS_STORE_NAME]: {
-    key: string;
-    value: Position;
-  };
-  [PRICES_STORE_NAME]: {
-    key: [string, string]; // [symbol, date]
-    value: CachedPrice;
-    indexes: { "by-symbol": string };
-  };
-}
-
-let dbPromise: Promise<IDBPDatabase<TradingDB>> | undefined;
-
-let cachedDailyResults: DailyResult[] = [];
-
-function getDb(): Promise<IDBPDatabase<TradingDB>> {
-  if (!dbPromise) {
-    dbPromise = openDB<TradingDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
-        if (oldVersion < 1) {
-          if (!db.objectStoreNames.contains(TRADES_STORE_NAME)) {
-            const store = db.createObjectStore(TRADES_STORE_NAME, {
-              keyPath: "id",
-              autoIncrement: true,
-            });
-            store.createIndex("by-date", "date");
-          }
-          if (!db.objectStoreNames.contains(POSITIONS_STORE_NAME)) {
-            db.createObjectStore(POSITIONS_STORE_NAME, { keyPath: "symbol" });
-          }
-        }
-        if (oldVersion < 2) {
-          if (db.objectStoreNames.contains(PRICES_STORE_NAME)) {
-            db.deleteObjectStore(PRICES_STORE_NAME);
-          }
-          const store = db.createObjectStore(PRICES_STORE_NAME, {
-            keyPath: ["symbol", "date"],
-          });
-          store.createIndex("by-symbol", "symbol");
-        }
-      },
-    });
-  }
-  return dbPromise!;
-}
-
-export async function closeDb(): Promise<void> {
-  if (dbPromise) {
-    const db = await dbPromise;
+    await importData(rawData);
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
     db.close();
-    dbPromise = undefined;
-  }
-}
+    expect(trades).toHaveLength(2);
+  });
 
-async function computeDataHash(data: unknown): Promise<string> {
-  const json = JSON.stringify(data);
-  try {
-    if (typeof crypto?.subtle !== "undefined") {
-      const buffer = new TextEncoder().encode(json);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-    }
-  } catch {
-    /* ignore */
-  }
-  let hash = 0;
-  for (let i = 0; i < json.length; i++) {
-    hash = (hash + json.charCodeAt(i)) % 0xfffffff;
-  }
-  return hash.toString();
-}
+  test("clearAndImportData skips malformed trades", async () => {
+    const rawData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-02-01",
+          symbol: "MSFT",
+          side: "INVALID" as unknown as RawTrade["side"],
+          qty: 1,
+          price: 200,
+        },
+        {
+          date: "2025-02-02",
+          symbol: "GOOG",
+          side: "SELL",
+          qty: 1,
+          price: 150,
+        },
+      ],
+    };
 
-function toISODate(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+    await clearAndImportData(rawData);
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({ symbol: "GOOG", action: "sell" });
+  });
 
-function getBaselineDate(rawTrades: ImportableTrade[]): string {
-  let minTime = Number.POSITIVE_INFINITY;
-  for (const trade of rawTrades) {
-    const d = new Date(`${trade.date}T00:00:00Z`);
-    const time = d.getTime();
-    if (Number.isFinite(time) && time < minTime) {
-      minTime = time;
-    }
-  }
-  if (!Number.isFinite(minTime)) {
-    return "1900-01-01";
-  }
-  const baselineDate = new Date(minTime - 24 * 60 * 60 * 1000);
-  return toISODate(baselineDate);
-}
+  test("clearAndImportData accepts exported trade format", async () => {
+    const exportedTrade: Trade = {
+      id: 99,
+      symbol: "TSLA",
+      price: 725,
+      quantity: 2,
+      date: "2025-02-10",
+      action: "sell",
+      time: "10:30",
+    };
 
-function normalizeSideKey(value: string): string {
-  return value.trim().toUpperCase().replace(/[\s-]+/g, "_");
-}
-
-function normalizeActionKey(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-}
-
-function parseNumeric(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return undefined;
-    const sanitized = trimmed.replace(/,/g, "");
-    const parsed = Number(sanitized);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return undefined;
-}
-
-function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
-  const sideMap: Record<string, Trade["action"]> = {
-    BUY: "buy",
-    B: "buy",
-    LONG: "buy",
-    SELL: "sell",
-    S: "sell",
-    SELL_TO_CLOSE: "sell",
-    SELLTOCLOSE: "sell",
-    SHORT: "short",
-    SS: "short",
-    SELL_SHORT: "short",
-    SELLSHORT: "short",
-    SELL_TO_OPEN: "short",
-    SELLTOOPEN: "short",
-    COVER: "cover",
-    C: "cover",
-    BUY_TO_COVER: "cover",
-    BUYTOCOVER: "cover",
-    BUY_TO_CLOSE: "cover",
-    BUYTOCLOSE: "cover",
-  };
-  const actionMap: Record<string, Trade["action"]> = {
-    buy: "buy",
-    long: "buy",
-    purchase: "buy",
-    sell: "sell",
-    sell_to_close: "sell",
-    selltoclose: "sell",
-    short: "short",
-    sell_short: "short",
-    sellshort: "short",
-    sell_to_open: "short",
-    selltoopen: "short",
-    short_sell: "short",
-    shortsell: "short",
-    cover: "cover",
-    buy_to_cover: "cover",
-    buytocover: "cover",
-    buy_to_close: "cover",
-    buytoclose: "cover",
-  };
-
-  let action: Trade["action"] | undefined;
-
-  if ("side" in rawTrade && typeof rawTrade.side === "string") {
-    const sideKey = normalizeSideKey(rawTrade.side);
-    action = sideMap[sideKey];
-    if (!action) {
-      action = sideMap[sideKey.replace(/[^A-Z]/g, "")];
-    }
-  }
-
-  if (!action && "action" in rawTrade && typeof rawTrade.action === "string") {
-    const actionKey = normalizeActionKey(rawTrade.action);
-    action = actionMap[actionKey] ?? actionMap[actionKey.replace(/[^a-z]/g, "")];
-  }
-
-  if (!action) {
-    console.warn(
-      `Unknown or missing trade side/action: ${String(
-        (rawTrade as RawTrade).side ?? (rawTrade as Trade).action,
-      )}, skipping.`,
-    );
-    return undefined;
-  }
-
-  let qtyValue: number | undefined;
-  if ("qty" in rawTrade) {
-    qtyValue = parseNumeric((rawTrade as RawTrade).qty);
-  }
-  if (qtyValue === undefined && "quantity" in rawTrade) {
-    qtyValue = parseNumeric((rawTrade as Trade).quantity);
-  }
-  if (qtyValue === undefined && "shares" in (rawTrade as { shares?: unknown })) {
-    qtyValue = parseNumeric((rawTrade as { shares?: unknown }).shares);
-  }
-
-  if (!Number.isFinite(qtyValue)) {
-    console.warn(
-      `Missing or invalid trade quantity for ${String(rawTrade.symbol)}, skipping.`,
-    );
-    return undefined;
-  }
-
-  const priceValue = parseNumeric((rawTrade as { price?: unknown }).price);
-  if (!Number.isFinite(priceValue)) {
-    console.warn(
-      `Missing or invalid trade price for ${String(rawTrade.symbol)}, skipping.`,
-    );
-    return undefined;
-  }
-
-  const symbol =
-    typeof rawTrade.symbol === "string" ? rawTrade.symbol.trim() : "";
-  if (!symbol) {
-    console.warn("Missing trade symbol, skipping.");
-    return undefined;
-  }
-
-  const date =
-    typeof rawTrade.date === "string" ? rawTrade.date.trim() : "";
-  if (!date) {
-    console.warn(
-      `Missing trade date for ${symbol}, skipping.`,
-    );
-    return undefined;
-  }
-
-  const normalizedQty = Math.abs(qtyValue as number);
-  const quantity = action === "short" ? -normalizedQty : normalizedQty;
-
-  const trade: Trade = {
-    symbol,
-    price: priceValue as number,
-    quantity,
-    date,
-    action,
-  };
-
-  if ("time" in rawTrade && rawTrade.time !== undefined) {
-    const timeValue = (rawTrade as Trade).time;
-    if (typeof timeValue === "string") {
-      const trimmed = timeValue.trim();
-      if (trimmed) {
-        trade.time = trimmed;
-      }
-    } else if (timeValue !== undefined) {
-      trade.time = timeValue;
-    }
-  }
-
-  if (
-    "isInitialPosition" in rawTrade &&
-    typeof rawTrade.isInitialPosition === "boolean"
-  ) {
-    trade.isInitialPosition = rawTrade.isInitialPosition;
-  }
-
-  return trade;
-}
-
-function normalizePositionsForStore(rawPositions: Position[]): Position[] {
-  const normalized: Position[] = [];
-  for (const raw of rawPositions) {
-    if (!raw) continue;
-    const qty = Number(raw.qty);
-    if (!Number.isFinite(qty) || qty === 0) continue;
-    const absQty = Math.abs(qty);
-    const isShort = qty < 0;
-    normalized.push({
-      symbol: raw.symbol,
-      qty: isShort ? -absQty : absQty,
-      avgPrice: raw.avgPrice,
-      last:
-        typeof raw.last === "number" && Number.isFinite(raw.last)
-          ? raw.last
-          : raw.avgPrice,
-      priceOk: raw.priceOk ?? true,
-      stale: raw.stale ?? false,
-      lastUpdatedAt: raw.lastUpdatedAt,
+    await clearAndImportData({ positions: [], trades: [exportedTrade] });
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      symbol: "TSLA",
+      action: "sell",
+      quantity: 2,
     });
-  }
-  return normalized;
-}
+  });
 
-export async function importData(rawData: {
-  positions: Position[];
-  trades: ImportableTrade[];
-}) {
-  const newHash = await computeDataHash(rawData);
-  let storedHash: string | null = null;
-  let storedSource: string | null = null;
-  try {
-    storedHash = localStorage.getItem(DATASET_HASH_KEY);
-    storedSource = localStorage.getItem(DATASET_SOURCE_KEY);
-  } catch {
-    /* localStorage unavailable */
-  }
+  // --- 回归：接受“富含元数据”的备份载荷（含字符串数值、action/quantity 等别名） ---
+  test("clearAndImportData accepts metadata rich backup payload", async () => {
+    const payload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "TSDD",
+          price: 11.04,
+          quantity: 10000,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:18:31",
+          id: 26,
+        },
+        {
+          symbol: "BA",
+          price: "216.27",
+          quantity: "350",
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:03",
+          id: 27,
+        },
+        {
+          symbol: "GOOGL",
+          price: 170.73,
+          quantity: 400,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:27",
+          id: 28,
+        },
+        {
+          symbol: "AMD",
+          price: 151.72,
+          quantity: 380,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:57",
+          id: 29,
+        },
+        {
+          symbol: "PYPL",
+          price: 68.54,
+          quantity: 555,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:20",
+          id: 30,
+        },
+        {
+          symbol: "UAL",
+          price: 103.7,
+          quantity: 300,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:39",
+          id: 31,
+        },
+        {
+          symbol: "DIS",
+          price: 116.83,
+          quantity: 250,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:59",
+          id: 32,
+        },
+        {
+          symbol: "NVDL",
+          price: 84.12,
+          quantity: 330,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:22:24",
+          id: 33,
+        },
+      ],
+      equityCurve: [],
+      generated: "2025-09-23T10:15:01.450Z",
+    } as const;
 
-  if (storedSource === DATASET_SOURCE_CUSTOM) {
-    logger.info("Custom dataset detected. Skipping import.");
-    return;
-  }
+    await clearAndImportData(payload as any);
 
-  if (storedHash !== newHash) {
-    await clearAllData();
-    try {
-      localStorage.setItem(DATASET_HASH_KEY, newHash);
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-    } catch {
-      /* ignore */
-    }
-  } else {
-    logger.info("Dataset unchanged. Skipping import.");
-    return;
-  }
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
 
-  const db = await getDb();
-
-  logger.info("Importing data...");
-  const tx = db.transaction(TRADES_STORE_NAME, "readwrite");
-  const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-
-  const baselineDate = getBaselineDate(rawData.trades);
-
-  const tradesToImport: Trade[] = [];
-  for (const rawTrade of rawData.trades) {
-    const trade = mapRawTrade(rawTrade);
-    if (trade) {
-      tradesToImport.push(trade);
-    }
-  }
-
-  for (const position of rawData.positions) {
-    const qty = Math.abs(position.qty);
-    if (qty === 0) continue;
-    const isShort = position.qty < 0;
-    tradesToImport.push({
-      symbol: position.symbol,
-      price: position.avgPrice,
-      quantity: isShort ? -qty : qty,
-      date: baselineDate,
-      action: isShort ? "short" : "buy",
-      isInitialPosition: true,
+    expect(trades).toHaveLength(8);
+    const baTrade = trades.find((t) => t.symbol === "BA");
+    expect(baTrade).toMatchObject({
+      action: "buy",
+      quantity: 350,
+      price: 216.27,
+      time: "2025-05-23T05:20:03",
     });
-  }
-
-  await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
-  await tx.done;
-
-  const positionsToStore = normalizePositionsForStore(rawData.positions);
-  if (positionsToStore.length > 0) {
-    const positionsTx = db.transaction(POSITIONS_STORE_NAME, "readwrite");
-    const positionStore = positionsTx.objectStore(POSITIONS_STORE_NAME);
-    await Promise.all(
-      positionsToStore.map((position) => positionStore.put(position)),
-    );
-    await positionsTx.done;
-  }
-  logger.info("Data imported successfully.");
-}
-
-export async function clearAllData(): Promise<void> {
-  const db = await getDb();
-  const tx = db.transaction(
-    [TRADES_STORE_NAME, POSITIONS_STORE_NAME, PRICES_STORE_NAME],
-    "readwrite",
-  );
-  await Promise.all([
-    tx.objectStore(TRADES_STORE_NAME).clear(),
-    tx.objectStore(POSITIONS_STORE_NAME).clear(),
-    tx.objectStore(PRICES_STORE_NAME).clear(),
-  ]);
-  await tx.done;
-  clearDailyResultsCache();
-  logger.info("All trade, position, and price data cleared.");
-}
-
-export async function clearAndImportData(rawData: {
-  positions: Position[];
-  trades: ImportableTrade[];
-}): Promise<void> {
-  await clearAllData();
-
-  const db = await getDb();
-  logger.info("Importing data...");
-  const tx = db.transaction(TRADES_STORE_NAME, "readwrite");
-  const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-
-  const baselineDate = getBaselineDate(rawData.trades);
-
-  const tradesToImport: Trade[] = [];
-  for (const rawTrade of rawData.trades) {
-    const trade = mapRawTrade(rawTrade);
-    if (trade) {
-      tradesToImport.push(trade);
-    }
-  }
-
-  for (const position of rawData.positions) {
-    const qty = Math.abs(position.qty);
-    if (qty === 0) continue;
-    const isShort = position.qty < 0;
-    tradesToImport.push({
-      symbol: position.symbol,
-      price: position.avgPrice,
-      quantity: isShort ? -qty : qty,
-      date: baselineDate,
-      action: isShort ? "short" : "buy",
-      isInitialPosition: true,
+    const tsddTrade = trades.find((t) => t.symbol === "TSDD");
+    expect(tsddTrade).toMatchObject({
+      quantity: 10000,
+      action: "buy",
+      date: "2025-05-23",
     });
-  }
+  });
 
-  await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
-  await tx.done;
+  test("clearAndImportData stores dataset hash", async () => {
+    const rawData = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-03-01",
+          symbol: "AAPL",
+          side: "BUY" as const,
+          qty: 1,
+          price: 100,
+        },
+      ],
+    };
 
-  const positionsToStore = normalizePositionsForStore(rawData.positions);
-  if (positionsToStore.length > 0) {
-    const positionsTx = db.transaction(POSITIONS_STORE_NAME, "readwrite");
-    const positionStore = positionsTx.objectStore(POSITIONS_STORE_NAME);
-    await Promise.all(
-      positionsToStore.map((position) => positionStore.put(position)),
+    const expectedHash = createHash("sha256")
+      .update(JSON.stringify(rawData))
+      .digest("hex");
+
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
+
+    await clearAndImportData(rawData);
+    expect(global.localStorage.getItem(DATASET_HASH_KEY)).toBe(expectedHash);
+    expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
+      DATASET_SOURCE_CUSTOM,
     );
-    await positionsTx.done;
-  }
-  clearDailyResultsCache();
-  try {
-    const newHash = await computeDataHash(rawData);
-    localStorage.setItem(DATASET_HASH_KEY, newHash);
-    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
-  } catch {
-    /* ignore */
-  }
-  logger.info("Data imported successfully after clearing.");
-}
+    // cleanup
+    // @ts-expect-error - cleanup mocked localStorage
+    delete global.localStorage;
+  });
 
-export async function exportData(): Promise<{
-  positions: Position[];
-  trades: Trade[];
-}> {
-  const trades = await findTrades();
-  const initialPositions = extractInitialPositionsFromTrades(trades).map(
-    ({ symbol, qty, avgPrice }) => ({
-      symbol,
-      qty,
-      avgPrice,
-      last: avgPrice,
-      priceOk: true,
-    }),
-  );
-  return { positions: initialPositions, trades };
-}
+  test("importData skips builtin import when custom dataset present", async () => {
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
 
-export async function findTrades(): Promise<Trade[]> {
-  const db = await getDb();
-  const tx = db.transaction(TRADES_STORE_NAME, "readonly");
-  const store = tx.objectStore(TRADES_STORE_NAME);
-  const list: Trade[] = [];
-  let cursor = await store.openCursor();
+    const customPayload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "CUSTOM",
+          price: 101.23,
+          quantity: 1,
+          date: "2025-06-01",
+          action: "buy" as const,
+        },
+      ],
+    } as const;
 
-  while (cursor) {
-    const trade = cursor.value as Trade;
-    const id = cursor.key as number;
-    list.push({ ...trade, id });
-    cursor = await cursor.continue();
-  }
-  return list;
-}
+    await clearAndImportData(customPayload as any);
 
-export async function findPositions(): Promise<Position[]> {
-  const trades = await findTrades();
-  const replay = replayPortfolio(trades);
-  return replay.positions;
-}
+    const builtinData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-07-01",
+          symbol: "BUILTIN",
+          side: "BUY",
+          qty: 5,
+          price: 55,
+        },
+      ],
+    };
 
-export async function loadDailyResults(): Promise<DailyResult[]> {
-  return cachedDailyResults.slice();
-}
+    await importData(builtinData);
 
-export function setDailyResultsCache(results: DailyResult[]): void {
-  cachedDailyResults = results.slice();
-}
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
 
-export function clearDailyResultsCache(): void {
-  cachedDailyResults = [];
-}
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      symbol: "CUSTOM",
+      action: "buy",
+      quantity: 1,
+    });
+    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
 
-export function getEvalDateStr(
-  daily: DailyResult[],
-  lastTradeDateStr?: string,
-) {
-  const freeze = process.env.NEXT_PUBLIC_FREEZE_DATE?.trim();
-  if (freeze) return freeze.slice(0, 10);
-  const lastDaily = daily.reduce(
-    (m, r) => (r.date > m ? r.date : m),
-    "1900-01-01",
-  );
-  const lastTrade = lastTradeDateStr ?? "1900-01-01";
-  return (lastDaily > lastTrade ? lastDaily : lastTrade).slice(0, 10);
-}
+    // cleanup
+    // @ts-expect-error - cleanup mocked localStorage
+    delete global.localStorage;
+  });
 
-// --- New functions for price cache ---
+  test("importData stores dataset hash and marks builtin source", async () => {
+    const rawData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-05-01",
+          symbol: "AAPL",
+          side: "BUY",
+          qty: 1,
+          price: 123,
+        },
+      ],
+    };
 
-export async function getPrice(
-  symbol: string,
-  date: string,
-): Promise<CachedPrice | undefined> {
-  const db = await getDb();
-  return db.get(PRICES_STORE_NAME, [symbol, date]);
-}
+    const expectedHash = createHash("sha256")
+      .update(JSON.stringify(rawData))
+      .digest("hex");
 
-export async function putPrice(price: CachedPrice): Promise<void> {
-  const db = await getDb();
-  const tx = db.transaction(PRICES_STORE_NAME, "readwrite");
-  await tx.store.put(price);
-  await tx.done;
-}
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
 
-export async function importClosePrices(
-  nestedPrices: Record<string, Record<string, number>>,
-): Promise<number> {
-  // nestedPrices format: { '2025-07-05': { 'AAPL': 123.45, ... }, ... }
-  let imported = 0;
-  const promises: Promise<void>[] = [];
-  for (const date in nestedPrices) {
-    const dayObj = nestedPrices[date];
-    if (dayObj && typeof dayObj === "object") {
-      for (const symbol in dayObj) {
-        const close = dayObj[symbol];
-        if (typeof close === "number") {
-          promises.push(putPrice({ symbol, date, close, source: "import" }));
-          imported++;
-        }
-      }
-    }
-  }
-  await Promise.all(promises);
-  clearDailyResultsCache();
-  return imported;
-}
+    await importData(rawData);
 
-export async function getAllPrices(): Promise<CachedPrice[]> {
-  const db = await getDb();
-  return db.getAll(PRICES_STORE_NAME);
-}
+    expect(global.localStorage.getItem(DATASET_HASH_KEY)).toBe(expectedHash);
+    expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
+      DATASET_SOURCE_BUILTIN,
+    );
 
-export async function addTrade(trade: Trade): Promise<number> {
-  const db = await getDb();
-  const id = await db.add(TRADES_STORE_NAME, trade as Trade);
-  clearDailyResultsCache();
-  return id;
-}
+    // cleanup
+    // @ts-expect-error - cleanup mocked localStorage
+    delete global.localStorage;
+  });
 
-// Update existing trade (by id)
-export async function updateTrade(trade: Trade): Promise<void> {
-  if (trade.id == null) throw new Error("Trade id is required for update");
-  const db = await getDb();
-  logger.info("更新交易:", trade);
-  await db.put(TRADES_STORE_NAME, trade);
-  logger.info("交易更新成功");
-  clearDailyResultsCache();
-}
-
-export async function deleteTrade(id: number): Promise<void> {
-  const db = await getDb();
-  await db.delete(TRADES_STORE_NAME, id);
-  clearDailyResultsCache();
-}
+  test("importData enforces negative quantity for short trades and positions", async () => {
+    const rawData = {
+      positions: [
+        { symbol: "AMZN", qty: -80, avgPrice: 10, last: 10, priceOk: true },
+      ],
+      trades: [
+        {
+          date: "2025-04-01",
+          symbol: "AMZN",
+          side: "SHORT" as const,
+          qty: 80,
+          price: 10,
+        },
+      ],
+    };
+    await importData(rawData);
+    const db = await openDB("TradingApp", 3);
+    const [trade] = await db.getAll("trades");
+    const [position] = await db.getAll("positions");
+    db.close();
+    expect(trade.quantity).toBe(-80);
+    expect(position.qty).toBe(-80);
+  });
+});
