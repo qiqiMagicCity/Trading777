@@ -314,23 +314,32 @@ export async function importData(rawData: {
 }) {
   const newHash = await computeDataHash(rawData);
   let storedHash: string | null = null;
+  let datasetSource: string | null = null;
   try {
     storedHash = localStorage.getItem(DATASET_HASH_KEY);
+    datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
   } catch {
     /* localStorage unavailable */
   }
 
-  if (storedHash !== newHash) {
-    await clearAllData();
-    try {
-      localStorage.setItem(DATASET_HASH_KEY, newHash);
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-    } catch {
-      /* ignore */
-    }
-  } else {
+  if (datasetSource === DATASET_SOURCE_CUSTOM && storedHash !== newHash) {
+    logger.info(
+      "Custom dataset detected. Skipping builtin import to preserve user data.",
+    );
+    return;
+  }
+
+  if (storedHash === newHash) {
     logger.info("Dataset unchanged. Skipping import.");
     return;
+  }
+
+  await clearAllData();
+  try {
+    localStorage.setItem(DATASET_HASH_KEY, newHash);
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+  } catch {
+    /* ignore */
   }
 
   const db = await getDb();
