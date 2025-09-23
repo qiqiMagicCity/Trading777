@@ -17,7 +17,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
 
   const [symbol, setSymbol] = useState('');
   const [side, setSide] = useState<Side>('BUY');
-  const [qty, setQty] = useState(0);
+  const [qty, setQty] = useState<number>(0);
   const [price, setPrice] = useState(0);
   const [date, setDate] = useState(nowNY().toISOString().slice(0, 10));
 
@@ -112,7 +112,14 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
           </select>
 
           <label>数量</label>
-          <input type="number" value={qty} onChange={e => setQty(parseInt(e.target.value || '0', 10))} required />
+          <input
+            type="number"
+            step="any"
+            inputMode="decimal"
+            value={qty || ''}
+            onChange={e => setQty(Number(e.target.value || '0'))}
+            required
+          />
 
           <label>单价</label>
           <input type="number" step="0.01" value={price} onChange={e => setPrice(parseFloat(e.target.value || '0'))} required />
