@@ -46,22 +46,32 @@ export function resolveDatasetSource(
     return datasetSource;
   }
 
-  const expectedSource =
-    storedHash === builtinHash
-      ? DATASET_SOURCE_BUILTIN
-      : DATASET_SOURCE_CUSTOM;
+  const storage = accessLocalStorage();
 
-  if (datasetSource !== expectedSource) {
-    const storage = accessLocalStorage();
+  if (storedHash === builtinHash) {
+    if (datasetSource !== DATASET_SOURCE_BUILTIN) {
+      try {
+        storage?.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+      } catch {
+        /* ignore */
+      }
+    }
+    return DATASET_SOURCE_BUILTIN;
+  }
+
+  if (datasetSource === DATASET_SOURCE_BUILTIN) {
+    return DATASET_SOURCE_BUILTIN;
+  }
+
+  if (datasetSource !== DATASET_SOURCE_CUSTOM) {
     try {
-      storage?.setItem(DATASET_SOURCE_KEY, expectedSource);
+      storage?.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
     } catch {
       /* ignore */
     }
-    return expectedSource;
   }
 
-  return datasetSource;
+  return DATASET_SOURCE_CUSTOM;
 }
 
 // Matches the structure in trades.json -> trades array
