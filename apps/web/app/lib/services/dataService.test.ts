@@ -257,6 +257,71 @@ describe("dataService trade import", () => {
     delete global.localStorage;
   });
 
+  test("importData skips builtin import when custom dataset present", async () => {
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
+
+    const customPayload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "CUSTOM",
+          price: 101.23,
+          quantity: 1,
+          date: "2025-06-01",
+          action: "buy" as const,
+        },
+      ],
+    } as const;
+
+    await clearAndImportData(customPayload as any);
+
+    const builtinData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-07-01",
+          symbol: "BUILTIN",
+          side: "BUY",
+          qty: 5,
+          price: 55,
+        },
+      ],
+    };
+
+    await importData(builtinData);
+
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      symbol: "CUSTOM",
+      action: "buy",
+      quantity: 1,
+    });
+    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
+
+    // cleanup
+    // @ts-expect-error - cleanup mocked localStorage
+    delete global.localStorage;
+  });
+
   test("importData stores dataset hash and marks builtin source", async () => {
     const rawData: { positions: Position[]; trades: RawTrade[] } = {
       positions: [],

@@ -357,10 +357,17 @@ export async function importData(rawData: {
 }) {
   const newHash = await computeDataHash(rawData);
   let storedHash: string | null = null;
+  let storedSource: string | null = null;
   try {
     storedHash = localStorage.getItem(DATASET_HASH_KEY);
+    storedSource = localStorage.getItem(DATASET_SOURCE_KEY);
   } catch {
     /* localStorage unavailable */
+  }
+
+  if (storedSource === DATASET_SOURCE_CUSTOM) {
+    logger.info("Custom dataset detected. Skipping import.");
+    return;
   }
 
   if (storedHash !== newHash) {
