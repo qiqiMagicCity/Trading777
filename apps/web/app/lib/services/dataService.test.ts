@@ -109,6 +109,110 @@ describe("dataService trade import", () => {
     });
   });
 
+  // --- 回归：接受“富含元数据”的备份载荷（含字符串数值、action/quantity 等别名） ---
+  test("clearAndImportData accepts metadata rich backup payload", async () => {
+    const payload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "TSDD",
+          price: 11.04,
+          quantity: 10000,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:18:31",
+          id: 26,
+        },
+        {
+          symbol: "BA",
+          price: "216.27",
+          quantity: "350",
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:03",
+          id: 27,
+        },
+        {
+          symbol: "GOOGL",
+          price: 170.73,
+          quantity: 400,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:27",
+          id: 28,
+        },
+        {
+          symbol: "AMD",
+          price: 151.72,
+          quantity: 380,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:20:57",
+          id: 29,
+        },
+        {
+          symbol: "PYPL",
+          price: 68.54,
+          quantity: 555,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:20",
+          id: 30,
+        },
+        {
+          symbol: "UAL",
+          price: 103.7,
+          quantity: 300,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:39",
+          id: 31,
+        },
+        {
+          symbol: "DIS",
+          price: 116.83,
+          quantity: 250,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:21:59",
+          id: 32,
+        },
+        {
+          symbol: "NVDL",
+          price: 84.12,
+          quantity: 330,
+          date: "2025-05-23",
+          action: "buy" as const,
+          time: "2025-05-23T05:22:24",
+          id: 33,
+        },
+      ],
+      equityCurve: [],
+      generated: "2025-09-23T10:15:01.450Z",
+    } as const;
+
+    await clearAndImportData(payload as any);
+
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+
+    expect(trades).toHaveLength(8);
+    const baTrade = trades.find((t) => t.symbol === "BA");
+    expect(baTrade).toMatchObject({
+      action: "buy",
+      quantity: 350,
+      price: 216.27,
+      time: "2025-05-23T05:20:03",
+    });
+    const tsddTrade = trades.find((t) => t.symbol === "TSDD");
+    expect(tsddTrade).toMatchObject({
+      quantity: 10000,
+      action: "buy",
+      date: "2025-05-23",
+    });
+  });
+
   test("clearAndImportData stores dataset hash", async () => {
     const rawData = {
       positions: [],
@@ -149,6 +253,71 @@ describe("dataService trade import", () => {
     expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
       DATASET_SOURCE_CUSTOM,
     );
+    // cleanup
+    // @ts-expect-error - cleanup mocked localStorage
+    delete global.localStorage;
+  });
+
+  test("importData skips builtin import when custom dataset present", async () => {
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
+
+    const customPayload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "CUSTOM",
+          price: 101.23,
+          quantity: 1,
+          date: "2025-06-01",
+          action: "buy" as const,
+        },
+      ],
+    } as const;
+
+    await clearAndImportData(customPayload as any);
+
+    const builtinData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-07-01",
+          symbol: "BUILTIN",
+          side: "BUY",
+          qty: 5,
+          price: 55,
+        },
+      ],
+    };
+
+    await importData(builtinData);
+
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      symbol: "CUSTOM",
+      action: "buy",
+      quantity: 1,
+    });
+    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
+
     // cleanup
     // @ts-expect-error - cleanup mocked localStorage
     delete global.localStorage;
