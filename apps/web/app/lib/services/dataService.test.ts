@@ -1,6 +1,14 @@
 import "fake-indexeddb/auto";
 import { openDB } from "idb";
-import { importData, clearAndImportData, closeDb } from "./dataService";
+import {
+  importData,
+  clearAndImportData,
+  closeDb,
+  DATASET_HASH_KEY,
+  DATASET_SOURCE_KEY,
+  DATASET_SOURCE_CUSTOM,
+  DATASET_SOURCE_BUILTIN,
+} from "./dataService";
 import type { RawTrade, Position } from "./dataService";
 import { createHash } from "crypto";
 
@@ -114,7 +122,57 @@ describe("dataService trade import", () => {
     });
 
     await clearAndImportData(rawData);
-    expect(global.localStorage.getItem("dataset-hash")).toBe(expectedHash);
+    expect(global.localStorage.getItem(DATASET_HASH_KEY)).toBe(expectedHash);
+    expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
+      DATASET_SOURCE_CUSTOM,
+    );
+    // cleanup
+    // @ts-expect-error - cleanup mocked localStorage
+    delete global.localStorage;
+  });
+
+  test("importData stores dataset hash and marks builtin source", async () => {
+    const rawData: { positions: Position[]; trades: RawTrade[] } = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-05-01",
+          symbol: "AAPL",
+          side: "BUY",
+          qty: 1,
+          price: 123,
+        },
+      ],
+    };
+
+    const expectedHash = createHash("sha256")
+      .update(JSON.stringify(rawData))
+      .digest("hex");
+
+    const store: Record<string, string> = {};
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
+
+    await importData(rawData);
+
+    expect(global.localStorage.getItem(DATASET_HASH_KEY)).toBe(expectedHash);
+    expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
+      DATASET_SOURCE_BUILTIN,
+    );
+
     // cleanup
     // @ts-expect-error - cleanup mocked localStorage
     delete global.localStorage;
@@ -123,7 +181,7 @@ describe("dataService trade import", () => {
   test("importData enforces negative quantity for short trades and positions", async () => {
     const rawData = {
       positions: [
-        { symbol: "AMZN", qty: 80, avgPrice: 10, last: 10, priceOk: true },
+        { symbol: "AMZN", qty: -80, avgPrice: 10, last: 10, priceOk: true },
       ],
       trades: [
         {

@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { importData, findTrades, clearAllData, getAllPrices, setDailyResultsCache } from '@/lib/services/dataService';
+import {
+  importData,
+  findTrades,
+  getAllPrices,
+  setDailyResultsCache,
+  DATASET_HASH_KEY,
+  DATASET_SOURCE_KEY,
+  DATASET_SOURCE_BUILTIN,
+} from '@/lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
@@ -61,23 +69,35 @@ export default function DashboardPage() {
         const newHash = await computeDataHash(rawData);
 
         let storedHash: string | null = null;
+        let datasetSource: string | null = null;
         try {
-          storedHash = localStorage.getItem('dataset-hash');
+          storedHash = localStorage.getItem(DATASET_HASH_KEY);
+          datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
         } catch {
           /* ignore */
         }
 
-        if (newHash !== storedHash) {
-          await clearAllData();
-          await importData(rawData);
+        if (!datasetSource && storedHash && storedHash === newHash) {
           try {
-            localStorage.setItem('dataset-hash', newHash);
+            localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+            datasetSource = DATASET_SOURCE_BUILTIN;
           } catch {
             /* ignore */
           }
         }
 
-        const dbTrades = await findTrades();
+        let dbTrades = await findTrades();
+
+        if (dbTrades.length === 0) {
+          await importData(rawData);
+          storedHash = newHash;
+          datasetSource = DATASET_SOURCE_BUILTIN;
+          dbTrades = await findTrades();
+        } else if (datasetSource === DATASET_SOURCE_BUILTIN && newHash !== storedHash) {
+          await importData(rawData);
+          storedHash = newHash;
+          dbTrades = await findTrades();
+        }
         const replay = replayPortfolio(dbTrades);
         const enriched = buildEnrichedTrades(replay.baseline);
         const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
