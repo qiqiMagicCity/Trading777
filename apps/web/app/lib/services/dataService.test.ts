@@ -210,7 +210,7 @@ describe("resolveDatasetSource", () => {
     delete global.localStorage;
   });
 
-  test("marks dataset as custom when stored hash differs and source unset", () => {
+  test("keeps builtin source when stored hash differs and source unset", () => {
     const store: Record<string, string> = {};
 
     Object.defineProperty(global, "localStorage", {
@@ -231,8 +231,8 @@ describe("resolveDatasetSource", () => {
 
     const result = resolveDatasetSource("builtin-hash", "custom-hash", null);
 
-    expect(result).toBe(DATASET_SOURCE_CUSTOM);
-    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
+    expect(result).toBe(DATASET_SOURCE_BUILTIN);
+    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_BUILTIN);
   });
 
   test("keeps builtin source when stored hash differs but flag is builtin", () => {
@@ -264,6 +264,37 @@ describe("resolveDatasetSource", () => {
 
     expect(result).toBe(DATASET_SOURCE_BUILTIN);
     expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_BUILTIN);
+  });
+
+  test("retains custom source when flag is custom", () => {
+    const store: Record<string, string> = {
+      [DATASET_SOURCE_KEY]: DATASET_SOURCE_CUSTOM,
+    };
+
+    Object.defineProperty(global, "localStorage", {
+      value: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, value: string) => {
+          store[key] = String(value);
+        },
+        removeItem: (key: string) => {
+          delete store[key];
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k];
+        },
+      },
+      configurable: true,
+    });
+
+    const result = resolveDatasetSource(
+      "builtin-hash",
+      "custom-hash",
+      DATASET_SOURCE_CUSTOM,
+    );
+
+    expect(result).toBe(DATASET_SOURCE_CUSTOM);
+    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
   });
 
   test("ensures builtin flag when hashes match", () => {

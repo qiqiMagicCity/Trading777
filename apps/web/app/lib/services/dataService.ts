@@ -38,40 +38,32 @@ function accessLocalStorage(): Storage | null {
 }
 
 export function resolveDatasetSource(
-  builtinHash: string,
+  bundledHash: string,
   storedHash: string | null,
-  datasetSource: string | null,
-): string | null {
-  if (!storedHash) {
-    return datasetSource;
-  }
-
+  storedSource: string | null,
+): typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM {
   const storage = accessLocalStorage();
 
-  if (storedHash === builtinHash) {
-    if (datasetSource !== DATASET_SOURCE_BUILTIN) {
-      try {
-        storage?.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-      } catch {
-        /* ignore */
-      }
-    }
+  const resolvedSource =
+    storedSource === DATASET_SOURCE_CUSTOM
+      ? DATASET_SOURCE_CUSTOM
+      : DATASET_SOURCE_BUILTIN;
+
+  try {
+    storage?.setItem(DATASET_SOURCE_KEY, resolvedSource);
+  } catch {
+    /* ignore */
+  }
+
+  if (
+    resolvedSource === DATASET_SOURCE_BUILTIN &&
+    storedHash !== null &&
+    storedHash === bundledHash
+  ) {
     return DATASET_SOURCE_BUILTIN;
   }
 
-  if (datasetSource === DATASET_SOURCE_BUILTIN) {
-    return DATASET_SOURCE_BUILTIN;
-  }
-
-  if (datasetSource !== DATASET_SOURCE_CUSTOM) {
-    try {
-      storage?.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  return DATASET_SOURCE_CUSTOM;
+  return resolvedSource;
 }
 
 // Matches the structure in trades.json -> trades array

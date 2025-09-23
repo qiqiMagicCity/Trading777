@@ -9,7 +9,6 @@ import {
   DATASET_HASH_KEY,
   DATASET_SOURCE_KEY,
   DATASET_SOURCE_BUILTIN,
-  DATASET_SOURCE_CUSTOM,
   resolveDatasetSource,
   computeDataHash,
 } from '@/lib/services/dataService';
@@ -51,37 +50,43 @@ export default function DashboardPage() {
         const builtinHash = await computeDataHash(rawData);
 
         let storedHash: string | null = null;
-        let datasetSource: string | null = null;
+        let storedSource: string | null = null;
         try {
           storedHash = localStorage.getItem(DATASET_HASH_KEY);
-          datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
+          storedSource = localStorage.getItem(DATASET_SOURCE_KEY);
         } catch {
           /* ignore */
         }
 
-        datasetSource = resolveDatasetSource(
+        const datasetSource = resolveDatasetSource(
           builtinHash,
           storedHash,
-          datasetSource,
+          storedSource,
         );
-
-        const hasCustomHash = storedHash !== null && storedHash !== builtinHash;
-        const isCustomDataset =
-          datasetSource === DATASET_SOURCE_CUSTOM || hasCustomHash;
 
         let dbTrades = await findTrades();
 
-        if (dbTrades.length === 0 && !isCustomDataset) {
+        const shouldSeedBuiltin =
+          datasetSource === DATASET_SOURCE_BUILTIN && dbTrades.length === 0;
+        const shouldRefreshBuiltin =
+          datasetSource === DATASET_SOURCE_BUILTIN && storedHash !== builtinHash;
+
+        if (shouldSeedBuiltin || shouldRefreshBuiltin) {
+          if (shouldSeedBuiltin && storedHash === builtinHash) {
+            try {
+              localStorage.removeItem(DATASET_HASH_KEY);
+            } catch {
+              /* ignore */
+            }
+          }
+
           await importData(rawData);
           storedHash = builtinHash;
-          datasetSource = DATASET_SOURCE_BUILTIN;
-          dbTrades = await findTrades();
-        } else if (
-          datasetSource === DATASET_SOURCE_BUILTIN &&
-          builtinHash !== storedHash
-        ) {
-          await importData(rawData);
-          storedHash = builtinHash;
+          try {
+            localStorage.setItem(DATASET_HASH_KEY, builtinHash);
+          } catch {
+            /* ignore */
+          }
           dbTrades = await findTrades();
         }
         const replay = replayPortfolio(dbTrades);

@@ -7,7 +7,7 @@ import {
   computeDataHash,
   DATASET_HASH_KEY,
   DATASET_SOURCE_KEY,
-  DATASET_SOURCE_CUSTOM,
+  DATASET_SOURCE_BUILTIN,
   resolveDatasetSource,
 } from "@/lib/services/dataService";
 import { loadJson } from "@/app/lib/dataSource";
@@ -26,37 +26,51 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        // 先查询是否已有交易数据，若没有则导入示例数据（仅当未导入自定义数据时）
-        let allTrades = await findTrades();
-        if (allTrades.length === 0) {
-          const tradesFile = await loadJson("trades");
-          const initPositionsFile = await loadJson("initial_positions");
-          const rawData = { trades: tradesFile, positions: initPositionsFile };
+        const tradesFile = await loadJson("trades");
+        const initPositionsFile = await loadJson("initial_positions");
+        const rawData = { trades: tradesFile, positions: initPositionsFile };
 
-          let storedHash: string | null = null;
-          let datasetSource: string | null = null;
+        const builtinHash = await computeDataHash(rawData);
+
+        let storedHash: string | null = null;
+        let storedSource: string | null = null;
+        try {
+          storedHash = localStorage.getItem(DATASET_HASH_KEY);
+          storedSource = localStorage.getItem(DATASET_SOURCE_KEY);
+        } catch {
+          /* ignore */
+        }
+
+        const datasetSource = resolveDatasetSource(
+          builtinHash,
+          storedHash,
+          storedSource,
+        );
+
+        let allTrades = await findTrades();
+
+        const shouldSeedBuiltin =
+          datasetSource === DATASET_SOURCE_BUILTIN && allTrades.length === 0;
+        const shouldRefreshBuiltin =
+          datasetSource === DATASET_SOURCE_BUILTIN && storedHash !== builtinHash;
+
+        if (shouldSeedBuiltin || shouldRefreshBuiltin) {
+          if (shouldSeedBuiltin && storedHash === builtinHash) {
+            try {
+              localStorage.removeItem(DATASET_HASH_KEY);
+            } catch {
+              /* ignore */
+            }
+          }
+
+          await importData(rawData);
+          storedHash = builtinHash;
           try {
-            storedHash = localStorage.getItem(DATASET_HASH_KEY);
-            datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
+            localStorage.setItem(DATASET_HASH_KEY, builtinHash);
           } catch {
             /* ignore */
           }
-
-          const builtinHash = await computeDataHash(rawData);
-          datasetSource = resolveDatasetSource(
-            builtinHash,
-            storedHash,
-            datasetSource,
-          );
-          const hasCustomHash =
-            storedHash !== null && storedHash !== builtinHash;
-          const isCustomDataset =
-            datasetSource === DATASET_SOURCE_CUSTOM || hasCustomHash;
-
-          if (!isCustomDataset) {
-            await importData(rawData);
-            allTrades = await findTrades();
-          }
+          allTrades = await findTrades();
         }
 
         const enriched = computeFifo(allTrades);
