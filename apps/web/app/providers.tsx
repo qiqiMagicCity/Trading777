@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { importData, findTrades } from './lib/services/dataService';
+import { importData, findTrades, DATASET_HASH_KEY } from './lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { lsGet } from './lib/env';
 
@@ -13,10 +13,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   // Ensure initial demo data is loaded into IndexedDB so every page sees the same dataset
   React.useEffect(() => {
-    setDatasetHash(lsGet('dataset-hash'));
+    setDatasetHash(lsGet(DATASET_HASH_KEY));
     async function initData() {
       try {
-        const storedHash = lsGet('dataset-hash');
+        const storedHash = lsGet(DATASET_HASH_KEY);
         const trades = await findTrades();
         if (!storedHash && trades.length === 0) {
           const tradesFile = await loadJson('trades');

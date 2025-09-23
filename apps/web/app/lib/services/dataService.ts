@@ -9,6 +9,61 @@ const TRADES_STORE_NAME = "trades";
 const POSITIONS_STORE_NAME = "positions";
 const PRICES_STORE_NAME = "prices"; // New store for prices
 
+export const DATASET_HASH_KEY = "dataset-hash";
+export const DATASET_SOURCE_KEY = "dataset-source";
+export const DATASET_SOURCE_BUILTIN = "builtin";
+export const DATASET_SOURCE_CUSTOM = "custom";
+
+function accessLocalStorage(): Storage | null {
+  try {
+    if (typeof window !== "undefined" && window?.localStorage) {
+      return window.localStorage;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    if (typeof globalThis !== "undefined") {
+      const storage = (globalThis as { localStorage?: Storage }).localStorage;
+      if (storage) {
+        return storage;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return null;
+}
+
+export function resolveDatasetSource(
+  builtinHash: string,
+  storedHash: string | null,
+  datasetSource: string | null,
+): string | null {
+  if (!storedHash) {
+    return datasetSource;
+  }
+
+  const expectedSource =
+    storedHash === builtinHash
+      ? DATASET_SOURCE_BUILTIN
+      : DATASET_SOURCE_CUSTOM;
+
+  if (datasetSource !== expectedSource) {
+    const storage = accessLocalStorage();
+    try {
+      storage?.setItem(DATASET_SOURCE_KEY, expectedSource);
+    } catch {
+      /* ignore */
+    }
+    return expectedSource;
+  }
+
+  return datasetSource;
+}
+
 // Matches the structure in trades.json -> trades array
 export interface RawTrade {
   date: string; // "2025-07-04"
@@ -184,6 +239,30 @@ function mapRawTrade(rawTrade: RawTrade): Trade | undefined {
   };
 }
 
+function normalizePositionsForStore(rawPositions: Position[]): Position[] {
+  const normalized: Position[] = [];
+  for (const raw of rawPositions) {
+    if (!raw) continue;
+    const qty = Number(raw.qty);
+    if (!Number.isFinite(qty) || qty === 0) continue;
+    const absQty = Math.abs(qty);
+    const isShort = qty < 0;
+    normalized.push({
+      symbol: raw.symbol,
+      qty: isShort ? -absQty : absQty,
+      avgPrice: raw.avgPrice,
+      last:
+        typeof raw.last === "number" && Number.isFinite(raw.last)
+          ? raw.last
+          : raw.avgPrice,
+      priceOk: raw.priceOk ?? true,
+      stale: raw.stale ?? false,
+      lastUpdatedAt: raw.lastUpdatedAt,
+    });
+  }
+  return normalized;
+}
+
 export async function importData(rawData: {
   positions: Position[];
   trades: RawTrade[];
@@ -191,7 +270,7 @@ export async function importData(rawData: {
   const newHash = await computeDataHash(rawData);
   let storedHash: string | null = null;
   try {
-    storedHash = localStorage.getItem("dataset-hash");
+    storedHash = localStorage.getItem(DATASET_HASH_KEY);
   } catch {
     /* localStorage unavailable */
   }
@@ -199,7 +278,8 @@ export async function importData(rawData: {
   if (storedHash !== newHash) {
     await clearAllData();
     try {
-      localStorage.setItem("dataset-hash", newHash);
+      localStorage.setItem(DATASET_HASH_KEY, newHash);
+      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
     } catch {
       /* ignore */
     }
@@ -240,6 +320,16 @@ export async function importData(rawData: {
 
   await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
   await tx.done;
+
+  const positionsToStore = normalizePositionsForStore(rawData.positions);
+  if (positionsToStore.length > 0) {
+    const positionsTx = db.transaction(POSITIONS_STORE_NAME, "readwrite");
+    const positionStore = positionsTx.objectStore(POSITIONS_STORE_NAME);
+    await Promise.all(
+      positionsToStore.map((position) => positionStore.put(position)),
+    );
+    await positionsTx.done;
+  }
   logger.info("Data imported successfully.");
 }
 
@@ -296,10 +386,21 @@ export async function clearAndImportData(rawData: {
 
   await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
   await tx.done;
+
+  const positionsToStore = normalizePositionsForStore(rawData.positions);
+  if (positionsToStore.length > 0) {
+    const positionsTx = db.transaction(POSITIONS_STORE_NAME, "readwrite");
+    const positionStore = positionsTx.objectStore(POSITIONS_STORE_NAME);
+    await Promise.all(
+      positionsToStore.map((position) => positionStore.put(position)),
+    );
+    await positionsTx.done;
+  }
   clearDailyResultsCache();
   try {
     const newHash = await computeDataHash(rawData);
-    localStorage.setItem("dataset-hash", newHash);
+    localStorage.setItem(DATASET_HASH_KEY, newHash);
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
   } catch {
     /* ignore */
   }
