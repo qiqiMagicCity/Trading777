@@ -153,6 +153,18 @@ describe('priceService safe fallbacks', () => {
     expect(result).toMatchObject({ price: 99, stale: true, priceOk: true });
   });
 
+  it('normalizes ISO datetime inputs when looking up daily closes', async () => {
+    getPriceMock.mockImplementation(async (_symbol, lookupDate) => {
+      if (lookupDate === '2024-05-20') {
+        return { symbol: 'AAPL', date: '2024-05-20', close: 321, source: 'import' } as any;
+      }
+      return undefined;
+    });
+
+    const result = await fetchDailyClose('AAPL', '2024-05-20T15:30:00.000Z');
+    expect(result).toMatchObject({ price: 321, stale: false, priceOk: true });
+  });
+
   it('returns priceOk false when realtime and fallback quotes are missing', async () => {
     getPriceMock.mockResolvedValue(undefined);
     loadJsonMock.mockResolvedValue({});

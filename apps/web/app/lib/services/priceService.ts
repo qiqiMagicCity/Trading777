@@ -371,22 +371,22 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
   const normalizedDate = date.includes('T') ? nyDateStr(date) : date;
 
   try {
-    const cachedPrice = await getPrice(key, date);
+    const cachedPrice = await getPrice(key, normalizedDate);
     if (cachedPrice && typeof cachedPrice.close === 'number') {
-      saveToFile(key, date, cachedPrice.close);
+      saveToFile(key, normalizedDate, cachedPrice.close);
       return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
     // 如果是“今天”且已过纽约收盘，则用实时报价当作今日收盘价（绕过 /api/candle 403）
     const todayNY = nyDateStr(Date.now());
-    if (date === todayNY && isAfterNyClose()) {
+    if (normalizedDate === todayNY && isAfterNyClose()) {
       try {
         const rt =
           (await fetchFinnhubRealtimeQuote(key)) ??
           (await fetchTiingoRealtimeQuote(key));
         if (typeof rt === 'number' && rt > 0) {
-          await putPrice({ symbol: key, date, close: rt, source: 'close_rt' });
-          saveToFile(key, date, rt);
+          await putPrice({ symbol: key, date: normalizedDate, close: rt, source: 'close_rt' });
+          saveToFile(key, normalizedDate, rt);
           return { price: rt, stale: false, priceOk: true, updatedAt: Date.now() };
         }
       } catch (_) {
@@ -401,18 +401,19 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    const filePrice = closeMap?.[key]?.[date];
+    const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
-      await putPrice({ symbol: key, date, close: filePrice, source: 'import' });
+      await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
+      saveToFile(key, normalizedDate, filePrice);
       return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
     if (process.env.MONITOR === '1') {
       const available = closeMap ? Object.keys(closeMap) : [];
-      console.warn('MISSING_CLOSE', { symbol: key, date, available });
+      console.warn('MISSING_CLOSE', { symbol: key, date: normalizedDate, available });
     }
 
-    const fallback = await getPrevCloseWithin(key, date, MAX_LOOKBACK_DAYS, closeMap);
+    const fallback = await getPrevCloseWithin(key, normalizedDate, MAX_LOOKBACK_DAYS, closeMap);
     if (fallback) {
       if (process.env.MONITOR === '1') {
         const isFutureFallback = fallback.date >= normalizedDate;
@@ -423,14 +424,14 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     }
 
     if (process.env.PRICE_STRICT === '1') {
-      throw new NoPriceError(`missing close for ${key} ${date}`);
+      throw new NoPriceError(`missing close for ${key} ${normalizedDate}`);
     }
 
     return null;
   } catch (error) {
-    console.error(`获取 ${key} 在 ${date} 的每日收盘价时出错:`, error);
+    console.error(`获取 ${key} 在 ${normalizedDate} 的每日收盘价时出错:`, error);
     if (process.env.PRICE_STRICT === '1') {
-      throw error instanceof NoPriceError ? error : new NoPriceError(`missing close for ${key} ${date}`);
+      throw error instanceof NoPriceError ? error : new NoPriceError(`missing close for ${key} ${normalizedDate}`);
     }
     return null;
   }
