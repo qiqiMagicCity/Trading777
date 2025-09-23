@@ -181,30 +181,54 @@ function coerceNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
-  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-    BUY: "buy",
-    SELL: "sell",
-    SHORT: "short",
-    COVER: "cover",
-  };
-  const actionMap: Record<string, Trade["action"]> = {
-    buy: "buy",
-    sell: "sell",
-    short: "short",
-    cover: "cover",
-  };
+const ACTION_ALIASES: Record<string, Trade["action"]> = {
+  BUY: "buy",
+  BUY_TO_OPEN: "buy",
+  BUYTOOPEN: "buy",
+  BOT: "buy",
+  BTO: "buy",
+  SELL: "sell",
+  SELL_TO_CLOSE: "sell",
+  SELLTOCLOSE: "sell",
+  STC: "sell",
+  SLD: "sell",
+  SHORT: "short",
+  SELL_SHORT: "short",
+  SELLSHORT: "short",
+  SELL_TO_OPEN: "short",
+  SELLTOOPEN: "short",
+  STO: "short",
+  COVER: "cover",
+  BUY_TO_CLOSE: "cover",
+  BUYTOCLOSE: "cover",
+  BTC: "cover",
+  COVER_SHORT: "cover",
+  COVERSHORT: "cover",
+};
 
+function normalizeAction(value: string): string {
+  return value
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^A-Z_]/gi, "")
+    .toUpperCase();
+}
+
+function parseAction(value: unknown): Trade["action"] | undefined {
+  if (typeof value !== "string") return undefined;
+  const key = normalizeAction(value);
+  return ACTION_ALIASES[key];
+}
+
+function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
   let action: Trade["action"] | undefined;
 
-  if ("side" in rawTrade && typeof rawTrade.side === "string") {
-    const sideKey = rawTrade.side.trim().toUpperCase();
-    action = sideMap[sideKey as keyof typeof sideMap];
+  if ("side" in rawTrade) {
+    action = parseAction((rawTrade as RawTrade).side);
   }
 
-  if (!action && "action" in rawTrade && typeof rawTrade.action === "string") {
-    const actionKey = rawTrade.action.trim().toLowerCase();
-    action = actionMap[actionKey];
+  if (!action && "action" in rawTrade) {
+    action = parseAction((rawTrade as Trade).action);
   }
 
   if (!action) {
