@@ -37,33 +37,47 @@ function accessLocalStorage(): Storage | null {
   return null;
 }
 
+function persistDatasetSource(source: string): void {
+  const storage = accessLocalStorage();
+  try {
+    storage?.setItem(DATASET_SOURCE_KEY, source);
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistDatasetMetadata(hash: string, source: string): void {
+  const storage = accessLocalStorage();
+  try {
+    storage?.setItem(DATASET_HASH_KEY, hash);
+    storage?.setItem(DATASET_SOURCE_KEY, source);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function resolveDatasetSource(
   bundledHash: string,
   storedHash: string | null,
   storedSource: string | null,
 ): typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM {
-  const storage = accessLocalStorage();
+  const normalizedSource =
+    typeof storedSource === "string"
+      ? storedSource.trim().toLowerCase()
+      : null;
 
-  const resolvedSource =
-    storedSource === DATASET_SOURCE_CUSTOM
-      ? DATASET_SOURCE_CUSTOM
-      : DATASET_SOURCE_BUILTIN;
-
-  try {
-    storage?.setItem(DATASET_SOURCE_KEY, resolvedSource);
-  } catch {
-    /* ignore */
+  if (normalizedSource === DATASET_SOURCE_CUSTOM) {
+    persistDatasetSource(DATASET_SOURCE_CUSTOM);
+    return DATASET_SOURCE_CUSTOM;
   }
 
-  if (
-    resolvedSource === DATASET_SOURCE_BUILTIN &&
-    storedHash !== null &&
-    storedHash === bundledHash
-  ) {
+  persistDatasetSource(DATASET_SOURCE_BUILTIN);
+
+  if (storedHash && storedHash === bundledHash) {
     return DATASET_SOURCE_BUILTIN;
   }
 
-  return resolvedSource;
+  return DATASET_SOURCE_BUILTIN;
 }
 
 // Matches the structure in trades.json -> trades array
@@ -279,12 +293,7 @@ export async function importData(rawData: {
 
   if (storedHash !== newHash) {
     await clearAllData();
-    try {
-      localStorage.setItem(DATASET_HASH_KEY, newHash);
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-    } catch {
-      /* ignore */
-    }
+    persistDatasetMetadata(newHash, DATASET_SOURCE_BUILTIN);
   } else {
     logger.info("Dataset unchanged. Skipping import.");
     return;
@@ -401,8 +410,7 @@ export async function clearAndImportData(rawData: {
   clearDailyResultsCache();
   try {
     const newHash = await computeDataHash(rawData);
-    localStorage.setItem(DATASET_HASH_KEY, newHash);
-    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+    persistDatasetMetadata(newHash, DATASET_SOURCE_CUSTOM);
   } catch {
     /* ignore */
   }
