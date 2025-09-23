@@ -181,30 +181,54 @@ function coerceNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
-  const sideMap: Record<RawTrade["side"], Trade["action"]> = {
-    BUY: "buy",
-    SELL: "sell",
-    SHORT: "short",
-    COVER: "cover",
-  };
-  const actionMap: Record<string, Trade["action"]> = {
-    buy: "buy",
-    sell: "sell",
-    short: "short",
-    cover: "cover",
-  };
+const ACTION_ALIASES: Record<string, Trade["action"]> = {
+  BUY: "buy",
+  BUY_TO_OPEN: "buy",
+  BUYTOOPEN: "buy",
+  BOT: "buy",
+  BTO: "buy",
+  SELL: "sell",
+  SELL_TO_CLOSE: "sell",
+  SELLTOCLOSE: "sell",
+  STC: "sell",
+  SLD: "sell",
+  SHORT: "short",
+  SELL_SHORT: "short",
+  SELLSHORT: "short",
+  SELL_TO_OPEN: "short",
+  SELLTOOPEN: "short",
+  STO: "short",
+  COVER: "cover",
+  BUY_TO_CLOSE: "cover",
+  BUYTOCLOSE: "cover",
+  BTC: "cover",
+  COVER_SHORT: "cover",
+  COVERSHORT: "cover",
+};
 
+function normalizeAction(value: string): string {
+  return value
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^A-Z_]/gi, "")
+    .toUpperCase();
+}
+
+function parseAction(value: unknown): Trade["action"] | undefined {
+  if (typeof value !== "string") return undefined;
+  const key = normalizeAction(value);
+  return ACTION_ALIASES[key];
+}
+
+function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
   let action: Trade["action"] | undefined;
 
-  if ("side" in rawTrade && typeof rawTrade.side === "string") {
-    const sideKey = rawTrade.side.trim().toUpperCase();
-    action = sideMap[sideKey as keyof typeof sideMap];
+  if ("side" in rawTrade) {
+    action = parseAction((rawTrade as RawTrade).side);
   }
 
-  if (!action && "action" in rawTrade && typeof rawTrade.action === "string") {
-    const actionKey = rawTrade.action.trim().toLowerCase();
-    action = actionMap[actionKey];
+  if (!action && "action" in rawTrade) {
+    action = parseAction((rawTrade as Trade).action);
   }
 
   if (!action) {
@@ -290,23 +314,32 @@ export async function importData(rawData: {
 }) {
   const newHash = await computeDataHash(rawData);
   let storedHash: string | null = null;
+  let datasetSource: string | null = null;
   try {
     storedHash = localStorage.getItem(DATASET_HASH_KEY);
+    datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
   } catch {
     /* localStorage unavailable */
   }
 
-  if (storedHash !== newHash) {
-    await clearAllData();
-    try {
-      localStorage.setItem(DATASET_HASH_KEY, newHash);
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-    } catch {
-      /* ignore */
-    }
-  } else {
+  if (datasetSource === DATASET_SOURCE_CUSTOM && storedHash !== newHash) {
+    logger.info(
+      "Custom dataset detected. Skipping builtin import to preserve user data.",
+    );
+    return;
+  }
+
+  if (storedHash === newHash) {
     logger.info("Dataset unchanged. Skipping import.");
     return;
+  }
+
+  await clearAllData();
+  try {
+    localStorage.setItem(DATASET_HASH_KEY, newHash);
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+  } catch {
+    /* ignore */
   }
 
   const db = await getDb();

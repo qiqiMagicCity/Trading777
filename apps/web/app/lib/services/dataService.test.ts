@@ -213,6 +213,58 @@ describe("dataService trade import", () => {
     });
   });
 
+  test("clearAndImportData normalizes common broker action aliases", async () => {
+    const payload = {
+      positions: [],
+      trades: [
+        {
+          symbol: "ALIAS1",
+          price: 10,
+          quantity: 1,
+          date: "2025-07-01",
+          action: "BTO",
+        },
+        {
+          symbol: "ALIAS1",
+          price: 12,
+          quantity: 1,
+          date: "2025-07-02",
+          action: "STC",
+        },
+        {
+          symbol: "ALIAS2",
+          price: 25,
+          quantity: 5,
+          date: "2025-07-03",
+          side: "SELL_SHORT",
+        },
+        {
+          symbol: "ALIAS2",
+          price: 20,
+          quantity: 5,
+          date: "2025-07-04",
+          action: "BTC",
+        },
+      ],
+    } as const;
+
+    await clearAndImportData(payload as any);
+
+    const db = await openDB("TradingApp", 3);
+    const trades = await db.getAll("trades");
+    db.close();
+
+    expect(trades).toHaveLength(4);
+    expect(trades.find((t) => t.symbol === "ALIAS1" && t.date === "2025-07-01"))
+      .toMatchObject({ action: "buy", quantity: 1 });
+    expect(trades.find((t) => t.symbol === "ALIAS1" && t.date === "2025-07-02"))
+      .toMatchObject({ action: "sell", quantity: 1 });
+    expect(trades.find((t) => t.symbol === "ALIAS2" && t.date === "2025-07-03"))
+      .toMatchObject({ action: "short", quantity: -5 });
+    expect(trades.find((t) => t.symbol === "ALIAS2" && t.date === "2025-07-04"))
+      .toMatchObject({ action: "cover", quantity: 5 });
+  });
+
   test("clearAndImportData stores dataset hash", async () => {
     const rawData = {
       positions: [],
