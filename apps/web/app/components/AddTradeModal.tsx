@@ -169,8 +169,10 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
           <label>数量(张)</label>
           <input
             type="number"
+            step="any"
+            inputMode="decimal"
             value={qty || ''}
-            onChange={e => setQty(parseInt(e.target.value || '0', 10))}
+            onChange={e => setQty(Number(e.target.value || '0'))}
             required
           />
 
