@@ -16,7 +16,12 @@ function readJSON(name: string) {
   );
 }
 
-const trades: RawTrade[] = readJSON('trades.json');
+type RawTradeWithLegacy = RawTrade & {
+  quantity?: number | string | null;
+  action?: string | null;
+};
+
+const trades: RawTradeWithLegacy[] = readJSON('trades.json');
 const initialPositions: InitialPosition[] = readJSON('initial_positions.json');
 const closePrices: ClosePriceMap = readJSON('close_prices.json');
 const dailyResults: { date: string; realized: number; unrealized: number }[] = readJSON(

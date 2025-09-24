@@ -87,21 +87,23 @@ export function computeM6(input: ComputeM6Input): ComputeM6Result {
     }
 
     const now = quote.now;
-    if (!Number.isFinite(now ?? NaN)) {
+    if (typeof now !== "number" || !Number.isFinite(now)) {
       excluded.push({ symbol: pos.symbol, reason: "NO_NOW" });
       continue;
     }
 
     const prevClose = quote.prevClose;
-    if (!Number.isFinite(prevClose ?? NaN)) {
+    if (typeof prevClose !== "number" || !Number.isFinite(prevClose)) {
       excluded.push({ symbol: pos.symbol, reason: "NO_PREV_CLOSE" });
       continue;
     }
 
-    const fxNow = Number.isFinite(quote.fxNow ?? NaN) ? (quote.fxNow as number) : 1;
-    const fxPrev = Number.isFinite(quote.fxPrevClose ?? NaN)
-      ? (quote.fxPrevClose as number)
-      : 1;
+    const fxNow =
+      typeof quote.fxNow === "number" && Number.isFinite(quote.fxNow) ? quote.fxNow : 1;
+    const fxPrev =
+      typeof quote.fxPrevClose === "number" && Number.isFinite(quote.fxPrevClose)
+        ? quote.fxPrevClose
+        : 1;
 
     const pxDiffInPortfolioCcy = now * fxNow - prevClose * fxPrev;
     const mtm = pxDiffInPortfolioCcy * qtyPrev;
