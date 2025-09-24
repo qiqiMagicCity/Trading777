@@ -1,4 +1,4 @@
-export async function loadJson(name: 'trades'|'initial_positions'|'close_prices') {
+export async function loadJson(name: 'initial_positions'|'close_prices') {
   const url = `/${name}.json`;
   try {
     const res = await fetch(url);
@@ -12,8 +12,6 @@ export async function loadJson(name: 'trades'|'initial_positions'|'close_prices'
     // ignore fetch errors
   }
   switch (name) {
-    case 'trades':
-      return (await import('../../public/trades.json')).default;
     case 'initial_positions':
       return (await import('../../public/initial_positions.json')).default;
     case 'close_prices':

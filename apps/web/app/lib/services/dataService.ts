@@ -9,8 +9,8 @@ const TRADES_STORE_NAME = "trades";
 const POSITIONS_STORE_NAME = "positions";
 const PRICES_STORE_NAME = "prices"; // New store for prices
 
-export const DATASET_HASH_KEY = "dataset-hash";
-export const DATASET_SOURCE_KEY = "dataset-source";
+export const DATASET_HASH_KEY = "dataset:hash";
+export const DATASET_SOURCE_KEY = "dataset:source";
 export const DATASET_SOURCE_BUILTIN = "builtin";
 export const DATASET_SOURCE_CUSTOM = "custom";
 
@@ -18,11 +18,17 @@ export const DATASET_SOURCE_CUSTOM = "custom";
 export interface RawTrade {
   date: string; // "2025-07-04"
   symbol: string;
-  side: "BUY" | "SELL" | "SHORT" | "COVER";
-  qty: number;
-  price: number;
+  side?: "BUY" | "SELL" | "SHORT" | "COVER" | string | null;
+  qty?: number | string | null;
+  quantity?: number | string | null;
+  price: number | string;
+  action?: string | null;
+  time?: string | number | Date;
+  datetime?: string | null;
+  id?: number;
   pl?: number;
   closed?: boolean;
+  isInitialPosition?: boolean;
 }
 
 // Matches the structure in trades.json -> positions array
@@ -119,23 +125,38 @@ export async function closeDb(): Promise<void> {
   }
 }
 
-async function computeDataHash(data: unknown): Promise<string> {
-  const json = JSON.stringify(data);
-  try {
-    if (typeof crypto?.subtle !== "undefined") {
-      const buffer = new TextEncoder().encode(json);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-    }
-  } catch {
-    /* ignore */
+function toUpperSafe(value?: string | number | null): string {
+  if (typeof value === "string") {
+    return value.trim().toUpperCase();
   }
-  let hash = 0;
+  if (typeof value === "number") {
+    return value.toString().trim().toUpperCase();
+  }
+  if (value == null) {
+    return "";
+  }
+  return String(value).trim().toUpperCase();
+}
+
+export function hashPayload(payload: unknown): string {
+  const json = JSON.stringify(payload ?? null);
+  // FNV-1a 32-bit hash for deterministic yet inexpensive hashing
+  let hash = 0x811c9dc5;
   for (let i = 0; i < json.length; i++) {
-    hash = (hash + json.charCodeAt(i)) % 0xfffffff;
+    hash ^= json.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+    hash >>>= 0;
   }
-  return hash.toString();
+  return hash.toString(16);
+}
+
+export async function getAnyTradeCount(): Promise<number> {
+  const db = await getDb();
+  const tx = db.transaction(TRADES_STORE_NAME, "readonly");
+  const store = tx.objectStore(TRADES_STORE_NAME);
+  const count = await store.count();
+  await tx.done;
+  return count;
 }
 
 function toISODate(date: Date): string {
@@ -220,7 +241,24 @@ function parseAction(value: unknown): Trade["action"] | undefined {
   return ACTION_ALIASES[key];
 }
 
-function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
+function mapRawTrade(
+  rawTrade: ImportableTrade,
+  options?: { strict?: boolean },
+): Trade | undefined {
+  const strict = options?.strict ?? false;
+  const fail = (message: string): undefined => {
+    if (strict) {
+      throw new Error(message);
+    }
+    console.warn(message);
+    return undefined;
+  };
+
+  const symbol = toUpperSafe((rawTrade as RawTrade).symbol);
+  if (!symbol) {
+    return fail(`Missing trade symbol: ${String((rawTrade as RawTrade).symbol)}`);
+  }
+
   let action: Trade["action"] | undefined;
 
   if ("side" in rawTrade) {
@@ -232,46 +270,45 @@ function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
   }
 
   if (!action) {
-    console.warn(
+    return fail(
       `Unknown or missing trade side/action: ${String(
         (rawTrade as RawTrade).side ?? (rawTrade as Trade).action,
       )}, skipping.`,
     );
-    return undefined;
   }
 
   const qtyValue =
     ("qty" in rawTrade ? coerceNumber(rawTrade.qty) : undefined) ??
     ("quantity" in rawTrade ? coerceNumber(rawTrade.quantity) : undefined);
 
-  if (qtyValue === undefined || !Number.isFinite(qtyValue)) {
-    console.warn(
-      `Missing or invalid trade quantity for ${rawTrade.symbol}, skipping.`,
+  if (qtyValue === undefined || !Number.isFinite(qtyValue) || qtyValue === 0) {
+    return fail(
+      `Missing or invalid trade quantity for ${symbol}, skipping.`,
     );
-    return undefined;
   }
 
   const priceValue = coerceNumber(rawTrade.price);
-  if (priceValue === undefined || !Number.isFinite(priceValue)) {
-    console.warn(
-      `Missing or invalid trade price for ${rawTrade.symbol}, skipping.`,
+  if (priceValue === undefined || !Number.isFinite(priceValue) || priceValue <= 0) {
+    return fail(
+      `Missing or invalid trade price for ${symbol}, skipping.`,
     );
-    return undefined;
   }
 
   const normalizedQty = Math.abs(qtyValue as number);
   const quantity = action === "short" ? -normalizedQty : normalizedQty;
 
   const trade: Trade = {
-    symbol: rawTrade.symbol,
+    symbol,
     price: priceValue,
     quantity,
-    date: rawTrade.date,
+    date: (rawTrade as RawTrade).date,
     action,
   };
 
-  if ("time" in rawTrade && rawTrade.time !== undefined) {
-    trade.time = rawTrade.time as Trade["time"];
+  const timeValue =
+    (rawTrade as RawTrade).time ?? (rawTrade as RawTrade).datetime ?? undefined;
+  if (timeValue !== undefined && timeValue !== null) {
+    trade.time = timeValue as Trade["time"];
   }
 
   if (
@@ -284,7 +321,9 @@ function mapRawTrade(rawTrade: ImportableTrade): Trade | undefined {
   return trade;
 }
 
-function normalizePositionsForStore(rawPositions: Position[]): Position[] {
+function normalizePositionsForStore(
+  rawPositions: Array<Partial<Position> & Record<string, unknown>>,
+): Position[] {
   const normalized: Position[] = [];
   for (const raw of rawPositions) {
     if (!raw) continue;
@@ -295,8 +334,10 @@ function normalizePositionsForStore(rawPositions: Position[]): Position[] {
     const lastPrice = coerceNumber(raw.last);
     const absQty = Math.abs(qty);
     const isShort = qty < 0;
+    const symbol = toUpperSafe(raw.symbol);
+    if (!symbol) continue;
     normalized.push({
-      symbol: raw.symbol,
+      symbol,
       qty: isShort ? -absQty : absQty,
       avgPrice,
       last: lastPrice !== undefined ? lastPrice : avgPrice,
@@ -308,67 +349,46 @@ function normalizePositionsForStore(rawPositions: Position[]): Position[] {
   return normalized;
 }
 
-export async function importData(rawData: {
-  positions: Position[];
-  trades: ImportableTrade[];
-}) {
-  const newHash = await computeDataHash(rawData);
-  let storedHash: string | null = null;
-  let datasetSource: string | null = null;
-  try {
-    storedHash = localStorage.getItem(DATASET_HASH_KEY);
-    datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
-  } catch {
-    /* localStorage unavailable */
-  }
+type DatasetPayload = {
+  positions?: Array<Partial<Position> & Record<string, unknown>>;
+  trades?: ImportableTrade[];
+};
 
-  if (datasetSource === DATASET_SOURCE_CUSTOM && storedHash !== newHash) {
-    logger.info(
-      "Custom dataset detected. Skipping builtin import to preserve user data.",
-    );
-    return;
-  }
-
-  if (storedHash === newHash) {
-    logger.info("Dataset unchanged. Skipping import.");
-    return;
-  }
-
-  await clearAllData();
-  try {
-    localStorage.setItem(DATASET_HASH_KEY, newHash);
-    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-  } catch {
-    /* ignore */
-  }
-
+async function replaceDataset(
+  rawData: DatasetPayload,
+  options: { source: typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM; strict: boolean },
+): Promise<void> {
   const db = await getDb();
 
+  const clearTx = db.transaction(
+    [TRADES_STORE_NAME, POSITIONS_STORE_NAME],
+    "readwrite",
+  );
+  await Promise.all([
+    clearTx.objectStore(TRADES_STORE_NAME).clear(),
+    clearTx.objectStore(POSITIONS_STORE_NAME).clear(),
+  ]);
+  await clearTx.done;
+
   logger.info("Importing data...");
-  const tx = db.transaction(TRADES_STORE_NAME, "readwrite");
-  const tradeStore = tx.objectStore(TRADES_STORE_NAME);
 
-  const baselineDate = getBaselineDate(rawData.trades);
-
-  const tradesToImport: Trade[] = [];
-  for (const rawTrade of rawData.trades) {
-    const trade = mapRawTrade(rawTrade);
+  const tradesToPersist: Trade[] = [];
+  for (const rawTrade of rawData.trades ?? []) {
+    const trade = mapRawTrade(rawTrade, { strict: options.strict });
     if (trade) {
-      tradesToImport.push(trade);
+      tradesToPersist.push(trade);
     }
   }
 
-  for (const position of rawData.positions) {
-    const qtyValue = coerceNumber(position.qty);
-    if (qtyValue === undefined || !Number.isFinite(qtyValue) || qtyValue === 0)
-      continue;
-    const avgPrice = coerceNumber(position.avgPrice);
-    if (avgPrice === undefined || !Number.isFinite(avgPrice)) continue;
-    const absQty = Math.abs(qtyValue);
-    const isShort = qtyValue < 0;
-    tradesToImport.push({
+  const baselineDate = getBaselineDate(tradesToPersist as ImportableTrade[]);
+
+  const normalizedPositions = normalizePositionsForStore(rawData.positions ?? []);
+  for (const position of normalizedPositions) {
+    const absQty = Math.abs(position.qty);
+    const isShort = position.qty < 0;
+    tradesToPersist.push({
       symbol: position.symbol,
-      price: avgPrice,
+      price: position.avgPrice,
       quantity: isShort ? -absQty : absQty,
       date: baselineDate,
       action: isShort ? "short" : "buy",
@@ -376,19 +396,43 @@ export async function importData(rawData: {
     });
   }
 
-  await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
-  await tx.done;
+  if (tradesToPersist.length > 0) {
+    const tradesTx = db.transaction(TRADES_STORE_NAME, "readwrite");
+    const tradeStore = tradesTx.objectStore(TRADES_STORE_NAME);
+    await Promise.all(tradesToPersist.map((trade) => tradeStore.add(trade)));
+    await tradesTx.done;
+  }
 
-  const positionsToStore = normalizePositionsForStore(rawData.positions);
-  if (positionsToStore.length > 0) {
+  if (normalizedPositions.length > 0) {
     const positionsTx = db.transaction(POSITIONS_STORE_NAME, "readwrite");
     const positionStore = positionsTx.objectStore(POSITIONS_STORE_NAME);
     await Promise.all(
-      positionsToStore.map((position) => positionStore.put(position)),
+      normalizedPositions.map((position) => positionStore.put(position)),
     );
     await positionsTx.done;
   }
+
+  clearDailyResultsCache();
+
+  try {
+    const datasetHash = hashPayload({
+      positions: rawData.positions ?? [],
+      trades: rawData.trades ?? [],
+    });
+    localStorage.setItem(DATASET_HASH_KEY, datasetHash);
+    localStorage.setItem(DATASET_SOURCE_KEY, options.source);
+  } catch {
+    /* ignore storage errors */
+  }
+
   logger.info("Data imported successfully.");
+}
+
+export async function importData(rawData: DatasetPayload) {
+  await replaceDataset(rawData, {
+    source: DATASET_SOURCE_CUSTOM,
+    strict: false,
+  });
 }
 
 export async function clearAllData(): Promise<void> {
@@ -407,66 +451,11 @@ export async function clearAllData(): Promise<void> {
   logger.info("All trade, position, and price data cleared.");
 }
 
-export async function clearAndImportData(rawData: {
-  positions: Position[];
-  trades: ImportableTrade[];
-}): Promise<void> {
-  await clearAllData();
-
-  const db = await getDb();
-  logger.info("Importing data...");
-  const tx = db.transaction(TRADES_STORE_NAME, "readwrite");
-  const tradeStore = tx.objectStore(TRADES_STORE_NAME);
-
-  const baselineDate = getBaselineDate(rawData.trades);
-
-  const tradesToImport: Trade[] = [];
-  for (const rawTrade of rawData.trades) {
-    const trade = mapRawTrade(rawTrade);
-    if (trade) {
-      tradesToImport.push(trade);
-    }
-  }
-
-  for (const position of rawData.positions) {
-    const qtyValue = coerceNumber(position.qty);
-    if (qtyValue === undefined || !Number.isFinite(qtyValue) || qtyValue === 0)
-      continue;
-    const avgPrice = coerceNumber(position.avgPrice);
-    if (avgPrice === undefined || !Number.isFinite(avgPrice)) continue;
-    const absQty = Math.abs(qtyValue);
-    const isShort = qtyValue < 0;
-    tradesToImport.push({
-      symbol: position.symbol,
-      price: avgPrice,
-      quantity: isShort ? -absQty : absQty,
-      date: baselineDate,
-      action: isShort ? "short" : "buy",
-      isInitialPosition: true,
-    });
-  }
-
-  await Promise.all(tradesToImport.map((trade) => tradeStore.add(trade)));
-  await tx.done;
-
-  const positionsToStore = normalizePositionsForStore(rawData.positions);
-  if (positionsToStore.length > 0) {
-    const positionsTx = db.transaction(POSITIONS_STORE_NAME, "readwrite");
-    const positionStore = positionsTx.objectStore(POSITIONS_STORE_NAME);
-    await Promise.all(
-      positionsToStore.map((position) => positionStore.put(position)),
-    );
-    await positionsTx.done;
-  }
-  clearDailyResultsCache();
-  try {
-    const newHash = await computeDataHash(rawData);
-    localStorage.setItem(DATASET_HASH_KEY, newHash);
-    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
-  } catch {
-    /* ignore */
-  }
-  logger.info("Data imported successfully after clearing.");
+export async function clearAndImportData(rawData: DatasetPayload): Promise<void> {
+  await replaceDataset(rawData, {
+    source: DATASET_SOURCE_BUILTIN,
+    strict: true,
+  });
 }
 
 export async function exportData(): Promise<{
