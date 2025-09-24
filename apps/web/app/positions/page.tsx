@@ -18,15 +18,14 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        // ✅ Single guard call; never fetch('/trades.json') here
+        // Single guard call; never fetch('/trades.json') here
         await ensureBuiltInDatasetLoaded();
 
-        // ✅ Only one findTrades() call
         const allTrades = await findTrades();
         const enriched = computeFifo(allTrades);
         setTrades(enriched);
 
-        // compute latest positions from enriched trades
+        // build latest positions from enriched trades
         const lastMap: Record<string, EnrichedTrade> = {};
         for (const t of enriched) lastMap[t.symbol] = t;
 

@@ -5,8 +5,7 @@ import { ensureBuiltInDatasetLoaded } from "@/app/lib/ensureBuiltInDatasetLoaded
 
 /**
  * Root dashboard page.
- * NOTE: Next.js App Router pages must only export a default component.
- * Do NOT export named functions/vars from this file.
+ * NOTE: App Router pages must only export a default component.
  */
 export default function Page() {
   useEffect(() => {
@@ -15,11 +14,10 @@ export default function Page() {
     });
   }, []);
 
-  // 将你原来的页面内容放到这里即可
   return (
     <main className="container mx-auto p-4">
       <h1 className="text-2xl font-semibold mb-4">Dashboard</h1>
-      {/* your dashboard content */}
+      {/* Put your dashboard content here */}
     </main>
   );
 }
