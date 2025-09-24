@@ -2,13 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import {
-  importData,
   findTrades,
   getAllPrices,
   setDailyResultsCache,
-  DATASET_HASH_KEY,
-  DATASET_SOURCE_KEY,
-  DATASET_SOURCE_BUILTIN,
 } from '@/lib/services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
@@ -28,27 +24,6 @@ import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, clos
 
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
-async function computeDataHash(data: unknown): Promise<string> {
-  const json = JSON.stringify(data);
-  try {
-    if (typeof crypto?.subtle !== 'undefined') {
-      const buffer = new TextEncoder().encode(json);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-  } catch {
-    /* ignore */
-  }
-  let hash = 0;
-  for (let i = 0; i < json.length; i++) {
-    const chr = json.charCodeAt(i);
-    hash = (hash << 5) - hash + chr;
-    hash |= 0;
-  }
-  return hash.toString();
-}
-
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
@@ -62,42 +37,14 @@ export default function DashboardPage() {
       try {
         setIsLoading(true);
 
-        const tradesFile = await loadJson('trades');
-        const initPositionsFile = await loadJson('initial_positions');
-        const rawData = { trades: tradesFile, positions: initPositionsFile };
+        await import('@/app/lib/ensureBuiltInDatasetLoaded')
+          .then(m => m.ensureBuiltInDatasetLoaded())
+          .catch(err => {
+            console.error('Dataset bootstrap failed:', err);
+            // Do NOT clear DB on failure; UI may show a non-blocking warning instead.
+          });
 
-        const newHash = await computeDataHash(rawData);
-
-        let storedHash: string | null = null;
-        let datasetSource: string | null = null;
-        try {
-          storedHash = localStorage.getItem(DATASET_HASH_KEY);
-          datasetSource = localStorage.getItem(DATASET_SOURCE_KEY);
-        } catch {
-          /* ignore */
-        }
-
-        if (!datasetSource && storedHash && storedHash === newHash) {
-          try {
-            localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-            datasetSource = DATASET_SOURCE_BUILTIN;
-          } catch {
-            /* ignore */
-          }
-        }
-
-        let dbTrades = await findTrades();
-
-        if (dbTrades.length === 0) {
-          await importData(rawData);
-          storedHash = newHash;
-          datasetSource = DATASET_SOURCE_BUILTIN;
-          dbTrades = await findTrades();
-        } else if (datasetSource === DATASET_SOURCE_BUILTIN && newHash !== storedHash) {
-          await importData(rawData);
-          storedHash = newHash;
-          dbTrades = await findTrades();
-        }
+        const dbTrades = await findTrades();
         const replay = replayPortfolio(dbTrades);
         const enriched = buildEnrichedTrades(replay.baseline);
         const posList: Position[] = replay.positions.map(pos => ({ ...pos }));

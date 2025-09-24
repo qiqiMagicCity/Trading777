@@ -8,17 +8,42 @@ import {
   DATASET_SOURCE_KEY,
   DATASET_SOURCE_CUSTOM,
   DATASET_SOURCE_BUILTIN,
+  hashPayload,
+  getAnyTradeCount,
 } from "./dataService";
 import type { RawTrade, Position, Trade } from "./dataService";
-import { createHash } from "crypto";
+import { ensureBuiltInDatasetLoaded } from "@/app/lib/ensureBuiltInDatasetLoaded";
+import { BUILTIN_DATASET } from "@/data/builtin";
+
+function createMemoryStorage() {
+  const store: Record<string, string> = {};
+  return {
+    getItem: (key: string) => (key in store ? store[key] : null),
+    setItem: (key: string, value: string) => {
+      store[key] = String(value);
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      for (const key of Object.keys(store)) delete store[key];
+    },
+  } satisfies Storage;
+}
 
 describe("dataService trade import", () => {
   beforeEach(async () => {
     await indexedDB.deleteDatabase("TradingApp");
+    Object.defineProperty(global, "localStorage", {
+      value: createMemoryStorage(),
+      configurable: true,
+    });
   });
 
   afterEach(async () => {
     await closeDb();
+    // @ts-expect-error cleanup for node test env
+    delete global.localStorage;
   });
 
   test("importData skips malformed trades without aborting", async () => {
@@ -279,100 +304,13 @@ describe("dataService trade import", () => {
       ],
     };
 
-    const expectedHash = createHash("sha256")
-      .update(JSON.stringify(rawData))
-      .digest("hex");
-
-    const store: Record<string, string> = {};
-    Object.defineProperty(global, "localStorage", {
-      value: {
-        getItem: (key: string) => store[key] ?? null,
-        setItem: (key: string, value: string) => {
-          store[key] = String(value);
-        },
-        removeItem: (key: string) => {
-          delete store[key];
-        },
-        clear: () => {
-          for (const k of Object.keys(store)) delete store[k];
-        },
-      },
-      configurable: true,
-    });
+    const expectedHash = hashPayload(rawData);
 
     await clearAndImportData(rawData);
     expect(global.localStorage.getItem(DATASET_HASH_KEY)).toBe(expectedHash);
     expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
-      DATASET_SOURCE_CUSTOM,
+      DATASET_SOURCE_BUILTIN,
     );
-    // cleanup
-    // @ts-expect-error - cleanup mocked localStorage
-    delete global.localStorage;
-  });
-
-  test("importData skips builtin import when custom dataset present", async () => {
-    const store: Record<string, string> = {};
-    Object.defineProperty(global, "localStorage", {
-      value: {
-        getItem: (key: string) => store[key] ?? null,
-        setItem: (key: string, value: string) => {
-          store[key] = String(value);
-        },
-        removeItem: (key: string) => {
-          delete store[key];
-        },
-        clear: () => {
-          for (const k of Object.keys(store)) delete store[k];
-        },
-      },
-      configurable: true,
-    });
-
-    const customPayload = {
-      positions: [],
-      trades: [
-        {
-          symbol: "CUSTOM",
-          price: 101.23,
-          quantity: 1,
-          date: "2025-06-01",
-          action: "buy" as const,
-        },
-      ],
-    } as const;
-
-    await clearAndImportData(customPayload as any);
-
-    const builtinData: { positions: Position[]; trades: RawTrade[] } = {
-      positions: [],
-      trades: [
-        {
-          date: "2025-07-01",
-          symbol: "BUILTIN",
-          side: "BUY",
-          qty: 5,
-          price: 55,
-        },
-      ],
-    };
-
-    await importData(builtinData);
-
-    const db = await openDB("TradingApp", 3);
-    const trades = await db.getAll("trades");
-    db.close();
-
-    expect(trades).toHaveLength(1);
-    expect(trades[0]).toMatchObject({
-      symbol: "CUSTOM",
-      action: "buy",
-      quantity: 1,
-    });
-    expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
-
-    // cleanup
-    // @ts-expect-error - cleanup mocked localStorage
-    delete global.localStorage;
   });
 
   test("importData stores dataset hash and marks builtin source", async () => {
@@ -389,37 +327,14 @@ describe("dataService trade import", () => {
       ],
     };
 
-    const expectedHash = createHash("sha256")
-      .update(JSON.stringify(rawData))
-      .digest("hex");
-
-    const store: Record<string, string> = {};
-    Object.defineProperty(global, "localStorage", {
-      value: {
-        getItem: (key: string) => store[key] ?? null,
-        setItem: (key: string, value: string) => {
-          store[key] = String(value);
-        },
-        removeItem: (key: string) => {
-          delete store[key];
-        },
-        clear: () => {
-          for (const k of Object.keys(store)) delete store[k];
-        },
-      },
-      configurable: true,
-    });
+    const expectedHash = hashPayload(rawData);
 
     await importData(rawData);
 
     expect(global.localStorage.getItem(DATASET_HASH_KEY)).toBe(expectedHash);
     expect(global.localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
-      DATASET_SOURCE_BUILTIN,
+      DATASET_SOURCE_CUSTOM,
     );
-
-    // cleanup
-    // @ts-expect-error - cleanup mocked localStorage
-    delete global.localStorage;
   });
 
   test("importData enforces negative quantity for short trades and positions", async () => {
@@ -444,5 +359,69 @@ describe("dataService trade import", () => {
     db.close();
     expect(trade.quantity).toBe(-80);
     expect(position.qty).toBe(-80);
+  });
+});
+
+describe("dataset bootstrap guard", () => {
+  beforeEach(async () => {
+    await indexedDB.deleteDatabase("TradingApp");
+    Object.defineProperty(global, "localStorage", {
+      value: createMemoryStorage(),
+      configurable: true,
+    });
+  });
+
+  afterEach(async () => {
+    await closeDb();
+    // @ts-expect-error cleanup for node test env
+    delete global.localStorage;
+  });
+
+  it("keeps custom dataset across bootstrap reload", async () => {
+    await clearAndImportData(BUILTIN_DATASET as any);
+
+    const custom = {
+      positions: [],
+      trades: [
+        { symbol: "TSDD", price: 11.04, quantity: 10000, date: "2025-05-23", action: "buy", time: "2025-05-23T05:18:31" },
+        { symbol: "BA", price: 216.27, quantity: 350, date: "2025-05-23", action: "buy", time: "2025-05-23T05:20:03" },
+        { symbol: "GOOGL", price: 170.73, quantity: 400, date: "2025-05-23", action: "buy", time: "2025-05-23T05:20:27" },
+        { symbol: "AMD", price: 151.72, quantity: 380, date: "2025-05-23", action: "buy", time: "2025-05-23T05:20:57" },
+        { symbol: "PYPL", price: 68.54, quantity: 555, date: "2025-05-23", action: "buy", time: "2025-05-23T05:21:20" },
+        { symbol: "UAL", price: 103.7, quantity: 300, date: "2025-05-23", action: "buy", time: "2025-05-23T05:21:39" },
+        { symbol: "DIS", price: 116.83, quantity: 250, date: "2025-05-23", action: "buy", time: "2025-05-23T05:21:59" },
+        { symbol: "NVDL", price: 84.12, quantity: 330, date: "2025-05-23", action: "buy", time: "2025-05-23T05:22:24" },
+      ],
+    };
+
+    await importData(custom);
+    expect(await getAnyTradeCount()).toBe(8);
+
+    await ensureBuiltInDatasetLoaded();
+
+    expect(await getAnyTradeCount()).toBe(8);
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_CUSTOM);
+  });
+
+  it("does not fetch trades.json when dataset is custom", async () => {
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+
+    const originalFetch = (global as any).fetch;
+    if (!originalFetch) {
+      (global as any).fetch = async () => ({ ok: true, json: async () => ({}) });
+    }
+
+    const spy = jest.spyOn(global as any, "fetch");
+
+    await ensureBuiltInDatasetLoaded();
+
+    expect(spy).not.toHaveBeenCalledWith(expect.stringMatching(/trades\.json|\/data\/builtin/));
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
+
+    if (!originalFetch) {
+      delete (global as any).fetch;
+    }
   });
 });

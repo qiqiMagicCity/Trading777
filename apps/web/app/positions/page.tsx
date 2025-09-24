@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { importData } from "@/lib/services/dataService";
 import { findTrades } from "@/lib/services/dataService";
-import { loadJson } from "@/app/lib/dataSource";
 import type { Position } from "@/lib/services/dataService";
 import { computeFifo, type EnrichedTrade } from "@/lib/fifo";
 import { PositionsTable } from "@/modules/PositionsTable";
@@ -19,14 +17,13 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        // 先查询是否已有交易数据，若没有则导入示例数据
-        let allTrades = await findTrades();
-        if (allTrades.length === 0) {
-          const tradesFile = await loadJson('trades');
-          const initPositionsFile = await loadJson('initial_positions');
-          await importData({ trades: tradesFile, positions: initPositionsFile });
-          allTrades = await findTrades();
-        }
+        await import("@/app/lib/ensureBuiltInDatasetLoaded")
+          .then((m) => m.ensureBuiltInDatasetLoaded())
+          .catch((err) => {
+            console.error("Dataset bootstrap failed:", err);
+          });
+
+        const allTrades = await findTrades();
 
         const enriched = computeFifo(allTrades);
         setTrades(enriched);
