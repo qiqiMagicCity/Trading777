@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { nowNY } from '@/lib/timezone';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale/zh-CN';
-import { clearAndImportData, exportData, importClosePrices, getAllPrices } from '@/lib/services/dataService';
+import { importData, exportData, importClosePrices, getAllPrices } from '@/lib/services/dataService';
 
 export function Header() {
   const [now, setNow] = useState(nowNY());
@@ -76,7 +76,7 @@ export function Header() {
         if (!data.trades || !data.positions) {
           throw new Error('Invalid JSON format. "trades" and "positions" arrays are required.');
         }
-        await clearAndImportData(data);
+        await importData(data as any);
         alert('导入成功! 页面将刷新。');
         window.location.reload();
       } catch (err) {
