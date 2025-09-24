@@ -66,10 +66,10 @@ describe.skip('property based invariants', () => {
           const drPrefix = sortedDaily.filter(d => d.date <= date);
             const res: any = runAll(date, [], cumulativeTrades, closePrices, { dailyResults: drPrefix });
             const m = normalizeMetrics(res);
-            const realizedUntilPrevClose = m.aux?.m6RealizedUntilPrevClose ?? 0;
+            const realizedToday = m.aux?.m6RealizedToday ?? m.M4.total ?? 0;
             const priceChange = m.aux?.m6PriceChange ?? 0;
             expect(m.M6.total).toBeCloseTo(
-              realizedUntilPrevClose + m.M5.fifo + priceChange,
+              realizedToday + m.M5.fifo + priceChange,
               10,
             );
 

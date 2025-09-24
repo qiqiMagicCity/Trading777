@@ -148,12 +148,10 @@ const split = calcM5Split(enriched as any, evalDate, initialPositions);
 const M5_1 = round2(split.trade);
 const M5_2_raw = split.fifo;
 const M5_2 = round2(M5_2_raw);
-const M4 = round2(split.historyRealized);
-const realizedUntilPrevClose = dailyResults
-  .filter((r) => r.date < evalDate)
-  .reduce((sum, r) => sum + (r.realized ?? 0), 0);
+const M4_raw = split.historyRealized;
+const M4 = round2(M4_raw);
 const m6Calc = computeM6({
-  m4UntilPrevClose: realizedUntilPrevClose,
+  m4TodayRealized: M4_raw,
   m5FifoToday: M5_2_raw,
   prevPositions,
   quotes,

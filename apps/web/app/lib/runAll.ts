@@ -433,11 +433,9 @@ function runAllCore(
   const M3_r = round2(metrics.M3);
   const priceChangeRaw = metrics.aux?.m6PriceChange ?? 0;
   const priceChange_r = round2(priceChangeRaw);
-  const realizedUntilPrevRaw = metrics.aux?.m6RealizedUntilPrevClose ?? 0;
-  const realizedUntilPrev_r = round2(realizedUntilPrevRaw);
   const realizedTodayRaw = metrics.aux?.m6RealizedToday ?? metrics.M4 ?? 0;
   const realizedToday_r = round2(realizedTodayRaw);
-  const M6_override = round2(realizedUntilPrevRaw + priceChangeRaw + M5_2_override);
+  const M6_override = round2(realizedTodayRaw + priceChangeRaw + M5_2_override);
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
@@ -459,7 +457,6 @@ function runAllCore(
     aux: {
       breakdown,
       m6PriceChange: priceChange_r,
-      m6RealizedUntilPrevClose: realizedUntilPrev_r,
       m6RealizedToday: realizedToday_r,
       m6FifoToday: M5_2_r,
       m6Legs: metrics.aux?.m6Legs ?? [],

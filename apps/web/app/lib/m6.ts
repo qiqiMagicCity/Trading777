@@ -31,8 +31,8 @@ export interface QuoteNowPrev {
 }
 
 export interface ComputeM6Input {
-  /** 截至昨收的“累计已实现盈亏”（不含今天） */
-  m4UntilPrevClose: number;
+  /** 今日针对昨持仓的已实现盈亏（M4） */
+  m4TodayRealized: number;
   /** 今日 FIFO 已实现盈亏（含回转 / 部分平仓） */
   m5FifoToday: number;
   /** 昨收后的净持仓快照 */
@@ -47,7 +47,7 @@ export interface ComputeM6Result {
   m6: number;
   /** Σ (now - prevClose) * qtyPrev —— 当日 MTM */
   mtmSum: number;
-  m4UntilPrevClose: number;
+  m4TodayRealized: number;
   m5FifoToday: number;
   legs: Array<{
     symbol: string;
@@ -64,7 +64,7 @@ export interface ComputeM6Result {
 }
 
 export function computeM6(input: ComputeM6Input): ComputeM6Result {
-  const { m4UntilPrevClose, m5FifoToday, prevPositions, quotes } = input;
+  const { m4TodayRealized, m5FifoToday, prevPositions, quotes } = input;
 
   const quoteMap = new Map<string, QuoteNowPrev>();
   for (const q of quotes) {
@@ -121,12 +121,12 @@ export function computeM6(input: ComputeM6Input): ComputeM6Result {
     });
   }
 
-  const m6 = m4UntilPrevClose + m5FifoToday + mtmSum;
+  const m6 = m4TodayRealized + m5FifoToday + mtmSum;
 
   return {
     m6,
     mtmSum,
-    m4UntilPrevClose,
+    m4TodayRealized,
     m5FifoToday,
     legs,
     excluded,

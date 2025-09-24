@@ -16,8 +16,6 @@ export interface MetricsContract {
   aux?: {
     breakdown?: BreakdownRow[];
     m6PriceChange?: number;
-    /** 截至昨收的累计已实现盈亏（M4_{t-1}） */
-    m6RealizedUntilPrevClose?: number;
     /** 今日针对昨持仓的已实现盈亏（M4.total） */
     m6RealizedToday?: number;
     /** 今日 FIFO 已实现盈亏（与 M5.fifo 一致，便于拆解展示） */

@@ -146,7 +146,6 @@ export interface Metrics {
   M13: number;
   aux?: {
     m6PriceChange?: number;
-    m6RealizedUntilPrevClose?: number;
     m6RealizedToday?: number;
     m6FifoToday?: number;
     m6Legs?: Array<{
@@ -203,13 +202,13 @@ function reportMonitoring(message: string, details?: unknown): void {
 export function assertM6(metrics: Metrics) {
   if (!DEBUG) return;
   const priceChange = metrics.aux?.m6PriceChange;
-  const realizedBase =
-    typeof metrics.aux?.m6RealizedUntilPrevClose === "number"
-      ? metrics.aux.m6RealizedUntilPrevClose
-      : undefined;
-  if (!Number.isFinite(priceChange) || !Number.isFinite(realizedBase)) return;
+  const realizedToday =
+    typeof metrics.aux?.m6RealizedToday === "number"
+      ? metrics.aux.m6RealizedToday
+      : metrics.M4;
+  if (!Number.isFinite(priceChange) || !Number.isFinite(realizedToday)) return;
   const expected = mRound2(
-    (realizedBase as number) + metrics.M5.fifo + (priceChange as number),
+    (realizedToday as number) + metrics.M5.fifo + (priceChange as number),
   );
   if (metrics.M6 !== expected) {
     const data = {
@@ -217,8 +216,7 @@ export function assertM6(metrics: Metrics) {
       fifo: metrics.M5.fifo,
       M6: metrics.M6,
       priceChange,
-      realizedUntilPrevClose: realizedBase,
-      realizedToday: metrics.aux?.m6RealizedToday ?? metrics.M4,
+      realizedToday,
       expected,
       missingPrevCloseSymbols: metrics.aux?.missingPrevCloseSymbols ?? [],
     };
@@ -869,10 +867,6 @@ function calcMetricsInternal(
   // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(sortedTrades, todayStr);
 
-  const realizedUntilPrevClose = dailyResults
-    .filter((r) => r.date < todayStr)
-    .reduce((sum, r) => sum + Number(r?.realized ?? 0), 0);
-
   const positionMap = new Map<string, Position>();
   for (const pos of positions) {
     if (!pos?.symbol) continue;
@@ -949,7 +943,7 @@ function calcMetricsInternal(
   }
 
   const m6Computation = computeM6({
-    m4UntilPrevClose: realizedUntilPrevClose,
+    m4TodayRealized: todayHistoricalRealizedPnl,
     m5FifoToday: pnlFifo,
     prevPositions: prevPositionsForM6,
     quotes: quotesForM6,
@@ -966,7 +960,6 @@ function calcMetricsInternal(
 
   if (DEBUG)
     logger.debug("M6_DEBUG", {
-      realizedUntilPrevClose,
       realizedToday: todayHistoricalRealizedPnl,
       fifo: pnlFifo,
       priceChange: priceChangeRounded,
@@ -1033,7 +1026,6 @@ function calcMetricsInternal(
     M13: ytd,
     aux: {
       m6PriceChange: priceChangeRounded,
-      m6RealizedUntilPrevClose: mRound2(m6Computation.m4UntilPrevClose),
       m6RealizedToday: mRound2(todayHistoricalRealizedPnl),
       m6FifoToday: mRound2(pnlFifo),
       m6Legs: m6Computation.legs.map((leg) => ({
@@ -1112,7 +1104,6 @@ export function normalizeMetrics(input:any): MetricsContract {
     typeof rawPriceChange === 'number' && Number.isFinite(rawPriceChange)
       ? rawPriceChange
       : undefined;
-  const realizedUntilPrevClose = input?.aux?.m6RealizedUntilPrevClose;
   const realizedToday = input?.aux?.m6RealizedToday;
   const fifoToday = input?.aux?.m6FifoToday;
   const m6Legs = Array.isArray(input?.aux?.m6Legs)
@@ -1133,10 +1124,6 @@ export function normalizeMetrics(input:any): MetricsContract {
   const aux = {
     breakdown: input?.aux?.breakdown ?? [],
     m6PriceChange: priceChange,
-    m6RealizedUntilPrevClose:
-      typeof realizedUntilPrevClose === 'number' && Number.isFinite(realizedUntilPrevClose)
-        ? realizedUntilPrevClose
-        : undefined,
     m6RealizedToday:
       typeof realizedToday === 'number' && Number.isFinite(realizedToday)
         ? realizedToday
