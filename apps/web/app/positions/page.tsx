@@ -5,6 +5,7 @@ import { findTrades } from "@/lib/services/dataService";
 import type { Position } from "@/lib/services/dataService";
 import { computeFifo, type EnrichedTrade } from "@/lib/fifo";
 import { PositionsTable } from "@/modules/PositionsTable";
+import { ensureBuiltInDatasetLoaded } from "@/app/lib/ensureBuiltInDatasetLoaded";
 
 export default function PositionsPage() {
   const [positions, setPositions] = useState<Position[]>([]);
@@ -17,22 +18,18 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        await import("@/app/lib/ensureBuiltInDatasetLoaded")
-          .then((m) => m.ensureBuiltInDatasetLoaded())
-          .catch((err) => {
-            console.error("Dataset bootstrap failed:", err);
-          });
+        // ✅ 统一只走启动守卫；禁止任何 fetch('/trades.json') 回灌
+        await ensureBuiltInDatasetLoaded();
 
+        // ✅ 只调用一次 findTrades（合并冲突时容易出现重复）
         const allTrades = await findTrades();
 
         const enriched = computeFifo(allTrades);
         setTrades(enriched);
 
-        // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
+        // 用 enriched 计算最新持仓（最后状态）
         const lastMap: Record<string, EnrichedTrade> = {};
-        for (const t of enriched) {
-          lastMap[t.symbol] = t; // 由于 computeFifo 已按日期升序，遍历结束时即为最后状态
-        }
+        for (const t of enriched) lastMap[t.symbol] = t;
 
         const posList: Position[] = Object.values(lastMap).map((t) => ({
           symbol: t.symbol,
@@ -55,19 +52,12 @@ export default function PositionsPage() {
     loadData();
   }, []);
 
-  if (isLoading) {
-    return <div>Loading positions...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
+  if (isLoading) return <div>Loading positions...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <main className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold tracking-tight mb-8">
-        Current Positions
-      </h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-8">Current Positions</h1>
       <PositionsTable positions={positions} trades={trades} />
     </main>
   );

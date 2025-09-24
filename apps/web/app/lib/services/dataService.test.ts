@@ -18,15 +18,15 @@ import { BUILTIN_DATASET } from "@/data/builtin";
  *  - Compat: also honor legacy keys datasetSource/datasetHash
  */
 export async function ensureBuiltInDatasetLoaded() {
-  // Primary keys
+  // New keys
   const source = localStorage.getItem(DATASET_SOURCE_KEY);
   const storedHash = localStorage.getItem(DATASET_HASH_KEY);
 
-  // Legacy compat keys (older builds)
+  // Legacy keys (old builds)
   const legacySource = localStorage.getItem("datasetSource");
   const legacyHash = localStorage.getItem("datasetHash");
 
-  // Effective values after considering legacy fallbacks
+  // Effective values with legacy fallback
   const effectiveSource =
     (source ?? legacySource ?? null) as
       | typeof DATASET_SOURCE_BUILTIN
@@ -40,7 +40,7 @@ export async function ensureBuiltInDatasetLoaded() {
     return;
   }
 
-  // 2) First run: no mark + empty store -> seed builtin
+  // 2) First run: unmarked + empty -> seed builtin once
   const hasAny = await getAnyTradeCount().catch(() => 0);
   if (!effectiveSource && !hasAny) {
     await clearAndImportData(BUILTIN_DATASET);
@@ -56,7 +56,7 @@ export async function ensureBuiltInDatasetLoaded() {
       await clearAndImportData(BUILTIN_DATASET);
       localStorage.setItem(DATASET_HASH_KEY, expected);
     }
-    // Normalize: if只有旧key被设置，把新key也补上
+    // Normalize: if only legacy key existed, also set the new key
     if (!source) {
       localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
     }
