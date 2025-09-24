@@ -29,7 +29,7 @@ test("黄金案例：M5 拆分与总值正确", async () => {
   expect(m.M5.behavior).toBe(1670);
   expect(m.M5.fifo).toBe(1320);
   expect(m.M4.total).toBe(6530);
-  expect(m.M6.total).toBe(8952.5);
+  expect(m.M6.total).toBe(7850);
 
   const rows = res.aux.breakdown;
   // NFLX 09:40 SELL 120 => 100历史(M4) + 20当日(M5)

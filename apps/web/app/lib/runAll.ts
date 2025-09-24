@@ -319,6 +319,22 @@ function runAllCore(
   const enriched = buildEnrichedTrades(replay.baseline);
   const baselinePositions = replay.baseline.initialPositions;
 
+  const resolvePrevClose = (symbol: string): number | undefined => {
+    const byDate = closePrices[symbol];
+    if (!byDate) return undefined;
+    let candidate: string | null = null;
+    for (const [date, price] of Object.entries(byDate)) {
+      if (!Number.isFinite(price)) continue;
+      if (date >= evalISO) continue;
+      if (!candidate || date > candidate) {
+        candidate = date;
+      }
+    }
+    if (!candidate) return undefined;
+    const price = byDate[candidate];
+    return Number.isFinite(price) ? price : undefined;
+  };
+
   const positions: Position[] = replay.positions.map((pos) => {
     const last = closePrices[pos.symbol]?.[evalISO];
     return {
@@ -326,6 +342,7 @@ function runAllCore(
       last: last ?? pos.avgPrice,
       priceOk: last !== undefined,
       stale: last === undefined,
+      prevClose: resolvePrevClose(pos.symbol),
     };
   });
 
@@ -414,7 +431,11 @@ function runAllCore(
   const M5_1_r = round2(M5_1_override);
   const M5_2_r = round2(M5_2_override);
   const M3_r = round2(metrics.M3);
-  const M6_override = M4_r + M3_r + M5_2_r;
+  const priceChangeRaw = metrics.aux?.m6PriceChange ?? 0;
+  const priceChange_r = round2(priceChangeRaw);
+  const prevRealizedRaw = metrics.aux?.m6PrevRealizedTotal ?? 0;
+  const prevRealized_r = round2(prevRealizedRaw);
+  const M6_override = prevRealized_r + priceChange_r + M5_2_r;
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
@@ -433,7 +454,15 @@ function runAllCore(
     M11,
     M12,
     M13,
-    aux: { breakdown },
+    aux: {
+      breakdown,
+      m6PriceChange: priceChange_r,
+      m6PrevRealizedTotal: prevRealized_r,
+      m6FifoToday: M5_2_r,
+      m6Legs: metrics.aux?.m6Legs ?? [],
+      m6Excluded: metrics.aux?.m6Excluded ?? [],
+      missingPrevCloseSymbols: metrics.aux?.missingPrevCloseSymbols ?? [],
+    },
   } as const;
 
   if (process.env.MONITOR === "1") {

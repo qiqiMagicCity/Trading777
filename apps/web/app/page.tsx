@@ -22,6 +22,41 @@ import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/l
 import { getLatestTradingDayStr } from '@/lib/timezone';
 import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, closePricesFromRows } from '@/lib/dailyResults';
 
+function resolvePrevClose(
+  symbol: string,
+  evalDate: string,
+  closePrices: Record<string, Record<string, number>>,
+): number | undefined {
+  const byDate = closePrices[symbol];
+  if (!byDate) return undefined;
+  let candidateDate: string | null = null;
+  for (const [date, price] of Object.entries(byDate)) {
+    if (!Number.isFinite(price)) continue;
+    if (date >= evalDate) continue;
+    if (!candidateDate || date > candidateDate) {
+      candidateDate = date;
+    }
+  }
+  if (!candidateDate) return undefined;
+  const price = byDate[candidateDate];
+  return Number.isFinite(price) ? price : undefined;
+}
+
+function attachPrevClose(
+  positions: Position[],
+  closePrices: Record<string, Record<string, number>>,
+  evalDate: string,
+) {
+  for (const pos of positions) {
+    const prevClose = resolvePrevClose(pos.symbol, evalDate, closePrices);
+    if (prevClose !== undefined) {
+      pos.prevClose = prevClose;
+    } else {
+      delete pos.prevClose;
+    }
+  }
+}
+
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 export default function DashboardPage() {
@@ -114,6 +149,8 @@ export default function DashboardPage() {
           normalizeClosePriceMap(fileClosePrices),
           closePricesFromRows(cachedPrices),
         );
+
+        attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
         const dailyResults = generateDailyResults({
           trades: enriched,
@@ -217,6 +254,8 @@ export default function DashboardPage() {
         normalizeClosePriceMap(fileClosePrices),
         closePricesFromRows(cachedPrices),
       );
+
+      attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
       const dailyResults = generateDailyResults({
         trades: enriched,

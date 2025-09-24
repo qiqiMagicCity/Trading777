@@ -29,5 +29,8 @@ test("页面口径与算法一致（黄金案例）", async () => {
   expect(m.M5.behavior).toBe(1320);
   expect(m.M5.fifo).toBe(1320);
   expect(m.M4.total).toBe(6530);
-  expect(m.M6.total).toBe(8952.5);
+  const prevRealized = m.aux?.m6PrevRealizedTotal ?? 0;
+  const priceChange = m.aux?.m6PriceChange ?? 0;
+  expect(m.M6.total).toBe(1320);
+  expect(m.M6.total).toBeCloseTo(prevRealized + m.M5.fifo + priceChange, 6);
 });

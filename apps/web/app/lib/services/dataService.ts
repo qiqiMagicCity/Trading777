@@ -54,6 +54,8 @@ export interface Position {
   priceOk: boolean;
   stale?: boolean;
   lastUpdatedAt?: number;
+  /** 前一交易日的收盘价，用于计算当日价格变动 */
+  prevClose?: number;
 }
 
 // New interface for cached prices
@@ -346,6 +348,9 @@ function normalizePositionsForStore(
     const avgPrice = coerceNumber(raw.avgPrice);
     if (avgPrice === undefined || !Number.isFinite(avgPrice)) continue;
     const lastPrice = coerceNumber(raw.last);
+    const prevClose =
+      coerceNumber((raw as any).prevClose) ??
+      coerceNumber((raw as any).previousClose);
     const absQty = Math.abs(qty);
     const isShort = qty < 0;
     const symbol = toUpperSafe(raw.symbol);
@@ -358,6 +363,7 @@ function normalizePositionsForStore(
       priceOk: raw.priceOk ?? true,
       stale: raw.stale ?? false,
       lastUpdatedAt: raw.lastUpdatedAt,
+      prevClose: prevClose !== undefined ? prevClose : undefined,
     });
   }
   return normalized;
