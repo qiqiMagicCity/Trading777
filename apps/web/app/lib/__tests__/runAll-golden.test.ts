@@ -12,7 +12,7 @@ describe("runAll golden case", () => {
     // 关键：统一口径
     const m = normalizeMetrics(res);
 
-    // 1) M6 恒等式：M6.total == aux.m6RealizedToday + M5.fifo + aux.m6PriceChange
+    // 1) M6 恒等式：M6.total == aux.m6RealizedUntilPrevClose + M5.fifo + aux.m6PriceChange
     assertM6Equality(m);
 
     // 2) 保留必要的健壮性断言（数值为数，非 NaN）

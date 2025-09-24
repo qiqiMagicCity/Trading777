@@ -42,7 +42,7 @@ npm run backtest -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD
 ## 产出
 - `data/real/dailyResult.json`：按日快照，字段含 realized（M4+M5.2）、unrealized（M3）、以及 M1–M13。
 - 每条快照包含 `stale` 布尔字段：若当日价格来自昨收回退则为 `true`。
-- UI 与脚本口径通过 `normalizeMetrics` 统一，M6 恒等式：M6 = aux.m6RealizedToday + M5.2 + aux.m6PriceChange（其中 aux.m6PriceChange = Σ 昨日持仓(实时价-昨收)*数量）。
+- UI 与脚本口径通过 `normalizeMetrics` 统一，M6 恒等式：M6 = aux.m6RealizedUntilPrevClose + M5.2 + aux.m6PriceChange（其中 aux.m6PriceChange = Σ 昨日持仓(实时价-昨收)*数量，aux.m6RealizedToday 仍保留今日针对昨持仓的盈亏拆解）。
 
 ## 校验（重要）
 - 本地：`npm run verify:real -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD`

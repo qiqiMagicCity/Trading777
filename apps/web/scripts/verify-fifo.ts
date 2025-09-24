@@ -149,8 +149,11 @@ const M5_1 = round2(split.trade);
 const M5_2_raw = split.fifo;
 const M5_2 = round2(M5_2_raw);
 const M4 = round2(split.historyRealized);
+const realizedUntilPrevClose = dailyResults
+  .filter((r) => r.date < evalDate)
+  .reduce((sum, r) => sum + (r.realized ?? 0), 0);
 const m6Calc = computeM6({
-  m4Today: split.historyRealized,
+  m4UntilPrevClose: realizedUntilPrevClose,
   m5FifoToday: M5_2_raw,
   prevPositions,
   quotes,
