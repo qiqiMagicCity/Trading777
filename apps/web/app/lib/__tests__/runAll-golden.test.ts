@@ -12,8 +12,13 @@ describe("runAll golden case", () => {
     // 关键：统一口径
     const m = normalizeMetrics(res);
 
-    // 1) M6 恒等式：M6.total == aux.m6PrevRealizedTotal + M5.fifo + aux.m6PriceChange
+    // 1) M6 恒等式：M6.total == M4 + M5.fifo + Σ(now - prevClose) × qty
     assertM6Equality(m);
+    const priceChange = m.aux?.m6PriceChange ?? 0;
+    // Golden snapshot recalculated under the prev-close MTM spec:
+    // missing prevClose quotes zero-out MTM, so M6 collapses to M4 + M5_FIFO.
+    expect(priceChange).toBe(0);
+    expect(m.M6.total).toBeCloseTo(m.M4.total + m.M5.fifo + priceChange, 6);
 
     // 2) 保留必要的健壮性断言（数值为数，非 NaN）
     expect(Number.isFinite(m.M4.total)).toBe(true);

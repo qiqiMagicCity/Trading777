@@ -6,7 +6,7 @@ import { computeFifo, type InitialPosition } from '../app/lib/fifo';
 import { calcM5Split } from '../app/lib/m5-intraday';
 import { calcM9FromDaily } from '../app/lib/metrics';
 import { round2 } from '../app/lib/money';
-import { computeM6, type PrevPosition, type QuoteNowPrev } from '../app/lib/m6';
+import { calcM6Detailed, type M6PositionInput } from '../app/lib/m6';
 import { nyDateStr } from '../app/lib/time';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -82,7 +82,6 @@ for (const [symbol, { qty, avgPrice }] of posMap.entries()) {
 const positionBySymbol = new Map<string, Position>();
 for (const pos of positions) positionBySymbol.set(pos.symbol, pos);
 
-const todayNetChange = new Map<string, number>();
 const lastTradePriceToday = new Map<string, number>();
 for (const trade of trades) {
   if ((trade as any)?.isInitialPosition) continue;
@@ -97,41 +96,20 @@ for (const trade of trades) {
   if (Number.isFinite(price)) {
     lastTradePriceToday.set(symbol, price);
   }
-  const side = String(trade.side ?? trade.action ?? '').toUpperCase();
-  let delta = 0;
-  if (side === 'BUY' || side === 'COVER') delta = qty;
-  else if (side === 'SELL' || side === 'SHORT') delta = -qty;
-  else continue;
-  todayNetChange.set(symbol, (todayNetChange.get(symbol) ?? 0) + delta);
 }
 
-const prevPositions: PrevPosition[] = [];
-const quotes: QuoteNowPrev[] = [];
-const symbolUniverse = new Set<string>([
-  ...positionBySymbol.keys(),
-  ...todayNetChange.keys(),
-]);
-for (const symbol of symbolUniverse) {
-  const pos = positionBySymbol.get(symbol);
-  const currentQty = Number(pos?.qty ?? 0);
-  const delta = todayNetChange.get(symbol) ?? 0;
-  const qtyPrev = currentQty - delta;
-  if (!Number.isFinite(qtyPrev) || Math.abs(qtyPrev) <= 1e-6) continue;
-
-  prevPositions.push({ symbol, qtyPrev });
-
-  let now: number | undefined;
-  if (pos && Number.isFinite(pos.last)) {
-    now = pos.last;
-  } else {
-    const tradePrice = lastTradePriceToday.get(symbol);
-    if (Number.isFinite(tradePrice)) now = tradePrice;
-  }
-
-  const prevClose =
-    pos && Number.isFinite(pos.prevClose ?? NaN) ? (pos.prevClose as number) : undefined;
-
-  quotes.push({ symbol, now, prevClose });
+const positionsForM6: M6PositionInput[] = [];
+for (const [symbol, pos] of positionBySymbol.entries()) {
+  const qty = Number(pos?.qty ?? 0);
+  if (!Number.isFinite(qty) || qty === 0) continue;
+  const nowPrice = Number(pos?.last);
+  const prevClose = Number(pos?.prevClose ?? NaN);
+  positionsForM6.push({
+    symbol,
+    qty,
+    priceNow: Number.isFinite(nowPrice) ? nowPrice : null,
+    prevClose: Number.isFinite(prevClose) ? prevClose : null,
+  });
 }
 
 const M1 = round2(positions.reduce((s, p) => s + Math.abs(p.avgPrice * p.qty), 0));
@@ -148,20 +126,19 @@ const split = calcM5Split(enriched as any, evalDate, initialPositions);
 const M5_1 = round2(split.trade);
 const M5_2_raw = split.fifo;
 const M5_2 = round2(M5_2_raw);
-const M4 = round2(split.historyRealized);
-const prevRealizedTotal = round2(
-  dailyResults
-    .filter((row) => row.date < evalDate)
-    .reduce((sum, row) => sum + Number(row.realized ?? 0), 0),
-);
-const m6Calc = computeM6({
-  m4UntilPrevClose: prevRealizedTotal,
-  m5FifoToday: M5_2_raw,
-  prevPositions,
-  quotes,
+const M4_raw = split.historyRealized;
+const m6Calc = calcM6Detailed({
+  positions: positionsForM6,
+  M4: M4_raw,
+  M5_FIFO: M5_2_raw,
+  nowMarkFallback: (symbol) => {
+    const tradePrice = lastTradePriceToday.get(symbol);
+    return Number.isFinite(tradePrice) ? Number(tradePrice) : null;
+  },
 });
-const dayPriceChange = round2(m6Calc.mtmSum);
-const M6 = round2(m6Calc.m6);
+const dayPriceChange = round2(m6Calc.mtm);
+const M6 = m6Calc.total;
+const M4 = round2(M4_raw);
 const M9 = round2(calcM9FromDaily(dailyResults, evalDate));
 
 const ours: Record<string, number> = {

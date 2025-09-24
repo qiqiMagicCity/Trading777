@@ -23,16 +23,16 @@ export interface MetricsContract {
     /** M6 逐标的 MTM 拆解 */
     m6Legs?: Array<{
       symbol: string;
-      qtyPrev: number;
+      qty: number;
       prevClose: number;
-      now: number;
-      pxDiffInPortfolioCcy: number;
+      priceNow: number;
+      fx: number;
       mtm: number;
     }>;
     /** 因行情缺失等原因未计入 MTM 的标的 */
     m6Excluded?: Array<{
       symbol: string;
-      reason: "NO_NOW" | "NO_PREV_CLOSE" | "ZERO_QTY";
+      reason: "MISSING_PREV_CLOSE" | "MISSING_MARK";
     }>;
     missingPrevCloseSymbols?: string[];
   };
