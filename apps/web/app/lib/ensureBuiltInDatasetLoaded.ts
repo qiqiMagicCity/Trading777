@@ -40,8 +40,17 @@ export async function ensureBuiltInDatasetLoaded() {
     : markers.includes(DATASET_SOURCE_BUILTIN)
       ? DATASET_SOURCE_BUILTIN
       : null) as typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM | null;
-  
+
   const effectiveHash = storedHash ?? legacyHash ?? metaHash ?? null;
+
+  let hasAny = 0;
+  try {
+    hasAny = await getAnyTradeCount();
+  } catch {
+    hasAny = 0;
+  }
+
+  const expectedHash = hashPayload(BUILTIN_DATASET);
 
   // 1) Custom data: never overwrite
   if (effectiveSource === DATASET_SOURCE_CUSTOM) {
@@ -53,10 +62,9 @@ export async function ensureBuiltInDatasetLoaded() {
   }
 
   // 2) First run: no mark + empty store -> seed builtin
-  const hasAny = await getAnyTradeCount().catch(() => 0);
   if (!effectiveSource && !hasAny) {
     await clearAndImportData(BUILTIN_DATASET);
-    await markDatasetAsBuiltin(hashPayload(BUILTIN_DATASET));
+    await markDatasetAsBuiltin(expectedHash);
     return;
   }
 
@@ -67,20 +75,30 @@ export async function ensureBuiltInDatasetLoaded() {
 
   // 3) Builtin: only refresh when hash changed
   if (effectiveSource === DATASET_SOURCE_BUILTIN) {
-    const expected = hashPayload(BUILTIN_DATASET);
-    if (effectiveHash !== expected) {
-      const matches = await doesDatabaseMatchDataset(BUILTIN_DATASET, { strict: true });
-      if (matches) {
-        await markDatasetAsBuiltin(expected);
-        return;
-      }
+    const matches = hasAny
+      ? await doesDatabaseMatchDataset(BUILTIN_DATASET, { strict: true }).catch(() => false)
+      : false;
 
-      await markDatasetAsCustom();
+    if (!matches) {
+      if (!hasAny) {
+        await clearAndImportData(BUILTIN_DATASET);
+        await markDatasetAsBuiltin(expectedHash);
+      } else {
+        await markDatasetAsCustom();
+      }
       return;
     }
-    // Normalize: if只有旧key被设置，把新key也补上
-    if (!source) {
-      await markDatasetAsBuiltin(effectiveHash ?? hashPayload(BUILTIN_DATASET));
+
+    if (
+      effectiveHash !== expectedHash ||
+      source !== DATASET_SOURCE_BUILTIN ||
+      legacySource !== DATASET_SOURCE_BUILTIN ||
+      metaSource !== DATASET_SOURCE_BUILTIN ||
+      storedHash !== expectedHash ||
+      legacyHash !== expectedHash ||
+      metaHash !== expectedHash
+    ) {
+      await markDatasetAsBuiltin(expectedHash);
     }
   }
 }
