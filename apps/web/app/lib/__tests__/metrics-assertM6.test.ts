@@ -24,6 +24,7 @@ describe('assertM6', () => {
       M4: 2,
       M5: { trade: 0, fifo: 3 },
       M6: 6,
+      aux: { m6PriceChange: 1, m6RealizedToday: 2 },
     } as any;
     assertM6(metrics);
     expect(warn).not.toHaveBeenCalled();
@@ -38,6 +39,7 @@ describe('assertM6', () => {
       M4: 2,
       M5: { trade: 0, fifo: 3 },
       M6: 7,
+      aux: { m6PriceChange: 1, m6RealizedToday: 2 },
     } as any;
     assertM6(metrics);
     expect(warn).toHaveBeenCalled();

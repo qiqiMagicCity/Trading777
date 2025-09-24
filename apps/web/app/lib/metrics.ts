@@ -15,8 +15,9 @@ import type { DailyResult } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
-import { add as mAdd, round2 as mRound2 } from "./money";
+import { round2 as mRound2 } from "./money";
 import type { MetricsContract } from "./types/metrics";
+import { computeM6, type PrevPosition, type QuoteNowPrev } from "./m6";
 
 
 export function isDebug() {
@@ -80,7 +81,10 @@ export interface Metrics {
     fifo: number;
   };
 
-  /** M6: 今日总盈利变化 - 今日历史仓位平仓盈亏、日内 FIFO 盈亏与浮动盈亏之和 */
+  /**
+   * M6: 今日总盈利变化
+   *   = 今日针对昨持仓的已实现盈亏（M4） + 今日 FIFO 已实现盈亏 + Σ(当前价格 - 昨收价) × 昨日持仓数量
+   */
   M6: number;
 
   /**
@@ -140,6 +144,24 @@ export interface Metrics {
 
   /** M13: YTD (Year-To-Date) - 本年至今的盈亏总和 */
   M13: number;
+  aux?: {
+    m6PriceChange?: number;
+    m6RealizedToday?: number;
+    m6FifoToday?: number;
+    m6Legs?: Array<{
+      symbol: string;
+      qtyPrev: number;
+      prevClose: number;
+      now: number;
+      pxDiffInPortfolioCcy: number;
+      mtm: number;
+    }>;
+    m6Excluded?: Array<{
+      symbol: string;
+      reason: "NO_NOW" | "NO_PREV_CLOSE" | "ZERO_QTY";
+    }>;
+    missingPrevCloseSymbols?: string[];
+  };
 }
 
 /** 价格映射类型，格式为 { 日期: { 股票代码: 价格 } } */
@@ -179,14 +201,24 @@ function reportMonitoring(message: string, details?: unknown): void {
 
 export function assertM6(metrics: Metrics) {
   if (!DEBUG) return;
-  const expected = mRound2(mAdd(metrics.M4, metrics.M3, metrics.M5.fifo));
+  const priceChange = metrics.aux?.m6PriceChange;
+  const realizedToday =
+    typeof metrics.aux?.m6RealizedToday === "number"
+      ? metrics.aux.m6RealizedToday
+      : metrics.M4;
+  if (!Number.isFinite(priceChange) || !Number.isFinite(realizedToday)) return;
+  const expected = mRound2(
+    (realizedToday as number) + metrics.M5.fifo + (priceChange as number),
+  );
   if (metrics.M6 !== expected) {
     const data = {
       M4: metrics.M4,
-      M3: metrics.M3,
       fifo: metrics.M5.fifo,
       M6: metrics.M6,
+      priceChange,
+      realizedToday,
       expected,
+      missingPrevCloseSymbols: metrics.aux?.missingPrevCloseSymbols ?? [],
     };
     logger.warn("M6 mismatch", data);
     reportMonitoring("M6 mismatch", data);
@@ -838,17 +870,107 @@ function calcMetricsInternal(
     todayStr,
   );
 
-  // M6: 今日总盈利变化
-  const todayTotalPnlChange = mRound2(
-    mAdd(todayHistoricalRealizedPnl, pnlFifo, floatPnl),
-  );
+  const positionMap = new Map<string, Position>();
+  for (const pos of positions) {
+    if (!pos?.symbol) continue;
+    positionMap.set(pos.symbol, pos);
+  }
+
+  const todayNetChange = new Map<string, number>();
+  const lastTradePriceToday = new Map<string, number>();
+  for (const trade of todayTrades) {
+    if (!trade?.symbol) continue;
+    const qty = Math.abs(Number(trade.quantity));
+    if (!Number.isFinite(qty) || qty <= EPSILON) continue;
+    if (Number.isFinite(Number(trade.price))) {
+      lastTradePriceToday.set(trade.symbol, Number(trade.price));
+    }
+    let delta = 0;
+    switch (trade.action) {
+      case "buy":
+      case "cover":
+        delta = qty;
+        break;
+      case "sell":
+      case "short":
+        delta = -qty;
+        break;
+      default:
+        continue;
+    }
+    todayNetChange.set(
+      trade.symbol,
+      (todayNetChange.get(trade.symbol) ?? 0) + delta,
+    );
+  }
+
+  const symbolsForPrev = new Set<string>([
+    ...positionMap.keys(),
+    ...todayNetChange.keys(),
+  ]);
+
+  const prevPositionsForM6: PrevPosition[] = [];
+  const quotesForM6: QuoteNowPrev[] = [];
+  const missingPrevCloseSymbols = new Set<string>();
+
+  for (const symbol of symbolsForPrev) {
+    const pos = positionMap.get(symbol);
+    const currentQty = Number(pos?.qty ?? 0);
+    const deltaToday = todayNetChange.get(symbol) ?? 0;
+    const qtyPrev = currentQty - deltaToday;
+    if (!Number.isFinite(qtyPrev) || Math.abs(qtyPrev) <= EPSILON) {
+      continue;
+    }
+
+    prevPositionsForM6.push({ symbol, qtyPrev });
+
+    let now: number | undefined;
+    if (pos && Number.isFinite(Number(pos.last))) {
+      now = Number(pos.last);
+    } else {
+      const tradePrice = lastTradePriceToday.get(symbol);
+      if (Number.isFinite(tradePrice)) {
+        now = Number(tradePrice);
+      }
+    }
+
+    let prevClose: number | undefined;
+    if (pos && Number.isFinite(Number(pos.prevClose))) {
+      prevClose = Number(pos.prevClose);
+    }
+    if (!Number.isFinite(prevClose ?? NaN)) {
+      missingPrevCloseSymbols.add(symbol);
+    }
+
+    quotesForM6.push({ symbol, now, prevClose });
+  }
+
+  const m6Computation = computeM6({
+    m4Today: todayHistoricalRealizedPnl,
+    m5FifoToday: pnlFifo,
+    prevPositions: prevPositionsForM6,
+    quotes: quotesForM6,
+  });
+
+  for (const entry of m6Computation.excluded) {
+    if (entry.reason === "NO_PREV_CLOSE") {
+      missingPrevCloseSymbols.add(entry.symbol);
+    }
+  }
+
+  const priceChangeRounded = mRound2(m6Computation.mtmSum);
+  const todayTotalPnlChange = mRound2(m6Computation.m6);
 
   if (DEBUG)
     logger.debug("M6_DEBUG", {
-      M4: todayHistoricalRealizedPnl,
-      M3: floatPnl,
+      realizedToday: m6Computation.m4Today,
       fifo: pnlFifo,
+      priceChange: priceChangeRounded,
       total: todayTotalPnlChange,
+      missingPrevCloseSymbols: Array.from(missingPrevCloseSymbols),
+      legs: m6Computation.legs,
+      excluded: m6Computation.excluded,
+      M3: floatPnl,
     });
 
   // M7: 今日交易次数
@@ -905,6 +1027,18 @@ function calcMetricsInternal(
     M11: wtd,
     M12: mtd,
     M13: ytd,
+    aux: {
+      m6PriceChange: priceChangeRounded,
+      m6RealizedToday: m6Computation.m4Today,
+      m6FifoToday: mRound2(pnlFifo),
+      m6Legs: m6Computation.legs.map((leg) => ({
+        ...leg,
+        pxDiffInPortfolioCcy: mRound2(leg.pxDiffInPortfolioCcy),
+        mtm: mRound2(leg.mtm),
+      })),
+      m6Excluded: m6Computation.excluded,
+      missingPrevCloseSymbols: Array.from(missingPrevCloseSymbols),
+    },
   };
 
   assertM6(metrics);
@@ -968,7 +1102,43 @@ export function normalizeMetrics(input:any): MetricsContract {
     fifo:      Number(input?.M5?.fifo      ?? input?.M5_2 ?? 0),
   };
   const M6 = { total: pickTotal(input?.M6) };
-  const aux = { breakdown: input?.aux?.breakdown ?? [] };
+  const rawPriceChange = input?.aux?.m6PriceChange ?? input?.M6?.priceChange;
+  const priceChange =
+    typeof rawPriceChange === 'number' && Number.isFinite(rawPriceChange)
+      ? rawPriceChange
+      : undefined;
+  const realizedToday = input?.aux?.m6RealizedToday;
+  const fifoToday = input?.aux?.m6FifoToday;
+  const m6Legs = Array.isArray(input?.aux?.m6Legs)
+    ? input.aux.m6Legs.filter(
+        (leg: any) =>
+          leg && typeof leg.symbol === 'string' && Number.isFinite(leg.qtyPrev),
+      )
+    : undefined;
+  const m6Excluded = Array.isArray(input?.aux?.m6Excluded)
+    ? input.aux.m6Excluded.filter(
+        (row: any) =>
+          row && typeof row.symbol === 'string' && typeof row.reason === 'string',
+      )
+    : undefined;
+  const missingPrevCloseSymbols = Array.isArray(input?.aux?.missingPrevCloseSymbols)
+    ? input.aux.missingPrevCloseSymbols.filter((s: unknown): s is string => typeof s === 'string')
+    : [];
+  const aux = {
+    breakdown: input?.aux?.breakdown ?? [],
+    m6PriceChange: priceChange,
+    m6RealizedToday:
+      typeof realizedToday === 'number' && Number.isFinite(realizedToday)
+        ? realizedToday
+        : typeof M4.total === 'number'
+          ? M4.total
+          : undefined,
+    m6FifoToday:
+      typeof fifoToday === 'number' && Number.isFinite(fifoToday) ? fifoToday : undefined,
+    m6Legs,
+    m6Excluded,
+    missingPrevCloseSymbols,
+  };
   return { M1, M2, M3, M4, M5, M6, M7:input?.M7, M8:input?.M8, M9:input?.M9, M10:input?.M10, M11:input?.M11, M12:input?.M12, M13:input?.M13, aux };
 }
 
