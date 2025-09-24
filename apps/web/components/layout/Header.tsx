@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { format, toZonedTime } from 'date-fns-tz';
 import { nowNY } from '@/lib/timezone';
-import { clearAndImportData, exportData } from '@/lib/services/dataService';
+import { importData, exportData } from '@/lib/services/dataService';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -75,7 +75,7 @@ export function Header() {
           throw new Error('Invalid JSON format. "trades" and "positions" arrays are required.');
         }
 
-        await clearAndImportData(data);
+        await importData(data as any);
         alert('导入成功! 页面将刷新。');
         window.location.reload();
       } catch (err) {
