@@ -4,15 +4,79 @@ import { logger } from "@/lib/logger";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 
 const DB_NAME = "TradingApp";
-const DB_VERSION = 3; // Incremented version for schema change
+const DB_VERSION = 4; // Incremented version for schema change
 const TRADES_STORE_NAME = "trades";
 const POSITIONS_STORE_NAME = "positions";
 const PRICES_STORE_NAME = "prices"; // New store for prices
+const META_STORE_NAME = "meta";
 
 export const DATASET_HASH_KEY = "dataset:hash";
 export const DATASET_SOURCE_KEY = "dataset:source";
 export const DATASET_SOURCE_BUILTIN = "builtin";
 export const DATASET_SOURCE_CUSTOM = "custom";
+
+const LEGACY_DATASET_SOURCE_KEY = "datasetSource";
+const LEGACY_DATASET_HASH_KEY = "datasetHash";
+
+type DatasetSource = typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM;
+
+const META_DATASET_SOURCE_KEY = "datasetSource";
+
+interface DatasetSourceMetaRecord {
+  key: typeof META_DATASET_SOURCE_KEY;
+  value: DatasetSource;
+}
+
+async function setDatasetSourceMeta(source: DatasetSource): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(META_STORE_NAME, "readwrite");
+    await tx.store.put({ key: META_DATASET_SOURCE_KEY, value: source } satisfies DatasetSourceMetaRecord);
+    await tx.done;
+  } catch {
+    /* ignore IndexedDB errors */
+  }
+}
+
+async function clearDatasetSourceMeta(): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(META_STORE_NAME, "readwrite");
+    await tx.store.delete(META_DATASET_SOURCE_KEY);
+    await tx.done;
+  } catch {
+    /* ignore IndexedDB errors */
+  }
+}
+
+export async function getDatasetSourceMeta(): Promise<DatasetSource | null> {
+  try {
+    const db = await getDb();
+    const entry = (await db.get(
+      META_STORE_NAME,
+      META_DATASET_SOURCE_KEY,
+    )) as DatasetSourceMetaRecord | undefined;
+    if (!entry) return null;
+    if (entry.value === DATASET_SOURCE_BUILTIN || entry.value === DATASET_SOURCE_CUSTOM) {
+      return entry.value;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function markDatasetAsCustom(): Promise<void> {
+  try {
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+    localStorage.removeItem(DATASET_HASH_KEY);
+    localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+    localStorage.removeItem(LEGACY_DATASET_HASH_KEY);
+  } catch {
+    /* ignore storage errors */
+  }
+  await setDatasetSourceMeta(DATASET_SOURCE_CUSTOM);
+}
 
 // Matches the structure in trades.json -> trades array
 export interface RawTrade {
@@ -80,6 +144,10 @@ interface TradingDB extends DBSchema {
     value: CachedPrice;
     indexes: { "by-symbol": string };
   };
+  [META_STORE_NAME]: {
+    key: string;
+    value: DatasetSourceMetaRecord;
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<TradingDB>> | undefined;
@@ -110,6 +178,11 @@ function getDb(): Promise<IDBPDatabase<TradingDB>> {
             keyPath: ["symbol", "date"],
           });
           store.createIndex("by-symbol", "symbol");
+        }
+        if (oldVersion < 4) {
+          if (!db.objectStoreNames.contains(META_STORE_NAME)) {
+            db.createObjectStore(META_STORE_NAME, { keyPath: "key" });
+          }
         }
       },
     });
@@ -354,6 +427,97 @@ type DatasetPayload = {
   trades?: ImportableTrade[];
 };
 
+function canonicalizeTradeForComparison(trade: Trade): string {
+  const { id: _id, ...rest } = trade;
+  const normalizedTime = (() => {
+    if (rest.time instanceof Date) {
+      return rest.time.toISOString();
+    }
+    if (typeof rest.time === "number") {
+      return String(rest.time);
+    }
+    if (typeof rest.time === "string") {
+      return rest.time;
+    }
+    return null;
+  })();
+  return JSON.stringify({
+    symbol: rest.symbol,
+    price: Number(rest.price),
+    quantity: Number(rest.quantity),
+    date: rest.date,
+    action: rest.action,
+    time: normalizedTime,
+    isInitialPosition: Boolean(rest.isInitialPosition),
+  });
+}
+
+function canonicalizePositionForComparison(position: Position): string {
+  return JSON.stringify({
+    symbol: position.symbol,
+    qty: Number(position.qty),
+    avgPrice: Number(position.avgPrice),
+    last: Number(position.last),
+    priceOk: position.priceOk !== false,
+  });
+}
+
+export async function doesDatabaseMatchDataset(
+  rawData: DatasetPayload,
+  options: { strict: boolean } = { strict: false },
+): Promise<boolean> {
+  const db = await getDb();
+  const tx = db.transaction([TRADES_STORE_NAME, POSITIONS_STORE_NAME], "readonly");
+  const tradeStore = tx.objectStore(TRADES_STORE_NAME);
+  const positionStore = tx.objectStore(POSITIONS_STORE_NAME);
+  const [dbTradesRaw, dbPositionsRaw] = await Promise.all([
+    tradeStore.getAll(),
+    positionStore.getAll(),
+  ]);
+  await tx.done;
+
+  const targetTrades: Trade[] = [];
+  for (const rawTrade of rawData.trades ?? []) {
+    const mapped = mapRawTrade(rawTrade, options);
+    if (mapped) {
+      targetTrades.push(mapped);
+    }
+  }
+  const targetPositions = normalizePositionsForStore(rawData.positions ?? []);
+
+  const dbTrades = (dbTradesRaw as Trade[]).map((trade) => ({ ...trade }));
+  const dbPositions = (dbPositionsRaw as Position[]).map((pos) => ({ ...pos }));
+
+  if (dbTrades.length !== targetTrades.length) {
+    return false;
+  }
+  if (dbPositions.length !== targetPositions.length) {
+    return false;
+  }
+
+  const canonDbTrades = dbTrades.map(canonicalizeTradeForComparison).sort();
+  const canonTargetTrades = targetTrades.map(canonicalizeTradeForComparison).sort();
+  for (let i = 0; i < canonDbTrades.length; i++) {
+    if (canonDbTrades[i] !== canonTargetTrades[i]) {
+      return false;
+    }
+  }
+
+  const canonDbPositions = dbPositions
+    .map(canonicalizePositionForComparison)
+    .sort();
+  const canonTargetPositions = targetPositions
+    .map(canonicalizePositionForComparison)
+    .sort();
+  for (let i = 0; i < canonDbPositions.length; i++) {
+    if (canonDbPositions[i] !== canonTargetPositions[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 async function replaceDataset(
   rawData: DatasetPayload,
   options: { source: typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM; strict: boolean },
@@ -415,15 +579,26 @@ async function replaceDataset(
   clearDailyResultsCache();
 
   try {
-    const datasetHash = hashPayload({
-      positions: rawData.positions ?? [],
-      trades: rawData.trades ?? [],
-    });
-    localStorage.setItem(DATASET_HASH_KEY, datasetHash);
-    localStorage.setItem(DATASET_SOURCE_KEY, options.source);
+    if (options.source === DATASET_SOURCE_BUILTIN) {
+      const datasetHash = hashPayload({
+        positions: rawData.positions ?? [],
+        trades: rawData.trades ?? [],
+      });
+      localStorage.setItem(DATASET_HASH_KEY, datasetHash);
+      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+      localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+      localStorage.setItem(LEGACY_DATASET_HASH_KEY, datasetHash);
+    } else {
+      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+      localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+      localStorage.removeItem(DATASET_HASH_KEY);
+      localStorage.removeItem(LEGACY_DATASET_HASH_KEY);
+    }
   } catch {
     /* ignore storage errors */
   }
+
+  await setDatasetSourceMeta(options.source);
 
   logger.info("Data imported successfully.");
 }
@@ -438,7 +613,7 @@ export async function importData(rawData: DatasetPayload) {
 export async function clearAllData(): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(
-    [TRADES_STORE_NAME, POSITIONS_STORE_NAME, PRICES_STORE_NAME],
+    [TRADES_STORE_NAME, POSITIONS_STORE_NAME, PRICES_STORE_NAME, META_STORE_NAME],
     "readwrite",
   );
   await Promise.all([
@@ -448,6 +623,7 @@ export async function clearAllData(): Promise<void> {
   ]);
   await tx.done;
   clearDailyResultsCache();
+  await clearDatasetSourceMeta();
   logger.info("All trade, position, and price data cleared.");
 }
 
@@ -572,6 +748,7 @@ export async function addTrade(trade: Trade): Promise<number> {
   const db = await getDb();
   const id = await db.add(TRADES_STORE_NAME, trade as Trade);
   clearDailyResultsCache();
+  await markDatasetAsCustom();
   return id;
 }
 
@@ -583,10 +760,12 @@ export async function updateTrade(trade: Trade): Promise<void> {
   await db.put(TRADES_STORE_NAME, trade);
   logger.info("交易更新成功");
   clearDailyResultsCache();
+  await markDatasetAsCustom();
 }
 
 export async function deleteTrade(id: number): Promise<void> {
   const db = await getDb();
   await db.delete(TRADES_STORE_NAME, id);
   clearDailyResultsCache();
+  await markDatasetAsCustom();
 }

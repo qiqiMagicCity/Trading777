@@ -72,7 +72,7 @@ describe("importData builtin guard", () => {
 
     await importData(customPayload);
 
-    const db = await openDB("TradingApp", 3);
+    const db = await openDB("TradingApp", 4);
     const trades = await db.getAll("trades");
     db.close();
 
@@ -100,7 +100,7 @@ describe("importData builtin guard", () => {
 
     await clearAndImportData(builtinData);
 
-    const db = await openDB("TradingApp", 3);
+    const db = await openDB("TradingApp", 4);
     const trades = await db.getAll("trades");
     db.close();
 

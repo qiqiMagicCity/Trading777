@@ -7,6 +7,10 @@ import {
   closeDb,
   DATASET_SOURCE_KEY,
   DATASET_SOURCE_CUSTOM,
+  DATASET_SOURCE_BUILTIN,
+  DATASET_HASH_KEY,
+  getDatasetSourceMeta,
+  hashPayload,
 } from "../services/dataService";
 import { BUILTIN_DATASET } from "@/data/builtin";
 
@@ -75,6 +79,32 @@ describe("ensureBuiltInDatasetLoaded", () => {
     expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_CUSTOM);
   });
 
+  it("reapplies custom markers when storage keys are reset", async () => {
+    await clearAndImportData(BUILTIN_DATASET as any);
+
+    const custom = {
+      positions: [],
+      trades: [
+        { symbol: "AAA", price: 10, quantity: 1, date: "2025-01-01", action: "buy", time: "2025-01-01T09:30:00" },
+      ],
+    } as const;
+
+    await importData(custom as any);
+    expect(await getAnyTradeCount()).toBe(1);
+
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+    localStorage.setItem("datasetSource", DATASET_SOURCE_BUILTIN);
+    localStorage.setItem(DATASET_HASH_KEY, "stale");
+    localStorage.setItem("datasetHash", "stale");
+
+    await ensureBuiltInDatasetLoaded();
+
+    expect(await getAnyTradeCount()).toBe(1);
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_CUSTOM);
+    expect(localStorage.getItem(DATASET_HASH_KEY)).toBeNull();
+    expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_CUSTOM);
+  });
+
   it("does not fetch trades.json when dataset is custom", async () => {
     localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
 
@@ -97,6 +127,20 @@ describe("ensureBuiltInDatasetLoaded", () => {
     }
   });
 
+  it("updates builtin hash markers when dataset already matches", async () => {
+    await clearAndImportData(BUILTIN_DATASET as any);
+
+    localStorage.setItem(DATASET_HASH_KEY, "stale");
+    localStorage.setItem("datasetHash", "stale");
+
+    await ensureBuiltInDatasetLoaded();
+
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_BUILTIN);
+    expect(localStorage.getItem(DATASET_HASH_KEY)).toBe(hashPayload(BUILTIN_DATASET));
+    expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_BUILTIN);
+    expect(await getAnyTradeCount()).toBe((BUILTIN_DATASET.trades ?? []).length);
+  });
+
   it("respects legacy datasetSource custom flag", async () => {
     localStorage.setItem("datasetSource", DATASET_SOURCE_CUSTOM);
 
@@ -110,7 +154,8 @@ describe("ensureBuiltInDatasetLoaded", () => {
     await ensureBuiltInDatasetLoaded();
 
     expect(spy).not.toHaveBeenCalled();
-    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBeNull();
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_CUSTOM);
+    expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_CUSTOM);
 
     spy.mockRestore();
 
