@@ -161,6 +161,7 @@ describe("ensureBuiltInDatasetLoaded", () => {
 
   it("updates builtin hash markers when dataset already matches", async () => {
     await clearAndImportData(BUILTIN_DATASET as any);
+    const seededCount = await getAnyTradeCount();
 
     localStorage.setItem(DATASET_HASH_KEY, "stale");
     localStorage.setItem("datasetHash", "stale");
@@ -171,11 +172,12 @@ describe("ensureBuiltInDatasetLoaded", () => {
     expect(localStorage.getItem(DATASET_HASH_KEY)).toBe(hashPayload(BUILTIN_DATASET));
     expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_BUILTIN);
     expect(await getDatasetHashMeta()).toBe(hashPayload(BUILTIN_DATASET));
-    expect(await getAnyTradeCount()).toBe((BUILTIN_DATASET.trades ?? []).length);
+    expect(await getAnyTradeCount()).toBe(seededCount);
   });
 
   it("re-seeds builtin dataset when markers claim builtin but database is empty", async () => {
     await clearAndImportData(BUILTIN_DATASET as any);
+    const seededCount = await getAnyTradeCount();
     await clearAllData();
 
     const expected = hashPayload(BUILTIN_DATASET);
@@ -185,7 +187,7 @@ describe("ensureBuiltInDatasetLoaded", () => {
 
     await ensureBuiltInDatasetLoaded();
 
-    expect(await getAnyTradeCount()).toBe((BUILTIN_DATASET.trades ?? []).length);
+    expect(await getAnyTradeCount()).toBe(seededCount);
     expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_BUILTIN);
     expect(localStorage.getItem(DATASET_HASH_KEY)).toBe(expected);
     expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_BUILTIN);

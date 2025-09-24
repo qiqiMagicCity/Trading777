@@ -546,6 +546,20 @@ export async function doesDatabaseMatchDataset(
   }
   const targetPositions = normalizePositionsForStore(rawData.positions ?? []);
 
+  const baselineDate = getBaselineDate(targetTrades as ImportableTrade[]);
+  for (const position of targetPositions) {
+    const absQty = Math.abs(position.qty);
+    const isShort = position.qty < 0;
+    targetTrades.push({
+      symbol: position.symbol,
+      price: position.avgPrice,
+      quantity: isShort ? -absQty : absQty,
+      date: baselineDate,
+      action: isShort ? "short" : "buy",
+      isInitialPosition: true,
+    });
+  }
+
   const dbTrades = (dbTradesRaw as Trade[]).map((trade) => ({ ...trade }));
   const dbPositions = (dbPositionsRaw as Position[]).map((pos) => ({ ...pos }));
 
