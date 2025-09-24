@@ -17,7 +17,7 @@ import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
 import type { MetricsContract } from "./types/metrics";
-import { computeM6, type PrevPosition, type QuoteNowPrev } from "./m6";
+import { calcM6Detailed, type M6PositionInput } from "./m6";
 
 
 export function isDebug() {
@@ -150,15 +150,15 @@ export interface Metrics {
     m6FifoToday?: number;
     m6Legs?: Array<{
       symbol: string;
-      qtyPrev: number;
+      qty: number;
       prevClose: number;
-      now: number;
-      pxDiffInPortfolioCcy: number;
+      priceNow: number;
+      fx: number;
       mtm: number;
     }>;
     m6Excluded?: Array<{
       symbol: string;
-      reason: "NO_NOW" | "NO_PREV_CLOSE" | "ZERO_QTY";
+      reason: "MISSING_PREV_CLOSE" | "MISSING_MARK";
     }>;
     missingPrevCloseSymbols?: string[];
   };
@@ -906,75 +906,60 @@ function calcMetricsInternal(
     ...todayNetChange.keys(),
   ]);
 
-  const prevPositionsForM6: PrevPosition[] = [];
-  const quotesForM6: QuoteNowPrev[] = [];
+  const positionsForM6: M6PositionInput[] = [];
   const missingPrevCloseSymbols = new Set<string>();
 
   for (const symbol of symbolsForPrev) {
     const pos = positionMap.get(symbol);
     const currentQty = Number(pos?.qty ?? 0);
-    const deltaToday = todayNetChange.get(symbol) ?? 0;
-    const qtyPrev = currentQty - deltaToday;
-    if (!Number.isFinite(qtyPrev) || Math.abs(qtyPrev) <= EPSILON) {
+    if (!Number.isFinite(currentQty) || Math.abs(currentQty) <= EPSILON) {
       continue;
     }
 
-    prevPositionsForM6.push({ symbol, qtyPrev });
-
-    let now: number | undefined;
-    if (pos && Number.isFinite(Number(pos.last))) {
-      now = Number(pos.last);
-    } else {
-      const tradePrice = lastTradePriceToday.get(symbol);
-      if (Number.isFinite(tradePrice)) {
-        now = Number(tradePrice);
-      }
-    }
-
-    let prevClose: number | undefined;
-    if (pos && Number.isFinite(Number(pos.prevClose))) {
-      prevClose = Number(pos.prevClose);
-    }
-    if (!Number.isFinite(prevClose ?? NaN)) {
+    const priceNowValue = Number(pos?.last);
+    const priceNow = Number.isFinite(priceNowValue) ? priceNowValue : null;
+    const prevCloseValue = Number(pos?.prevClose);
+    const prevClose = Number.isFinite(prevCloseValue) ? prevCloseValue : null;
+    if (prevClose == null) {
       missingPrevCloseSymbols.add(symbol);
     }
 
-    quotesForM6.push({ symbol, now, prevClose });
+    positionsForM6.push({
+      symbol,
+      qty: currentQty,
+      priceNow,
+      prevClose,
+    });
   }
 
-  const cumulativeRealizedUntilPrev = dailyResults
-    .filter((r) => r.date < todayStr)
-    .reduce((sum, row) => {
-      const realized = Number(row?.realized ?? 0);
-      return Number.isFinite(realized) ? sum + realized : sum;
-    }, 0);
-  const m4UntilPrevClose = mRound2(cumulativeRealizedUntilPrev);
-
-  const m6Computation = computeM6({
-    m4UntilPrevClose,
-    m5FifoToday: pnlFifo,
-    prevPositions: prevPositionsForM6,
-    quotes: quotesForM6,
+  const m6Computation = calcM6Detailed({
+    positions: positionsForM6,
+    M4: todayHistoricalRealizedPnl,
+    M5_FIFO: pnlFifo,
+    nowMarkFallback: (symbol) => {
+      const tradePrice = lastTradePriceToday.get(symbol);
+      return Number.isFinite(tradePrice) ? Number(tradePrice) : null;
+    },
   });
 
-  for (const entry of m6Computation.excluded) {
-    if (entry.reason === "NO_PREV_CLOSE") {
-      missingPrevCloseSymbols.add(entry.symbol);
+  for (const warning of m6Computation.warnings) {
+    if (warning.reason === "MISSING_PREV_CLOSE") {
+      missingPrevCloseSymbols.add(warning.symbol);
     }
   }
 
-  const priceChangeRounded = mRound2(m6Computation.mtmSum);
-  const todayTotalPnlChange = mRound2(m6Computation.m6);
+  const priceChangeRounded = mRound2(m6Computation.mtm);
+  const todayTotalPnlChange = m6Computation.total;
 
   if (DEBUG)
     logger.debug("M6_DEBUG", {
-      prevRealized: m6Computation.m4UntilPrevClose,
+      prevRealized: todayHistoricalRealizedPnl,
       fifo: pnlFifo,
       priceChange: priceChangeRounded,
       total: todayTotalPnlChange,
       missingPrevCloseSymbols: Array.from(missingPrevCloseSymbols),
       legs: m6Computation.legs,
-      excluded: m6Computation.excluded,
+      excluded: m6Computation.warnings,
       M3: floatPnl,
     });
 
@@ -1034,14 +1019,13 @@ function calcMetricsInternal(
     M13: ytd,
     aux: {
       m6PriceChange: priceChangeRounded,
-      m6PrevRealizedTotal: m6Computation.m4UntilPrevClose,
+      m6PrevRealizedTotal: mRound2(todayHistoricalRealizedPnl),
       m6FifoToday: mRound2(pnlFifo),
       m6Legs: m6Computation.legs.map((leg) => ({
         ...leg,
-        pxDiffInPortfolioCcy: mRound2(leg.pxDiffInPortfolioCcy),
         mtm: mRound2(leg.mtm),
       })),
-      m6Excluded: m6Computation.excluded,
+      m6Excluded: m6Computation.warnings,
       missingPrevCloseSymbols: Array.from(missingPrevCloseSymbols),
     },
   };
@@ -1117,13 +1101,15 @@ export function normalizeMetrics(input:any): MetricsContract {
   const m6Legs = Array.isArray(input?.aux?.m6Legs)
     ? input.aux.m6Legs.filter(
         (leg: any) =>
-          leg && typeof leg.symbol === 'string' && Number.isFinite(leg.qtyPrev),
+          leg && typeof leg.symbol === 'string' && Number.isFinite(leg.qty),
       )
     : undefined;
   const m6Excluded = Array.isArray(input?.aux?.m6Excluded)
     ? input.aux.m6Excluded.filter(
         (row: any) =>
-          row && typeof row.symbol === 'string' && typeof row.reason === 'string',
+          row &&
+          typeof row.symbol === 'string' &&
+          (row.reason === 'MISSING_PREV_CLOSE' || row.reason === 'MISSING_MARK'),
       )
     : undefined;
   const missingPrevCloseSymbols = Array.isArray(input?.aux?.missingPrevCloseSymbols)

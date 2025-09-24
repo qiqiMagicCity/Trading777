@@ -433,8 +433,7 @@ function runAllCore(
   const M3_r = round2(metrics.M3);
   const priceChangeRaw = metrics.aux?.m6PriceChange ?? 0;
   const priceChange_r = round2(priceChangeRaw);
-  const prevRealizedRaw = metrics.aux?.m6PrevRealizedTotal ?? 0;
-  const prevRealized_r = round2(prevRealizedRaw);
+  const prevRealized_r = M4_r;
   const M6_override = prevRealized_r + priceChange_r + M5_2_r;
 
   const winRatePct = round1(metrics.M10.rate * 100);

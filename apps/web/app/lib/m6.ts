@@ -1,132 +1,121 @@
-/**
- * M6（当日总变化）计算工具。
- *
- * 公式：
- *   M6 = M4_{t-1} + M5FIFO_t + Σ (P_now - P_prevClose) * Q_prev
- *
- * 说明：
- * - M4_{t-1}：累计已实现盈亏，截止昨收（不含今天）。
- * - M5FIFO_t：今天按 FIFO 配对产生的已实现盈亏（含回转 / 部分平仓）。
- * - Q_prev：昨收时刻的净持仓数量（多头为正，空头为负）。
- * - P_prevClose / P_now：昨收价与当前估值价，只有同时存在时才计入 MTM。
- */
+import { round2 } from "./money";
 
-export interface PrevPosition {
+export interface M6PositionInput {
   symbol: string;
-  /** 昨收时刻的净持仓数量（多头为正、空头为负） */
-  qtyPrev: number;
-  /** 可选：昨收基准货币 */
-  ccy?: string;
+  qty: number;
+  priceNow: number | null;
+  prevClose: number | null;
+  fx?: number | null;
 }
 
-export interface QuoteNowPrev {
+export interface M6Inputs {
+  positions: M6PositionInput[];
+  M4: number;
+  M5_FIFO: number;
+  fallbackOpen?: (symbol: string) => number | null;
+  nowMarkFallback?: (symbol: string) => number | null;
+}
+
+export interface CalcM6Warning {
   symbol: string;
-  /** 当前估值价格（可为实时价、盘中价或收盘价） */
-  now?: number;
-  /** 昨日收盘价 */
-  prevClose?: number;
-  /** 若存在多币种，提供 FX（报价货币 → 组合货币）的换算率 */
-  fxNow?: number;
-  fxPrevClose?: number;
+  reason: "MISSING_PREV_CLOSE" | "MISSING_MARK";
 }
 
-export interface ComputeM6Input {
-  /** 截至昨收的累计已实现盈亏（不含今天） */
-  m4UntilPrevClose: number;
-  /** 今日 FIFO 已实现盈亏（含回转 / 部分平仓） */
-  m5FifoToday: number;
-  /** 昨收后的净持仓快照 */
-  prevPositions: PrevPosition[];
-  /** 当日估值所用行情（覆盖部分或全部昨收持仓标的） */
-  quotes: QuoteNowPrev[];
-  portfolioCcy?: string;
+export interface CalcM6Leg {
+  symbol: string;
+  qty: number;
+  prevClose: number;
+  priceNow: number;
+  fx: number;
+  mtm: number;
 }
 
-export interface ComputeM6Result {
-  /** 最终 M6 数值 */
-  m6: number;
-  /** Σ (now - prevClose) * qtyPrev —— 当日 MTM */
-  mtmSum: number;
-  m4UntilPrevClose: number;
-  m5FifoToday: number;
-  legs: Array<{
-    symbol: string;
-    qtyPrev: number;
-    prevClose: number;
-    now: number;
-    pxDiffInPortfolioCcy: number;
-    mtm: number;
-  }>;
-  excluded: Array<{
-    symbol: string;
-    reason: "NO_NOW" | "NO_PREV_CLOSE" | "ZERO_QTY";
-  }>;
+export interface CalcM6DetailedResult {
+  total: number;
+  mtm: number;
+  legs: CalcM6Leg[];
+  warnings: CalcM6Warning[];
 }
 
-export function computeM6(input: ComputeM6Input): ComputeM6Result {
-  const { m4UntilPrevClose, m5FifoToday, prevPositions, quotes } = input;
+function resolvePrice(
+  explicit: number | null,
+  fallback: ((symbol: string) => number | null) | undefined,
+  symbol: string,
+): { value: number | null; usedFallback: boolean } {
+  if (explicit != null && Number.isFinite(explicit)) {
+    return { value: explicit, usedFallback: false };
+  }
+  if (!fallback) return { value: null, usedFallback: false };
+  const px = fallback(symbol);
+  if (px != null && Number.isFinite(px)) {
+    return { value: px, usedFallback: true };
+  }
+  return { value: null, usedFallback: false };
+}
 
-  const quoteMap = new Map<string, QuoteNowPrev>();
-  for (const q of quotes) quoteMap.set(q.symbol, q);
+export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
+  let mtm = 0;
+  const legs: CalcM6Leg[] = [];
+  const warnings: CalcM6Warning[] = [];
 
-  const legs: ComputeM6Result["legs"] = [];
-  const excluded: ComputeM6Result["excluded"] = [];
-  let mtmSum = 0;
-
-  for (const pos of prevPositions) {
-    const qtyPrev = pos.qtyPrev ?? 0;
-    if (!Number.isFinite(qtyPrev) || qtyPrev === 0) {
-      excluded.push({ symbol: pos.symbol, reason: "ZERO_QTY" });
+  for (const item of input.positions) {
+    const qty = Number(item.qty ?? 0);
+    if (!Number.isFinite(qty) || qty === 0) {
       continue;
     }
 
-    const quote = quoteMap.get(pos.symbol);
-    if (!quote) {
-      excluded.push({ symbol: pos.symbol, reason: "NO_NOW" });
+    const { value: prevClose, usedFallback: usedPrevFallback } = resolvePrice(
+      item.prevClose,
+      input.fallbackOpen,
+      item.symbol,
+    );
+    if (prevClose == null) {
+      warnings.push({ symbol: item.symbol, reason: "MISSING_PREV_CLOSE" });
+      console.warn?.(
+        "calcM6: missing prevClose (and fallback open) for symbol",
+        item.symbol,
+      );
+      continue;
+    }
+    if (usedPrevFallback) {
+      console.warn?.(
+        "calcM6: prevClose missing, using fallback open for symbol",
+        item.symbol,
+      );
+    }
+
+    const { value: priceNow } = resolvePrice(
+      item.priceNow,
+      input.nowMarkFallback,
+      item.symbol,
+    );
+    if (priceNow == null) {
+      warnings.push({ symbol: item.symbol, reason: "MISSING_MARK" });
+      console.warn?.(
+        "calcM6: missing priceNow (and fallback mark) for symbol",
+        item.symbol,
+      );
       continue;
     }
 
-    const now = quote.now;
-    if (typeof now !== "number" || !Number.isFinite(now)) {
-      excluded.push({ symbol: pos.symbol, reason: "NO_NOW" });
-      continue;
-    }
-
-    const prevClose = quote.prevClose;
-    if (typeof prevClose !== "number" || !Number.isFinite(prevClose)) {
-      excluded.push({ symbol: pos.symbol, reason: "NO_PREV_CLOSE" });
-      continue;
-    }
-
-    const fxNow =
-      typeof quote.fxNow === "number" && Number.isFinite(quote.fxNow) ? quote.fxNow : 1;
-    const fxPrev =
-      typeof quote.fxPrevClose === "number" && Number.isFinite(quote.fxPrevClose)
-        ? quote.fxPrevClose
-        : 1;
-
-    const pxDiffInPortfolioCcy = now * fxNow - prevClose * fxPrev;
-    const mtm = pxDiffInPortfolioCcy * qtyPrev;
-    mtmSum += mtm;
-
+    const fx = Number.isFinite(item.fx ?? NaN) ? Number(item.fx) : 1;
+    const legMtm = (priceNow - prevClose) * qty * fx;
+    mtm += legMtm;
     legs.push({
-      symbol: pos.symbol,
-      qtyPrev,
+      symbol: item.symbol,
+      qty,
       prevClose,
-      now,
-      pxDiffInPortfolioCcy,
-      mtm,
+      priceNow,
+      fx,
+      mtm: legMtm,
     });
   }
 
-  const m6 = m4UntilPrevClose + m5FifoToday + mtmSum;
-
-  return {
-    m6,
-    mtmSum,
-    m4UntilPrevClose,
-    m5FifoToday,
-    legs,
-    excluded,
-  };
+  const total = round2(input.M4 + input.M5_FIFO + mtm);
+  return { total, mtm, legs, warnings };
 }
+
+export function calcM6(input: M6Inputs): number {
+  return calcM6Detailed(input).total;
+}
+

@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { runAll } from '@/lib/runAll';
 import { computeFifo } from '@/lib/fifo';
-import { normalizeMetrics } from "@/app/lib/metrics";
+import { normalizeMetrics, calcMetrics } from "@/app/lib/metrics";
 
 describe.skip('property based invariants', () => {
   it('M6 matches, positions non-negative, M9 monotonic', () => {
@@ -90,6 +90,44 @@ describe.skip('property based invariants', () => {
           lastM9 = (res as any).M9;
         }
       }),
+    );
+  });
+
+  it('M6 ignores shifts in historical cost basis', () => {
+    const symbolArb = fc.constantFrom('AAA', 'BBB', 'CCC');
+    const positionArb = fc.record({
+      symbol: symbolArb,
+      qty: fc.integer({ min: -5, max: 5 }).filter((q) => q !== 0),
+      last: fc.float({ min: 1, max: 500, noNaN: true, noDefaultInfinity: true }),
+      prevClose: fc.float({ min: 1, max: 500, noNaN: true, noDefaultInfinity: true }),
+      avgPrice: fc.float({ min: 1, max: 500, noNaN: true, noDefaultInfinity: true }),
+    });
+
+    fc.assert(
+      fc.property(
+        fc.array(positionArb, { minLength: 1, maxLength: 3 }),
+        fc.float({ min: -50, max: 50, noNaN: true, noDefaultInfinity: true }),
+        (positions, shift) => {
+          const basePositions = positions.map((p) => ({
+            symbol: p.symbol,
+            qty: p.qty,
+            avgPrice: p.avgPrice,
+            last: p.last,
+            priceOk: true,
+            prevClose: p.prevClose,
+          }));
+
+          const shiftedPositions = basePositions.map((p) => ({
+            ...p,
+            avgPrice: p.avgPrice + shift,
+          }));
+
+          const metricsBase = calcMetrics([], basePositions as any, []);
+          const metricsShifted = calcMetrics([], shiftedPositions as any, []);
+
+          expect(metricsBase.M6).toBeCloseTo(metricsShifted.M6, 10);
+        },
+      ),
     );
   });
 });
