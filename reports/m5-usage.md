@@ -4,9 +4,9 @@ Static scan for `M5.behavior`, `M5.fifo`, `M5_1`, `M5_2` under `apps/web`.
 
 | File | Line | Expression | R/W | Context |
 | --- | --- | --- | --- | --- |
-| scripts/verify-fifo.ts | 72 | `M5_1 = round2(split.trade)` | write | export
-| scripts/verify-fifo.ts | 73 | `M5_2 = round2(split.fifo)` | write | export
-| scripts/verify-fifo.ts | 75 | `M6 = round2(M4 + M3 + M5_2)` | read | script
+| scripts/verify-fifo.ts | 143 | `const M5_1 = round2(split.trade);` | write | export
+| scripts/verify-fifo.ts | 145 | `const M5_2 = round2(M5_2_raw);` | write | export
+| scripts/verify-fifo.ts | 159 | `const M6 = round2(m6Calc.m6);` | read | script
 | scripts/verify-history.ts | 41 | `res.M5_2` | read | script
 | scripts/replay.ts | 51 | `m.M5.fifo` | read | replay
 | scripts/verify-golden.ts | 40-43 | `res.M5_1`, `res.M5_2` | read | test

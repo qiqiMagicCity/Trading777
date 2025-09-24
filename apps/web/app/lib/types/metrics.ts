@@ -13,5 +13,27 @@ export interface MetricsContract {
   M5: { behavior: number; fifo: number };
   M6: { total: number };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
-  aux?: { breakdown?: BreakdownRow[] };
+  aux?: {
+    breakdown?: BreakdownRow[];
+    m6PriceChange?: number;
+    /** 截至昨收的累计已实现盈亏 */
+    m6PrevRealizedTotal?: number;
+    /** 今日 FIFO 已实现盈亏（与 M5.fifo 一致，便于拆解展示） */
+    m6FifoToday?: number;
+    /** M6 逐标的 MTM 拆解 */
+    m6Legs?: Array<{
+      symbol: string;
+      qtyPrev: number;
+      prevClose: number;
+      now: number;
+      pxDiffInPortfolioCcy: number;
+      mtm: number;
+    }>;
+    /** 因行情缺失等原因未计入 MTM 的标的 */
+    m6Excluded?: Array<{
+      symbol: string;
+      reason: "NO_NOW" | "NO_PREV_CLOSE" | "ZERO_QTY";
+    }>;
+    missingPrevCloseSymbols?: string[];
+  };
 }
