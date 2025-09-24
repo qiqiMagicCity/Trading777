@@ -14,6 +14,20 @@ export const DATASET_SOURCE_KEY = "dataset:source";
 export const DATASET_SOURCE_BUILTIN = "builtin";
 export const DATASET_SOURCE_CUSTOM = "custom";
 
+const LEGACY_DATASET_SOURCE_KEY = "datasetSource";
+const LEGACY_DATASET_HASH_KEY = "datasetHash";
+
+function markDatasetAsCustom(): void {
+  try {
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+    localStorage.removeItem(DATASET_HASH_KEY);
+    localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+    localStorage.removeItem(LEGACY_DATASET_HASH_KEY);
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
 // Matches the structure in trades.json -> trades array
 export interface RawTrade {
   date: string; // "2025-07-04"
@@ -572,6 +586,7 @@ export async function addTrade(trade: Trade): Promise<number> {
   const db = await getDb();
   const id = await db.add(TRADES_STORE_NAME, trade as Trade);
   clearDailyResultsCache();
+  markDatasetAsCustom();
   return id;
 }
 
@@ -583,10 +598,12 @@ export async function updateTrade(trade: Trade): Promise<void> {
   await db.put(TRADES_STORE_NAME, trade);
   logger.info("交易更新成功");
   clearDailyResultsCache();
+  markDatasetAsCustom();
 }
 
 export async function deleteTrade(id: number): Promise<void> {
   const db = await getDb();
   await db.delete(TRADES_STORE_NAME, id);
   clearDailyResultsCache();
+  markDatasetAsCustom();
 }

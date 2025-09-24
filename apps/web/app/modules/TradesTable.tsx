@@ -8,6 +8,7 @@ import { fromZonedTime, toZonedTime } from "date-fns-tz";
 const pad = (value: number | string): string => value.toString().padStart(2, '0');
 
 const NY_TIME_ZONE = 'America/New_York';
+const TIME_ONLY_REGEX = /^(\d{1,2})(:\d{1,2}){1,2}$/;
 
 const normalizeTimeText = (timeText: string): string => {
   const sanitized = timeText.replace('Z', '').split('.')[0] ?? '';
@@ -15,23 +16,45 @@ const normalizeTimeText = (timeText: string): string => {
   return `${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
 };
 
-const parseTimeValue = (value: EnrichedTrade['time']): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) {
-    return new Date(value.getTime());
+const parseTimeValue = (trade: EnrichedTrade): Date | null => {
+  const { time, date } = trade;
+  if (!time) return null;
+  if (time instanceof Date) {
+    return new Date(time.getTime());
   }
-  if (typeof value === 'number') {
-    const fromNumber = new Date(value);
+  if (typeof time === 'number') {
+    const fromNumber = new Date(time);
     return Number.isNaN(fromNumber.getTime()) ? null : fromNumber;
   }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
+  if (typeof time === 'string') {
+    const trimmed = time.trim();
     if (!trimmed) return null;
     const withoutZ = trimmed.replace(/Z$/i, '');
     const noFractions = withoutZ.replace(/\.\d+/, '');
-    const normalized = noFractions.includes('T')
-      ? noFractions.replace(' ', 'T')
-      : `${noFractions.replace(' ', 'T')}T00:00:00`;
+    const sanitized = noFractions.replace(' ', 'T');
+
+    const hasExplicitDate = sanitized.includes('T') && /^\d{4}-\d{2}-\d{2}/.test(sanitized);
+    const maybeTimeOnly = !hasExplicitDate && TIME_ONLY_REGEX.test(sanitized);
+
+    const normalized = (() => {
+      if (maybeTimeOnly) {
+        const normalizedTime = normalizeTimeText(sanitized);
+        const isoDate = typeof date === 'string' && date.trim()
+          ? date.trim()
+          : '1970-01-01';
+        return `${isoDate}T${normalizedTime}`;
+      }
+      if (sanitized.includes('T')) {
+        const [datePart, timePart] = sanitized.split('T');
+        if (datePart && timePart) {
+          return `${datePart}T${normalizeTimeText(timePart)}`;
+        }
+      }
+      if (typeof date === 'string' && date.trim()) {
+        return `${date.trim()}T${normalizeTimeText(sanitized)}`;
+      }
+      return `${sanitized}T00:00:00`;
+    })();
 
     try {
       const nyUtc = fromZonedTime(normalized, NY_TIME_ZONE);
@@ -74,7 +97,7 @@ const parseTimeValue = (value: EnrichedTrade['time']): Date | null => {
 };
 
 const getWeekdayIndex = (trade: EnrichedTrade): number | null => {
-  const parsedTime = parseTimeValue(trade.time);
+  const parsedTime = parseTimeValue(trade);
   if (parsedTime) {
     try {
       return toZonedTime(parsedTime, NY_TIME_ZONE).getDay();
@@ -95,19 +118,33 @@ const getWeekdayIndex = (trade: EnrichedTrade): number | null => {
 
 const getTimeDisplay = (trade: EnrichedTrade): string => {
   if (!trade.time) return '--';
-  if (typeof trade.time === 'string' && trade.time.includes('T')) {
-    const [, timePart] = trade.time.replace('Z', '').split('T');
-    if (timePart) {
-      return normalizeTimeText(timePart);
+  if (typeof trade.time === 'string') {
+    const trimmed = trade.time.trim();
+    if (!trimmed) return '--';
+    if (trimmed.includes('T')) {
+      const [, timePart] = trimmed.replace('Z', '').split('T');
+      if (timePart) {
+        return normalizeTimeText(timePart);
+      }
+    }
+    if (trimmed.includes(' ')) {
+      const parts = trimmed.split(/\s+/).filter(Boolean);
+      const possibleTime = parts.length > 1 ? parts[parts.length - 1] : undefined;
+      if (possibleTime) {
+        return normalizeTimeText(possibleTime);
+      }
+    }
+    if (TIME_ONLY_REGEX.test(trimmed)) {
+      return normalizeTimeText(trimmed);
     }
   }
-  const parsed = parseTimeValue(trade.time);
+  const parsed = parseTimeValue(trade);
   if (!parsed) return '--';
   return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
 };
 
 const getSortValue = (trade: EnrichedTrade): number => {
-  const parsed = parseTimeValue(trade.time);
+  const parsed = parseTimeValue(trade);
   if (parsed) {
     const time = parsed.getTime();
     if (!Number.isNaN(time)) {
