@@ -12,6 +12,7 @@ import {
   DATASET_SOURCE_CUSTOM,
   DATASET_HASH_KEY,
   getDatasetSourceMeta,
+  getDatasetHashMeta,
 } from "../services/dataService";
 
 function mockLocalStorage(store: Record<string, string>) {
@@ -69,6 +70,7 @@ describe("trade mutations promote dataset to custom", () => {
     );
     expect(localStorage.getItem(DATASET_HASH_KEY)).not.toBeNull();
     expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_BUILTIN);
+    expect(await getDatasetHashMeta()).not.toBeNull();
 
     await addTrade({
       symbol: "NEW",
@@ -87,6 +89,7 @@ describe("trade mutations promote dataset to custom", () => {
     );
     expect(localStorage.getItem("datasetHash")).toBeNull();
     expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_CUSTOM);
+    expect(await getDatasetHashMeta()).toBeNull();
   });
 
   test("updateTrade marks dataset as custom", async () => {
@@ -106,6 +109,7 @@ describe("trade mutations promote dataset to custom", () => {
     );
     expect(localStorage.getItem(DATASET_HASH_KEY)).toBeNull();
     expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_CUSTOM);
+    expect(await getDatasetHashMeta()).toBeNull();
   });
 
   test("deleteTrade marks dataset as custom", async () => {
@@ -122,5 +126,6 @@ describe("trade mutations promote dataset to custom", () => {
     );
     expect(localStorage.getItem(DATASET_HASH_KEY)).toBeNull();
     expect(await getDatasetSourceMeta()).toBe(DATASET_SOURCE_CUSTOM);
+    expect(await getDatasetHashMeta()).toBeNull();
   });
 });

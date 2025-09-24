@@ -7,7 +7,9 @@ import {
   DATASET_SOURCE_CUSTOM,
   DATASET_HASH_KEY,
   getDatasetSourceMeta,
+  getDatasetHashMeta,
   markDatasetAsCustom,
+  markDatasetAsBuiltin,
   doesDatabaseMatchDataset,
 } from "@/lib/services/dataService";
 import { BUILTIN_DATASET } from "@/data/builtin";
@@ -30,6 +32,7 @@ export async function ensureBuiltInDatasetLoaded() {
   const legacyHash = localStorage.getItem("datasetHash");
 
   const metaSource = await getDatasetSourceMeta();
+  const metaHash = await getDatasetHashMeta();
 
   const markers = [source, legacySource, metaSource];
   const effectiveSource = (markers.includes(DATASET_SOURCE_CUSTOM)
@@ -38,7 +41,7 @@ export async function ensureBuiltInDatasetLoaded() {
       ? DATASET_SOURCE_BUILTIN
       : null) as typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM | null;
   
-  const effectiveHash = storedHash ?? legacyHash ?? null;
+  const effectiveHash = storedHash ?? legacyHash ?? metaHash ?? null;
 
   // 1) Custom data: never overwrite
   if (effectiveSource === DATASET_SOURCE_CUSTOM) {
@@ -53,8 +56,7 @@ export async function ensureBuiltInDatasetLoaded() {
   const hasAny = await getAnyTradeCount().catch(() => 0);
   if (!effectiveSource && !hasAny) {
     await clearAndImportData(BUILTIN_DATASET);
-    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-    localStorage.setItem(DATASET_HASH_KEY, hashPayload(BUILTIN_DATASET));
+    await markDatasetAsBuiltin(hashPayload(BUILTIN_DATASET));
     return;
   }
 
@@ -69,16 +71,7 @@ export async function ensureBuiltInDatasetLoaded() {
     if (effectiveHash !== expected) {
       const matches = await doesDatabaseMatchDataset(BUILTIN_DATASET, { strict: true });
       if (matches) {
-        try {
-          localStorage.setItem(DATASET_HASH_KEY, expected);
-          localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-        } catch {
-          /* ignore storage errors */
-        }
-        if (!source) {
-          // ensure marker exists even if only legacy key was present
-          localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-        }
+        await markDatasetAsBuiltin(expected);
         return;
       }
 
@@ -87,7 +80,7 @@ export async function ensureBuiltInDatasetLoaded() {
     }
     // Normalize: if只有旧key被设置，把新key也补上
     if (!source) {
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+      await markDatasetAsBuiltin(effectiveHash ?? hashPayload(BUILTIN_DATASET));
     }
   }
 }

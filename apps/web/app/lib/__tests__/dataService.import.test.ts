@@ -7,6 +7,9 @@ import {
   DATASET_SOURCE_KEY,
   DATASET_SOURCE_CUSTOM,
   DATASET_SOURCE_BUILTIN,
+  DATASET_HASH_KEY,
+  getDatasetHashMeta,
+  hashPayload,
 } from "../services/dataService";
 
 function setupLocalStorage(store: Record<string, string>) {
@@ -79,6 +82,8 @@ describe("importData builtin guard", () => {
     expect(trades).toHaveLength(1);
     expect(trades[0]).toMatchObject({ symbol: "CUSTOM", action: "buy", quantity: 5 });
     expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
+    expect(store[DATASET_HASH_KEY]).toBeUndefined();
+    expect(await getDatasetHashMeta()).toBeNull();
   });
 
   test("clearAndImportData seeds builtin dataset", async () => {
@@ -107,5 +112,7 @@ describe("importData builtin guard", () => {
     expect(trades).toHaveLength(1);
     expect(trades[0]).toMatchObject({ symbol: "SAMPLE", action: "buy", quantity: 3 });
     expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_BUILTIN);
+    expect(store[DATASET_HASH_KEY]).toBe(hashPayload(builtinData));
+    expect(await getDatasetHashMeta()).toBe(hashPayload(builtinData));
   });
 });

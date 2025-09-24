@@ -21,11 +21,19 @@ const LEGACY_DATASET_HASH_KEY = "datasetHash";
 type DatasetSource = typeof DATASET_SOURCE_BUILTIN | typeof DATASET_SOURCE_CUSTOM;
 
 const META_DATASET_SOURCE_KEY = "datasetSource";
+const META_DATASET_HASH_KEY = "datasetHash";
 
 interface DatasetSourceMetaRecord {
   key: typeof META_DATASET_SOURCE_KEY;
   value: DatasetSource;
 }
+
+interface DatasetHashMetaRecord {
+  key: typeof META_DATASET_HASH_KEY;
+  value: string;
+}
+
+type MetaStoreRecord = DatasetSourceMetaRecord | DatasetHashMetaRecord;
 
 async function setDatasetSourceMeta(source: DatasetSource): Promise<void> {
   try {
@@ -66,6 +74,45 @@ export async function getDatasetSourceMeta(): Promise<DatasetSource | null> {
   }
 }
 
+async function setDatasetHashMeta(hash: string): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(META_STORE_NAME, "readwrite");
+    await tx.store.put({ key: META_DATASET_HASH_KEY, value: hash } satisfies DatasetHashMetaRecord);
+    await tx.done;
+  } catch {
+    /* ignore IndexedDB errors */
+  }
+}
+
+async function clearDatasetHashMeta(): Promise<void> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(META_STORE_NAME, "readwrite");
+    await tx.store.delete(META_DATASET_HASH_KEY);
+    await tx.done;
+  } catch {
+    /* ignore IndexedDB errors */
+  }
+}
+
+export async function getDatasetHashMeta(): Promise<string | null> {
+  try {
+    const db = await getDb();
+    const entry = (await db.get(
+      META_STORE_NAME,
+      META_DATASET_HASH_KEY,
+    )) as DatasetHashMetaRecord | undefined;
+    if (!entry) return null;
+    if (typeof entry.value === "string" && entry.value.length > 0) {
+      return entry.value;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function markDatasetAsCustom(): Promise<void> {
   try {
     localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
@@ -76,6 +123,20 @@ export async function markDatasetAsCustom(): Promise<void> {
     /* ignore storage errors */
   }
   await setDatasetSourceMeta(DATASET_SOURCE_CUSTOM);
+  await clearDatasetHashMeta();
+}
+
+export async function markDatasetAsBuiltin(hash: string): Promise<void> {
+  try {
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+    localStorage.setItem(DATASET_HASH_KEY, hash);
+    localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
+    localStorage.setItem(LEGACY_DATASET_HASH_KEY, hash);
+  } catch {
+    /* ignore storage errors */
+  }
+  await setDatasetSourceMeta(DATASET_SOURCE_BUILTIN);
+  await setDatasetHashMeta(hash);
 }
 
 // Matches the structure in trades.json -> trades array
@@ -146,7 +207,7 @@ interface TradingDB extends DBSchema {
   };
   [META_STORE_NAME]: {
     key: string;
-    value: DatasetSourceMetaRecord;
+    value: MetaStoreRecord;
   };
 }
 
@@ -578,27 +639,15 @@ async function replaceDataset(
 
   clearDailyResultsCache();
 
-  try {
-    if (options.source === DATASET_SOURCE_BUILTIN) {
-      const datasetHash = hashPayload({
-        positions: rawData.positions ?? [],
-        trades: rawData.trades ?? [],
-      });
-      localStorage.setItem(DATASET_HASH_KEY, datasetHash);
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-      localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_BUILTIN);
-      localStorage.setItem(LEGACY_DATASET_HASH_KEY, datasetHash);
-    } else {
-      localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
-      localStorage.setItem(LEGACY_DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
-      localStorage.removeItem(DATASET_HASH_KEY);
-      localStorage.removeItem(LEGACY_DATASET_HASH_KEY);
-    }
-  } catch {
-    /* ignore storage errors */
+  if (options.source === DATASET_SOURCE_BUILTIN) {
+    const datasetHash = hashPayload({
+      positions: rawData.positions ?? [],
+      trades: rawData.trades ?? [],
+    });
+    await markDatasetAsBuiltin(datasetHash);
+  } else {
+    await markDatasetAsCustom();
   }
-
-  await setDatasetSourceMeta(options.source);
 
   logger.info("Data imported successfully.");
 }
@@ -624,6 +673,7 @@ export async function clearAllData(): Promise<void> {
   await tx.done;
   clearDailyResultsCache();
   await clearDatasetSourceMeta();
+  await clearDatasetHashMeta();
   logger.info("All trade, position, and price data cleared.");
 }
 
