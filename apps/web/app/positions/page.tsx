@@ -18,22 +18,17 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        try {
-          await ensureBuiltInDatasetLoaded();
-        } catch (err) {
-          console.error("Dataset bootstrap failed:", err);
-        }
+        // ✅ Single guard call; never fetch('/trades.json') here
+        await ensureBuiltInDatasetLoaded();
 
+        // ✅ Only one findTrades() call
         const allTrades = await findTrades();
-
         const enriched = computeFifo(allTrades);
         setTrades(enriched);
 
-        // 根据 enriched 计算最新持仓（quantityAfter / averageCost）
+        // compute latest positions from enriched trades
         const lastMap: Record<string, EnrichedTrade> = {};
-        for (const t of enriched) {
-          lastMap[t.symbol] = t; // 由于 computeFifo 已按日期升序，遍历结束时即为最后状态
-        }
+        for (const t of enriched) lastMap[t.symbol] = t;
 
         const posList: Position[] = Object.values(lastMap).map((t) => ({
           symbol: t.symbol,
@@ -43,7 +38,6 @@ export default function PositionsPage() {
           priceOk: true,
           stale: true,
         }));
-
         setPositions(posList);
       } catch (e) {
         console.error(e);
@@ -52,23 +46,15 @@ export default function PositionsPage() {
         setIsLoading(false);
       }
     }
-
     loadData();
   }, []);
 
-  if (isLoading) {
-    return <div>Loading positions...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
+  if (isLoading) return <div>Loading positions...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <main className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold tracking-tight mb-8">
-        Current Positions
-      </h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-8">Current Positions</h1>
       <PositionsTable positions={positions} trades={trades} />
     </main>
   );
