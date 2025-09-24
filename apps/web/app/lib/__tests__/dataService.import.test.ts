@@ -38,9 +38,24 @@ describe("importData builtin guard", () => {
     delete global.localStorage;
   });
 
-  test("skips builtin import when custom dataset already exists", async () => {
+  test("custom import overwrites builtin dataset", async () => {
     const store: Record<string, string> = {};
     setupLocalStorage(store);
+
+    const builtinSeed = {
+      positions: [],
+      trades: [
+        {
+          date: "2025-07-01",
+          symbol: "BUILTIN",
+          side: "BUY" as const,
+          qty: 2,
+          price: 55,
+        },
+      ],
+    };
+
+    await clearAndImportData(builtinSeed);
 
     const customPayload = {
       positions: [],
@@ -55,26 +70,7 @@ describe("importData builtin guard", () => {
       ],
     } as const;
 
-    await clearAndImportData(customPayload as any);
-
-    const before = await openDB("TradingApp", 3);
-    expect(await before.getAll("trades")).toHaveLength(1);
-    before.close();
-
-    const builtinData = {
-      positions: [],
-      trades: [
-        {
-          date: "2025-07-01",
-          symbol: "BUILTIN",
-          side: "BUY" as const,
-          qty: 2,
-          price: 55,
-        },
-      ],
-    };
-
-    await importData(builtinData);
+    await importData(customPayload);
 
     const db = await openDB("TradingApp", 3);
     const trades = await db.getAll("trades");
@@ -85,7 +81,7 @@ describe("importData builtin guard", () => {
     expect(store[DATASET_SOURCE_KEY]).toBe(DATASET_SOURCE_CUSTOM);
   });
 
-  test("imports builtin dataset when no custom data is present", async () => {
+  test("clearAndImportData seeds builtin dataset", async () => {
     const store: Record<string, string> = {};
     setupLocalStorage(store);
 
@@ -102,7 +98,7 @@ describe("importData builtin guard", () => {
       ],
     };
 
-    await importData(builtinData);
+    await clearAndImportData(builtinData);
 
     const db = await openDB("TradingApp", 3);
     const trades = await db.getAll("trades");
