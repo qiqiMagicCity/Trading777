@@ -12,6 +12,7 @@ export interface MetricsContract {
   M4: { total: number };
   M5: { behavior: number; fifo: number };
   M6: { total: number };
+  _m6?: { overnightPnL: number; warnings: string[] };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
   aux?: {
     breakdown?: BreakdownRow[];

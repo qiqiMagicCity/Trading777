@@ -68,6 +68,10 @@ export interface Metrics {
     fifo: number;
   };
   M6: number;
+  _m6?: {
+    overnightPnL: number;
+    warnings: string[];
+  };
   M7: {
     B: number;
     S: number;
@@ -904,6 +908,8 @@ function calcMetricsInternal(
   }
 
   const todayNetChange = new Map<string, number>();
+  const totalSellQty = new Map<string, number>();
+  const totalCoverQty = new Map<string, number>();
   const lastTradePriceToday = new Map<string, number>();
   for (const trade of todayTrades) {
     if (!trade?.symbol) continue;
@@ -929,6 +935,17 @@ function calcMetricsInternal(
       trade.symbol,
       (todayNetChange.get(trade.symbol) ?? 0) + delta,
     );
+    if (trade.action === "sell") {
+      totalSellQty.set(
+        trade.symbol,
+        (totalSellQty.get(trade.symbol) ?? 0) + qty,
+      );
+    } else if (trade.action === "cover") {
+      totalCoverQty.set(
+        trade.symbol,
+        (totalCoverQty.get(trade.symbol) ?? 0) + qty,
+      );
+    }
   }
 
   const symbolsForPrev = new Set<string>([
@@ -947,12 +964,43 @@ function calcMetricsInternal(
     }
 
     const todayDelta = todayNetChange.get(symbol) ?? 0;
+    const prevQty = currentQty - todayDelta;
+    let overnightQty = 0;
+
+    if (Math.abs(prevQty) > EPSILON) {
+      if (prevQty > 0) {
+        const sold = totalSellQty.get(symbol) ?? 0;
+        const remainingPrev = Math.max(prevQty - sold, 0);
+        const available = currentQty > 0 ? currentQty : 0;
+        overnightQty = Math.min(remainingPrev, available);
+      } else if (prevQty < 0) {
+        const covered = totalCoverQty.get(symbol) ?? 0;
+        const remainingPrev = Math.max(Math.abs(prevQty) - covered, 0);
+        const available = currentQty < 0 ? Math.abs(currentQty) : 0;
+        overnightQty = -Math.min(remainingPrev, available);
+      }
+    }
+
+    if (Math.abs(overnightQty) <= EPSILON) {
+      if (DEBUG) {
+        logger.debug("M6_QTY_SKIP", {
+          symbol,
+          currentQty,
+          todayDelta,
+          prevQty,
+          reason: "No overnight quantity remains after today trades.",
+        });
+      }
+      continue;
+    }
+
     if (DEBUG) {
       logger.debug("M6_QTY_DIAG_BEFORE", {
         symbol,
         currentQty,
         todayDelta,
-        expectedYesterdayQty: mRound2(currentQty - todayDelta),
+        prevQty,
+        overnightQty,
       });
     }
 
@@ -964,17 +1012,9 @@ function calcMetricsInternal(
       missingPrevCloseSymbols.add(symbol);
     }
 
-    if (DEBUG) {
-      logger.debug("M6_QTY_PUSH", {
-        symbol,
-        qtyUsedForMtm: currentQty,
-        note: "If this differs from expectedYesterdayQty above, M6 will be off.",
-      });
-    }
-
     positionsForM6.push({
       symbol,
-      qty: currentQty,
+      qty: overnightQty,
       priceNow,
       prevClose,
     });
@@ -998,6 +1038,23 @@ function calcMetricsInternal(
 
   const priceChangeRounded = mRound2(m6Computation.mtm);
   const todayTotalPnlChange = m6Computation.total;
+  const m6WarningMessages = Array.from(
+    new Set(
+      m6Computation.warnings.map((warning) => {
+        if (warning.reason === "MISSING_PREV_CLOSE") {
+          return `SafePrice: ${warning.symbol} 缺少昨收价，该标的按 0 计入 OvernightPnL。`;
+        }
+        if (warning.reason === "MISSING_MARK") {
+          return `SafePrice: ${warning.symbol} 缺少实时价，该标的按 0 计入 OvernightPnL。`;
+        }
+        return `SafePrice: ${warning.symbol} 缺少必要行情数据，按 0 计入 OvernightPnL。`;
+      }),
+    ),
+  );
+  const m6Details = {
+    overnightPnL: priceChangeRounded,
+    warnings: m6WarningMessages,
+  };
 
   if (DEBUG)
     logger.debug("M6_DEBUG", {
@@ -1041,6 +1098,7 @@ function calcMetricsInternal(
       fifo: pnlFifo,
     },
     M6: todayTotalPnlChange,
+    _m6: m6Details,
     M7: {
       B: todayTradeCountsByType.B,
       S: todayTradeCountsByType.S,
@@ -1155,6 +1213,21 @@ export function normalizeMetrics(input: any): MetricsContract {
     fifo: Number(input?.M5?.fifo ?? input?.M5_2 ?? 0),
   };
   const M6 = { total: pickTotal(input?.M6) };
+  const rawOvernightPnL =
+    typeof input?._m6?.overnightPnL === "number"
+      ? input._m6.overnightPnL
+      : input?.aux?.m6PriceChange;
+  const _m6 = {
+    overnightPnL:
+      typeof rawOvernightPnL === "number" && Number.isFinite(rawOvernightPnL)
+        ? rawOvernightPnL
+        : 0,
+    warnings: Array.isArray(input?._m6?.warnings)
+      ? input._m6.warnings.filter(
+          (msg: unknown): msg is string => typeof msg === "string" && msg.length > 0,
+        )
+      : [],
+  };
   const M7 = normalizeCounts(input?.M7 ?? {});
   const M8 = normalizeCounts(input?.M8 ?? {});
   const M9 = Number(
@@ -1211,6 +1284,7 @@ export function normalizeMetrics(input: any): MetricsContract {
     M4,
     M5,
     M6,
+    _m6,
     M7,
     M8,
     M9,

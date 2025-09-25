@@ -39,7 +39,6 @@ test("页面口径与算法一致（黄金案例）", async () => {
   expect(priceChange).toBe(0);
   expect(m.M6.total).toBe(m.M4.total + m.M5.fifo);
   expect(m.M6.total).toBeCloseTo(prevRealized + m.M5.fifo + priceChange, 6);
-  expect(m.aux?.m6Excluded?.map((row) => row.reason)).toEqual(
-    expect.arrayContaining(["MISSING_PREV_CLOSE"]),
-  );
+  expect(m.aux?.m6Excluded ?? []).toHaveLength(0);
+  expect(m._m6?.warnings ?? []).toEqual([]);
 });
