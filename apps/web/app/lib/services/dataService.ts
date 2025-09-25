@@ -342,7 +342,7 @@ function mapRawTrade(
 }
 
 function normalizePositionsForStore(
-  rawPositions: Array<Partial<Position> & Record<string, unknown>>,
+  rawPositions: ReadonlyArray<Partial<Position> & Record<string, unknown>>,
 ): Position[] {
   const normalized: Position[] = [];
   for (const raw of rawPositions) {
@@ -374,8 +374,8 @@ function normalizePositionsForStore(
 }
 
 type DatasetPayload = {
-  positions?: Array<Partial<Position> & Record<string, unknown>>;
-  trades?: ImportableTrade[];
+  positions?: ReadonlyArray<Partial<Position> & Record<string, unknown>>;
+  trades?: ReadonlyArray<ImportableTrade>;
 };
 
 async function replaceDataset(

@@ -67,7 +67,7 @@ describe("calcM6Detailed", () => {
   });
 
   it("falls back to open price when prevClose is missing", () => {
-    const fallbackOpen = jest.fn().mockReturnValue(50);
+    const fallbackOpen: (symbol: string) => number | null = jest.fn(() => 50);
     const result = calcM6Detailed({
       positions: [
         { symbol: "FFF", qty: 2, priceNow: 55, prevClose: null },

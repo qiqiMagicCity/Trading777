@@ -91,7 +91,7 @@ describe("trade mutations promote dataset to custom", () => {
     mockLocalStorage(store);
 
     await clearAndImportData({ ...builtinSeed });
-    const [existing] = await findTrades();
+    const existing = (await findTrades())[0]!;
 
     await updateTrade({
       ...existing,
@@ -109,7 +109,7 @@ describe("trade mutations promote dataset to custom", () => {
     mockLocalStorage(store);
 
     await clearAndImportData({ ...builtinSeed });
-    const [existing] = await findTrades();
+    const existing = (await findTrades())[0]!;
 
     await deleteTrade(existing.id!);
 
