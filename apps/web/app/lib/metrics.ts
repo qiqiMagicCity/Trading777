@@ -54,6 +54,85 @@ function seedInitialLots(
   }
 }
 
+function signedQtyFromAction(action: string, qty: number): number {
+  switch (action) {
+    case "buy":
+    case "cover":
+      return qty;
+    case "sell":
+    case "short":
+      return -qty;
+    default:
+      return 0;
+  }
+}
+
+function consumeQuantity(
+  bucket: number,
+  change: number,
+): { bucket: number; leftover: number } {
+  if (!Number.isFinite(change) || Math.abs(change) <= EPSILON) {
+    return { bucket, leftover: 0 };
+  }
+  if (!Number.isFinite(bucket) || Math.abs(bucket) <= EPSILON) {
+    return { bucket: 0, leftover: change };
+  }
+  if (Math.sign(bucket) === Math.sign(change)) {
+    return { bucket, leftover: change };
+  }
+  const bucketAbs = Math.abs(bucket);
+  const changeAbs = Math.abs(change);
+  if (changeAbs >= bucketAbs - EPSILON) {
+    const leftoverAbs = changeAbs - bucketAbs;
+    const leftoverSign = Math.sign(change) || 1;
+    return {
+      bucket: 0,
+      leftover: leftoverAbs <= EPSILON ? 0 : leftoverSign * leftoverAbs,
+    };
+  }
+  const updatedAbs = bucketAbs - changeAbs;
+  return {
+    bucket: Math.sign(bucket) * updatedAbs,
+    leftover: 0,
+  };
+}
+
+function computeOvernightQuantity(
+  yesterdayQty: number,
+  trades: EnrichedTrade[],
+): number {
+  if (!Number.isFinite(yesterdayQty) || Math.abs(yesterdayQty) <= EPSILON) {
+    return 0;
+  }
+
+  let overnightQty = yesterdayQty;
+
+  for (const trade of trades) {
+    if (!trade?.symbol) continue;
+    const rawQty = Math.abs(Number(trade.quantity ?? 0));
+    if (!Number.isFinite(rawQty) || rawQty <= EPSILON) continue;
+    const signed = signedQtyFromAction(trade.action, rawQty);
+    if (!Number.isFinite(signed) || Math.abs(signed) <= EPSILON) continue;
+
+    const { bucket: updatedOvernight } = consumeQuantity(
+      overnightQty,
+      signed,
+    );
+    overnightQty = updatedOvernight;
+  }
+
+  if (Math.abs(overnightQty) <= EPSILON) {
+    return 0;
+  }
+
+  if (Math.sign(overnightQty) !== Math.sign(yesterdayQty)) {
+    return 0;
+  }
+
+  const cappedAbs = Math.min(Math.abs(overnightQty), Math.abs(yesterdayQty));
+  return Math.sign(overnightQty) * cappedAbs;
+}
+
 /**
  * 交易系统指标接口
  * 定义了所有需要计算和展示的指标
@@ -865,6 +944,15 @@ function calcMetricsInternal(
     );
 
   const sortedTrades = sortTrades(safeTrades);
+  const todayTradesBySymbol = new Map<string, EnrichedTrade[]>();
+  for (const trade of sortedTrades) {
+    if (!trade?.symbol) continue;
+    if (!isTodayNY(trade.date, todayStr)) continue;
+    if (!todayTradesBySymbol.has(trade.symbol)) {
+      todayTradesBySymbol.set(trade.symbol, []);
+    }
+    todayTradesBySymbol.get(trade.symbol)!.push(trade);
+  }
 
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
@@ -947,13 +1035,24 @@ function calcMetricsInternal(
     }
 
     const todayDelta = todayNetChange.get(symbol) ?? 0;
+    const yesterdayQty = currentQty - todayDelta;
+    const overnightQty = computeOvernightQuantity(
+      yesterdayQty,
+      todayTradesBySymbol.get(symbol) ?? [],
+    );
+
     if (DEBUG) {
       logger.debug("M6_QTY_DIAG_BEFORE", {
         symbol,
         currentQty,
         todayDelta,
-        expectedYesterdayQty: mRound2(currentQty - todayDelta),
+        expectedYesterdayQty: mRound2(yesterdayQty),
+        overnightQtyUsedForMtm: mRound2(overnightQty),
       });
+    }
+
+    if (Math.abs(overnightQty) <= EPSILON) {
+      continue;
     }
 
     const priceNowValue = Number(pos?.last);
@@ -967,14 +1066,14 @@ function calcMetricsInternal(
     if (DEBUG) {
       logger.debug("M6_QTY_PUSH", {
         symbol,
-        qtyUsedForMtm: currentQty,
+        qtyUsedForMtm: overnightQty,
         note: "If this differs from expectedYesterdayQty above, M6 will be off.",
       });
     }
 
     positionsForM6.push({
       symbol,
-      qty: currentQty,
+      qty: overnightQty,
       priceNow,
       prevClose,
     });
