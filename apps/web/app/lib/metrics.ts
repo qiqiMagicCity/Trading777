@@ -812,15 +812,23 @@ function calcMetricsInternal(
   // 基于原始交易记录（保留重复项）计算统计
   const evalDateNY = nowNY();
   const todayStr = getLatestTradingDayStr(evalDateNY);
-  const evalEnd = endOfDayNY(evalDateNY);
+  const evalEnd = endOfDayNY(toNY(`${todayStr}T12:00:00Z`));
   const safeTrades = trades.filter((t) => {
-    const d = toNY(t.time ?? t.date);
+    const base =
+      typeof t.date === "string" && t.date
+        ? t.date
+        : typeof t.time === "string" && t.time.length >= 10
+          ? t.time
+          : t.time ?? t.date;
+    if (!base) return false;
+    const d =
+      typeof base === "string" && base.length === 10
+        ? toNY(`${base}T12:00:00Z`)
+        : toNY(base);
     return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
   });
 
-  const todayTrades = safeTrades.filter((t) =>
-    isTodayNY(t.time ?? t.date, todayStr),
-  );
+  const todayTrades = safeTrades.filter((t) => isTodayNY(t.date, todayStr));
   const counts = _count(todayTrades);
 
   if (DEBUG)
@@ -1078,8 +1086,35 @@ export function formatNumber(value: number, decimals: number = 2): string {
   return value.toFixed(decimals);
 }
 
-export function normalizeMetrics(input:any): MetricsContract {
-  const pickTotal = (v:any)=> typeof v==='number' ? v : (v?.total ?? 0);
+export function normalizeMetrics(input: any): MetricsContract {
+  const pickTotal = (v: any) => (typeof v === "number" ? v : v?.total ?? 0);
+  const normalizeCounts = (value: any) => {
+    const B = Number(value?.B ?? value?.buy ?? 0);
+    const S = Number(value?.S ?? value?.sell ?? 0);
+    const P = Number(value?.P ?? value?.short ?? 0);
+    const C = Number(value?.C ?? value?.cover ?? 0);
+    const totalRaw = value?.total;
+    const total =
+      totalRaw !== undefined && Number.isFinite(Number(totalRaw))
+        ? Number(totalRaw)
+        : B + S + P + C;
+    return { B, S, P, C, total };
+  };
+  const normalizeWinLoss = (value: any) => {
+    const win = Number(value?.win ?? value?.W ?? 0);
+    const loss = Number(value?.loss ?? value?.L ?? 0);
+    const flat = Number(value?.flat ?? value?.F ?? 0);
+    let rateRaw = value?.rate ?? value?.winRate ?? value?.winRatePct;
+    let rate = Number(rateRaw);
+    if (!Number.isFinite(rate)) {
+      const denom = win + loss;
+      rate = denom > 0 ? win / denom : 0;
+    } else if (rate > 1.0000001) {
+      rate = rate / 100;
+    }
+    return { win, loss, flat, rate };
+  };
+
   const M1 = Number(input?.M1 ?? 0);
   const M2 = Number(input?.M2 ?? 0);
   const M3 = Number(input?.M3 ?? 0);
@@ -1088,9 +1123,15 @@ export function normalizeMetrics(input:any): MetricsContract {
     behavior: Number(
       input?.M5?.behavior ?? input?.M5?.trade ?? input?.M5_1 ?? 0,
     ),
-    fifo:      Number(input?.M5?.fifo      ?? input?.M5_2 ?? 0),
+    fifo: Number(input?.M5?.fifo ?? input?.M5_2 ?? 0),
   };
   const M6 = { total: pickTotal(input?.M6) };
+  const M7 = normalizeCounts(input?.M7 ?? {});
+  const M8 = normalizeCounts(input?.M8 ?? {});
+  const M9 = Number(
+    input?.M9 ?? input?.realized ?? input?.aux?.m6PrevRealizedTotal ?? 0,
+  );
+  const M10 = normalizeWinLoss(input?.M10 ?? {});
   const rawPriceChange = input?.aux?.m6PriceChange ?? input?.M6?.priceChange;
   const priceChange =
     typeof rawPriceChange === 'number' && Number.isFinite(rawPriceChange)
@@ -1128,7 +1169,22 @@ export function normalizeMetrics(input:any): MetricsContract {
     m6Excluded,
     missingPrevCloseSymbols,
   };
-  return { M1, M2, M3, M4, M5, M6, M7:input?.M7, M8:input?.M8, M9:input?.M9, M10:input?.M10, M11:input?.M11, M12:input?.M12, M13:input?.M13, aux };
+  return {
+    M1,
+    M2,
+    M3,
+    M4,
+    M5,
+    M6,
+    M7,
+    M8,
+    M9,
+    M10,
+    M11: input?.M11,
+    M12: input?.M12,
+    M13: input?.M13,
+    aux,
+  };
 }
 
 // 兼容监控的扁平投影（监控/脚本可能用到）
