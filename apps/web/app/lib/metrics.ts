@@ -212,6 +212,26 @@ function normalizeDateInput(
   return trimmed;
 }
 
+function normalizeDateLikeValue(
+  value: string | number | Date | undefined,
+): string | null {
+  const normalized = normalizeDateInput(value);
+  if (typeof normalized === "string") {
+    const candidate =
+      normalized.length === 10 ? `${normalized}T12:00:00Z` : normalized;
+    const parsed = toNY(candidate);
+    return Number.isNaN(parsed.getTime()) ? null : normalized;
+  }
+  if (normalized instanceof Date) {
+    return Number.isNaN(normalized.getTime()) ? null : normalized.toISOString();
+  }
+  if (typeof normalized === "number") {
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  return null;
+}
+
 function resolveTradeDate(
   trade: Pick<EnrichedTrade, "date" | "time">,
 ): Date | null {
@@ -855,8 +875,19 @@ function calcMetricsInternal(
     if (!parsed) continue;
     if (parsed.getTime() > evalEnd.getTime()) continue;
     const day = parsed.toISOString().slice(0, 10);
-    safeTrades.push(trade);
-    tradeEntries.push({ trade, date: parsed, day });
+    const normalizedDateValue = normalizeDateLikeValue(trade.date);
+    const normalizedTimeValue = normalizeDateLikeValue(
+      trade.time as string | number | Date | undefined,
+    );
+    const canonicalDate = normalizedDateValue ?? normalizedTimeValue ?? parsed.toISOString();
+    const canonicalTime = normalizedTimeValue ?? normalizedDateValue ?? parsed.toISOString();
+    const normalizedTrade: EnrichedTrade = {
+      ...trade,
+      date: canonicalDate,
+      time: canonicalTime,
+    };
+    safeTrades.push(normalizedTrade);
+    tradeEntries.push({ trade: normalizedTrade, date: parsed, day });
   }
 
   let todayStr = initialTodayStr;
