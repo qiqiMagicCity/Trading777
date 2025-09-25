@@ -22,6 +22,12 @@ import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/l
 import { getLatestTradingDayStr } from '@/lib/timezone';
 import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, closePricesFromRows } from '@/lib/dailyResults';
 
+interface PriceIssue {
+  symbol: string;
+  level: 'warning' | 'error';
+  message: string;
+}
+
 function resolvePrevClose(
   symbol: string,
   evalDate: string,
@@ -40,6 +46,27 @@ function resolvePrevClose(
   if (!candidateDate) return undefined;
   const price = byDate[candidateDate];
   return Number.isFinite(price) ? price : undefined;
+}
+
+function resolveCloseOnOrBefore(
+  symbol: string,
+  evalDate: string,
+  closePrices: Record<string, Record<string, number>>,
+): { price: number; date: string } | null {
+  const byDate = closePrices[symbol];
+  if (!byDate) return null;
+  let candidateDate: string | null = null;
+  for (const [date, price] of Object.entries(byDate)) {
+    if (!Number.isFinite(price)) continue;
+    if (date > evalDate) continue;
+    if (!candidateDate || date > candidateDate) {
+      candidateDate = date;
+    }
+  }
+  if (!candidateDate) return null;
+  const price = byDate[candidateDate];
+  if (!Number.isFinite(price)) return null;
+  return { price: Number(price), date: candidateDate };
 }
 
 function attachPrevClose(
@@ -65,12 +92,126 @@ export default function DashboardPage() {
   const [enrichedTrades, setEnrichedTrades] = useState<EnrichedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [priceAlerts, setPriceAlerts] = useState<PriceIssue[]>([]);
   const [showModal, setShowModal] = useState(false);
+
+  async function buildDashboardData() {
+    const dbTrades = await findTrades();
+    const replay = replayPortfolio(dbTrades);
+    const enriched = buildEnrichedTrades(replay.baseline);
+    const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
+
+    for (const pos of posList) {
+      const cached = getCachedRealtimeQuote(pos.symbol);
+      if (cached?.price !== undefined) {
+        pos.last = cached.price;
+        pos.priceOk = true;
+        pos.stale = true;
+        pos.lastUpdatedAt = cached.updatedAt;
+      }
+
+      try {
+        let result = await fetchRealtimeQuote(pos.symbol);
+        if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
+          const today = getLatestTradingDayStr();
+          const dailyClose = await fetchDailyClose(pos.symbol, today);
+          if (dailyClose) {
+            result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
+          }
+        }
+
+        if (result && typeof result.price === 'number' && result.price !== 1) {
+          pos.last = result.price;
+          pos.priceOk = result.priceOk !== false;
+          pos.stale = Boolean(result.stale);
+          pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+        } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+          pos.priceOk = true;
+          pos.stale = true;
+        } else {
+          pos.last = NaN;
+          pos.priceOk = false;
+          pos.stale = true;
+        }
+      } catch (e) {
+        if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+          pos.priceOk = true;
+          pos.stale = true;
+        } else {
+          pos.last = NaN;
+          pos.priceOk = false;
+          pos.stale = true;
+        }
+      }
+    }
+
+    const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+    const [fileClosePrices, cachedPrices] = await Promise.all([
+      loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
+      getAllPrices(),
+    ]);
+    const mergedClosePrices = mergeClosePriceMaps(
+      normalizeClosePriceMap(fileClosePrices),
+      closePricesFromRows(cachedPrices),
+    );
+
+    attachPrevClose(posList, mergedClosePrices, evalDateStr);
+
+    const issues: PriceIssue[] = [];
+    for (const pos of posList) {
+      if (!pos.priceOk) {
+        const fallback = resolveCloseOnOrBefore(pos.symbol, evalDateStr, mergedClosePrices);
+        if (fallback) {
+          pos.last = fallback.price;
+          pos.stale = true;
+          pos.priceIssueLevel = 'warning';
+          pos.priceIssueMessage = `实时行情不可用，已使用 ${fallback.date} 的收盘价。`;
+        } else {
+          pos.last = pos.avgPrice;
+          pos.stale = true;
+          pos.priceIssueLevel = 'error';
+          pos.priceIssueMessage = freezeDate
+            ? `缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json。`
+            : '实时与历史价格均缺失，已暂用持仓成本估算。';
+        }
+        issues.push({
+          symbol: pos.symbol,
+          level: pos.priceIssueLevel ?? 'warning',
+          message: pos.priceIssueMessage ?? '实时行情不可用。',
+        });
+      } else {
+        pos.priceIssueLevel = undefined;
+        pos.priceIssueMessage = undefined;
+      }
+
+      if (!Number.isFinite(pos.last)) {
+        pos.last = pos.avgPrice;
+      }
+    }
+
+    const dailyResults = generateDailyResults({
+      trades: enriched,
+      positions: posList,
+      closePrices: mergedClosePrices,
+      evalDate: evalDateStr,
+    });
+
+    return {
+      trades: dbTrades,
+      positions: posList,
+      enrichedTrades: enriched,
+      dailyResults,
+      priceIssues: issues,
+    };
+  }
 
   useEffect(() => {
     async function loadData() {
       try {
         setIsLoading(true);
+        setError(null);
+        setPriceAlerts([]);
 
         await import('@/app/lib/ensureBuiltInDatasetLoaded')
           .then(m => m.ensureBuiltInDatasetLoaded())
@@ -79,95 +220,18 @@ export default function DashboardPage() {
             // Do NOT clear DB on failure; UI may show a non-blocking warning instead.
           });
 
-        const dbTrades = await findTrades();
-        const replay = replayPortfolio(dbTrades);
-        const enriched = buildEnrichedTrades(replay.baseline);
-        const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
+        const snapshot = await buildDashboardData();
 
-        // 为每个持仓获取最新价格
-        for (const pos of posList) {
-          const cached = getCachedRealtimeQuote(pos.symbol);
-          if (cached?.price !== undefined) {
-            pos.last = cached.price;
-            pos.priceOk = true;
-            pos.stale = true;
-            pos.lastUpdatedAt = cached.updatedAt;
-          }
+        setDailyResultsCache(snapshot.dailyResults);
 
-          try {
-            let result = await fetchRealtimeQuote(pos.symbol);
-            if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
-              const today = getLatestTradingDayStr();
-              const dailyClose = await fetchDailyClose(pos.symbol, today);
-              if (dailyClose) {
-                result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
-              }
-            }
-
-            if (result && typeof result.price === 'number' && result.price !== 1) {
-              pos.last = result.price;
-              pos.priceOk = result.priceOk !== false;
-              pos.stale = Boolean(result.stale);
-              pos.lastUpdatedAt = result.updatedAt ?? Date.now();
-            } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-              pos.priceOk = true;
-              pos.stale = true;
-            } else {
-              pos.last = NaN;
-              pos.priceOk = false;
-              pos.stale = true;
-            }
-          } catch (e) {
-            if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-              pos.priceOk = true;
-              pos.stale = true;
-            } else {
-              pos.last = NaN;
-              pos.priceOk = false;
-              pos.stale = true;
-            }
-          }
-        }
-
-        if (posList.some(p => !p.priceOk)) {
-          if (freezeDate) {
-            setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
-          } else {
-            setError('无法获取实时价格，指标计算失败');
-          }
-          setIsLoading(false);
-          return;
-        }
-
-        const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
-
-        const [fileClosePrices, cachedPrices] = await Promise.all([
-          loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
-          getAllPrices(),
-        ]);
-        const mergedClosePrices = mergeClosePriceMaps(
-          normalizeClosePriceMap(fileClosePrices),
-          closePricesFromRows(cachedPrices),
-        );
-
-        attachPrevClose(posList, mergedClosePrices, evalDateStr);
-
-        const dailyResults = generateDailyResults({
-          trades: enriched,
-          positions: posList,
-          closePrices: mergedClosePrices,
-          evalDate: evalDateStr,
-        });
-        setDailyResultsCache(dailyResults);
-
-        // 计算指标并存入全局状态
-        const rawMetrics = calcMetrics(enriched, posList, dailyResults);
+        const rawMetrics = calcMetrics(snapshot.enrichedTrades, snapshot.positions, snapshot.dailyResults);
         const metrics = normalizeMetrics(rawMetrics);
         useStore.getState().setMetrics(metrics as any);
 
-        setTrades(dbTrades);
-        setPositions(posList);
-        setEnrichedTrades(enriched);
+        setTrades(snapshot.trades);
+        setPositions(snapshot.positions);
+        setEnrichedTrades(snapshot.enrichedTrades);
+        setPriceAlerts(snapshot.priceIssues);
       } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
@@ -179,7 +243,6 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
     const set = new Set(trades.map(t => t.symbol));
     return Array.from(set);
@@ -187,93 +250,21 @@ export default function DashboardPage() {
 
   async function reloadData() {
     try {
-      const dbTrades = await findTrades();
-      const replay = replayPortfolio(dbTrades);
-      const enriched = buildEnrichedTrades(replay.baseline);
-      const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
+      const snapshot = await buildDashboardData();
+      setDailyResultsCache(snapshot.dailyResults);
 
-      for (const pos of posList) {
-        const cached = getCachedRealtimeQuote(pos.symbol);
-        if (cached?.price !== undefined) {
-          pos.last = cached.price;
-          pos.priceOk = true;
-          pos.stale = true;
-          pos.lastUpdatedAt = cached.updatedAt;
-        }
-
-        try {
-          let result = await fetchRealtimeQuote(pos.symbol);
-          if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
-            const today = getLatestTradingDayStr();
-            const dailyClose = await fetchDailyClose(pos.symbol, today);
-            if (dailyClose) {
-              result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
-            }
-          }
-          if (result && typeof result.price === 'number' && result.price !== 1) {
-            pos.last = result.price;
-            pos.priceOk = result.priceOk !== false;
-            pos.stale = Boolean(result.stale);
-            pos.lastUpdatedAt = result.updatedAt ?? Date.now();
-          } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-            pos.priceOk = true;
-            pos.stale = true;
-          } else {
-            pos.last = NaN;
-            pos.priceOk = false;
-            pos.stale = true;
-          }
-        } catch (e) {
-          if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-            pos.priceOk = true;
-            pos.stale = true;
-          } else {
-            pos.last = NaN;
-            pos.priceOk = false;
-            pos.stale = true;
-          }
-        }
-      }
-
-      if (posList.some(p => !p.priceOk)) {
-        if (freezeDate) {
-          setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
-        } else {
-          setError('无法获取实时价格，指标计算失败');
-        }
-        return;
-      }
-
-      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
-
-      const [fileClosePrices, cachedPrices] = await Promise.all([
-        loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
-        getAllPrices(),
-      ]);
-      const mergedClosePrices = mergeClosePriceMaps(
-        normalizeClosePriceMap(fileClosePrices),
-        closePricesFromRows(cachedPrices),
-      );
-
-      attachPrevClose(posList, mergedClosePrices, evalDateStr);
-
-      const dailyResults = generateDailyResults({
-        trades: enriched,
-        positions: posList,
-        closePrices: mergedClosePrices,
-        evalDate: evalDateStr,
-      });
-      setDailyResultsCache(dailyResults);
-
-      // 计算指标并更新全局状态
-      const rawMetrics = calcMetrics(enriched, posList, dailyResults);
+      const rawMetrics = calcMetrics(snapshot.enrichedTrades, snapshot.positions, snapshot.dailyResults);
       const metrics = normalizeMetrics(rawMetrics);
       useStore.getState().setMetrics(metrics as any);
 
-      setTrades(dbTrades);
-      setPositions(posList);
-      setEnrichedTrades(enriched);
-    } catch (e) { console.error(e); }
+      setTrades(snapshot.trades);
+      setPositions(snapshot.positions);
+      setEnrichedTrades(snapshot.enrichedTrades);
+      setPriceAlerts(snapshot.priceIssues);
+      setError(null);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   if (isLoading) {
@@ -284,9 +275,24 @@ export default function DashboardPage() {
     return <div className="text-center p-10 text-destructive">Error: {error}</div>;
   }
 
+  const alertClass = priceAlerts.some(issue => issue.level === 'error') ? 'alert-error' : 'alert-warning';
+
   return (
     <div>
       <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
+
+      {priceAlerts.length > 0 && (
+        <div className={`alert ${alertClass}`}>
+          <strong>部分标的的实时价格未能获取</strong>
+          <ul className="alert-list">
+            {priceAlerts.map(issue => (
+              <li key={issue.symbol} className={issue.level}>
+                {issue.symbol}：{issue.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h3 className="section-title" id="positions-title">目前持仓 <Link href="/analysis" className="details">交易分析</Link></h3>
       <PositionsTable positions={positions} trades={enrichedTrades} />
