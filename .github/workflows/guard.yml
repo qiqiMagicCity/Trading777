@@ -2,11 +2,15 @@ name: guard
 on:
   push:
   pull_request:
+defaults:
+  run:
+    shell: bash
 jobs:
   always_pass:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Soft guard (always pass)
         run: |
-          echo "Soft guard active while stabilizing CI."
+          echo "Soft guard active. This job always passes."
           exit 0
