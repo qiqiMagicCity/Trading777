@@ -161,7 +161,9 @@ export default function DashboardPage() {
         setDailyResultsCache(dailyResults);
 
         // 计算指标并存入全局状态
-        const rawMetrics = calcMetrics(enriched, posList, dailyResults);
+        const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
+          tradingDateStr: evalDateStr,
+        });
         const metrics = normalizeMetrics(rawMetrics);
         useStore.getState().setMetrics(metrics as any);
 
@@ -266,7 +268,9 @@ export default function DashboardPage() {
       setDailyResultsCache(dailyResults);
 
       // 计算指标并更新全局状态
-      const rawMetrics = calcMetrics(enriched, posList, dailyResults);
+      const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
+        tradingDateStr: evalDateStr,
+      });
       const metrics = normalizeMetrics(rawMetrics);
       useStore.getState().setMetrics(metrics as any);
 
