@@ -28,6 +28,48 @@ interface PriceIssue {
   message: string;
 }
 
+function ensureFiniteMark(
+  pos: Position,
+  defaultMessage: string,
+): { next: Position; issue?: PriceIssue } {
+  if (Number.isFinite(pos.last)) {
+    return { next: pos };
+  }
+  const fallbackPrice = Number.isFinite(pos.avgPrice) ? Number(pos.avgPrice) : 0;
+  const level = pos.priceIssueLevel ?? 'error';
+  const message = pos.priceIssueMessage ?? defaultMessage;
+  const next: Position = {
+    ...pos,
+    last: fallbackPrice,
+    priceOk: false,
+    stale: true,
+    priceIssueLevel: level,
+    priceIssueMessage: message,
+  };
+  return {
+    next,
+    issue: pos.priceIssueMessage
+      ? undefined
+      : {
+          symbol: pos.symbol,
+          level,
+          message,
+        },
+  };
+}
+
+function mergePriceIssues(base: PriceIssue[], extra: PriceIssue[]): PriceIssue[] {
+  const seen = new Set<string>();
+  const merged: PriceIssue[] = [];
+  for (const issue of [...base, ...extra]) {
+    const key = `${issue.symbol}|${issue.level}|${issue.message}`;
+    if (seen.has(key)) continue;
+    merged.push(issue);
+    seen.add(key);
+  }
+  return merged;
+}
+
 function resolvePrevClose(
   symbol: string,
   evalDate: string,
@@ -186,7 +228,23 @@ export default function DashboardPage() {
       }
 
       if (!Number.isFinite(pos.last)) {
-        pos.last = pos.avgPrice;
+        const fallbackPrice = Number.isFinite(pos.avgPrice) ? Number(pos.avgPrice) : 0;
+        pos.last = fallbackPrice;
+        pos.stale = true;
+        pos.priceOk = false;
+        if (!pos.priceIssueMessage) {
+          const message =
+            freezeDate
+              ? `缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json。`
+              : '实时与历史价格均缺失，已暂用持仓成本估算。';
+          pos.priceIssueLevel = 'error';
+          pos.priceIssueMessage = message;
+          issues.push({
+            symbol: pos.symbol,
+            level: 'error',
+            message,
+          });
+        }
       }
     }
 
@@ -224,14 +282,47 @@ export default function DashboardPage() {
 
         setDailyResultsCache(snapshot.dailyResults);
 
-        const rawMetrics = calcMetrics(snapshot.enrichedTrades, snapshot.positions, snapshot.dailyResults);
-        const metrics = normalizeMetrics(rawMetrics);
+        const degradedMessage = freezeDate
+          ? `缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json。`
+          : '实时与历史价格均缺失，已暂用持仓成本估算。';
+
+        let metrics;
+        let positionsForUi = snapshot.positions;
+        let issuesForUi = snapshot.priceIssues;
+
+        try {
+          const rawMetrics = calcMetrics(snapshot.enrichedTrades, positionsForUi, snapshot.dailyResults);
+          metrics = normalizeMetrics(rawMetrics);
+        } catch (err) {
+          const extras: PriceIssue[] = [];
+          const sanitized = positionsForUi.map(pos => {
+            const { next, issue } = ensureFiniteMark(pos, degradedMessage);
+            if (issue) extras.push(issue);
+            return next;
+          });
+          try {
+            const rawMetrics = calcMetrics(snapshot.enrichedTrades, sanitized, snapshot.dailyResults);
+            metrics = normalizeMetrics(rawMetrics);
+            positionsForUi = sanitized;
+            issuesForUi = mergePriceIssues(issuesForUi, [
+              ...extras,
+              {
+                symbol: '系统',
+                level: 'warning',
+                message: '部分指标基于估算价格计算，请检查行情服务并补齐缺失价格。',
+              },
+            ]);
+          } catch (fallbackErr) {
+            throw err instanceof Error ? err : new Error(String(err));
+          }
+        }
+
         useStore.getState().setMetrics(metrics as any);
 
         setTrades(snapshot.trades);
-        setPositions(snapshot.positions);
+        setPositions(positionsForUi);
         setEnrichedTrades(snapshot.enrichedTrades);
-        setPriceAlerts(snapshot.priceIssues);
+        setPriceAlerts(issuesForUi);
       } catch (e) {
         console.error(e);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
@@ -253,14 +344,47 @@ export default function DashboardPage() {
       const snapshot = await buildDashboardData();
       setDailyResultsCache(snapshot.dailyResults);
 
-      const rawMetrics = calcMetrics(snapshot.enrichedTrades, snapshot.positions, snapshot.dailyResults);
-      const metrics = normalizeMetrics(rawMetrics);
+      const degradedMessage = freezeDate
+        ? `缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json。`
+        : '实时与历史价格均缺失，已暂用持仓成本估算。';
+
+      let metrics;
+      let positionsForUi = snapshot.positions;
+      let issuesForUi = snapshot.priceIssues;
+
+      try {
+        const rawMetrics = calcMetrics(snapshot.enrichedTrades, positionsForUi, snapshot.dailyResults);
+        metrics = normalizeMetrics(rawMetrics);
+      } catch (err) {
+        const extras: PriceIssue[] = [];
+        const sanitized = positionsForUi.map(pos => {
+          const { next, issue } = ensureFiniteMark(pos, degradedMessage);
+          if (issue) extras.push(issue);
+          return next;
+        });
+        try {
+          const rawMetrics = calcMetrics(snapshot.enrichedTrades, sanitized, snapshot.dailyResults);
+          metrics = normalizeMetrics(rawMetrics);
+          positionsForUi = sanitized;
+          issuesForUi = mergePriceIssues(issuesForUi, [
+            ...extras,
+            {
+              symbol: '系统',
+              level: 'warning',
+              message: '部分指标基于估算价格计算，请检查行情服务并补齐缺失价格。',
+            },
+          ]);
+        } catch (fallbackErr) {
+          throw err instanceof Error ? err : new Error(String(err));
+        }
+      }
+
       useStore.getState().setMetrics(metrics as any);
 
       setTrades(snapshot.trades);
-      setPositions(snapshot.positions);
+      setPositions(positionsForUi);
       setEnrichedTrades(snapshot.enrichedTrades);
-      setPriceAlerts(snapshot.priceIssues);
+      setPriceAlerts(issuesForUi);
       setError(null);
     } catch (e) {
       console.error(e);
