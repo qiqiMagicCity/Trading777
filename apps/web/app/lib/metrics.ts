@@ -213,6 +213,10 @@ export function assertM6(metrics: Metrics) {
       missingPrevCloseSymbols: metrics.aux?.missingPrevCloseSymbols ?? [],
     };
     logger.warn("M6 mismatch", data);
+    logger.warn(
+      "M6 hint",
+      "Check M6_QTY_DIAG_BEFORE/M6_QTY_PUSH logs for qty mismatch vs yesterdayQty",
+    );
     reportMonitoring("M6 mismatch", data);
   }
 }
@@ -942,12 +946,31 @@ function calcMetricsInternal(
       continue;
     }
 
+    const todayDelta = todayNetChange.get(symbol) ?? 0;
+    if (DEBUG) {
+      logger.debug("M6_QTY_DIAG_BEFORE", {
+        symbol,
+        currentQty,
+        todayDelta,
+        expectedYesterdayQty: mRound2(currentQty - todayDelta),
+      });
+    }
+
     const priceNowValue = Number(pos?.last);
     const priceNow = Number.isFinite(priceNowValue) ? priceNowValue : null;
     const prevCloseValue = Number(pos?.prevClose);
     const prevClose = Number.isFinite(prevCloseValue) ? prevCloseValue : null;
     if (prevClose == null) {
       missingPrevCloseSymbols.add(symbol);
+    }
+
+    if (DEBUG) {
+      logger.debug("M6_QTY_PUSH", {
+        symbol,
+        qtyUsedForMtm: currentQty,
+        note:
+          "If this differs from expectedYesterdayQty above, M6 will be off.",
+      });
     }
 
     positionsForM6.push({
