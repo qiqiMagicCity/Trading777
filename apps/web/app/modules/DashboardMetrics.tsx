@@ -159,6 +159,21 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     });
   }, [metrics, metricNames, order]);
 
+  const rows = useMemo(
+    () => [
+      formattedMetrics.slice(0, 3),
+      formattedMetrics.slice(3, 7),
+      formattedMetrics.slice(7, 13),
+    ].filter((row) => row.length > 0),
+    [formattedMetrics],
+  );
+
+  const rowClassNames = [
+    "grid grid-cols-3 gap-4 justify-items-center",
+    "grid grid-cols-4 gap-4 justify-items-center",
+    "grid grid-cols-6 gap-4 justify-items-center",
+  ];
+
   if (!metrics) {
     return <section id="stats" className="stats-grid">正在加载指标...</section>;
   }
@@ -166,26 +181,18 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   return (
     <section id="stats" className="my-5">
       <div className="flex flex-col items-center gap-4">
-        <div className="flex flex-wrap justify-center gap-4">
-          {formattedMetrics.slice(0, 8).map((metric) => (
-            <MetricCard
-              key={metric.key}
-              title={metric.title!}
-              value={metric.value}
-              colorClass={metric.colorClass}
-            />
-          ))}
-        </div>
-        <div className="flex flex-wrap justify-center gap-4">
-          {formattedMetrics.slice(8).map((metric) => (
-            <MetricCard
-              key={metric.key}
-              title={metric.title!}
-              value={metric.value}
-              colorClass={metric.colorClass}
-            />
-          ))}
-        </div>
+        {rows.map((row, index) => (
+          <div key={index} className={rowClassNames[index] ?? "grid gap-4"}>
+            {row.map((metric) => (
+              <MetricCard
+                key={metric.key}
+                title={metric.title!}
+                value={metric.value}
+                colorClass={metric.colorClass}
+              />
+            ))}
+          </div>
+        ))}
       </div>
     </section>
   );
