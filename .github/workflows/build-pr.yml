@@ -1,37 +1,39 @@
 name: Build (PR)
-
 on:
-  pull_request:
-    branches: [ "**" ]
-
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout PR HEAD (no secrets)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false
+          fetch-depth: 0
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
-      - name: Install deps
-        run: |
-          npm ci
+      - name: Install
+        env: { CI: 'true' }
+        run: npm ci
 
-      # 跳过 lint，避免 Next.js/ESLint 在 CI 上引发交互或告警阻塞
+      # 留作以后需要时再开启
       # - name: Lint
       #   run: npm run lint
 
-      - name: Build (workspaces-friendly)
+      - name: Build (monorepo-friendly)
         env:
           CI: 'true'
           NEXT_TELEMETRY_DISABLED: '1'
         run: |
-          if [ -f package.json ]; then
-            # 若是 monorepo，尊重各包 build；否则构建根
-            npm run build --workspaces --if-present || npm run build --if-present
-          fi
+          npm run build --workspaces --if-present || npm run build --if-present

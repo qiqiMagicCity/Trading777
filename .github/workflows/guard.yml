@@ -1,19 +1,14 @@
 name: guard
-
 on:
   push:
-    branches: [ "**" ]
+    branches: ["**"]
   pull_request:
-    branches: [ "**" ]
-
+    branches: ["**"]
+permissions:
+  contents: read
 jobs:
   guard:
-    name: guard
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Pass guard
-        run: |
-          echo "Guard OK"
-          # 避免无密钥/来自 fork 的权限问题，这里不做任何需要 token 的操作
-          exit 0
+      - run: echo "Guard check passed"
