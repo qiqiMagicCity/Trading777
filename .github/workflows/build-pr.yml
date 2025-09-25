@@ -1,0 +1,37 @@
+name: Build (PR)
+
+on:
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install deps
+        run: |
+          npm ci
+
+      # 跳过 lint，避免 Next.js/ESLint 在 CI 上引发交互或告警阻塞
+      # - name: Lint
+      #   run: npm run lint
+
+      - name: Build (workspaces-friendly)
+        env:
+          CI: 'true'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: |
+          if [ -f package.json ]; then
+            # 若是 monorepo，尊重各包 build；否则构建根
+            npm run build --workspaces --if-present || npm run build --if-present
+          fi

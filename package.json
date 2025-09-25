@@ -4,7 +4,7 @@
   "scripts": {
     "build": "npx --yes turbo run build",
     "dev": "npx --yes turbo run dev",
-    "lint": "npx --yes turbo run lint",
+    "lint": "next lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "npx --yes turbo run check-types",
     "test": "npx --yes jest",
@@ -37,5 +37,10 @@
   "dependencies": {
     "date-fns-tz": "^3.2.0",
     "turbo": "^2.5.4"
+  },
+  "eslintConfig": {
+    "extends": [
+      "next/core-web-vitals"
+    ]
   }
 }
