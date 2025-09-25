@@ -109,6 +109,9 @@ export interface Metrics {
       reason: "MISSING_PREV_CLOSE" | "MISSING_MARK";
     }>;
     missingPrevCloseSymbols?: string[];
+    markWarning?: string;
+    staleMarks?: boolean;
+    markFallbackSymbols?: string[];
   };
 }
 
@@ -855,54 +858,6 @@ function calcMetricsInternal(
 
   const counts = _count(todayTrades);
 
-  if (DEBUG)
-    logger.debug(
-      "M7_FILTERED",
-      { all: _count(safeTrades), today: counts },
-      {
-        evalEndNY: evalEnd.toISOString?.(),
-      },
-    );
-
-  const sortedTrades = sortTrades(safeTrades);
-
-  // M1: 持仓成本
-  const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
-
-  // M2: 持仓市值
-  const currentValue = sum(
-    positions.map((p) => {
-      const marketValue = p.last * Math.abs(p.qty);
-      return marketValue;
-    }),
-  );
-
-  // M3: 持仓浮盈
-  const floatPnl = positions.reduce((acc, pos) => {
-    const qty = Math.abs(pos.qty);
-    if (pos.qty >= 0) {
-      return acc + (pos.last - pos.avgPrice) * qty;
-    } else {
-      return acc + (pos.avgPrice - pos.last) * qty;
-    }
-  }, 0);
-
-  // M5
-  const pnlTrade = calcTodayTradePnL(sortedTrades, todayStr);
-  const pnlFifo = calcTodayFifoPnL(sortedTrades, todayStr);
-
-  // M4
-  const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
-    sortedTrades,
-    todayStr,
-  );
-
-  const positionMap = new Map<string, Position>();
-  for (const pos of positions) {
-    if (!pos?.symbol) continue;
-    positionMap.set(pos.symbol, pos);
-  }
-
   const todayNetChange = new Map<string, number>();
   const lastTradePriceToday = new Map<string, number>();
   for (const trade of todayTrades) {
@@ -929,6 +884,100 @@ function calcMetricsInternal(
       trade.symbol,
       (todayNetChange.get(trade.symbol) ?? 0) + delta,
     );
+  }
+
+  if (DEBUG)
+    logger.debug(
+      "M7_FILTERED",
+      { all: _count(safeTrades), today: counts },
+      {
+        evalEndNY: evalEnd.toISOString?.(),
+      },
+    );
+
+  const sortedTrades = sortTrades(safeTrades);
+
+  // M1: 持仓成本
+  const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
+
+  const fallbackMarkSymbols = new Set<string>();
+  const markInfoCache = new WeakMap<
+    Position,
+    { value: number; usedFallback: boolean }
+  >();
+  const resolveMarkForPosition = (pos: Position) => {
+    const cached = markInfoCache.get(pos);
+    if (cached) return cached;
+
+    const explicit = Number(pos?.last);
+    if (Number.isFinite(explicit)) {
+      const info = {
+        value: explicit,
+        usedFallback: pos.priceOk === false,
+      };
+      if (info.usedFallback) fallbackMarkSymbols.add(pos.symbol);
+      markInfoCache.set(pos, info);
+      return info;
+    }
+
+    const prevClose = Number(pos?.prevClose);
+    if (Number.isFinite(prevClose)) {
+      const info = { value: prevClose, usedFallback: true };
+      fallbackMarkSymbols.add(pos.symbol);
+      markInfoCache.set(pos, info);
+      return info;
+    }
+
+    const tradePrice = lastTradePriceToday.get(pos.symbol);
+    if (Number.isFinite(tradePrice)) {
+      const info = { value: Number(tradePrice), usedFallback: true };
+      fallbackMarkSymbols.add(pos.symbol);
+      markInfoCache.set(pos, info);
+      return info;
+    }
+
+    const avg = Number(pos?.avgPrice);
+    const fallbackValue = Number.isFinite(avg) ? avg : 0;
+    const info = { value: fallbackValue, usedFallback: true };
+    fallbackMarkSymbols.add(pos.symbol);
+    markInfoCache.set(pos, info);
+    return info;
+  };
+
+  // M2: 持仓市值
+  const currentValue = sum(
+    positions.map((p) => {
+      const { value } = resolveMarkForPosition(p);
+      const marketValue = value * Math.abs(p.qty);
+      return marketValue;
+    }),
+  );
+
+  // M3: 持仓浮盈
+  const floatPnl = positions.reduce((acc, pos) => {
+    const { value } = resolveMarkForPosition(pos);
+    const qty = Math.abs(pos.qty);
+    if (pos.qty >= 0) {
+      return acc + (value - pos.avgPrice) * qty;
+    } else {
+      return acc + (pos.avgPrice - value) * qty;
+    }
+  }, 0);
+
+  // M5
+  const pnlTrade = calcTodayTradePnL(sortedTrades, todayStr);
+  const pnlFifo = calcTodayFifoPnL(sortedTrades, todayStr);
+
+  // M4
+  const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
+    sortedTrades,
+    todayStr,
+  );
+
+  const positionMap = new Map<string, Position>();
+  for (const pos of positions) {
+    if (!pos?.symbol) continue;
+    positionMap.set(pos.symbol, pos);
   }
 
   const symbolsForPrev = new Set<string>([
@@ -1078,6 +1127,16 @@ function calcMetricsInternal(
     },
   };
 
+  if (fallbackMarkSymbols.size > 0) {
+    const markFallbackSymbols = Array.from(fallbackMarkSymbols);
+    metrics.aux = {
+      ...metrics.aux,
+      markWarning: "PRICE_FALLBACK",
+      staleMarks: true,
+      markFallbackSymbols,
+    };
+  }
+
   assertM6(metrics);
 
   return metrics;
@@ -1203,6 +1262,16 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6Legs,
     m6Excluded,
     missingPrevCloseSymbols,
+    markWarning:
+      typeof input?.aux?.markWarning === "string"
+        ? (input.aux.markWarning as string)
+        : undefined,
+    staleMarks: Boolean(input?.aux?.staleMarks),
+    markFallbackSymbols: Array.isArray(input?.aux?.markFallbackSymbols)
+      ? input.aux.markFallbackSymbols.filter(
+          (s: unknown): s is string => typeof s === "string",
+        )
+      : undefined,
   };
   return {
     M1,
