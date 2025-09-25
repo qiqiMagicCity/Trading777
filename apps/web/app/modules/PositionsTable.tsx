@@ -168,7 +168,14 @@ export function PositionsTable({ positions, trades }: Props) {
             const resolvedPrice = Number.isFinite(lastPrice) ? lastPrice : pos.avgPrice;
             const isStale = result?.data?.stale ?? pos.stale;
             const isPending = result?.isFetching ?? false;
-            const isError = result?.isError;
+            const hasFreshQuote = Boolean(
+              result?.data &&
+                typeof result.data.price === 'number' &&
+                result.data.priceOk !== false,
+            );
+            const issueLevel = hasFreshQuote ? undefined : pos.priceIssueLevel;
+            const issueMessage = hasFreshQuote ? undefined : pos.priceIssueMessage;
+            const isError = result?.isError || issueLevel === 'error';
 
             // 使用回退价格计算市值和浮动盈亏
             const isShort = pos.qty < 0;
@@ -199,7 +206,13 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{pos.symbol}</td>
                 <td>{nameMap[pos.symbol] || '--'}</td>
                 <td>
-                  <PriceBadge price={resolvedPrice} stale={isStale} pending={isPending} />
+                  <PriceBadge
+                    price={resolvedPrice}
+                    stale={isStale}
+                    pending={isPending}
+                    issueLevel={issueLevel}
+                    issueMessage={issueMessage}
+                  />
                   {isError && !isPending && (
                     <span className="ml-2 text-xs text-red-500">获取失败</span>
                   )}

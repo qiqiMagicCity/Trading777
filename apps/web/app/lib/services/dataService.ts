@@ -56,6 +56,10 @@ export interface Position {
   lastUpdatedAt?: number;
   /** 前一交易日的收盘价，用于计算当日价格变动 */
   prevClose?: number;
+  /** 实时价格缺失时的提示级别 */
+  priceIssueLevel?: 'warning' | 'error';
+  /** 实时价格缺失时的提示内容 */
+  priceIssueMessage?: string;
 }
 
 // New interface for cached prices
@@ -338,7 +342,7 @@ function mapRawTrade(
 }
 
 function normalizePositionsForStore(
-  rawPositions: Array<Partial<Position> & Record<string, unknown>>,
+  rawPositions: ReadonlyArray<Partial<Position> & Record<string, unknown>>,
 ): Position[] {
   const normalized: Position[] = [];
   for (const raw of rawPositions) {
@@ -370,8 +374,8 @@ function normalizePositionsForStore(
 }
 
 type DatasetPayload = {
-  positions?: Array<Partial<Position> & Record<string, unknown>>;
-  trades?: ImportableTrade[];
+  positions?: ReadonlyArray<Partial<Position> & Record<string, unknown>>;
+  trades?: ReadonlyArray<ImportableTrade>;
 };
 
 async function replaceDataset(

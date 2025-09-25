@@ -5,9 +5,17 @@ on:
 jobs:
   guard:
     if: >
-      ${{ !contains(github.event.head_commit.message, '[skip ci]')
-          && !contains(github.event.pull_request.title, '[skip ci]')
-          && !contains(github.event.pull_request.body, '[skip ci]') }}
+      ${{ !(
+            github.event_name == 'push'
+            && contains(github.event.head_commit.message, '[skip ci]')
+          )
+          && !(
+            github.event_name == 'pull_request'
+            && (
+              contains(github.event.pull_request.title, '[skip ci]')
+              || contains(github.event.pull_request.body, '[skip ci]')
+            )
+          ) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

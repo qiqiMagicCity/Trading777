@@ -14,4 +14,4 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run verify:golden
-      - run: npx --yes turbo run build --filter=!web --output-logs=errors-only
+      - run: npx --yes turbo run build --filter='!web' --output-logs=errors-only
