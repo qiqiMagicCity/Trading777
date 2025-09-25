@@ -1,3 +1,4 @@
+// === file: apps/web/app/lib/metrics.ts ===
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import {
@@ -18,7 +19,6 @@ import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
 import type { MetricsContract } from "./types/metrics";
 import { calcM6Detailed, type M6PositionInput } from "./m6";
-
 
 export function isDebug() {
   return (
@@ -59,42 +59,15 @@ function seedInitialLots(
  * 定义了所有需要计算和展示的指标
  */
 export interface Metrics {
-  /** M1: 持仓成本 - 所有持仓的成本总和 */
   M1: number;
-
-  /** M2: 持仓市值 - 所有持仓的当前市场价值总和 */
   M2: number;
-
-  /** M3: 持仓浮盈 - 所有持仓的未实现盈亏总和 */
   M3: number;
-
-  /** M4: 今天持仓平仓盈利 - 今日平掉历史仓位的盈亏 */
   M4: number;
-
-  /**
-   * M5: 今日日内交易盈利 - 同一天内开仓并平仓的交易盈亏
-   * trade: 交易视角，按交易匹配计算
-   * fifo: FIFO视角，按先进先出原则计算
-   */
   M5: {
     trade: number;
     fifo: number;
   };
-
-  /**
-   * M6: 今日总盈利变化
-   *   = 截至昨收的累计已实现盈亏 + 今日 FIFO 已实现盈亏 + Σ(当前价格 - 昨收价) × 昨日持仓数量
-   */
   M6: number;
-
-  /**
-   * M7: 今日交易次数 - 今日各类型交易的次数统计
-   * B: 买入次数
-   * S: 卖出次数
-   * P: 做空次数
-   * C: 回补次数
-   * total: 总交易次数
-   */
   M7: {
     B: number;
     S: number;
@@ -102,15 +75,6 @@ export interface Metrics {
     C: number;
     total: number;
   };
-
-  /**
-   * M8: 累计交易次数 - 历史各类型交易的次数统计
-   * B: 买入次数
-   * S: 卖出次数
-   * P: 做空次数
-   * C: 回补次数
-   * total: 总交易次数
-   */
   M8: {
     B: number;
     S: number;
@@ -118,31 +82,15 @@ export interface Metrics {
     C: number;
     total: number;
   };
-
-  /** M9: 所有历史平仓盈利 - 所有已实现盈亏的累计和 */
   M9: number;
-
-  /**
-   * M10: 胜率统计
-   * win: 盈利交易次数
-   * loss: 亏损交易次数
-   * flat: 盈亏为0的交易次数
-   * rate: 胜率（win / (win + loss)）
-   */
   M10: {
     win: number;
     loss: number;
     flat: number;
     rate: number;
   };
-
-  /** M11: WTD (Week-To-Date) - 本周至今的盈亏总和 */
   M11: number;
-
-  /** M12: MTD (Month-To-Date) - 本月至今的盈亏总和 */
   M12: number;
-
-  /** M13: YTD (Year-To-Date) - 本年至今的盈亏总和 */
   M13: number;
   aux?: {
     m6PriceChange?: number;
@@ -178,11 +126,6 @@ export type RealizedBreakdownRow = {
   pnl: number;
 };
 
-/**
- * 计算数组总和的辅助函数
- * @param arr 数字数组
- * @returns 数组元素之和
- */
 function sum(arr: number[]): number {
   return arr.reduce((a, b) => a + b, 0);
 }
@@ -197,6 +140,58 @@ function reportMonitoring(message: string, details?: unknown): void {
   }).catch((err) => {
     logger.error("reportMonitoring failed", err);
   });
+}
+
+function normalizeDateInput(
+  input: string | number | Date | undefined,
+): string | number | Date | undefined {
+  if (typeof input !== "string") return input;
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length === 10) return trimmed;
+  if (trimmed.includes(" ") && !trimmed.includes("T")) {
+    return trimmed.replace(" ", "T");
+  }
+  return trimmed;
+}
+
+function normalizeDateLikeValue(
+  value: string | number | Date | undefined,
+): string | null {
+  const normalized = normalizeDateInput(value);
+  if (typeof normalized === "string") {
+    const candidate =
+      normalized.length === 10 ? `${normalized}T12:00:00Z` : normalized;
+    const parsed = toNY(candidate);
+    return Number.isNaN(parsed.getTime()) ? null : normalized;
+  }
+  if (normalized instanceof Date) {
+    return Number.isNaN(normalized.getTime()) ? null : normalized.toISOString();
+  }
+  if (typeof normalized === "number") {
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  return null;
+}
+
+function resolveTradeDate(
+  trade: Pick<EnrichedTrade, "date" | "time">,
+): Date | null {
+  const normalizedDate = normalizeDateInput(trade?.date);
+  const normalizedTime = normalizeDateInput(trade?.time);
+  const source =
+    normalizedDate !== undefined
+      ? normalizedDate
+      : normalizedTime !== undefined
+        ? normalizedTime
+        : undefined;
+  if (source === undefined) return null;
+  const parsed =
+    typeof source === "string" && source.length === 10
+      ? toNY(`${source}T12:00:00Z`)
+      : toNY(source);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function assertM6(metrics: Metrics) {
@@ -300,17 +295,11 @@ function isValidTradeDate(
  * 缓存结构用于快速计算区间盈亏
  */
 type SumPeriodCache = {
-  /** 原始 daily 引用，用于判断是否需要重建缓存 */
   daily: DailyResult[];
-  /** 缓存时 daily 的长度 */
   dailyLength: number;
-  /** 缓存时最后一条记录的日期 */
   lastDate?: string;
-  /** 按日期排序后的时间戳数组 */
   dates: number[];
-  /** 累计收益前缀和 */
   prefix: number[];
-  /** 最近一次查询的起始、结束日期及结果 */
   lastFrom?: string;
   lastTo?: string;
   lastResult?: number;
@@ -706,7 +695,7 @@ function calcCumulativeTradeCounts(trades: EnrichedTrade[]) {
         break;
       case "cover":
         C++;
-      break;
+        break;
     }
   }
   return { B, S, P, C, total: B + S + P + C };
@@ -811,24 +800,55 @@ function calcMetricsInternal(
 
   // 基于原始交易记录（保留重复项）计算统计
   const evalDateNY = nowNY();
-  const todayStr = getLatestTradingDayStr(evalDateNY);
-  const evalEnd = endOfDayNY(toNY(`${todayStr}T12:00:00Z`));
-  const safeTrades = trades.filter((t) => {
-    const base =
-      typeof t.date === "string" && t.date
-        ? t.date
-        : typeof t.time === "string" && t.time.length >= 10
-          ? t.time
-          : t.time ?? t.date;
-    if (!base) return false;
-    const d =
-      typeof base === "string" && base.length === 10
-        ? toNY(`${base}T12:00:00Z`)
-        : toNY(base);
-    return !isNaN(d.getTime()) && d.getTime() <= evalEnd.getTime();
-  });
 
-  const todayTrades = safeTrades.filter((t) => isTodayNY(t.date, todayStr));
+  const initialTodayStr = getLatestTradingDayStr(evalDateNY);
+  const evalEnd = endOfDayNY(toNY(`${initialTodayStr}T12:00:00Z`));
+
+  const safeTrades: EnrichedTrade[] = [];
+  const tradeEntries: Array<{ trade: EnrichedTrade; date: Date; day: string }> = [];
+
+  for (const trade of trades) {
+    const parsed = resolveTradeDate(trade);
+    if (!parsed) continue;
+    if (parsed.getTime() > evalEnd.getTime()) continue;
+
+    const day = parsed.toISOString().slice(0, 10);
+
+    const normalizedDateValue = normalizeDateLikeValue(trade.date);
+    const normalizedTimeValue = normalizeDateLikeValue(
+      trade.time as string | number | Date | undefined,
+    );
+    const canonicalDate = normalizedDateValue ?? normalizedTimeValue ?? parsed.toISOString();
+    const canonicalTime = normalizedTimeValue ?? normalizedDateValue ?? parsed.toISOString();
+
+    const normalizedTrade: EnrichedTrade = {
+      ...trade,
+      date: canonicalDate,
+      time: canonicalTime,
+    };
+
+    safeTrades.push(normalizedTrade);
+    tradeEntries.push({ trade: normalizedTrade, date: parsed, day });
+  }
+
+  let todayStr = initialTodayStr;
+  const hasTradeOnInitialDay = tradeEntries.some((entry) => entry.day === todayStr);
+  if (!hasTradeOnInitialDay) {
+    let latestTradeDay: string | null = null;
+    for (const entry of tradeEntries) {
+      if (!latestTradeDay || entry.day > latestTradeDay) {
+        latestTradeDay = entry.day;
+      }
+    }
+    if (latestTradeDay && latestTradeDay < todayStr) {
+      todayStr = latestTradeDay;
+    }
+  }
+
+  const todayTrades = tradeEntries
+    .filter((entry) => entry.day === todayStr)
+    .map((entry) => entry.trade);
+
   const counts = _count(todayTrades);
 
   if (DEBUG)
@@ -857,19 +877,17 @@ function calcMetricsInternal(
   const floatPnl = positions.reduce((acc, pos) => {
     const qty = Math.abs(pos.qty);
     if (pos.qty >= 0) {
-      // 多头: (市价 - 均价) * 数量
       return acc + (pos.last - pos.avgPrice) * qty;
     } else {
-      // 空头: (均价 - 市价) * 数量
       return acc + (pos.avgPrice - pos.last) * qty;
     }
   }, 0);
 
-  // M5: 日内交易（先计算，后续 M4 需要用到 pnlFifo）
+  // M5
   const pnlTrade = calcTodayTradePnL(sortedTrades, todayStr);
   const pnlFifo = calcTodayFifoPnL(sortedTrades, todayStr);
 
-  // M4: 今天持仓平仓盈利（仅历史仓位，不含日内交易）
+  // M4
   const todayHistoricalRealizedPnl = calcHistoryFifoPnL(
     sortedTrades,
     todayStr,
@@ -971,24 +989,24 @@ function calcMetricsInternal(
       M3: floatPnl,
     });
 
-  // M7: 今日交易次数
+  // M7
   const todayTradeCountsByType = counts;
   const todayTradeCounts = counts.total;
 
-  // M8: 累计交易次数（含历史持仓）
+  // M8
   const allTradesByType = calcCumulativeTradeCounts(safeTrades);
   const totalTrades = allTradesByType.total;
 
   const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
 
-  // M9: 所有历史平仓盈利（含今日）
+  // M9
   const historicalRealizedPnl = calcM9(historicalDailyResults);
 
-  // M10: 胜率
+  // M10
   const closes = collectCloseLots(sortedTrades, todayStr);
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
-  // M11-13: 周期性指标
+  // M11-13
   const { wtd, mtd, ytd } = calcWtdMtdYtd(historicalDailyResults, todayStr);
 
   const metrics: Metrics = {
@@ -1061,11 +1079,6 @@ export function calcMetrics(
   }
 }
 
-/**
- * 格式化数字为货币格式
- * @param value 要格式化的数值
- * @returns 格式化后的字符串，包含美元符号 ($)
- */
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -1075,12 +1088,6 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
-/**
- * 格式化数字为通用格式
- * @param value 要格式化的数值
- * @param decimals 小数位数，默认为2
- * @returns 格式化后的字符串
- */
 export function formatNumber(value: number, decimals: number = 2): string {
   if (isNaN(value)) return "N/A";
   return value.toFixed(decimals);
@@ -1134,7 +1141,7 @@ export function normalizeMetrics(input: any): MetricsContract {
   const M10 = normalizeWinLoss(input?.M10 ?? {});
   const rawPriceChange = input?.aux?.m6PriceChange ?? input?.M6?.priceChange;
   const priceChange =
-    typeof rawPriceChange === 'number' && Number.isFinite(rawPriceChange)
+    typeof rawPriceChange === "number" && Number.isFinite(rawPriceChange)
       ? rawPriceChange
       : undefined;
   const prevRealized = input?.aux?.m6PrevRealizedTotal;
@@ -1142,29 +1149,35 @@ export function normalizeMetrics(input: any): MetricsContract {
   const m6Legs = Array.isArray(input?.aux?.m6Legs)
     ? input.aux.m6Legs.filter(
         (leg: any) =>
-          leg && typeof leg.symbol === 'string' && Number.isFinite(leg.qty),
+          leg && typeof leg.symbol === "string" && Number.isFinite(leg.qty),
       )
     : undefined;
   const m6Excluded = Array.isArray(input?.aux?.m6Excluded)
     ? input.aux.m6Excluded.filter(
         (row: any) =>
           row &&
-          typeof row.symbol === 'string' &&
-          (row.reason === 'MISSING_PREV_CLOSE' || row.reason === 'MISSING_MARK'),
+          typeof row.symbol === "string" &&
+          (row.reason === "MISSING_PREV_CLOSE" || row.reason === "MISSING_MARK"),
       )
     : undefined;
-  const missingPrevCloseSymbols = Array.isArray(input?.aux?.missingPrevCloseSymbols)
-    ? input.aux.missingPrevCloseSymbols.filter((s: unknown): s is string => typeof s === 'string')
+  const missingPrevCloseSymbols = Array.isArray(
+    input?.aux?.missingPrevCloseSymbols,
+  )
+    ? input.aux.missingPrevCloseSymbols.filter(
+        (s: unknown): s is string => typeof s === "string",
+      )
     : [];
   const aux = {
     breakdown: input?.aux?.breakdown ?? [],
     m6PriceChange: priceChange,
     m6PrevRealizedTotal:
-      typeof prevRealized === 'number' && Number.isFinite(prevRealized)
+      typeof prevRealized === "number" && Number.isFinite(prevRealized)
         ? prevRealized
         : undefined,
     m6FifoToday:
-      typeof fifoToday === 'number' && Number.isFinite(fifoToday) ? fifoToday : undefined,
+      typeof fifoToday === "number" && Number.isFinite(fifoToday)
+        ? fifoToday
+        : undefined,
     m6Legs,
     m6Excluded,
     missingPrevCloseSymbols,
@@ -1188,7 +1201,7 @@ export function normalizeMetrics(input: any): MetricsContract {
 }
 
 // 兼容监控的扁平投影（监控/脚本可能用到）
-export function projectToM6(input:any){
+export function projectToM6(input: any) {
   const m = normalizeMetrics(input);
   return { M3: m.M3, M4: m.M4.total, M5_2: m.M5.fifo, M6: m.M6.total };
 }
