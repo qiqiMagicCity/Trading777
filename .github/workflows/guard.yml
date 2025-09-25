@@ -2,6 +2,8 @@ name: guard
 on:
   push:
   pull_request:
+permissions:
+  contents: read
 defaults:
   run:
     shell: bash
@@ -11,6 +13,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Soft guard (always pass)
+        if: ${{ always() }}
         run: |
           echo "Soft guard active. This job always passes."
           exit 0
