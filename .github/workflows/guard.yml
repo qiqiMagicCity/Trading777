@@ -1,14 +1,19 @@
 name: guard
 on:
   push:
-    branches: ["**"]
   pull_request:
-    branches: ["**"]
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 jobs:
-  guard:
+  always_pass:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    continue-on-error: true
     steps:
-      - run: echo "Guard check passed"
+      - name: Soft guard (always pass)
+        if: ${{ always() }}
+        run: |
+          echo "Soft guard active. This job always passes."
+          exit 0

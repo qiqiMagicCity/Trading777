@@ -435,6 +435,12 @@ function runAllCore(
   const priceChange_r = round2(priceChangeRaw);
   const prevRealized_r = M4_r;
   const M6_override = prevRealized_r + priceChange_r + M5_2_r;
+  const m6Details = {
+    overnightPnL: round2(metrics._m6?.overnightPnL ?? priceChange_r),
+    warnings: Array.isArray(metrics._m6?.warnings)
+      ? [...metrics._m6.warnings]
+      : [],
+  };
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
@@ -446,6 +452,7 @@ function runAllCore(
     M5_1: M5_1_r,
     M5_2: M5_2_r,
     M6: round2(M6_override),
+    _m6: m6Details,
     M7: metrics.M7,
     M8: metrics.M8,
     M9,
