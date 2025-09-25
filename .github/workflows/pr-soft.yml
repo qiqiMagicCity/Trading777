@@ -1,0 +1,11 @@
+name: PR Soft Check (disabled)
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  noop:
+    if: ${{ false }} # 默认禁用，避免产生任何状态
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Enable by flipping if:false -> always()."
