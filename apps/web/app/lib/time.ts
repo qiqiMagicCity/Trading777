@@ -1,9 +1,18 @@
-import { fromZonedTime as zonedTimeToUtc, toZonedTime as utcToZonedTime, formatInTimeZone } from 'date-fns-tz';
+import {
+  fromZonedTime as zonedTimeToUtc,
+  toZonedTime as utcToZonedTime,
+  formatInTimeZone,
+} from 'date-fns-tz';
 import { startOfWeek, startOfMonth, startOfYear } from 'date-fns';
 
 export const NY_TZ = 'America/New_York';
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 将任意时间映射为纽约时区的 YYYY-MM-DD 字符串 */
+export function toETYYYYMMDD(d: Date | string | number): string {
+  return formatInTimeZone(d, NY_TZ, 'yyyy-MM-dd');
+}
 
 export function toNY(d: Date | string | number): Date {
   const dt = typeof d === 'string' || typeof d === 'number' ? new Date(d) : d;
@@ -18,14 +27,14 @@ export function isSameNYDay(a: Date | string | number, b: Date | string | number
 }
 
 export function nyDateStr(d: Date | string | number): string {
-  return formatInTimeZone(d, NY_TZ, 'yyyy-MM-dd');
+  return toETYYYYMMDD(d);
 }
 
 export function nyDateStrSafe(d: Date | string | number): string {
   if (typeof d === 'string' && DATE_ONLY_RE.test(d)) {
-    return formatInTimeZone(`${d}T12:00:00Z`, NY_TZ, 'yyyy-MM-dd');
+    return toETYYYYMMDD(`${d}T12:00:00Z`);
   }
-  return nyDateStr(d);
+  return toETYYYYMMDD(d);
 }
 
 export function startOfDayNY(d: Date | string | number): Date {
