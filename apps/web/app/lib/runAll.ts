@@ -2,7 +2,8 @@ import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
 import { computePeriods } from "./metrics-periods";
-import { nyDateStr, nyDateStrSafe } from "./time";
+import { nyDateStrSafe } from "./time";
+import { resolveTradingDateStr } from "./tradingDay";
 import {
   assertM6Equality,
   assertNoOverClose,
@@ -287,8 +288,9 @@ function runAllCore(
 ) {
   // ---- 评估日统一 ----
   const envFreeze = process?.env?.NEXT_PUBLIC_FREEZE_DATE || process?.env?.FREEZE_DATE || "";
-  const evalDate: Date | string = (opts as any)?.evalDate ?? (envFreeze || _date) ?? new Date();
-  const evalISO = nyDateStr(evalDate);
+  const evalDateInput: Date | string =
+    (opts as any)?.evalDate ?? (envFreeze || _date) ?? new Date();
+  const evalISO = resolveTradingDateStr(evalDateInput);
 
   // ---- trades 规范化并通过交易回放构建基线 ----
   const trades: Trade[] = rawTrades.map((t) => ({
@@ -352,7 +354,9 @@ function runAllCore(
 
   let metrics;
   try {
-    metrics = calcMetrics(enriched, positions, input.dailyResults || []);
+    metrics = calcMetrics(enriched, positions, input.dailyResults || [], {
+      tradingDateStr: evalISO,
+    });
   } finally {
     if (prevFreeze === undefined) {
       delete process.env.NEXT_PUBLIC_FREEZE_DATE;
@@ -362,7 +366,7 @@ function runAllCore(
   }
 
   // ---- 周/月/年周期指标与 M9（历史已实现累计）----
-  const periods = computePeriods(input.dailyResults || [], evalDate);
+  const periods = computePeriods(input.dailyResults || [], evalISO);
   const M9 = periods.M9;
   const M11 = periods.M11;
   const M12 = periods.M12;

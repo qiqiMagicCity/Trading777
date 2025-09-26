@@ -38,3 +38,20 @@ export interface MetricsContract {
     missingPrevCloseSymbols?: string[];
   };
 }
+
+/**
+ * 概览接口（直接对应后端 summary 对象）。
+ * - M6 等字段沿用后端命名，不在前端重命名/复算；
+ * - tradingDateStr 表示当前交易日（09:30 ET 切换）。
+ */
+export interface SummaryMetrics {
+  M1?: number;
+  M2?: number;
+  M3?: number;
+  M4?: number;
+  M5_2?: number; // 今日未平日内（FIFO 未实现）
+  M6?: number;   // 今日总盈亏（后端已按规则计算）
+  M7?: number;
+  _m6?: { overnightPnL: number; warnings: string[] };
+  tradingDateStr?: string;
+}

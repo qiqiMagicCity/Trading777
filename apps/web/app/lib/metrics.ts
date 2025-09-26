@@ -17,8 +17,64 @@ import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
-import type { MetricsContract } from "./types/metrics";
+import type { MetricsContract, SummaryMetrics } from "./types/metrics";
 import { calcM6Detailed, type M6PositionInput } from "./m6";
+
+export interface CalcMetricsOptions {
+  tradingDateStr?: string;
+}
+
+export async function fetchSummaryMetrics(init?: {
+  signal?: AbortSignal;
+}): Promise<SummaryMetrics> {
+  if (typeof fetch !== "function") {
+    throw new Error("Global fetch is not available in current environment");
+  }
+  const response = await fetch("/api/metrics", {
+    cache: "no-store",
+    signal: init?.signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch /api/metrics: ${response.status}`);
+  }
+  const json = await response.json();
+  const summary = (json?.summary ?? json ?? {}) as Record<string, any>;
+  const fallbackM5_2 =
+    typeof summary?.M5_2 === "number"
+      ? summary.M5_2
+      : typeof summary?.M5?.fifo === "number"
+        ? summary.M5.fifo
+        : undefined;
+  const result: SummaryMetrics = {
+    M1: typeof summary?.M1 === "number" ? summary.M1 : undefined,
+    M2: typeof summary?.M2 === "number" ? summary.M2 : undefined,
+    M3: typeof summary?.M3 === "number" ? summary.M3 : undefined,
+    M4: typeof summary?.M4 === "number" ? summary.M4 : summary?.M4?.total,
+    M5_2: fallbackM5_2,
+    M6: typeof summary?.M6 === "number"
+      ? summary.M6
+      : typeof summary?.M6?.total === "number"
+        ? summary.M6.total
+        : undefined,
+    M7: typeof summary?.M7 === "number" ? summary.M7 : summary?.M7?.total,
+    _m6:
+      summary?._m6 && typeof summary._m6 === "object"
+        ? {
+            overnightPnL: Number(summary._m6.overnightPnL) || 0,
+            warnings: Array.isArray(summary._m6.warnings)
+              ? summary._m6.warnings.filter(
+                  (msg: unknown): msg is string => typeof msg === "string",
+                )
+              : [],
+          }
+        : undefined,
+    tradingDateStr:
+      typeof summary?.tradingDateStr === "string"
+        ? summary.tradingDateStr
+        : undefined,
+  };
+  return result;
+}
 
 export function isDebug() {
   return (
@@ -800,6 +856,7 @@ function calcMetricsInternal(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
+  options: CalcMetricsOptions = {},
 ): Metrics {
   if (DEBUG)
     logger.debug("M7_INPUT", _count(trades), {
@@ -807,9 +864,20 @@ function calcMetricsInternal(
     });
 
   // 基于原始交易记录（保留重复项）计算统计
-  const evalDateNY = nowNY();
+  const rawTradingDate =
+    typeof options.tradingDateStr === "string"
+      ? options.tradingDateStr.trim()
+      : undefined;
+  const providedTradingDate =
+    rawTradingDate && /^\d{4}-\d{2}-\d{2}$/.test(rawTradingDate)
+      ? rawTradingDate
+      : undefined;
+  const evalDateNY = providedTradingDate
+    ? toNY(`${providedTradingDate}T12:00:00Z`)
+    : nowNY();
 
-  const initialTodayStr = getLatestTradingDayStr(evalDateNY);
+  const initialTodayStr =
+    providedTradingDate ?? getLatestTradingDayStr(evalDateNY);
   const evalEnd = endOfDayNY(toNY(`${initialTodayStr}T12:00:00Z`));
 
   const safeTrades: EnrichedTrade[] = [];
@@ -1145,9 +1213,10 @@ export function calcMetrics(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
+  options: CalcMetricsOptions = {},
 ): Metrics {
   try {
-    return calcMetricsInternal(trades, positions, dailyResults);
+    return calcMetricsInternal(trades, positions, dailyResults, options);
   } catch (err) {
     const e = err instanceof Error ? err : new Error(String(err));
     logger.error("calcMetrics failed", e);
