@@ -374,7 +374,8 @@ function _calcM6Strict(params: {
   for (const [symbol, lots] of Object.entries(todayLots)) {
     const pos = posMap.get(symbol);
     const currentQty = Number(pos?.qty ?? 0); // 净数量（可为负）
-    if (!Number.isFinite(currentQty) || Math.abs(currentQty) < 1e-9) continue;
+    // 允许 currentQty===0（纯日内腿）亦计算“当日未平”浮盈
+    if (!Number.isFinite(currentQty)) continue;
 
     // 2.1 实时价与昨收
     let mark = Number(pos?.last);
@@ -421,7 +422,7 @@ function _calcM6Strict(params: {
     }
   }
 
-  // 3) 还需考虑那些“今天没有任何交易但有持仓”的标的（全部算作过夜）
+  // 3) “今天无交易但有持仓”的标的（全部算作过夜）
   for (const p of positions) {
     const symbol = p.symbol;
     if (!symbol || todayLots[symbol]) continue; // 已处理
@@ -449,7 +450,173 @@ function _calcM6Strict(params: {
   }
 
   const M6 = M4 + M5_2 + overnightPnL;
-  return { M6, overnightPnL, warnings };
+  // warnings 去重：避免当日未平与过夜分支重复
+  return { M6, overnightPnL, warnings: Array.from(new Set(warnings)) };
+}
+
+// === [DEBUG] M6 明细诊断：对外导出 getM6DebugBreakdown ===
+export function getM6DebugBreakdown(params: {
+  positions: Position[];
+  todayTrades: EnrichedTrade[];
+  M4: number;
+  M5_2: number;
+}): {
+  totals: { M4: number; M5_2: number; overnightPnL: number; M6: number };
+  perSymbol: Array<{
+    symbol: string;
+    overnightSigned: number;
+    prevClose: number | null;
+    mark: number | null;
+    overnightPnL: number;
+    today: {
+      longQty: number;
+      longCost: number;
+      shortQty: number;
+      shortCost: number;
+      intradayUnrealizedPnL: number;
+    };
+  }>;
+  warnings: string[];
+} {
+  const todayLots = _buildTodayLots(params.todayTrades ?? []);
+
+  const lastTradePriceToday = new Map<string, number>();
+  for (const trade of params.todayTrades ?? []) {
+    if (!trade?.symbol) continue;
+    const px = Number(trade.price);
+    if (!Number.isFinite(px)) continue;
+    lastTradePriceToday.set(trade.symbol, px);
+  }
+
+  const lastPriceFallback = (symbol: string): number | null => {
+    const px = lastTradePriceToday.get(symbol);
+    if (typeof px === "number" && Number.isFinite(px)) return px;
+    return null;
+  };
+
+  const strict = _calcM6Strict({
+    positions: params.positions ?? [],
+    todayTrades: params.todayTrades ?? [],
+    M4: params.M4,
+    M5_2: params.M5_2,
+    lastPriceFallback,
+  });
+
+  const posMap = new Map<string, Position>();
+  for (const pos of params.positions ?? []) {
+    if (pos?.symbol) posMap.set(pos.symbol, pos);
+  }
+
+  const symbols = new Set<string>([
+    ...Object.keys(todayLots),
+    ...Array.from(posMap.keys()),
+  ]);
+
+  const perSymbol: Array<{
+    symbol: string;
+    overnightSigned: number;
+    prevClose: number | null;
+    mark: number | null;
+    overnightPnL: number;
+    today: {
+      longQty: number;
+      longCost: number;
+      shortQty: number;
+      shortCost: number;
+      intradayUnrealizedPnL: number;
+    };
+  }> = [];
+  const warnings = new Set<string>(strict.warnings ?? []);
+  let breakdownSum = 0;
+
+  for (const symbol of symbols) {
+    const lots = todayLots[symbol] ?? {
+      longQty: 0,
+      longCost: 0,
+      shortQty: 0,
+      shortCost: 0,
+    };
+    const pos = posMap.get(symbol);
+    const currentQty = Number(pos?.qty ?? 0);
+
+    let mark = Number(pos?.last);
+    if (!Number.isFinite(mark)) {
+      const fallback = lastPriceFallback(symbol);
+      if (fallback !== null) mark = fallback;
+    }
+    const prevClose = Number(pos?.prevClose);
+    const hasMark = Number.isFinite(mark);
+    const hasPrev = Number.isFinite(prevClose);
+
+    const todayNewSigned = (lots.longQty ?? 0) - (lots.shortQty ?? 0);
+    const overnightSigned = currentQty - todayNewSigned;
+
+    let intradayUnrealized = 0;
+    if (hasMark) {
+      if (lots.longQty > 0) {
+        intradayUnrealized += (mark - (lots.longCost || 0)) * lots.longQty;
+      }
+      if (lots.shortQty > 0) {
+        intradayUnrealized += ((lots.shortCost || 0) - mark) * lots.shortQty;
+      }
+    } else if ((lots.longQty ?? 0) > 0 || (lots.shortQty ?? 0) > 0) {
+      warnings.add(`SafePrice: ${symbol} 缺少实时价，当日新开未平按 0 计入`);
+    }
+
+    let overnightPnL = 0;
+    if (Math.abs(overnightSigned) > 1e-9) {
+      if (hasMark && hasPrev) {
+        if (overnightSigned > 0) {
+          overnightPnL += (mark - prevClose) * overnightSigned;
+        } else {
+          overnightPnL += (prevClose - mark) * Math.abs(overnightSigned);
+        }
+      } else {
+        const miss: string[] = [];
+        if (!hasMark) miss.push("实时价");
+        if (!hasPrev) miss.push("昨收价");
+        warnings.add(`SafePrice: ${symbol} 缺少${miss.join("与")}，过夜部分按 0 计入`);
+      }
+    }
+
+    breakdownSum += intradayUnrealized + overnightPnL;
+
+    perSymbol.push({
+      symbol,
+      overnightSigned,
+      prevClose: hasPrev ? prevClose : null,
+      mark: hasMark ? mark : null,
+      overnightPnL,
+      today: {
+        longQty: lots.longQty ?? 0,
+        longCost: lots.longCost ?? 0,
+        shortQty: lots.shortQty ?? 0,
+        shortCost: lots.shortCost ?? 0,
+        intradayUnrealizedPnL: intradayUnrealized,
+      },
+    });
+  }
+
+  if (Math.abs(breakdownSum - strict.overnightPnL) > 1e-6) {
+    warnings.add(
+      `M6_DEBUG: perSymbol 明细 (${mRound2(breakdownSum)}) 与严格总计 ${mRound2(strict.overnightPnL)} 存在 ${mRound2(
+        breakdownSum - strict.overnightPnL,
+      )} 的差异`,
+    );
+  }
+
+  const totals = {
+    M4: params.M4,
+    M5_2: params.M5_2,
+    overnightPnL: strict.overnightPnL,
+    M6: strict.M6,
+  };
+
+  return {
+    totals,
+    perSymbol: perSymbol.sort((a, b) => a.symbol.localeCompare(b.symbol)),
+    warnings: Array.from(warnings),
+  };
 }
 
 function _count(list: { action?: string }[] | undefined) {
@@ -1409,8 +1576,192 @@ export function normalizeMetrics(input: any): MetricsContract {
   };
 }
 
+function getTradeDayStr(trade: any): string | null {
+  const tryValue = (value: unknown): string | null => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+      return null;
+    }
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().slice(0, 10);
+    }
+    if (typeof value === "number") {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    }
+    return null;
+  };
+
+  const candidates = [trade?.date, trade?.time];
+  for (const candidate of candidates) {
+    const day = tryValue(candidate);
+    if (day) return day;
+  }
+  const fallback = tryValue(trade);
+  return fallback;
+}
+
+export function calcM3Today(params: {
+  tradesAll: EnrichedTrade[] | any[];
+  positions: Position[] | any[];
+  todayStr?: string;
+}): { M3_today: number; missingPrevClose: string[]; missingMark: string[] } {
+  const todayStr =
+    typeof params.todayStr === "string" && params.todayStr
+      ? params.todayStr
+      : getLatestTradingDayStr(nowNY());
+
+  const tradesAll = Array.isArray(params.tradesAll)
+    ? (params.tradesAll as EnrichedTrade[])
+    : [];
+  const todayTrades = tradesAll.filter((trade) => {
+    const day = getTradeDayStr(trade);
+    return day === todayStr;
+  });
+
+  const todayLots = _buildTodayLots(todayTrades);
+
+  const lastTradePriceToday = new Map<string, number>();
+  for (const trade of todayTrades) {
+    const symbol = (trade as any)?.symbol as string | undefined;
+    const price = Number((trade as any)?.price);
+    if (symbol && Number.isFinite(price)) {
+      lastTradePriceToday.set(symbol, price);
+    }
+  }
+
+  const posMap = new Map<string, Position>();
+  for (const pos of Array.isArray(params.positions) ? params.positions : []) {
+    const symbol = (pos as any)?.symbol;
+    if (symbol) {
+      posMap.set(symbol, pos as Position);
+    }
+  }
+
+  const symbols = new Set<string>([
+    ...Object.keys(todayLots),
+    ...Array.from(posMap.keys()),
+  ]);
+
+  let total = 0;
+  const missingPrev = new Set<string>();
+  const missingMark = new Set<string>();
+
+  for (const symbol of symbols) {
+    const lots = todayLots[symbol] ?? {
+      longQty: 0,
+      longCost: 0,
+      shortQty: 0,
+      shortCost: 0,
+    };
+    const position = posMap.get(symbol);
+    const currentQty = Number(position?.qty ?? 0);
+
+    let mark = Number(position?.last);
+    if (!Number.isFinite(mark)) {
+      const fallbackMark = Number(lastTradePriceToday.get(symbol));
+      if (Number.isFinite(fallbackMark)) {
+        mark = fallbackMark;
+      }
+    }
+
+    const hasLots = (lots.longQty ?? 0) > 0 || (lots.shortQty ?? 0) > 0;
+    let intradayUnrealized = 0;
+    if (Number.isFinite(mark)) {
+      if (lots.longQty > 0) {
+        intradayUnrealized += (mark - (lots.longCost || 0)) * lots.longQty;
+      }
+      if (lots.shortQty > 0) {
+        intradayUnrealized += ((lots.shortCost || 0) - mark) * lots.shortQty;
+      }
+    } else if (hasLots) {
+      missingMark.add(symbol);
+    }
+
+    const todayNewSigned = (lots.longQty ?? 0) - (lots.shortQty ?? 0);
+    const overnightSigned = currentQty - todayNewSigned;
+    let overnightUnrealized = 0;
+    if (Math.abs(overnightSigned) > 1e-9) {
+      const prevClose = Number(position?.prevClose);
+      const hasMark = Number.isFinite(mark);
+      const hasPrev = Number.isFinite(prevClose);
+      if (hasMark && hasPrev) {
+        if (overnightSigned > 0) {
+          overnightUnrealized += (mark - prevClose) * overnightSigned;
+        } else {
+          overnightUnrealized += (prevClose - mark) * Math.abs(overnightSigned);
+        }
+      } else {
+        if (!hasMark) missingMark.add(symbol);
+        if (!hasPrev) missingPrev.add(symbol);
+      }
+    }
+
+    total += intradayUnrealized + overnightUnrealized;
+  }
+
+  return {
+    M3_today: Number.isFinite(total) ? total : 0,
+    missingPrevClose: Array.from(missingPrev),
+    missingMark: Array.from(missingMark),
+  };
+}
+
 // 兼容监控的扁平投影（监控/脚本可能用到）
 export function projectToM6(input: any) {
   const m = normalizeMetrics(input);
-  return { M3: m.M3, M4: m.M4.total, M5_2: m.M5.fifo, M6: m.M6.total };
+  const source = input as any;
+
+  const positions = Array.isArray(source?.positions)
+    ? (source.positions as Position[])
+    : Array.isArray(source?.aux?.positions)
+    ? (source.aux.positions as Position[])
+    : [];
+
+  const tradesAll = Array.isArray(source?.trades)
+    ? (source.trades as EnrichedTrade[])
+    : Array.isArray(source?.aux?.trades)
+    ? (source.aux.trades as EnrichedTrade[])
+    : [];
+
+  const providedTodayStr =
+    typeof source?.todayStr === "string" && source.todayStr
+      ? source.todayStr
+      : undefined;
+
+  const sortedTrades = Array.isArray(tradesAll)
+    ? tradesAll
+        .slice()
+        .sort((a: any, b: any) => {
+          const ta = new Date(a?.date ?? a?.time ?? 0).getTime();
+          const tb = new Date(b?.date ?? b?.time ?? 0).getTime();
+          return ta - tb;
+        })
+    : [];
+
+  const todayStr = providedTodayStr || getLatestTradingDayStr(nowNY());
+
+  const computedM4 = calcHistoryFifoPnL(sortedTrades as EnrichedTrade[], todayStr);
+  const computedM5_2 = calcTodayFifoPnL(sortedTrades as EnrichedTrade[], todayStr);
+  const { M3_today } = calcM3Today({
+    tradesAll: tradesAll as EnrichedTrade[],
+    positions: positions as Position[],
+    todayStr,
+  });
+
+  const M4 = Number.isFinite(computedM4)
+    ? computedM4
+    : Number(m.M4?.total ?? m.M4 ?? 0);
+  const M5_2 = Number.isFinite(computedM5_2)
+    ? computedM5_2
+    : Number(m.M5?.fifo ?? 0);
+  const M6 = Number.isFinite(M4 + M5_2 + M3_today)
+    ? M4 + M5_2 + M3_today
+    : Number(m.M6?.total ?? m.M6 ?? 0);
+
+  return { M3: m.M3, M3_today, M4, M5_2, M6 };
 }

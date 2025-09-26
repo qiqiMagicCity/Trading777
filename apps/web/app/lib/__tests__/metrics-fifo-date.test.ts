@@ -1,4 +1,4 @@
-import { calcTodayFifoPnL, calcHistoryFifoPnL } from "@/lib/metrics";
+import { calcTodayFifoPnL, calcHistoryFifoPnL } from "@/app/lib/metrics";
 import { sortTrades } from "@/lib/sortTrades";
 import type { EnrichedTrade } from "@/lib/fifo";
 

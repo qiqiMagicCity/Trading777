@@ -1,4 +1,4 @@
-import { calcMetrics } from "@/lib/metrics";
+import { calcMetrics } from "@/app/lib/metrics";
 import type { EnrichedTrade } from "@/lib/fifo";
 
 describe("M8 cumulative trade counts", () => {
