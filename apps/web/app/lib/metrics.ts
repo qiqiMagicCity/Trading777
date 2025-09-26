@@ -24,6 +24,7 @@ export interface CalcMetricsOptions {
   tradingDateStr?: string;
 }
 
+/** 从后端读取汇总（直读 summary.M6 与 tradingDateStr） */
 export async function fetchSummaryMetrics(init?: {
   signal?: AbortSignal;
 }): Promise<SummaryMetrics> {
@@ -43,17 +44,19 @@ export async function fetchSummaryMetrics(init?: {
     typeof summary?.M5_2 === "number"
       ? summary.M5_2
       : typeof summary?.M5?.fifo === "number"
-        ? summary.M5.fifo
-        : undefined;
+      ? summary.M5.fifo
+      : undefined;
+
   const result: SummaryMetrics = {
     M1: typeof summary?.M1 === "number" ? summary.M1 : undefined,
     M2: typeof summary?.M2 === "number" ? summary.M2 : undefined,
     M3: typeof summary?.M3 === "number" ? summary.M3 : undefined,
     M4: typeof summary?.M4 === "number" ? summary.M4 : summary?.M4?.total,
     M5_2: fallbackM5_2,
-    M6: typeof summary?.M6 === "number"
-      ? summary.M6
-      : typeof summary?.M6?.total === "number"
+    M6:
+      typeof summary?.M6 === "number"
+        ? summary.M6
+        : typeof summary?.M6?.total === "number"
         ? summary.M6.total
         : undefined,
     M7: typeof summary?.M7 === "number" ? summary.M7 : summary?.M7?.total,
@@ -244,8 +247,8 @@ function resolveTradeDate(
     normalizedDate !== undefined
       ? normalizedDate
       : normalizedTime !== undefined
-        ? normalizedTime
-        : undefined;
+      ? normalizedTime
+      : undefined;
   if (source === undefined) return null;
   const parsed =
     typeof source === "string" && source.length === 10
@@ -881,7 +884,8 @@ function calcMetricsInternal(
   const evalEnd = endOfDayNY(toNY(`${initialTodayStr}T12:00:00Z`));
 
   const safeTrades: EnrichedTrade[] = [];
-  const tradeEntries: Array<{ trade: EnrichedTrade; date: Date; day: string }> = [];
+  const tradeEntries: Array<{ trade: EnrichedTrade; date: Date; day: string }> =
+    [];
 
   for (const trade of trades) {
     const parsed = resolveTradeDate(trade);
@@ -894,8 +898,10 @@ function calcMetricsInternal(
     const normalizedTimeValue = normalizeDateLikeValue(
       trade.time as string | number | Date | undefined,
     );
-    const canonicalDate = normalizedDateValue ?? normalizedTimeValue ?? parsed.toISOString();
-    const canonicalTime = normalizedTimeValue ?? normalizedDateValue ?? parsed.toISOString();
+    const canonicalDate =
+      normalizedDateValue ?? normalizedTimeValue ?? parsed.toISOString();
+    const canonicalTime =
+      normalizedTimeValue ?? normalizedDateValue ?? parsed.toISOString();
 
     const normalizedTrade: EnrichedTrade = {
       ...trade,
@@ -908,7 +914,9 @@ function calcMetricsInternal(
   }
 
   let todayStr = initialTodayStr;
-  const hasTradeOnInitialDay = tradeEntries.some((entry) => entry.day === todayStr);
+  const hasTradeOnInitialDay = tradeEntries.some(
+    (entry) => entry.day === todayStr,
+  );
   if (!hasTradeOnInitialDay) {
     let latestTradeDay: string | null = null;
     for (const entry of tradeEntries) {
@@ -1293,7 +1301,8 @@ export function normalizeMetrics(input: any): MetricsContract {
         : 0,
     warnings: Array.isArray(input?._m6?.warnings)
       ? input._m6.warnings.filter(
-          (msg: unknown): msg is string => typeof msg === "string" && msg.length > 0,
+          (msg: unknown): msg is string =>
+            typeof msg === "string" && msg.length > 0,
         )
       : [],
   };
@@ -1321,7 +1330,8 @@ export function normalizeMetrics(input: any): MetricsContract {
         (row: any) =>
           row &&
           typeof row.symbol === "string" &&
-          (row.reason === "MISSING_PREV_CLOSE" || row.reason === "MISSING_MARK"),
+          (row.reason === "MISSING_PREV_CLOSE" ||
+            row.reason === "MISSING_MARK"),
       )
     : undefined;
   const missingPrevCloseSymbols = Array.isArray(
