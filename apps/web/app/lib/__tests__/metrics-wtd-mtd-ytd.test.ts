@@ -1,4 +1,4 @@
-import { calcWtdMtdYtd } from "@/lib/metrics";
+import { calcWtdMtdYtd } from "@/app/lib/metrics";
 import type { DailyResult } from "@/lib/types";
 
 describe("calcWtdMtdYtd", () => {
