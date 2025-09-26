@@ -1,5 +1,5 @@
 import { performance } from "perf_hooks";
-import { sumPeriod } from "@/lib/metrics";
+import { sumPeriod } from "@/app/lib/metrics";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 

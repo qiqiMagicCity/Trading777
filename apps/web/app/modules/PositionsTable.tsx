@@ -7,7 +7,7 @@ import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
-import { formatCurrency } from '@/lib/metrics';
+import { formatCurrency } from '@/app/lib/metrics';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
 
