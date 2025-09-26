@@ -449,7 +449,7 @@ function _calcM6Strict(params: {
   }
 
   const M6 = M4 + M5_2 + overnightPnL;
-  return { M6, overnightPnL, warnings };
+  return { M6, overnightPnL, warnings: Array.from(new Set(warnings)) };
 }
 
 // === [DEBUG] M6 明细诊断：对外导出 getM6DebugBreakdown ===
