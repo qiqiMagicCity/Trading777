@@ -374,6 +374,7 @@ function _calcM6Strict(params: {
   for (const [symbol, lots] of Object.entries(todayLots)) {
     const pos = posMap.get(symbol);
     const currentQty = Number(pos?.qty ?? 0); // 净数量（可为负）
+    // 允许 currentQty===0（纯日内腿）亦计算“当日未平”浮盈
     if (!Number.isFinite(currentQty)) continue;
 
     // 2.1 实时价与昨收
@@ -421,7 +422,7 @@ function _calcM6Strict(params: {
     }
   }
 
-  // 3) 还需考虑那些“今天没有任何交易但有持仓”的标的（全部算作过夜）
+  // 3) “今天无交易但有持仓”的标的（全部算作过夜）
   for (const p of positions) {
     const symbol = p.symbol;
     if (!symbol || todayLots[symbol]) continue; // 已处理
@@ -449,6 +450,7 @@ function _calcM6Strict(params: {
   }
 
   const M6 = M4 + M5_2 + overnightPnL;
+  // warnings 去重：避免当日未平与过夜分支重复
   return { M6, overnightPnL, warnings: Array.from(new Set(warnings)) };
 }
 
