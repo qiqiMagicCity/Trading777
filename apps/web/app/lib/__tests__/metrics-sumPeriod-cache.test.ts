@@ -1,4 +1,4 @@
-import { sumPeriod } from "@/lib/metrics";
+import { sumPeriod } from "@/app/lib/metrics";
 import type { DailyResult } from "@/lib/types";
 
 describe("sumPeriod cache rebuild", () => {
