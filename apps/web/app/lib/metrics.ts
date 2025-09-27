@@ -165,6 +165,7 @@ export interface Metrics {
       priceNow: number;
       fx: number;
       mtm: number;
+      component?: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT";
     }>;
     m6Excluded?: Array<{
       symbol: string;

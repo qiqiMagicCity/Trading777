@@ -403,7 +403,21 @@ async function getPrevCloseWithin(
  * 顺序：缓存 -> close_prices.json -> 默认值(1)
  * close_prices.json 结构：{ [SYMBOL]: { [YYYY-MM-DD]: price } }
  */
-export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult | null> {
+interface FetchDailyCloseOptions {
+  /**
+   * 当实时接口不可用但仍处于“收盘至下一次开盘”窗口时，可以传入一个备用收盘价（例如前台实时价），
+   * 让函数在确认窗口有效后依旧将该价格视为官方收盘价并落盘，避免周末/节假日缺口。
+   */
+  fallbackClose?: number | null;
+  /** 自定义数据来源标签，默认为 close_fallback */
+  fallbackSource?: CachedPrice['source'];
+}
+
+export async function fetchDailyClose(
+  symbol: string,
+  date: string,
+  options: FetchDailyCloseOptions = {},
+): Promise<QuoteResult | null> {
   const key = symbol.trim().toUpperCase();
   const normalizedDate = date.includes('T') ? nyDateStr(date) : date;
 
@@ -494,6 +508,14 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
           }
         } catch (_) {
           // 获取不到就继续走日线/文件回退逻辑
+        }
+
+        const fallbackClose = options?.fallbackClose;
+        if (typeof fallbackClose === 'number' && Number.isFinite(fallbackClose) && fallbackClose > 0) {
+          return await recordOfficialClose(
+            fallbackClose,
+            options.fallbackSource ?? 'close_fallback',
+          );
         }
       }
 

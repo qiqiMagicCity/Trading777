@@ -70,13 +70,32 @@ function collectSymbols(trades: Trade[], positions: Position[]): string[] {
   return Array.from(symbols).sort();
 }
 
-async function ensureDailyCloses(symbols: string[], targetDate: string) {
+type CloseFallbackMap = Record<string, number>;
+
+function buildCloseFallbacks(positions: Position[]): CloseFallbackMap {
+  const fallbackMap: CloseFallbackMap = {};
+  for (const pos of positions) {
+    const symbol = pos.symbol?.trim().toUpperCase();
+    if (!symbol) continue;
+    const price = Number(pos.last);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    if (pos.priceOk === false) continue;
+    if (fallbackMap[symbol] !== undefined) continue;
+    fallbackMap[symbol] = price;
+  }
+  return fallbackMap;
+}
+
+async function ensureDailyCloses(symbols: string[], targetDate: string, fallbackCloses?: CloseFallbackMap) {
   if (!symbols.length || !targetDate) return;
   const unique = Array.from(new Set(symbols.map(sym => sym.trim().toUpperCase()).filter(Boolean)));
   if (!unique.length) return;
   await Promise.all(
     unique.map(symbol =>
-      fetchDailyClose(symbol, targetDate).catch(err => {
+      fetchDailyClose(symbol, targetDate, {
+        fallbackClose: fallbackCloses?.[symbol],
+        fallbackSource: 'close_fallback',
+      }).catch(err => {
         console.warn('[dashboard] ensureDailyCloses failed', { symbol, date: targetDate, error: err });
         return null;
       }),
@@ -181,7 +200,8 @@ export default function DashboardPage() {
 
         if (!freezeDate) {
           const symbols = collectSymbols(dbTrades, posList);
-          await ensureDailyCloses(symbols, evalDateStr);
+          const fallbackCloses = buildCloseFallbacks(posList);
+          await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
         }
 
         const [fileClosePrices, cachedPrices] = await Promise.all([
@@ -307,7 +327,8 @@ export default function DashboardPage() {
 
       if (!freezeDate) {
         const symbols = collectSymbols(dbTrades, posList);
-        await ensureDailyCloses(symbols, evalDateStr);
+        const fallbackCloses = buildCloseFallbacks(posList);
+        await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
       }
 
       const [fileClosePrices, cachedPrices] = await Promise.all([
