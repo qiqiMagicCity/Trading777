@@ -3,25 +3,78 @@ import { promises as fs } from 'fs';
 import path from 'path';
 
 const FILE_PATH = path.join(process.cwd(), 'apps/web/public/close_prices.json');
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+type ClosePriceMap = Record<string, Record<string, number>>;
+
+function normaliseSymbol(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.trim().toUpperCase();
+}
+
+function normaliseDate(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  return DATE_PATTERN.test(trimmed) ? trimmed : '';
+}
+
+function normalisePrice(raw: unknown): number | null {
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function toSymbolFirstMap(raw: unknown): ClosePriceMap {
+  const result: ClosePriceMap = {};
+  if (!raw || typeof raw !== 'object') return result;
+
+  const maybeAdd = (symbol: string, date: string, price: number | null) => {
+    if (!symbol || !date || price === null) return;
+    (result[symbol] ??= {})[date] = price;
+  };
+
+  for (const [outerKey, innerValue] of Object.entries(raw as Record<string, unknown>)) {
+    if (!innerValue || typeof innerValue !== 'object') continue;
+
+    if (DATE_PATTERN.test(outerKey)) {
+      const date = outerKey;
+      for (const [symKey, priceRaw] of Object.entries(innerValue as Record<string, unknown>)) {
+        const symbol = normaliseSymbol(symKey);
+        maybeAdd(symbol, date, normalisePrice(priceRaw));
+      }
+    } else {
+      const symbol = normaliseSymbol(outerKey);
+      const nested = innerValue as Record<string, unknown>;
+      for (const [dateKey, priceRaw] of Object.entries(nested)) {
+        if (!DATE_PATTERN.test(dateKey)) continue;
+        maybeAdd(symbol, dateKey, normalisePrice(priceRaw));
+      }
+    }
+  }
+
+  return result;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const { symbol, date, close } = await req.json();
-    if (!symbol || !date || typeof close !== 'number') {
+    const payload = await req.json();
+    const symbol = normaliseSymbol((payload as any)?.symbol);
+    const date = normaliseDate((payload as any)?.date);
+    const close = normalisePrice((payload as any)?.close);
+
+    if (!symbol || !date || close === null) {
       return new Response(JSON.stringify({ error: 'symbol,date,close required' }), { status: 400 });
     }
-    let data: Record<string, Record<string, number>> = {};
+
+    let data: ClosePriceMap = {};
     try {
       const txt = await fs.readFile(FILE_PATH, 'utf8');
-      data = JSON.parse(txt || '{}') as Record<string, Record<string, number>>;
+      data = toSymbolFirstMap(JSON.parse(txt || '{}'));
+    } catch (_err) {
+      data = {};
     }
-    // 文件可能不存在或 JSON 无法解析，此处忽略以便初始化为空对象
-    // eslint-disable-next-line no-empty
-    catch (_err) {
-      // intentionally empty
-    }
-    if (!data[date]) data[date] = {};
-    data[date][symbol] = close;
+
+    (data[symbol] ??= {})[date] = close;
+
     await fs.writeFile(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
     return new Response(JSON.stringify({ ok: true }));
   } catch (err) {
