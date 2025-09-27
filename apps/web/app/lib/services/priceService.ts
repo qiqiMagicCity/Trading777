@@ -377,23 +377,6 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
-    // 如果是“今天”且已过纽约收盘，则用实时报价当作今日收盘价（绕过 /api/candle 403）
-    const todayNY = nyDateStr(Date.now());
-    if (normalizedDate === todayNY && isAfterNyClose()) {
-      try {
-        const rt =
-          (await fetchFinnhubRealtimeQuote(key)) ??
-          (await fetchTiingoRealtimeQuote(key));
-        if (typeof rt === 'number' && rt > 0) {
-          await putPrice({ symbol: key, date: normalizedDate, close: rt, source: 'close_rt' });
-          saveToFile(key, normalizedDate, rt);
-          return { price: rt, stale: false, priceOk: true, updatedAt: Date.now() };
-        }
-      } catch (_) {
-        // 获取不到就继续走文件/回溯逻辑
-      }
-    }
-
     let closeMap: Record<string, Record<string, number>> | undefined;
     try {
       closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
@@ -406,6 +389,77 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
       saveToFile(key, normalizedDate, filePrice);
       return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
+    }
+
+    const tryDailyApis = async (): Promise<{ price: number; source: CachedPrice['source'] } | null> => {
+      try {
+        const fh = await fetchFinnhubDailyClose(key, normalizedDate);
+        if (typeof fh === 'number') return { price: fh, source: 'finnhub' };
+      } catch (err) {
+        console.warn('[priceService] Finnhub 日线接口失败', err);
+      }
+      try {
+        const ti = await fetchTiingoDailyClose(key, normalizedDate);
+        if (typeof ti === 'number') return { price: ti, source: 'tiingo' };
+      } catch (err) {
+        console.warn('[priceService] Tiingo 日线接口失败', err);
+      }
+      return null;
+    };
+
+    const recordOfficialClose = async (
+      price: number,
+      source: CachedPrice['source'] = 'import'
+    ) => {
+      await putPrice({ symbol: key, date: normalizedDate, close: price, source });
+      saveToFile(key, normalizedDate, price);
+      return { price, stale: false, priceOk: true, updatedAt: Date.now() } as QuoteResult;
+    };
+
+    const todayNY = nyDateStr(Date.now());
+    const isToday = normalizedDate === todayNY;
+
+    if (isToday) {
+      const nowNY = toNY(Date.now());
+      const windowMinutes = Number(process.env.RT_CLOSE_WINDOW_MIN ?? '10');
+      const allowRealtime = (() => {
+        if (!Number.isFinite(windowMinutes) || windowMinutes <= 0) return false;
+        if (!isAfterNyClose()) return false;
+        const cutoff = new Date(
+          nowNY.getFullYear(),
+          nowNY.getMonth(),
+          nowNY.getDate(),
+          16,
+          0,
+          0,
+          0
+        );
+        const diffMin = Math.abs(nowNY.getTime() - cutoff.getTime()) / 60_000;
+        return diffMin <= windowMinutes;
+      })();
+
+      if (allowRealtime) {
+        try {
+          const rt =
+            (await fetchFinnhubRealtimeQuote(key)) ??
+            (await fetchTiingoRealtimeQuote(key));
+          if (typeof rt === 'number' && rt > 0) {
+            return await recordOfficialClose(rt, 'close_rt');
+          }
+        } catch (_) {
+          // 获取不到就继续走日线/文件回退逻辑
+        }
+      }
+
+      const dailyPrice = await tryDailyApis();
+      if (dailyPrice && dailyPrice.price > 0) {
+        return await recordOfficialClose(dailyPrice.price, dailyPrice.source);
+      }
+    } else {
+      const historicalDaily = await tryDailyApis();
+      if (historicalDaily && historicalDaily.price > 0) {
+        return await recordOfficialClose(historicalDaily.price, historicalDaily.source);
+      }
     }
 
     if (process.env.MONITOR === '1') {
