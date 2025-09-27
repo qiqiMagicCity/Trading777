@@ -6,7 +6,9 @@ import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
-import { nyDateStr, toNY } from '../time';
+import { nyDateStr, toNY, NY_TZ } from '../time';
+import { getTradingDateStr } from '../tradingDay';
+import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -271,21 +273,56 @@ export interface QuoteResult {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_LOOKBACK_DAYS = 365;
+const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-/** 纽约收盘后判定（DST 安全）。默认 0 分钟缓冲，可用 CLOSE_GRACE_MIN 调整。 */
-function isAfterNyClose(ts: number = Date.now()): boolean {
-  const graceMin = Number(process.env.CLOSE_GRACE_MIN ?? '0');
-  const nowNY = toNY(ts);
-  const cutoffLocal = new Date(
-    nowNY.getFullYear(),
-    nowNY.getMonth(),
-    nowNY.getDate(),
-    16, // 美股收盘永远是纽约时间 16:00（DST 自动处理）
-    graceMin,
-    0,
-    0
-  );
-  return nowNY.getTime() >= cutoffLocal.getTime();
+function parseYmd(date: string): { y: number; m: number; d: number } | null {
+  const match = DATE_ONLY_RE.exec(date);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return { y: year, m: month, d: day };
+}
+
+function toNyDateTime(date: string, hour: number, minute: number): Date {
+  if (!parseYmd(date)) return new Date(NaN);
+  const iso = `${date} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+  const utc = zonedTimeToUtc(iso, NY_TZ);
+  return toNY(utc);
+}
+
+function nextTradingOpen(date: string): Date {
+  if (!parseYmd(date)) return new Date(NaN);
+  const base = toNyDateTime(date, 9, 30);
+  if (Number.isNaN(base.getTime())) return base;
+  const next = new Date(base.getTime());
+  next.setDate(next.getDate() + 1);
+  while (next.getDay() === 0 || next.getDay() === 6) {
+    next.setDate(next.getDate() + 1);
+  }
+  next.setHours(9, 30, 0, 0);
+  return next;
+}
+
+function shouldUseRealtimeClose(
+  targetDate: string,
+  nowNY: Date,
+  windowMinutes: number
+): boolean {
+  if (windowMinutes <= 0) return false;
+  const closeMoment = toNyDateTime(targetDate, 16, 0);
+  if (Number.isNaN(closeMoment.getTime())) return false;
+  const graceRaw = Number(process.env.CLOSE_GRACE_MIN ?? '0');
+  const graceMs = Number.isFinite(graceRaw) && graceRaw > 0 ? graceRaw * 60_000 : 0;
+  if (nowNY.getTime() < closeMoment.getTime() + graceMs) return false;
+  const diffMin = (nowNY.getTime() - closeMoment.getTime()) / 60_000;
+  if (diffMin <= windowMinutes) return true;
+  const nextOpen = nextTradingOpen(targetDate);
+  if (Number.isNaN(nextOpen.getTime())) return false;
+  return nowNY.getTime() < nextOpen.getTime();
 }
 
 async function getPrevCloseWithin(
@@ -417,25 +454,21 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     };
 
     const todayNY = nyDateStr(Date.now());
+    const latestTradingDate = getTradingDateStr(Date.now());
     const isToday = normalizedDate === todayNY;
+    const isLatestTradingDay = normalizedDate === latestTradingDate;
 
-    if (isToday) {
+    if (isToday || isLatestTradingDay) {
       const nowNY = toNY(Date.now());
-      const windowMinutes = Number(process.env.RT_CLOSE_WINDOW_MIN ?? '10');
+      const windowMinutes = (() => {
+        const raw = Number(process.env.RT_CLOSE_WINDOW_MIN ?? `${DEFAULT_RT_CLOSE_WINDOW_MIN}`);
+        if (!Number.isFinite(raw)) return DEFAULT_RT_CLOSE_WINDOW_MIN;
+        if (raw <= 0) return 0;
+        return raw;
+      })();
       const allowRealtime = (() => {
-        if (!Number.isFinite(windowMinutes) || windowMinutes <= 0) return false;
-        if (!isAfterNyClose()) return false;
-        const cutoff = new Date(
-          nowNY.getFullYear(),
-          nowNY.getMonth(),
-          nowNY.getDate(),
-          16,
-          0,
-          0,
-          0
-        );
-        const diffMin = Math.abs(nowNY.getTime() - cutoff.getTime()) / 60_000;
-        return diffMin <= windowMinutes;
+        if (!isLatestTradingDay && !isToday) return false;
+        return shouldUseRealtimeClose(normalizedDate, nowNY, windowMinutes);
       })();
 
       if (allowRealtime) {

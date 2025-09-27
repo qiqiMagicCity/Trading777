@@ -57,6 +57,30 @@ function attachPrevClose(
   }
 }
 
+function collectSymbols(trades: Trade[], positions: Position[]): string[] {
+  const symbols = new Set<string>();
+  for (const trade of trades) {
+    const sym = trade.symbol?.trim().toUpperCase();
+    if (sym) symbols.add(sym);
+  }
+  for (const pos of positions) {
+    const sym = pos.symbol?.trim().toUpperCase();
+    if (sym) symbols.add(sym);
+  }
+  return Array.from(symbols).sort();
+}
+
+function findMissingCloseSymbols(
+  symbols: string[],
+  closePrices: Record<string, Record<string, number>>,
+  targetDate: string,
+): string[] {
+  return symbols.filter(symbol => {
+    const price = closePrices?.[symbol]?.[targetDate];
+    return !(typeof price === 'number' && Number.isFinite(price));
+  });
+}
+
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 export default function DashboardPage() {
@@ -151,6 +175,20 @@ export default function DashboardPage() {
         );
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
+
+        const missingCloseSymbols = findMissingCloseSymbols(
+          collectSymbols(dbTrades, posList),
+          mergedClosePrices,
+          evalDateStr,
+        );
+        if (missingCloseSymbols.length > 0) {
+          setTrades(dbTrades);
+          setPositions(posList);
+          setEnrichedTrades(enriched);
+          setError(`缺少 ${evalDateStr} 的收盘价：${missingCloseSymbols.join('、')}。请编辑 close_prices.json 后重试。`);
+          setIsLoading(false);
+          return;
+        }
 
         const dailyResults = generateDailyResults({
           trades: enriched,
@@ -252,12 +290,25 @@ export default function DashboardPage() {
         loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
         getAllPrices(),
       ]);
-      const mergedClosePrices = mergeClosePriceMaps(
-        normalizeClosePriceMap(fileClosePrices),
-        closePricesFromRows(cachedPrices),
-      );
+        const mergedClosePrices = mergeClosePriceMaps(
+          normalizeClosePriceMap(fileClosePrices),
+          closePricesFromRows(cachedPrices),
+        );
 
-      attachPrevClose(posList, mergedClosePrices, evalDateStr);
+        attachPrevClose(posList, mergedClosePrices, evalDateStr);
+
+        const missingCloseSymbols = findMissingCloseSymbols(
+          collectSymbols(dbTrades, posList),
+          mergedClosePrices,
+          evalDateStr,
+        );
+        if (missingCloseSymbols.length > 0) {
+          setTrades(dbTrades);
+          setPositions(posList);
+          setEnrichedTrades(enriched);
+          setError(`缺少 ${evalDateStr} 的收盘价：${missingCloseSymbols.join('、')}。请编辑 close_prices.json 后重试。`);
+          return;
+        }
 
       const dailyResults = generateDailyResults({
         trades: enriched,

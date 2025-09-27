@@ -24,6 +24,7 @@ describe('priceService safe fallbacks', () => {
   const originalPriceStrict = process.env.PRICE_STRICT;
   const originalFinnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
   const originalTiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
+  const originalRtCloseWindow = process.env.RT_CLOSE_WINDOW_MIN;
 
   beforeAll(() => {
     jest.useFakeTimers();
@@ -43,6 +44,7 @@ describe('priceService safe fallbacks', () => {
     delete process.env.PRICE_STRICT;
     delete process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
     delete process.env.NEXT_PUBLIC_TIINGO_TOKEN;
+    delete process.env.RT_CLOSE_WINDOW_MIN;
     __clearPriceServiceCachesForTest();
   });
 
@@ -66,6 +68,11 @@ describe('priceService safe fallbacks', () => {
       delete process.env.NEXT_PUBLIC_TIINGO_TOKEN;
     } else {
       process.env.NEXT_PUBLIC_TIINGO_TOKEN = originalTiingoToken;
+    }
+    if (originalRtCloseWindow === undefined) {
+      delete process.env.RT_CLOSE_WINDOW_MIN;
+    } else {
+      process.env.RT_CLOSE_WINDOW_MIN = originalRtCloseWindow;
     }
     if (originalFetch === undefined) {
       delete (global as any).fetch;
@@ -121,6 +128,64 @@ describe('priceService safe fallbacks', () => {
     // only the first call should hit realtime quote endpoint
     const quoteCalls = fetchCalls.filter(call => call.url.includes('/api/quote'));
     expect(quoteCalls).toHaveLength(1);
+
+    dateNowSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('treats realtime quotes as official closes within the extended post-market window', async () => {
+    __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({});
+    putPriceMock.mockImplementation(async payload => payload as any);
+
+    (global as any).fetch = jest.fn(async (input: any) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/quote')) {
+        return { ok: true, json: async () => ({ c: 321 }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+
+    const dateNowSpy = jest.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValue(new Date('2024-05-20T20:45:00Z').getTime());
+
+    const result = await fetchDailyClose('AAPL', '2024-05-20');
+    expect(result).toMatchObject({ price: 321, stale: false, priceOk: true });
+    expect(putPriceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'AAPL', date: '2024-05-20', close: 321, source: 'close_rt' }),
+    );
+
+    dateNowSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('continues to accept realtime closes on the next calendar day before the market reopens', async () => {
+    __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({});
+    putPriceMock.mockImplementation(async payload => payload as any);
+
+    (global as any).fetch = jest.fn(async (input: any) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/quote')) {
+        return { ok: true, json: async () => ({ c: 400 }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+
+    const dateNowSpy = jest.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValue(new Date('2024-05-25T13:29:00-04:00').getTime());
+
+    const result = await fetchDailyClose('AAPL', '2024-05-24');
+    expect(result).toMatchObject({ price: 400, stale: false, priceOk: true });
+    expect(putPriceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'AAPL', date: '2024-05-24', close: 400, source: 'close_rt' }),
+    );
 
     dateNowSpy.mockRestore();
     warnSpy.mockRestore();
