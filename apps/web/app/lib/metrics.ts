@@ -327,7 +327,10 @@ function _buildTodayLots(todayTrades: EnrichedTrade[]): Record<string, TodayLots
         remain -= use;
         if (lot.qty === 0) bag.long.shift();
       }
-      // 多余的卖出意味着在卖掉过夜仓，与当日 lots 无关
+      // 若还有剩余则代表当日卖出量超过了当日多头，形成新的当日空头
+      if (remain > EPSILON) {
+        bag.short.push({ qty: remain, price: px });
+      }
     } else if (t.action === "cover") {
       // 消耗今天的空头开仓
       let remain = qty;
@@ -337,6 +340,10 @@ function _buildTodayLots(todayTrades: EnrichedTrade[]): Record<string, TodayLots
         lot.qty -= use;
         remain -= use;
         if (lot.qty === 0) bag.short.shift();
+      }
+      // 剩余部分表示回补超过当日空头，形成新的当日多头
+      if (remain > EPSILON) {
+        bag.long.push({ qty: remain, price: px });
       }
     }
   }
