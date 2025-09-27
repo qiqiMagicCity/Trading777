@@ -66,4 +66,26 @@ describe("calcM6Detailed pure scenarios", () => {
     expect(result.total).toBeCloseTo(540, 6);
     expect(result.legs).toHaveLength(2);
   });
+
+  it("flip from long to short uses same-day cost basis", () => {
+    const result = calcM6Detailed({
+      positions: [
+        {
+          symbol: "FLIP",
+          qty: -5,
+          priceNow: 108,
+          prevClose: 100,
+          todayShortQty: 5,
+          todayShortAvg: 110,
+        },
+      ],
+      M4: 0,
+      M5_FIFO: 0,
+    });
+
+    expect(result.mtm).toBeCloseTo((110 - 108) * 5, 6);
+    expect(result.legs).toHaveLength(1);
+    expect(result.legs[0]?.component).toBe("TODAY_SHORT");
+    expect(result.legs[0]?.prevClose).toBe(110);
+  });
 });
