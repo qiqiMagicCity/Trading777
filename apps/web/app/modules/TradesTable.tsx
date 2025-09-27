@@ -2,7 +2,7 @@
 
 import type { EnrichedTrade } from "@/lib/fifo";
 import { useEffect, useState } from "react";
-import Image from "next/image";
+import SymbolLogo from "@/components/SymbolLogo";
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 const pad = (value: number | string): string => value.toString().padStart(2, '0');
@@ -222,9 +222,9 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
               <td>{getTimeDisplay(trade)}</td>
               <td>{weekday}</td>
               <td>
-                <Image
+                <SymbolLogo
                   className="logo"
-                  src={`/logos/${trade.symbol}.png`}
+                  symbol={trade.symbol}
                   alt={trade.symbol}
                   width={36}
                   height={36}
