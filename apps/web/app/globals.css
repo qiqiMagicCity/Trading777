@@ -393,7 +393,11 @@ body {
 
 /* 股票标签样式 */
 .symbol-tag {
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
   background: #002b29;
   border: 1px solid #05c788;
   border-radius: 4px;
@@ -402,7 +406,7 @@ body {
   font-size: 14px;
   flex: 0 0 calc(10% - 8px);
   text-align: center;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 .symbol-tag.negative {
   border-color: #ff5c5c;
@@ -415,6 +419,20 @@ body {
 .symbol-tag.negative:hover {
   background: #ff5c5c;
   color: #002b29;
+}
+
+.symbol-tag__logo {
+  border-radius: 50%;
+  background: rgba(4, 79, 76, 0.6);
+  padding: 2px;
+}
+
+.symbol-tag.negative .symbol-tag__logo {
+  background: rgba(111, 31, 31, 0.6);
+}
+
+.symbol-tag__text {
+  line-height: 1;
 }
 
 /* Trades page action buttons */

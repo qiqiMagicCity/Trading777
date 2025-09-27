@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 
+import SymbolLogo from '../components/SymbolLogo';
+
 interface SymbolTagsProps {
   symbols: string[];
   realizedPnls?: Record<string, number>;
@@ -20,7 +22,14 @@ export function SymbolTags({ symbols, realizedPnls }: SymbolTagsProps) {
           href={`/stock?symbol=${symbol}`}
           className={`symbol-tag${(realizedPnls?.[symbol] ?? 0) < 0 ? ' negative' : ''}`}
         >
-          {symbol}
+          <SymbolLogo
+            symbol={symbol}
+            width={18}
+            height={18}
+            className="symbol-tag__logo"
+            alt={`${symbol} logo`}
+          />
+          <span className="symbol-tag__text">{symbol}</span>
         </Link>
       ))}
     </div>
