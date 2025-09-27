@@ -4,7 +4,7 @@ import { useQueries } from "@tanstack/react-query";
 import type { Position } from "@/lib/services/dataService";
 import { fetchRealtimeQuote } from "@/lib/services/priceService";
 import { useEffect, useState, useMemo } from "react";
-import Image from "next/image";
+import SymbolLogo from "@/components/SymbolLogo";
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/metrics';
@@ -188,9 +188,9 @@ export function PositionsTable({ positions, trades }: Props) {
             return (
               <tr key={pos.symbol}>
                 <td>
-                  <Image
+                  <SymbolLogo
                     className="logo"
-                    src={`/logos/${pos.symbol}.png`}
+                    symbol={pos.symbol}
                     alt={pos.symbol}
                     width={36}
                     height={36}
