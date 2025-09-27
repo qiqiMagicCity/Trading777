@@ -266,6 +266,15 @@ export default function DashboardPage() {
     return Array.from(set);
   }, [trades]);
 
+  const symbolRealizedPnls = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const trade of enrichedTrades) {
+      if (!Number.isFinite(trade.realizedPnl)) continue;
+      totals[trade.symbol] = (totals[trade.symbol] ?? 0) + trade.realizedPnl;
+    }
+    return totals;
+  }, [enrichedTrades]);
+
   async function reloadData() {
     try {
       const dbTrades = await findTrades();
@@ -394,7 +403,7 @@ export default function DashboardPage() {
       <PositionsTable positions={positions} trades={enrichedTrades} />
 
       <h3 className="section-title">个股情况 <Link href="/" className="details" style={{ visibility: 'hidden' }}>详情</Link></h3>
-      <SymbolTags symbols={symbolsInTrades} />
+      <SymbolTags symbols={symbolsInTrades} realizedPnls={symbolRealizedPnls} />
 
       <h3 className="section-title">交易记录 <Link href="/trades" className="details">查看全部</Link></h3>
       <TradesTable trades={enrichedTrades} />

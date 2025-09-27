@@ -404,8 +404,16 @@ body {
   text-align: center;
   transition: background 0.2s;
 }
+.symbol-tag.negative {
+  border-color: #ff5c5c;
+  color: #ff5c5c;
+}
 .symbol-tag:hover {
   background: #05c788;
+  color: #002b29;
+}
+.symbol-tag.negative:hover {
+  background: #ff5c5c;
   color: #002b29;
 }
 
