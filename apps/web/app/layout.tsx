@@ -6,7 +6,7 @@ import { Header } from "@/components/layout/Header";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "Trading777 v7.80",
+  title: "Trading777 琦大爷💹💹💹",
   description: "Trading777 Dashboard",
 };
 
