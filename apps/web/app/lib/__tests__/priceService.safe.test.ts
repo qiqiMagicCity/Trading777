@@ -191,6 +191,50 @@ describe('priceService safe fallbacks', () => {
     warnSpy.mockRestore();
   });
 
+  it('records official close from cached realtime quotes when quote APIs are unavailable', async () => {
+    __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({});
+    putPriceMock.mockImplementation(async payload => payload as any);
+
+    const fetchMock = jest.fn();
+    (global as any).fetch = fetchMock;
+
+    const dateNowSpy = jest.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValueOnce(new Date('2025-09-26T20:05:00Z').getTime());
+
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ c: 512 }) });
+
+    const realtime = await fetchRealtimeQuote('AAPL');
+    expect(realtime).toMatchObject({ price: 512, stale: false, priceOk: true });
+
+    dateNowSpy.mockReturnValue(new Date('2025-09-27T13:30:00Z').getTime());
+
+    fetchMock.mockImplementation(async (input: any) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/close-price')) {
+        return { ok: true, json: async () => ({ ok: true }), text: async () => '' };
+      }
+      return { ok: false, statusText: 'down', json: async () => ({}) };
+    });
+
+    const close = await fetchDailyClose('AAPL', '2025-09-26');
+    expect(close).toMatchObject({ price: 512, stale: false, priceOk: true });
+    expect(putPriceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'AAPL', date: '2025-09-26', close: 512, source: 'close_rt' }),
+    );
+
+    const quoteCalls = fetchMock.mock.calls.filter(([input]) =>
+      typeof input === 'string' ? input.includes('/api/quote') : String(input).includes('/api/quote'),
+    );
+    expect(quoteCalls).toHaveLength(1);
+
+    dateNowSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   it('falls back to last close with stale flag and no price 1', async () => {
     getPriceMock.mockResolvedValue({ symbol: 'AAPL', date: '2024-04-10', close: 123, source: 'import' });
     const result = await fetchRealtimeQuote('AAPL');

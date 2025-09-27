@@ -70,6 +70,20 @@ function collectSymbols(trades: Trade[], positions: Position[]): string[] {
   return Array.from(symbols).sort();
 }
 
+async function ensureDailyCloses(symbols: string[], targetDate: string) {
+  if (!symbols.length || !targetDate) return;
+  const unique = Array.from(new Set(symbols.map(sym => sym.trim().toUpperCase()).filter(Boolean)));
+  if (!unique.length) return;
+  await Promise.all(
+    unique.map(symbol =>
+      fetchDailyClose(symbol, targetDate).catch(err => {
+        console.warn('[dashboard] ensureDailyCloses failed', { symbol, date: targetDate, error: err });
+        return null;
+      }),
+    ),
+  );
+}
+
 function findMissingCloseSymbols(
   symbols: string[],
   closePrices: Record<string, Record<string, number>>,
@@ -164,6 +178,11 @@ export default function DashboardPage() {
         }
 
         const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+        if (!freezeDate) {
+          const symbols = collectSymbols(dbTrades, posList);
+          await ensureDailyCloses(symbols, evalDateStr);
+        }
 
         const [fileClosePrices, cachedPrices] = await Promise.all([
           loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
@@ -285,6 +304,11 @@ export default function DashboardPage() {
       }
 
       const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+      if (!freezeDate) {
+        const symbols = collectSymbols(dbTrades, posList);
+        await ensureDailyCloses(symbols, evalDateStr);
+      }
 
       const [fileClosePrices, cachedPrices] = await Promise.all([
         loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,

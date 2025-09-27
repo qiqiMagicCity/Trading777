@@ -472,6 +472,19 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       })();
 
       if (allowRealtime) {
+        const cachedRealtime = readRealtimeCache(key);
+        if (cachedRealtime && typeof cachedRealtime.price === 'number' && cachedRealtime.price > 0) {
+          const closeMoment = toNyDateTime(normalizedDate, 16, 0);
+          const cachedMoment = toNY(cachedRealtime.ts);
+          if (
+            Number.isFinite(closeMoment.getTime()) &&
+            Number.isFinite(cachedMoment.getTime()) &&
+            cachedMoment.getTime() >= closeMoment.getTime()
+          ) {
+            return await recordOfficialClose(cachedRealtime.price, 'close_rt');
+          }
+        }
+
         try {
           const rt =
             (await fetchFinnhubRealtimeQuote(key)) ??
