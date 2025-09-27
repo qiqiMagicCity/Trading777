@@ -271,6 +271,7 @@ export interface QuoteResult {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_LOOKBACK_DAYS = 365;
+const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
 
 /** 纽约收盘后判定（DST 安全）。默认 0 分钟缓冲，可用 CLOSE_GRACE_MIN 调整。 */
 function isAfterNyClose(ts: number = Date.now()): boolean {
@@ -421,9 +422,14 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
 
     if (isToday) {
       const nowNY = toNY(Date.now());
-      const windowMinutes = Number(process.env.RT_CLOSE_WINDOW_MIN ?? '10');
+      const windowMinutes = (() => {
+        const raw = Number(process.env.RT_CLOSE_WINDOW_MIN ?? `${DEFAULT_RT_CLOSE_WINDOW_MIN}`);
+        if (!Number.isFinite(raw)) return DEFAULT_RT_CLOSE_WINDOW_MIN;
+        if (raw <= 0) return 0;
+        return raw;
+      })();
       const allowRealtime = (() => {
-        if (!Number.isFinite(windowMinutes) || windowMinutes <= 0) return false;
+        if (windowMinutes <= 0) return false;
         if (!isAfterNyClose()) return false;
         const cutoff = new Date(
           nowNY.getFullYear(),
@@ -434,7 +440,9 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
           0,
           0
         );
-        const diffMin = Math.abs(nowNY.getTime() - cutoff.getTime()) / 60_000;
+        const diffMs = nowNY.getTime() - cutoff.getTime();
+        if (diffMs < 0) return false;
+        const diffMin = diffMs / 60_000;
         return diffMin <= windowMinutes;
       })();
 
