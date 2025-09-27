@@ -1,8 +1,14 @@
 import type { Daily } from './metrics-periods';
+import { startOfDayNY } from './time';
 
 /** 仅保留参与求和的核心字段，做稳定 stringify，再哈希 */
 function stableKeyForDaily(daily: Daily[]): string {
-  const norm = (daily || []).map(d => [d.date, +(d.realized||0), +(d.unrealized||0)]);
+  const norm = (daily || []).map(d => [
+    d.date,
+    +(d.realized || 0),
+    +(d.unrealized || 0),
+    d.unrealizedDelta === undefined ? null : +(d.unrealizedDelta || 0),
+  ]);
   const json = JSON.stringify(norm);
   // 简单 djb2 哈希，足够做 cache key
   let h = 5381;
@@ -10,7 +16,12 @@ function stableKeyForDaily(daily: Daily[]): string {
   return (h >>> 0).toString(36) + `~${norm.length}`;
 }
 
-type Inner = Map<string, number>; // key: "start|end" -> sum
+type Inner = {
+  sums: Map<string, number>; // key: "start|end" -> sum
+  dates: number[];
+  prefix: number[];
+};
+
 const CACHE = new Map<string, Inner>(); // key: datasetKey
 
 /** 清理过大的缓存，避免内存无限增长（极简 LRU：超 32 个数据集时清空最早的 8 个） */
@@ -20,24 +31,91 @@ function gc() {
   toDelete.forEach(k => CACHE.delete(k));
 }
 
-/** 带缓存的周期求和（包含 realized+unrealized） */
+function buildInner(daily: Daily[]): Inner {
+  const sorted = (daily || [])
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  const dates: number[] = [];
+  const prefix: number[] = [];
+  let prevUnrealized = 0;
+  let acc = 0;
+
+  for (const d of sorted) {
+    if (!d?.date) continue;
+    const dt = new Date(d.date);
+    if (!Number.isFinite(dt.valueOf())) continue;
+    const dayTS = startOfDayNY(dt).getTime();
+    if (!Number.isFinite(dayTS)) continue;
+
+    const unrealized = d?.unrealized ?? 0;
+    const delta =
+      typeof d?.unrealizedDelta === 'number'
+        ? d.unrealizedDelta
+        : unrealized - prevUnrealized;
+
+    acc += (d?.realized ?? 0) + delta;
+    dates.push(dayTS);
+    prefix.push(acc);
+    prevUnrealized = unrealized;
+  }
+
+  return { sums: new Map(), dates, prefix };
+}
+
+function lowerBound(arr: number[], target: number) {
+  let l = 0,
+    r = arr.length;
+  while (l < r) {
+    const m = (l + r) >> 1;
+    const mid = arr[m]!;
+    if (mid < target) l = m + 1;
+    else r = m;
+  }
+  return l;
+}
+
+function upperBound(arr: number[], target: number) {
+  let l = 0,
+    r = arr.length;
+  while (l < r) {
+    const m = (l + r) >> 1;
+    const mid = arr[m]!;
+    if (mid <= target) l = m + 1;
+    else r = m;
+  }
+  return l - 1;
+}
+
+/** 带缓存的周期求和（包含 realized + unrealized 变化量） */
 export function sumPeriodCached(daily: Daily[], startISO: string, endISO: string): number {
   const dsKey = stableKeyForDaily(daily);
   let inner = CACHE.get(dsKey);
-  if (!inner) { inner = new Map(); CACHE.set(dsKey, inner); gc(); }
+  if (!inner) {
+    inner = buildInner(daily);
+    CACHE.set(dsKey, inner);
+    gc();
+  }
 
   const key = `${startISO}|${endISO}`;
-  if (inner.has(key)) return inner.get(key)!;
+  if (inner.sums.has(key)) return inner.sums.get(key)!;
 
-  const start = new Date(startISO);
-  const end   = new Date(endISO);
-  let s = 0;
-  for (const d of daily || []) {
-    const dt = new Date(d.date);
-    if (dt >= start && dt <= end) {
-      s += (d?.realized ?? 0) + (d?.unrealized ?? 0);
-    }
+  const start = startOfDayNY(startISO).getTime();
+  const end = startOfDayNY(endISO).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+    inner.sums.set(key, 0);
+    return 0;
   }
-  inner.set(key, s);
-  return s;
+
+  const startIdx = lowerBound(inner.dates, start);
+  const endIdx = upperBound(inner.dates, end);
+
+  let total = 0;
+  if (endIdx >= startIdx && endIdx >= 0 && endIdx < inner.prefix.length) {
+    const prev = startIdx === 0 ? 0 : inner.prefix[startIdx - 1]!;
+    total = inner.prefix[endIdx]! - prev;
+  }
+
+  inner.sums.set(key, total);
+  return total;
 }

@@ -34,9 +34,17 @@ describe("runAll multi-day metrics", () => {
     const totalRealized = dailyResults.reduce((s, d) => s + d.realized, 0);
     expect(res.M9).toBe(totalRealized);
 
-    const periodExpected = dailyResults
-      .filter((d) => d.date >= "2024-01-01")
-      .reduce((s, d) => s + d.realized + d.unrealized, 0);
+    let prevUnrealized = 0;
+    const periodExpected = dailyResults.reduce((s, d) => {
+      const unrealized = d.unrealized ?? 0;
+      const delta =
+        d.unrealizedDelta !== undefined
+          ? d.unrealizedDelta
+          : unrealized - prevUnrealized;
+      prevUnrealized = unrealized;
+      if (d.date < "2024-01-01") return s;
+      return s + (d.realized ?? 0) + delta;
+    }, 0);
     expect(res.M11).toBe(periodExpected);
     expect(res.M12).toBe(periodExpected);
     expect(res.M13).toBe(periodExpected);
