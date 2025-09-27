@@ -410,7 +410,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
   try {
     const cachedPrice = await getPrice(key, normalizedDate);
     if (cachedPrice && typeof cachedPrice.close === 'number') {
-      saveToFile(key, normalizedDate, cachedPrice.close);
+      await saveToFile(key, normalizedDate, cachedPrice.close);
       return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
@@ -424,7 +424,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
-      saveToFile(key, normalizedDate, filePrice);
+      await saveToFile(key, normalizedDate, filePrice);
       return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
@@ -449,7 +449,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       source: CachedPrice['source'] = 'import'
     ) => {
       await putPrice({ symbol: key, date: normalizedDate, close: price, source });
-      saveToFile(key, normalizedDate, price);
+      await saveToFile(key, normalizedDate, price);
       return { price, stale: false, priceOk: true, updatedAt: Date.now() } as QuoteResult;
     };
 

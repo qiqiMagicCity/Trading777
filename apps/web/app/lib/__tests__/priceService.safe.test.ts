@@ -235,6 +235,40 @@ describe('priceService safe fallbacks', () => {
     warnSpy.mockRestore();
   });
 
+  it('awaits file persistence before resolving realtime closes', async () => {
+    __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({});
+    putPriceMock.mockImplementation(async payload => payload as any);
+
+    let persisted = false;
+
+    (global as any).fetch = jest.fn(async (input: any) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/quote')) {
+        return { ok: true, json: async () => ({ c: 333 }) };
+      }
+      if (url.includes('/api/close-price')) {
+        await Promise.resolve();
+        persisted = true;
+        return { ok: true, json: async () => ({ ok: true }), text: async () => '' };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+
+    const dateNowSpy = jest.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValue(new Date('2025-09-27T13:25:00-04:00').getTime());
+
+    const result = await fetchDailyClose('AAPL', '2025-09-26');
+    expect(result).toMatchObject({ price: 333, stale: false, priceOk: true });
+    expect(persisted).toBe(true);
+
+    dateNowSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   it('falls back to last close with stale flag and no price 1', async () => {
     getPriceMock.mockResolvedValue({ symbol: 'AAPL', date: '2024-04-10', close: 123, source: 'import' });
     const result = await fetchRealtimeQuote('AAPL');
