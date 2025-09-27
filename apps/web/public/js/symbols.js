@@ -674,6 +674,7 @@ window.SymbolCN = {
   "VEA": "Vanguard发达市场ETF",
   "VWO": "Vanguard新兴市场ETF",
   "TSLL": "两倍做多特斯拉",
+  "TSLQ": "两倍做空特斯拉",
   "TSDD": "两倍做空特斯拉",
   "DJT": "川普媒体科技集团",
   "DDM": "两倍做多道指",
