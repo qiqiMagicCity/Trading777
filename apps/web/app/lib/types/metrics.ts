@@ -29,6 +29,7 @@ export interface MetricsContract {
       priceNow: number;
       fx: number;
       mtm: number;
+      component?: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT";
     }>;
     /** 因行情缺失等原因未计入 MTM 的标的 */
     m6Excluded?: Array<{

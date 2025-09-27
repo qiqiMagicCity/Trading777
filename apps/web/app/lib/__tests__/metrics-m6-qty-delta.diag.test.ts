@@ -34,8 +34,8 @@ describe("M6 qty delta diagnostic", () => {
       { symbol: "AAA", qty: 15, avgPrice: 100, last: 102, prevClose: 100 } as any,
     ];
 
-    const daily = [];
-    const m = calcMetrics(trades as any, positions as any, daily as any);
+    const daily: any[] = [];
+    const m = calcMetrics(trades as any, positions as any, daily);
 
     console.log("DIAG_M6", {
       M4: m.M4,
