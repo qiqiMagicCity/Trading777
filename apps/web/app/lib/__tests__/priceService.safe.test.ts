@@ -11,10 +11,11 @@ jest.mock('@/app/lib/dataSource', () => ({
 
 import { fetchRealtimeQuote, fetchDailyClose, __clearPriceServiceCachesForTest, __setRuntimeApiKeysForTest } from '../services/priceService';
 import { NoPriceError } from '../priceService';
-import { getPrice } from '../services/dataService';
+import { getPrice, putPrice } from '../services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
 
 const getPriceMock = getPrice as unknown as jest.MockedFunction<typeof getPrice>;
+const putPriceMock = putPrice as unknown as jest.MockedFunction<typeof putPrice>;
 const loadJsonMock = loadJson as unknown as jest.MockedFunction<typeof loadJson>;
 const originalFetch = (global as any).fetch;
 
@@ -24,10 +25,19 @@ describe('priceService safe fallbacks', () => {
   const originalFinnhubToken = process.env.NEXT_PUBLIC_FINNHUB_TOKEN;
   const originalTiingoToken = process.env.NEXT_PUBLIC_TIINGO_TOKEN;
 
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
+
   beforeEach(() => {
     getPriceMock.mockReset();
+    putPriceMock.mockReset();
     loadJsonMock.mockReset();
-    const fetchMock = jest.fn(async () => ({ ok: false, json: async () => ({}) }));
+    const fetchMock = jest.fn(async () => ({
+      ok: false,
+      json: async () => ({}),
+      text: async () => '',
+    }));
     (global as any).fetch = fetchMock;
     delete process.env.MONITOR;
     delete process.env.PRICE_STRICT;
@@ -63,6 +73,57 @@ describe('priceService safe fallbacks', () => {
       (global as any).fetch = originalFetch;
     }
     jest.clearAllMocks();
+  });
+
+  it('does not overwrite recorded close when called multiple times after market', async () => {
+    __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    let storedPrice: number | undefined;
+    getPriceMock.mockImplementation(async (_symbol, lookupDate) => {
+      if (lookupDate === '2024-05-20' && storedPrice !== undefined) {
+        return { symbol: 'AAPL', date: '2024-05-20', close: storedPrice, source: 'close_rt' } as any;
+      }
+      return undefined;
+    });
+    putPriceMock.mockImplementation(async payload => {
+      if (payload.date === '2024-05-20') {
+        storedPrice = payload.close;
+      }
+      return payload as any;
+    });
+    loadJsonMock.mockResolvedValue({});
+
+    const fetchCalls: Array<{ url: string; opts?: RequestInit }> = [];
+    (global as any).fetch = jest.fn(async (input: any, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      fetchCalls.push({ url, opts: init });
+      if (url.includes('/api/quote')) {
+        return { ok: true, json: async () => ({ c: 256 }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+
+    const dateNowSpy = jest.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValue(new Date('2024-05-20T20:01:00Z').getTime());
+
+    const first = await fetchDailyClose('AAPL', '2024-05-20');
+    expect(first).toMatchObject({ price: 256, stale: false, priceOk: true });
+    expect(storedPrice).toBe(256);
+    expect(putPriceMock).toHaveBeenCalledTimes(1);
+
+    dateNowSpy.mockReturnValue(new Date('2024-05-20T22:30:00Z').getTime());
+
+    const second = await fetchDailyClose('AAPL', '2024-05-20');
+    expect(second).toMatchObject({ price: 256, stale: false, priceOk: true });
+    expect(putPriceMock).toHaveBeenCalledTimes(1);
+
+    // only the first call should hit realtime quote endpoint
+    const quoteCalls = fetchCalls.filter(call => call.url.includes('/api/quote'));
+    expect(quoteCalls).toHaveLength(1);
+
+    dateNowSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it('falls back to last close with stale flag and no price 1', async () => {
@@ -181,5 +242,9 @@ describe('priceService safe fallbacks', () => {
     loadJsonMock.mockResolvedValue({});
 
     await expect(fetchRealtimeQuote('AAPL')).rejects.toThrow(NoPriceError);
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
   });
 });
