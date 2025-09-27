@@ -3,8 +3,8 @@ const config = {
   rootDir: ".",
   testEnvironment: "node",
   transform: {
-    "^.+\\.(ts|tsx)$": ["ts-jest", { useESM: true, tsconfig: "<rootDir>/tsconfig.json" }],
-    "^.+\\.(js|jsx)$": ["ts-jest", { useESM: true, tsconfig: "<rootDir>/tsconfig.json" }]
+    "^.+\\.(ts|tsx)$": ["ts-jest", { useESM: true, tsconfig: "<rootDir>/tsconfig.jest.json" }],
+    "^.+\\.(js|jsx)$": ["ts-jest", { useESM: true, tsconfig: "<rootDir>/tsconfig.jest.json" }]
   },
   extensionsToTreatAsEsm: [".ts", ".tsx"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
