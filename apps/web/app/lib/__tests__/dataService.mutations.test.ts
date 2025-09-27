@@ -46,6 +46,13 @@ const builtinSeed = {
   ],
 } as const;
 
+function cloneSeed(): Parameters<typeof clearAndImportData>[0] {
+  return {
+    positions: [],
+    trades: builtinSeed.trades.map((t) => ({ ...t })),
+  };
+}
+
 describe("trade mutations promote dataset to custom", () => {
   beforeEach(async () => {
     await indexedDB.deleteDatabase("TradingApp");
@@ -61,7 +68,7 @@ describe("trade mutations promote dataset to custom", () => {
     const store: Record<string, string> = {};
     mockLocalStorage(store);
 
-    await clearAndImportData({ ...builtinSeed });
+    await clearAndImportData(cloneSeed());
 
     expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(
       DATASET_SOURCE_BUILTIN,
@@ -90,8 +97,11 @@ describe("trade mutations promote dataset to custom", () => {
     const store: Record<string, string> = {};
     mockLocalStorage(store);
 
-    await clearAndImportData({ ...builtinSeed });
+    await clearAndImportData(cloneSeed());
     const [existing] = await findTrades();
+    if (!existing) {
+      throw new Error("seed trade missing after import");
+    }
 
     await updateTrade({
       ...existing,
@@ -108,8 +118,11 @@ describe("trade mutations promote dataset to custom", () => {
     const store: Record<string, string> = {};
     mockLocalStorage(store);
 
-    await clearAndImportData({ ...builtinSeed });
+    await clearAndImportData(cloneSeed());
     const [existing] = await findTrades();
+    if (!existing) {
+      throw new Error("seed trade missing after import");
+    }
 
     await deleteTrade(existing.id!);
 

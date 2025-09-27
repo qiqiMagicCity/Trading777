@@ -22,6 +22,7 @@ describe("calcM6Detailed", () => {
     expect(result.mtm).toBe(100);
     expect(result.total).toBe(5 + 2 + 100);
     expect(result.legs).toHaveLength(1);
+    expect(result.legs[0]?.component).toBe("OVERNIGHT_LONG");
     expect(result.warnings).toHaveLength(0);
   });
 
@@ -67,7 +68,9 @@ describe("calcM6Detailed", () => {
   });
 
   it("falls back to open price when prevClose is missing", () => {
-    const fallbackOpen = jest.fn().mockReturnValue(50);
+    const fallbackOpen = jest
+      .fn<(symbol: string) => number | null>()
+      .mockReturnValue(50);
     const result = calcM6Detailed({
       positions: [
         { symbol: "FFF", qty: 2, priceNow: 55, prevClose: null },
@@ -100,6 +103,46 @@ describe("calcM6Detailed", () => {
     expect(result.warnings).toEqual([
       { symbol: "GGG", reason: "MISSING_MARK" },
     ]);
+  });
+
+  it("handles today-open legs with missing cost gracefully", () => {
+    const result = calcM6Detailed({
+      positions: [
+        {
+          symbol: "H", qty: 5, priceNow: 12, prevClose: 10, todayLongQty: 5,
+        },
+      ],
+      M4: 0,
+      M5_FIFO: 0,
+    });
+
+    expect(result.mtm).toBe(0);
+    expect(result.warnings).toContainEqual({
+      symbol: "H",
+      reason: "MISSING_TODAY_LONG_COST",
+    });
+  });
+
+  it("computes today short legs using provided average", () => {
+    const result = calcM6Detailed({
+      positions: [
+        {
+          symbol: "I",
+          qty: -15,
+          priceNow: 18,
+          prevClose: 17,
+          todayShortQty: 5,
+          todayShortAvg: 19,
+          overnightQty: -10,
+        },
+      ],
+      M4: 0,
+      M5_FIFO: 0,
+    });
+
+    expect(result.mtm).toBeCloseTo((17 - 18) * 10 + (19 - 18) * 5, 6);
+    const components = result.legs.map((leg) => leg.component).sort();
+    expect(components).toEqual(["OVERNIGHT_SHORT", "TODAY_SHORT"]);
   });
 });
 

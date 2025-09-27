@@ -1,36 +1,69 @@
 import { calcM6Detailed } from "../m6";
 
 describe("calcM6Detailed pure scenarios", () => {
-  it("A: 无当日成交，仅昨夜仓位", () => {
+  it("示例A：只有过夜多头", () => {
     const result = calcM6Detailed({
-      positions: [{ symbol: "AAPL", qty: 100, prevClose: 100, priceNow: 110 }],
+      positions: [
+        { symbol: "AAPL", qty: 100, prevClose: 100, priceNow: 103 },
+      ],
       M4: 0,
       M5_FIFO: 0,
     });
 
-    expect(result.total).toBeCloseTo(1000, 6);
-    expect(result.mtm).toBeCloseTo(1000, 6);
+    expect(result.mtm).toBeCloseTo(300, 6);
+    expect(result.total).toBeCloseTo(300, 6);
   });
 
-  it("B: 纯日内开平且全平", () => {
+  it("示例B：纯日内开平（当日无持仓）", () => {
     const result = calcM6Detailed({
       positions: [],
-      M4: 250,
+      M4: 0,
+      M5_FIFO: 120,
+    });
+
+    expect(result.mtm).toBeCloseTo(0, 6);
+    expect(result.total).toBeCloseTo(120, 6);
+  });
+
+  it("示例C：今日新开多头仍持有", () => {
+    const result = calcM6Detailed({
+      positions: [
+        {
+          symbol: "NVDA",
+          qty: 80,
+          prevClose: 900,
+          priceNow: 885,
+          todayLongQty: 80,
+          todayLongAvg: 890,
+        },
+      ],
+      M4: 0,
       M5_FIFO: 0,
     });
 
-    expect(result.total).toBeCloseTo(250, 6);
-    expect(result.mtm).toBeCloseTo(0, 6);
+    expect(result.mtm).toBeCloseTo(-400, 6);
+    expect(result.total).toBeCloseTo(-400, 6);
   });
 
-  it("C: 昨夜持有+今日再买未平", () => {
+  it("示例D：过夜空头 + 今日再加空", () => {
     const result = calcM6Detailed({
-      positions: [{ symbol: "NVDA", qty: 10, prevClose: 900, priceNow: 910 }],
+      positions: [
+        {
+          symbol: "XYZ",
+          qty: -120,
+          prevClose: 50,
+          priceNow: 45,
+          todayShortQty: 20,
+          todayShortAvg: 47,
+          overnightQty: -100,
+        },
+      ],
       M4: 0,
-      M5_FIFO: 30,
+      M5_FIFO: 0,
     });
 
-    expect(result.mtm).toBeCloseTo(100, 6);
-    expect(result.total).toBeCloseTo(130, 6);
+    expect(result.mtm).toBeCloseTo(540, 6);
+    expect(result.total).toBeCloseTo(540, 6);
+    expect(result.legs).toHaveLength(2);
   });
 });

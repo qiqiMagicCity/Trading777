@@ -370,6 +370,14 @@ function _calcM6Strict(params: {
 
   let overnightPnL = 0;
   const warnings: string[] = [];
+  const legs: Array<{
+    symbol: string;
+    qty: number;
+    basis: number;
+    priceNow: number;
+    mtm: number;
+    component: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT";
+  }> = [];
 
   for (const [symbol, lots] of Object.entries(todayLots)) {
     const pos = posMap.get(symbol);
@@ -392,13 +400,36 @@ function _calcM6Strict(params: {
     // 2.3 过夜净数量 = 当前净仓 − 今日新开仍未平净仓
     const overnightSigned = currentQty - todayNewSigned;
 
+    const recordLeg = (
+      component: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT",
+      qty: number,
+      basis: number,
+      pnl: number,
+    ) => {
+      legs.push({ symbol, qty, basis, priceNow: mark, mtm: pnl, component });
+    };
+
     // === 当日新开未平部分 ===
     if (hasMark) {
       if (lots.longQty > 0) {
-        overnightPnL += (mark - (lots.longCost || 0)) * lots.longQty;
+        const basis = Number(lots.longCost ?? NaN);
+        if (Number.isFinite(basis)) {
+          const pnl = (mark - basis) * lots.longQty;
+          overnightPnL += pnl;
+          recordLeg("TODAY_LONG", lots.longQty, basis, pnl);
+        } else {
+          warnings.push(`SafePrice: ${symbol} 缺少当日多头成本，当日新开未平不计入。`);
+        }
       }
       if (lots.shortQty > 0) {
-        overnightPnL += ((lots.shortCost || 0) - mark) * lots.shortQty;
+        const basis = Number(lots.shortCost ?? NaN);
+        if (Number.isFinite(basis)) {
+          const pnl = (basis - mark) * lots.shortQty;
+          overnightPnL += pnl;
+          recordLeg("TODAY_SHORT", lots.shortQty, basis, pnl);
+        } else {
+          warnings.push(`SafePrice: ${symbol} 缺少当日空头成本，当日新开未平不计入。`);
+        }
       }
     } else {
       warnings.push(`SafePrice: ${symbol} 缺少实时价，当日新开未平不计入。`);
@@ -408,9 +439,14 @@ function _calcM6Strict(params: {
     if (Math.abs(overnightSigned) > 1e-9) {
       if (hasMark && hasPrev) {
         if (overnightSigned > 0) {
-          overnightPnL += (mark - prevClose) * overnightSigned; // 多头过夜
+          const pnl = (mark - prevClose) * overnightSigned; // 多头过夜
+          overnightPnL += pnl;
+          recordLeg("OVERNIGHT_LONG", overnightSigned, prevClose, pnl);
         } else {
-          overnightPnL += (prevClose - mark) * Math.abs(overnightSigned); // 空头过夜
+          const absQty = Math.abs(overnightSigned);
+          const pnl = (prevClose - mark) * absQty; // 空头过夜
+          overnightPnL += pnl;
+          recordLeg("OVERNIGHT_SHORT", absQty, prevClose, pnl);
         }
       } else {
         const miss: string[] = [];
@@ -438,8 +474,16 @@ function _calcM6Strict(params: {
     const hasPrev = Number.isFinite(prevClose);
 
     if (hasMark && hasPrev) {
-      if (currentQty > 0) overnightPnL += (mark - prevClose) * currentQty;
-      else overnightPnL += (prevClose - mark) * Math.abs(currentQty);
+      if (currentQty > 0) {
+        const pnl = (mark - prevClose) * currentQty;
+        overnightPnL += pnl;
+        legs.push({ symbol, qty: currentQty, basis: prevClose, priceNow: mark, mtm: pnl, component: "OVERNIGHT_LONG" });
+      } else {
+        const absQty = Math.abs(currentQty);
+        const pnl = (prevClose - mark) * absQty;
+        overnightPnL += pnl;
+        legs.push({ symbol, qty: absQty, basis: prevClose, priceNow: mark, mtm: pnl, component: "OVERNIGHT_SHORT" });
+      }
     } else {
       const miss: string[] = [];
       if (!hasMark) miss.push("实时价");
@@ -449,7 +493,7 @@ function _calcM6Strict(params: {
   }
 
   const M6 = M4 + M5_2 + overnightPnL;
-  return { M6, overnightPnL, warnings };
+  return { M6, overnightPnL, warnings, legs };
 }
 
 function _count(list: { action?: string }[] | undefined) {
@@ -1169,6 +1213,15 @@ function calcMetricsInternal(
 
   const todayTotalPnlChange = strict.M6;
   const priceChangeRounded = mRound2(strict.overnightPnL);
+  const legsForAux = strict.legs.map((leg) => ({
+    symbol: leg.symbol,
+    qty: leg.qty,
+    prevClose: leg.basis,
+    priceNow: leg.priceNow,
+    fx: 1,
+    mtm: leg.mtm,
+    component: leg.component,
+  }));
   const m6Details = {
     overnightPnL: priceChangeRounded,
     warnings: strict.warnings,
@@ -1243,6 +1296,7 @@ function calcMetricsInternal(
       m6PriceChange: priceChangeRounded,
       m6PrevRealizedTotal: mRound2(todayHistoricalRealizedPnl),
       m6FifoToday: mRound2(pnlFifo),
+      m6Legs: legsForAux,
     },
   };
 

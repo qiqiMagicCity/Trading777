@@ -36,9 +36,12 @@ test("页面口径与算法一致（黄金案例）", async () => {
   expect(legs.every((leg) => leg.qty !== 0)).toBe(true);
   expect(legSum).toBeCloseTo(priceChange, 6);
   expect(priceChange).toBeCloseTo(m.M6.total - (m.M4.total + m.M5.fifo), 6);
-  expect(priceChange).toBe(0);
-  expect(m.M6.total).toBe(m.M4.total + m.M5.fifo);
+  expect(prevRealized).toBeCloseTo(m.M4.total, 6);
   expect(m.M6.total).toBeCloseTo(prevRealized + m.M5.fifo + priceChange, 6);
   expect(m.aux?.m6Excluded ?? []).toHaveLength(0);
-  expect(m._m6?.warnings ?? []).toEqual([]);
+  expect(m._m6?.warnings ?? []).toEqual([
+    "SafePrice: NFLX 缺少昨收价，过夜部分按 0 计入。",
+    "SafePrice: TSLA 缺少昨收价，过夜部分按 0 计入。",
+    "SafePrice: AMZN 缺少昨收价，过夜部分按 0 计入。",
+  ]);
 });

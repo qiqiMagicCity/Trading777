@@ -57,7 +57,7 @@ describe("importData builtin guard", () => {
 
     await clearAndImportData(builtinSeed);
 
-    const customPayload = {
+    const customPayload: Parameters<typeof importData>[0] = {
       positions: [],
       trades: [
         {
@@ -65,10 +65,10 @@ describe("importData builtin guard", () => {
           price: 101.23,
           quantity: 5,
           date: "2025-06-01",
-          action: "buy" as const,
+          action: "buy",
         },
       ],
-    } as const;
+    };
 
     await importData(customPayload);
 
@@ -85,7 +85,7 @@ describe("importData builtin guard", () => {
     const store: Record<string, string> = {};
     setupLocalStorage(store);
 
-    const builtinData = {
+    const builtinData: Parameters<typeof clearAndImportData>[0] = {
       positions: [],
       trades: [
         {

@@ -98,17 +98,92 @@ for (const trade of trades) {
   }
 }
 
+type TodayLotBag = { long: { qty: number; price: number }[]; short: { qty: number; price: number }[] };
+const todayLotBags = new Map<string, TodayLotBag>();
+
+function getTodayBag(symbol: string): TodayLotBag {
+  const existing = todayLotBags.get(symbol);
+  if (existing) return existing;
+  const bag: TodayLotBag = { long: [], short: [] };
+  todayLotBags.set(symbol, bag);
+  return bag;
+}
+
+function consumeLots(lots: { qty: number; price: number }[], qty: number) {
+  let remain = qty;
+  while (remain > 0 && lots.length > 0) {
+    const lot = lots[0]!;
+    const used = Math.min(lot.qty, remain);
+    lot.qty -= used;
+    remain -= used;
+    if (lot.qty <= 1e-9) {
+      lots.shift();
+    }
+  }
+}
+
+for (const trade of trades) {
+  if ((trade as any)?.isInitialPosition) continue;
+  const symbol = trade.symbol;
+  if (!symbol) continue;
+  const day = nyDateStr(trade.date);
+  if (day !== evalDate) continue;
+  const qtyRaw = Number(trade.qty ?? trade.quantity ?? 0);
+  const qty = Math.abs(qtyRaw);
+  if (!Number.isFinite(qty) || qty === 0) continue;
+  const price = Number(trade.price);
+  if (!Number.isFinite(price)) continue;
+  const side = String((trade as any)?.side ?? (trade as any)?.action ?? "").toUpperCase();
+  const bag = getTodayBag(symbol);
+  if (side === "BUY") {
+    bag.long.push({ qty, price });
+  } else if (side === "SHORT") {
+    bag.short.push({ qty, price });
+  } else if (side === "SELL") {
+    consumeLots(bag.long, qty);
+  } else if (side === "COVER") {
+    consumeLots(bag.short, qty);
+  }
+}
+
+const todayLotsSummary = new Map<
+  string,
+  { longQty: number; longAvg: number | undefined; shortQty: number; shortAvg: number | undefined }
+>();
+
+for (const [symbol, bag] of todayLotBags.entries()) {
+  const longQty = bag.long.reduce((sum, lot) => sum + lot.qty, 0);
+  const shortQty = bag.short.reduce((sum, lot) => sum + lot.qty, 0);
+  const longCost = bag.long.reduce((sum, lot) => sum + lot.qty * lot.price, 0);
+  const shortCost = bag.short.reduce((sum, lot) => sum + lot.qty * lot.price, 0);
+  todayLotsSummary.set(symbol, {
+    longQty,
+    longAvg: longQty > 0 ? longCost / longQty : undefined,
+    shortQty,
+    shortAvg: shortQty > 0 ? shortCost / shortQty : undefined,
+  });
+}
+
 const positionsForM6: M6PositionInput[] = [];
 for (const [symbol, pos] of positionBySymbol.entries()) {
   const qty = Number(pos?.qty ?? 0);
   if (!Number.isFinite(qty) || qty === 0) continue;
   const nowPrice = Number(pos?.last);
   const prevClose = Number(pos?.prevClose ?? NaN);
+  const todayLots = todayLotsSummary.get(symbol);
   positionsForM6.push({
     symbol,
     qty,
     priceNow: Number.isFinite(nowPrice) ? nowPrice : null,
     prevClose: Number.isFinite(prevClose) ? prevClose : null,
+    todayLongQty: todayLots?.longQty,
+    todayLongAvg: todayLots?.longAvg,
+    todayShortQty: todayLots?.shortQty,
+    todayShortAvg: todayLots?.shortAvg,
+    overnightQty:
+      todayLots && Number.isFinite(qty)
+        ? qty - (todayLots.longQty ?? 0) + (todayLots.shortQty ?? 0)
+        : undefined,
   });
 }
 
