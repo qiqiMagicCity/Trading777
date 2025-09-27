@@ -10,6 +10,16 @@ import {
   startOfMonthNY,
   startOfYearNY,
 } from "@/lib/timezone";
+import { startOfDayNY } from "./time";
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeToNyDay(input: string | number | Date): Date | string | number {
+  if (typeof input === "string" && DATE_ONLY_RE.test(input)) {
+    return `${input}T12:00:00Z`;
+  }
+  return input;
+}
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import { sortTrades } from "./sortTrades";
 import type { DailyResult } from "./types";
@@ -729,7 +739,7 @@ function rebuildSumPeriodCache(daily: DailyResult[]): SumPeriodCache {
   let prevUnrealized = 0;
   let acc = 0;
   for (const r of sorted) {
-    const ts = toNY(r.date).getTime();
+    const ts = startOfDayNY(normalizeToNyDay(r.date)).getTime();
     const unrealized = r.unrealized ?? 0;
     const delta =
       r.unrealizedDelta !== undefined
@@ -793,8 +803,8 @@ export function sumPeriod(
     return sumPeriodCache.lastResult ?? 0;
   }
 
-  const fromTS = toNY(fromStr).getTime();
-  const toTS = toNY(toStr).getTime();
+  const fromTS = startOfDayNY(normalizeToNyDay(fromStr)).getTime();
+  const toTS = startOfDayNY(normalizeToNyDay(toStr)).getTime();
   const { dates, prefix } = sumPeriodCache;
 
   const startIdx = lowerBound(dates, fromTS);
