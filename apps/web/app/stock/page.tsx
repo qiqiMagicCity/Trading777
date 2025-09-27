@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
+import SymbolLogo from '@/components/SymbolLogo';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { findTrades } from '@/lib/services/dataService';
@@ -85,9 +85,9 @@ export default function StockPage() {
   return (
     <div>
       <div style={{ textAlign: 'center', marginTop: '20px' }}>
-        <Image
+        <SymbolLogo
           id="stock-logo"
-          src={`/logos/${symbol}.png`}
+          symbol={symbol}
           alt="Logo"
           width={150}
           height={150}
