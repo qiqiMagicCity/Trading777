@@ -274,6 +274,8 @@ export interface QuoteResult {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_LOOKBACK_DAYS = 365;
 const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
+
+// === 保留 PR 侧：日期工具与窗口解析 ===
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function parseYmd(date: string): { y: number; m: number; d: number } | null {
@@ -305,6 +307,7 @@ function resolveRtCloseWindow(): number {
   return parsed;
 }
 
+// === 保留 PR 侧：确定下次开盘 & 是否允许收盘后实时价 ===
 function nextTradingOpen(date: string): Date {
   if (!parseYmd(date)) return new Date(NaN);
   const base = toNyDateTime(date, 9, 30);
@@ -484,6 +487,8 @@ export async function fetchDailyClose(
 
     if (isToday || isLatestTradingDay) {
       const nowNY = toNY(Date.now());
+
+      // === 保留 PR 侧：使用扩展窗口/次日开盘前窗口 ===
       const windowMinutes = resolveRtCloseWindow();
       const allowRealtime = (() => {
         if (!isLatestTradingDay && !isToday) return false;
@@ -491,6 +496,7 @@ export async function fetchDailyClose(
       })();
 
       if (allowRealtime) {
+        // 1) 先用缓存的实时价（若时间戳晚于当日 16:00）
         const cachedRealtime = readRealtimeCache(key);
         if (cachedRealtime && typeof cachedRealtime.price === 'number' && cachedRealtime.price > 0) {
           const closeMoment = toNyDateTime(normalizedDate, 16, 0);
@@ -504,6 +510,7 @@ export async function fetchDailyClose(
           }
         }
 
+        // 2) 其后再尝试实时接口
         try {
           const rt =
             (await fetchFinnhubRealtimeQuote(key)) ??
@@ -516,6 +523,7 @@ export async function fetchDailyClose(
         }
       }
 
+      // 3) 仍在收盘后窗口，接受调用方 fallback 作为官方收盘价
       const fallbackClose = options?.fallbackClose;
       const afterOfficialClose = (() => {
         const closeMoment = toNyDateTime(normalizedDate, 16, 0);
@@ -535,17 +543,20 @@ export async function fetchDailyClose(
         );
       }
 
+      // 4) 最后再尝试日线 API
       const dailyPrice = await tryDailyApis();
       if (dailyPrice && dailyPrice.price > 0) {
         return await recordOfficialClose(dailyPrice.price, dailyPrice.source);
       }
     } else {
+      // 历史日，直接请求日线 API
       const historicalDaily = await tryDailyApis();
       if (historicalDaily && historicalDaily.price > 0) {
         return await recordOfficialClose(historicalDaily.price, historicalDaily.source);
       }
     }
 
+    // 日线与实时均失败，做回退
     if (process.env.MONITOR === '1') {
       const available = closeMap ? Object.keys(closeMap) : [];
       console.warn('MISSING_CLOSE', { symbol: key, date: normalizedDate, available });

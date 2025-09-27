@@ -9,7 +9,12 @@ jest.mock('@/app/lib/dataSource', () => ({
   loadJson: jest.fn(),
 }));
 
-import { fetchRealtimeQuote, fetchDailyClose, __clearPriceServiceCachesForTest, __setRuntimeApiKeysForTest } from '../services/priceService';
+import {
+  fetchRealtimeQuote,
+  fetchDailyClose,
+  __clearPriceServiceCachesForTest,
+  __setRuntimeApiKeysForTest,
+} from '../services/priceService';
 import { NoPriceError } from '../priceService';
 import { getPrice, putPrice } from '../services/dataService';
 import { loadJson } from '@/app/lib/dataSource';
@@ -161,6 +166,8 @@ describe('priceService safe fallbacks', () => {
     dateNowSpy.mockRestore();
     warnSpy.mockRestore();
   });
+
+  // === 新增：保留 PR 侧周末/次日开盘前窗口与 fallback 场景 ===
 
   it('continues to accept realtime closes on the next calendar day before the market reopens', async () => {
     __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
@@ -334,6 +341,8 @@ describe('priceService safe fallbacks', () => {
     dateNowSpy.mockRestore();
     warnSpy.mockRestore();
   });
+
+  // === 下面是原有用例，继续保留 ===
 
   it('falls back to last close with stale flag and no price 1', async () => {
     getPriceMock.mockResolvedValue({ symbol: 'AAPL', date: '2024-04-10', close: 123, source: 'import' });
