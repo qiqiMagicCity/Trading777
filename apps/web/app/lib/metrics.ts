@@ -286,7 +286,12 @@ export function assertM6(metrics: Metrics) {
 /** 严格版 M6 计算：按指定口径拆分过夜 / 当日新开未平 两部分 */
 type TodayLots = { longQty: number; longCost: number; shortQty: number; shortCost: number };
 
-function _buildTodayLots(todayTrades: EnrichedTrade[]): Record<string, TodayLots> {
+type BaselineSeed = Record<string, { long?: number | null; short?: number | null }>;
+
+function _buildTodayLots(
+  todayTrades: EnrichedTrade[],
+  baselineSeed: BaselineSeed = {},
+): Record<string, TodayLots> {
   // 仅记录“当日新开且仍未平”的剩余 lots（FIFO 消耗）
   const bySym = new Map<
     string,
@@ -296,64 +301,140 @@ function _buildTodayLots(todayTrades: EnrichedTrade[]): Record<string, TodayLots
     }
   >();
 
-  const get = (sym: string) => {
-    const v = bySym.get(sym);
-    if (v) return v;
-    const x = { long: [] as { qty: number; price: number }[], short: [] as { qty: number; price: number }[] };
-    bySym.set(sym, x);
-    return x;
+  const baseline = new Map<string, { long: number; short: number }>();
+  for (const [sym, seed] of Object.entries(baselineSeed)) {
+    const long = Math.max(0, Number(seed?.long ?? 0));
+    const short = Math.max(0, Number(seed?.short ?? 0));
+    if (long > EPSILON || short > EPSILON) {
+      baseline.set(sym, { long, short });
+    }
+  }
+
+  const getBag = (sym: string) => {
+    const existing = bySym.get(sym);
+    if (existing) return existing;
+    const created = {
+      long: [] as { qty: number; price: number }[],
+      short: [] as { qty: number; price: number }[],
+    };
+    bySym.set(sym, created);
+    return created;
+  };
+
+  const getBaseline = (sym: string) => {
+    const existing = baseline.get(sym);
+    if (existing) return existing;
+    const created = { long: 0, short: 0 };
+    baseline.set(sym, created);
+    return created;
   };
 
   for (const t of todayTrades) {
     const sym = t.symbol;
     if (!sym) continue;
-    const qty = Math.abs(t.quantity);
-    const px = Number(t.price);
-    if (!Number.isFinite(qty) || qty <= 0) continue;
+    const qty = Math.abs(Number(t.quantity));
+    if (!Number.isFinite(qty) || qty <= EPSILON) continue;
 
-    const bag = get(sym);
+    const pxRaw = Number(t.price);
+    const price = Number.isFinite(pxRaw) ? pxRaw : NaN;
+
+    if (t.isInitialPosition) {
+      const base = getBaseline(sym);
+      if (t.action === "short" || t.quantity < 0) {
+        base.short += qty;
+      } else {
+        base.long += qty;
+      }
+      continue;
+    }
+
+    const bag = getBag(sym);
+    const base = baseline.get(sym);
+
+    const consumeLots = (
+      lots: { qty: number; price: number }[],
+      amount: number,
+    ) => {
+      let remain = amount;
+      while (remain > EPSILON && lots.length > 0) {
+        const lot = lots[0]!;
+        const use = Math.min(lot.qty, remain);
+        lot.qty -= use;
+        remain -= use;
+        if (lot.qty <= EPSILON) {
+          lots.shift();
+        }
+      }
+      return remain;
+    };
 
     if (t.action === "buy") {
-      bag.long.push({ qty, price: px });
-    } else if (t.action === "short") {
-      bag.short.push({ qty, price: px });
-    } else if (t.action === "sell") {
-      // 消耗今天的多头开仓（仅消当日开，不影响过夜部分）
-      let remain = qty;
-      while (remain > 0 && bag.long.length > 0) {
-        const lot = bag.long[0]!;
-        const use = Math.min(lot.qty, remain);
-        lot.qty -= use;
+      if (Number.isFinite(price)) {
+        bag.long.push({ qty, price });
+      }
+      continue;
+    }
+
+    if (t.action === "short") {
+      if (Number.isFinite(price)) {
+        bag.short.push({ qty, price });
+      }
+      continue;
+    }
+
+    if (t.action === "sell") {
+      let remain = consumeLots(bag.long, qty);
+
+      if (remain > EPSILON && base && base.long > EPSILON) {
+        const use = Math.min(base.long, remain);
+        base.long -= use;
         remain -= use;
-        if (lot.qty === 0) bag.long.shift();
+        if (base.long <= EPSILON) base.long = 0;
       }
-      // 若还有剩余则代表当日卖出量超过了当日多头，形成新的当日空头
-      if (remain > EPSILON) {
-        bag.short.push({ qty: remain, price: px });
+
+      if (remain > EPSILON && Number.isFinite(price)) {
+        bag.short.push({ qty: remain, price });
       }
-    } else if (t.action === "cover") {
-      // 消耗今天的空头开仓
-      let remain = qty;
-      while (remain > 0 && bag.short.length > 0) {
-        const lot = bag.short[0]!;
-        const use = Math.min(lot.qty, remain);
-        lot.qty -= use;
+      continue;
+    }
+
+    if (t.action === "cover") {
+      let remain = consumeLots(bag.short, qty);
+
+      if (remain > EPSILON && base && base.short > EPSILON) {
+        const use = Math.min(base.short, remain);
+        base.short -= use;
         remain -= use;
-        if (lot.qty === 0) bag.short.shift();
+        if (base.short <= EPSILON) base.short = 0;
       }
-      // 剩余部分表示回补超过当日空头，形成新的当日多头
-      if (remain > EPSILON) {
-        bag.long.push({ qty: remain, price: px });
+
+      if (remain > EPSILON && Number.isFinite(price)) {
+        bag.long.push({ qty: remain, price });
       }
     }
   }
 
   const result: Record<string, TodayLots> = {};
   for (const [sym, bag] of bySym.entries()) {
-    const longQty = bag.long.reduce((a, b) => a + b.qty, 0);
-    const longCost = longQty > 0 ? bag.long.reduce((a, b) => a + b.qty * b.price, 0) / longQty : 0;
-    const shortQty = bag.short.reduce((a, b) => a + b.qty, 0);
-    const shortCost = shortQty > 0 ? bag.short.reduce((a, b) => a + b.qty * b.price, 0) / shortQty : 0;
+    const validLongLots = bag.long.filter((lot) => lot.qty > EPSILON && Number.isFinite(lot.price));
+    const validShortLots = bag.short.filter((lot) => lot.qty > EPSILON && Number.isFinite(lot.price));
+
+    const longQty = validLongLots.reduce((acc, lot) => acc + lot.qty, 0);
+    const shortQty = validShortLots.reduce((acc, lot) => acc + lot.qty, 0);
+
+    if (longQty <= EPSILON && shortQty <= EPSILON) {
+      continue;
+    }
+
+    const longCost =
+      longQty > 0
+        ? validLongLots.reduce((acc, lot) => acc + lot.qty * lot.price, 0) / longQty
+        : 0;
+    const shortCost =
+      shortQty > 0
+        ? validShortLots.reduce((acc, lot) => acc + lot.qty * lot.price, 0) / shortQty
+        : 0;
+
     result[sym] = { longQty, longCost, shortQty, shortCost };
   }
   return result;
@@ -368,12 +449,50 @@ function _calcM6Strict(params: {
 }) {
   const { positions, todayTrades, M4, M5_2, lastPriceFallback } = params;
 
-  // 1) 当日新开且仍未平的 lots（按 FIFO 剩余）
-  const todayLots = _buildTodayLots(todayTrades);
-
   // 2) 做一个 Position 索引
   const posMap = new Map<string, Position>();
   for (const p of positions) if (p?.symbol) posMap.set(p.symbol, p);
+
+  // 1) 当日新开且仍未平的 lots（按 FIFO 剩余）
+  const tradeSymbols = new Set<string>();
+  const deltaBySymbol = new Map<string, number>();
+  for (const t of todayTrades) {
+    const sym = t.symbol;
+    if (!sym) continue;
+    tradeSymbols.add(sym);
+    const qty = Math.abs(Number(t.quantity));
+    if (!Number.isFinite(qty) || qty <= EPSILON) continue;
+    let delta = 0;
+    switch (t.action) {
+      case "buy":
+      case "cover":
+        delta = qty;
+        break;
+      case "sell":
+      case "short":
+        delta = -qty;
+        break;
+      default:
+        break;
+    }
+    if (delta !== 0) {
+      deltaBySymbol.set(sym, (deltaBySymbol.get(sym) ?? 0) + delta);
+    }
+  }
+
+  const baselineSeed: BaselineSeed = {};
+  for (const sym of tradeSymbols) {
+    const currentQtyRaw = Number(posMap.get(sym)?.qty ?? 0);
+    const currentQty = Number.isFinite(currentQtyRaw) ? currentQtyRaw : 0;
+    const delta = deltaBySymbol.get(sym) ?? 0;
+    const startQty = currentQty - delta;
+    if (Math.abs(startQty) > EPSILON) {
+      if (startQty > 0) baselineSeed[sym] = { long: Math.abs(startQty) };
+      else baselineSeed[sym] = { short: Math.abs(startQty) };
+    }
+  }
+
+  const todayLots = _buildTodayLots(todayTrades, baselineSeed);
 
   let overnightPnL = 0;
   const warnings: string[] = [];
@@ -402,10 +521,19 @@ function _calcM6Strict(params: {
     const hasPrev = Number.isFinite(prevClose);
 
     // 2.2 当日新开仍未平的净数量（多为正、空为负）
-    const todayNewSigned = (lots.longQty ?? 0) - (lots.shortQty ?? 0);
+    const todayLongQty = Number(lots.longQty ?? 0);
+    const todayShortQty = Number(lots.shortQty ?? 0);
+    const todayLongOpen = Math.abs(todayLongQty) > EPSILON ? todayLongQty : 0;
+    const todayShortOpen = Math.abs(todayShortQty) > EPSILON ? todayShortQty : 0;
+
+    const todayNewSignedRaw = todayLongOpen - todayShortOpen;
+    const todayNewSigned =
+      Math.abs(todayNewSignedRaw) > EPSILON ? todayNewSignedRaw : 0;
 
     // 2.3 过夜净数量 = 当前净仓 − 今日新开仍未平净仓
-    const overnightSigned = currentQty - todayNewSigned;
+    const overnightSignedRaw = currentQty - todayNewSigned;
+    const overnightSigned =
+      Math.abs(overnightSignedRaw) > EPSILON ? overnightSignedRaw : 0;
 
     const recordLeg = (
       component: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT",
@@ -418,22 +546,22 @@ function _calcM6Strict(params: {
 
     // === 当日新开未平部分 ===
     if (hasMark) {
-      if (lots.longQty > 0) {
+      if (todayLongOpen > EPSILON) {
         const basis = Number(lots.longCost ?? NaN);
         if (Number.isFinite(basis)) {
-          const pnl = (mark - basis) * lots.longQty;
+          const pnl = (mark - basis) * todayLongOpen;
           overnightPnL += pnl;
-          recordLeg("TODAY_LONG", lots.longQty, basis, pnl);
+          recordLeg("TODAY_LONG", todayLongOpen, basis, pnl);
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日多头成本，当日新开未平不计入。`);
         }
       }
-      if (lots.shortQty > 0) {
+      if (todayShortOpen > EPSILON) {
         const basis = Number(lots.shortCost ?? NaN);
         if (Number.isFinite(basis)) {
-          const pnl = (basis - mark) * lots.shortQty;
+          const pnl = (basis - mark) * todayShortOpen;
           overnightPnL += pnl;
-          recordLeg("TODAY_SHORT", lots.shortQty, basis, pnl);
+          recordLeg("TODAY_SHORT", todayShortOpen, basis, pnl);
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日空头成本，当日新开未平不计入。`);
         }

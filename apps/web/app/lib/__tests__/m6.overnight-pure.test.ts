@@ -1,4 +1,7 @@
 import { calcM6Detailed } from "../m6";
+import { calcMetrics } from "../metrics";
+import type { EnrichedTrade } from "@/lib/fifo";
+import type { Position } from "@/lib/services/dataService";
 
 describe("calcM6Detailed pure scenarios", () => {
   it("示例A：只有过夜多头", () => {
@@ -87,5 +90,115 @@ describe("calcM6Detailed pure scenarios", () => {
     expect(result.legs).toHaveLength(1);
     expect(result.legs[0]?.component).toBe("TODAY_SHORT");
     expect(result.legs[0]?.prevClose).toBe(110);
+  });
+
+  it("overnight long fully closed then finishes net short", () => {
+    const trades: EnrichedTrade[] = [
+      {
+        symbol: "FLIPLS",
+        action: "buy",
+        quantity: 100,
+        price: 90,
+        date: "2024-09-23T14:30:00Z",
+        time: "2024-09-23T14:30:00Z",
+      } as any,
+      {
+        symbol: "FLIPLS",
+        action: "sell",
+        quantity: 150,
+        price: 120,
+        date: "2024-09-24T14:31:00Z",
+        time: "2024-09-24T14:31:00Z",
+      } as any,
+    ];
+
+    const positions: Position[] = [
+      {
+        symbol: "FLIPLS",
+        qty: -50,
+        avgPrice: 120,
+        last: 110,
+        prevClose: 90,
+      } as any,
+    ];
+
+    const metrics = calcMetrics(trades as any, positions as any, [], {
+      tradingDateStr: "2024-09-24",
+    });
+
+    const expectedM4 = (120 - 90) * 100; // close overnight long 100@90
+    const expectedM5 = 0;
+    const expectedMtm = (120 - 110) * 50; // today short 50@120 marked at 110
+
+    expect(metrics.M4).toBeCloseTo(expectedM4, 6);
+    expect(metrics.M5.fifo).toBeCloseTo(expectedM5, 6);
+    expect(metrics.aux?.m6PriceChange ?? 0).toBeCloseTo(expectedMtm, 6);
+    expect(metrics.M6).toBeCloseTo(expectedM4 + expectedM5 + expectedMtm, 6);
+
+    const legs = metrics.aux?.m6Legs ?? [];
+    const flipLeg = legs.find(
+      (leg) => leg.symbol === "FLIPLS" && leg.component === "TODAY_SHORT",
+    );
+    expect(flipLeg).toMatchObject({ qty: 50 });
+    expect(
+      legs.find(
+        (leg) => leg.symbol === "FLIPLS" && leg.component?.startsWith("OVERNIGHT"),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("overnight short fully closed then finishes net long", () => {
+    const trades: EnrichedTrade[] = [
+      {
+        symbol: "FLIPSL",
+        action: "short",
+        quantity: -80,
+        price: 200,
+        date: "2024-09-23T14:30:00Z",
+        time: "2024-09-23T14:30:00Z",
+      } as any,
+      {
+        symbol: "FLIPSL",
+        action: "cover",
+        quantity: 120,
+        price: 180,
+        date: "2024-09-24T15:00:00Z",
+        time: "2024-09-24T15:00:00Z",
+      } as any,
+    ];
+
+    const positions: Position[] = [
+      {
+        symbol: "FLIPSL",
+        qty: 40,
+        avgPrice: 180,
+        last: 190,
+        prevClose: 200,
+      } as any,
+    ];
+
+    const metrics = calcMetrics(trades as any, positions as any, [], {
+      tradingDateStr: "2024-09-24",
+    });
+
+    const expectedM4 = (200 - 180) * 80; // close overnight short 80@200
+    const expectedM5 = 0;
+    const expectedMtm = (190 - 180) * 40; // today long 40@180 marked at 190
+
+    expect(metrics.M4).toBeCloseTo(expectedM4, 6);
+    expect(metrics.M5.fifo).toBeCloseTo(expectedM5, 6);
+    expect(metrics.aux?.m6PriceChange ?? 0).toBeCloseTo(expectedMtm, 6);
+    expect(metrics.M6).toBeCloseTo(expectedM4 + expectedM5 + expectedMtm, 6);
+
+    const legs = metrics.aux?.m6Legs ?? [];
+    const todayLongLeg = legs.find(
+      (leg) => leg.symbol === "FLIPSL" && leg.component === "TODAY_LONG",
+    );
+    expect(todayLongLeg).toMatchObject({ qty: 40 });
+    expect(
+      legs.find(
+        (leg) => leg.symbol === "FLIPSL" && leg.component?.startsWith("OVERNIGHT"),
+      ),
+    ).toBeUndefined();
   });
 });
