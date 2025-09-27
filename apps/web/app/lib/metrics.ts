@@ -1,3 +1,8 @@
+/* WTD/MTD/YTD FIX
+- 根因：使用字符串比较过滤 daily，导致当天 ISO 带时区的记录被漏算，WTD/MTD/YTD 偏小或相等。
+- 修复：统一用纽约时区的数值比较（startOfDayNY/endOfDayNY），确保包含当天。
+- UI：确保 WTD 读取 M11、MTD 读取 M12、YTD 读取 M13，避免三者误绑同一字段。
+*/
 // === file: apps/web/app/lib/metrics.ts ===
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
@@ -1391,7 +1396,11 @@ function calcMetricsInternal(
   const allTradesByType = calcCumulativeTradeCounts(safeTrades);
   const totalTrades = allTradesByType.total;
 
-  const historicalDailyResults = dailyResults.filter((r) => r.date <= todayStr);
+  const endTs = endOfDayNY(toNY(`${todayStr}T12:00:00Z`)).getTime();
+  const historicalDailyResults = dailyResults.filter((r) => {
+    const dayTs = startOfDayNY(normalizeToNyDay(r.date)).getTime();
+    return Number.isFinite(dayTs) && dayTs <= endTs;
+  });
 
   // M9
   const historicalRealizedPnl = calcM9(historicalDailyResults);
@@ -1402,6 +1411,13 @@ function calcMetricsInternal(
 
   // M11-13
   const { wtd, mtd, ytd } = calcWtdMtdYtd(historicalDailyResults, todayStr);
+  if (DEBUG) {
+    try {
+      checkPeriodDebug(historicalDailyResults ?? dailyResults, todayStr);
+    } catch (error) {
+      logger.debug("METRICS_DEBUG_PERIOD", { error });
+    }
+  }
 
   const metrics: Metrics = {
     M1: totalCost,
