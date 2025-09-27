@@ -67,6 +67,34 @@ function writeRealtimeCache(symbol: string, price: number): RealtimeCacheEntry {
   return entry;
 }
 
+async function persistRealtimeClose(
+  symbol: string,
+  price: number,
+  timestamp: number,
+): Promise<void> {
+  if (!(typeof price === 'number' && Number.isFinite(price) && price > 0)) return;
+
+  const key = symbol.trim().toUpperCase();
+  if (!key) return;
+
+  const tradingDate = getTradingDateStr(timestamp);
+  const nowNY = toNY(timestamp);
+  const windowMinutes = resolveRtCloseWindow();
+  if (!shouldUseRealtimeClose(tradingDate, nowNY, windowMinutes)) return;
+
+  const closeMoment = toNyDateTime(tradingDate, 16, 0);
+  if (Number.isNaN(closeMoment.getTime())) return;
+  if (nowNY.getTime() < closeMoment.getTime()) return;
+
+  try {
+    await putPrice({ symbol: key, date: tradingDate, close: price, source: 'close_rt' });
+  } catch (err) {
+    console.warn('[priceService] 缓存收盘价失败', err);
+  }
+
+  await saveToFile(key, tradingDate, price);
+}
+
 export function getCachedRealtimeQuote(symbol: string): QuoteResult | null {
   const cached = readRealtimeCache(symbol);
   if (!cached) return null;
@@ -613,6 +641,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     const finnhubPrice = await fetchFinnhubRealtimeQuote(symbol);
     if (finnhubPrice !== null) {
       const entry = writeRealtimeCache(symbol, finnhubPrice);
+      void persistRealtimeClose(symbol, finnhubPrice, entry.ts);
       return { price: finnhubPrice, stale: false, priceOk: true, updatedAt: entry.ts };
     }
   } catch (e) {
@@ -623,6 +652,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     const tiingoPrice = await fetchTiingoRealtimeQuote(symbol);
     if (tiingoPrice !== null) {
       const entry = writeRealtimeCache(symbol, tiingoPrice);
+      void persistRealtimeClose(symbol, tiingoPrice, entry.ts);
       return { price: tiingoPrice, stale: false, priceOk: true, updatedAt: entry.ts };
     }
   } catch (e) {
