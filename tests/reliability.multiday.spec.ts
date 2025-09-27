@@ -73,4 +73,17 @@ describe('reliability multi-day baseline', () => {
     expect(M12).toBeCloseTo(8952.5, 5);
     expect(M13).toBeCloseTo(9552.5, 5);
   });
+
+  it('computes period sums using unrealized deltas', () => {
+    const dailyResults = [
+      { date: '2024-01-01', realized: 100, unrealized: 50 },
+      { date: '2024-01-02', realized: 0, unrealized: -20 },
+      { date: '2024-01-03', realized: 10, unrealized: 30 },
+    ];
+    const evalDate = new Date('2024-01-03T16:00:00-05:00');
+
+    const { M11, M12, M13 } = computePeriods(dailyResults, evalDate);
+
+    expect({ M11, M12, M13 }).toEqual({ M11: 140, M12: 140, M13: 140 });
+  });
 });

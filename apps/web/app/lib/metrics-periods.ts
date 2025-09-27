@@ -1,7 +1,18 @@
-import { nyDateStr, nyDateStrSafe, startOfWeekNY, startOfMonthNY, startOfYearNY } from './time';
+import {
+  nyDateStr,
+  nyDateStrSafe,
+  startOfWeekNY,
+  startOfMonthNY,
+  startOfYearNY,
+  startOfDayNY,
+} from './time';
 import { sumPeriodCached } from './period-sum-cache';
+import type { DailyResult } from './types';
 
-export type Daily = { date: string; realized: number; unrealized: number };
+export type Daily = Pick<
+  DailyResult,
+  'date' | 'realized' | 'unrealized' | 'unrealizedDelta'
+>;
 
 export function sumM9(daily: Daily[], endISO?: string): number {
   return (daily || []).reduce((s, d) => {
@@ -17,14 +28,39 @@ export function sumM9(daily: Daily[], endISO?: string): number {
 }
 
 export function sumPeriod(daily: Daily[], startISO: string, endISO: string): number {
-  const start = new Date(startISO);
-  const end = new Date(endISO);
-  return (daily || [])
-    .filter(d => {
-      const dt = new Date(d.date);
-      return dt >= start && dt <= end;
-    })
-    .reduce((s, d) => s + (d?.realized ?? 0) + (d?.unrealized ?? 0), 0);
+  const start = startOfDayNY(startISO).getTime();
+  const end = startOfDayNY(endISO).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return 0;
+
+  const sorted = (daily || [])
+    .slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  let total = 0;
+  let prevUnrealized = 0;
+
+  for (const d of sorted) {
+    if (!d?.date) continue;
+    const dt = new Date(d.date);
+    if (!Number.isFinite(dt.valueOf())) continue;
+    const dayTS = startOfDayNY(dt).getTime();
+    if (!Number.isFinite(dayTS)) continue;
+
+    const unrealized = d?.unrealized ?? 0;
+    const delta =
+      typeof d?.unrealizedDelta === 'number'
+        ? d.unrealizedDelta
+        : unrealized - prevUnrealized;
+
+    if (dayTS >= start && dayTS <= end) {
+      total += (d?.realized ?? 0) + delta;
+    }
+
+    prevUnrealized = unrealized;
+    if (dayTS > end) break;
+  }
+
+  return total;
 }
 
 export function computePeriods(daily: Daily[], evalDate: Date | string) {
