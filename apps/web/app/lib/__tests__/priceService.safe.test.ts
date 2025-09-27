@@ -270,6 +270,37 @@ describe('priceService safe fallbacks', () => {
     warnSpy.mockRestore();
   });
 
+  it('records fallback close even when realtime window is disabled', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    getPriceMock.mockResolvedValue(undefined);
+    loadJsonMock.mockResolvedValue({});
+    putPriceMock.mockImplementation(async payload => payload as any);
+
+    process.env.RT_CLOSE_WINDOW_MIN = '0';
+
+    const fetchMock = jest.fn(async (input: any) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/api/close-price')) {
+        return { ok: true, json: async () => ({ ok: true }) } as any;
+      }
+      return { ok: false, json: async () => ({}) } as any;
+    }) as jest.Mock;
+    (global as any).fetch = fetchMock as any;
+
+    const dateNowSpy = jest.spyOn(Date, 'now');
+    dateNowSpy.mockReturnValue(new Date('2025-09-27T09:29:00-04:00').getTime());
+
+    const result = await fetchDailyClose('AMD', '2025-09-26', { fallbackClose: 161.27 });
+    expect(result).toMatchObject({ price: 161.27, stale: false, priceOk: true });
+    expect(putPriceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'AMD', date: '2025-09-26', close: 161.27, source: 'close_fallback' }),
+    );
+
+    dateNowSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
   it('awaits file persistence before resolving realtime closes', async () => {
     __setRuntimeApiKeysForTest({ finnhub: 'demo', tiingo: 'demo' });
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});

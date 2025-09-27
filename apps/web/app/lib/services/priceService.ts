@@ -294,6 +294,17 @@ function toNyDateTime(date: string, hour: number, minute: number): Date {
   return toNY(utc);
 }
 
+function resolveRtCloseWindow(): number {
+  const raw = process.env.RT_CLOSE_WINDOW_MIN;
+  if (raw === undefined || raw === null || raw === '') {
+    return DEFAULT_RT_CLOSE_WINDOW_MIN;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_RT_CLOSE_WINDOW_MIN;
+  if (parsed < 0) return DEFAULT_RT_CLOSE_WINDOW_MIN;
+  return parsed;
+}
+
 function nextTradingOpen(date: string): Date {
   if (!parseYmd(date)) return new Date(NaN);
   const base = toNyDateTime(date, 9, 30);
@@ -310,16 +321,15 @@ function nextTradingOpen(date: string): Date {
 function shouldUseRealtimeClose(
   targetDate: string,
   nowNY: Date,
-  windowMinutes: number
+  windowMinutes: number,
 ): boolean {
-  if (windowMinutes <= 0) return false;
   const closeMoment = toNyDateTime(targetDate, 16, 0);
   if (Number.isNaN(closeMoment.getTime())) return false;
   const graceRaw = Number(process.env.CLOSE_GRACE_MIN ?? '0');
   const graceMs = Number.isFinite(graceRaw) && graceRaw > 0 ? graceRaw * 60_000 : 0;
   if (nowNY.getTime() < closeMoment.getTime() + graceMs) return false;
   const diffMin = (nowNY.getTime() - closeMoment.getTime()) / 60_000;
-  if (diffMin <= windowMinutes) return true;
+  if (windowMinutes > 0 && diffMin <= windowMinutes) return true;
   const nextOpen = nextTradingOpen(targetDate);
   if (Number.isNaN(nextOpen.getTime())) return false;
   return nowNY.getTime() < nextOpen.getTime();
@@ -474,12 +484,7 @@ export async function fetchDailyClose(
 
     if (isToday || isLatestTradingDay) {
       const nowNY = toNY(Date.now());
-      const windowMinutes = (() => {
-        const raw = Number(process.env.RT_CLOSE_WINDOW_MIN ?? `${DEFAULT_RT_CLOSE_WINDOW_MIN}`);
-        if (!Number.isFinite(raw)) return DEFAULT_RT_CLOSE_WINDOW_MIN;
-        if (raw <= 0) return 0;
-        return raw;
-      })();
+      const windowMinutes = resolveRtCloseWindow();
       const allowRealtime = (() => {
         if (!isLatestTradingDay && !isToday) return false;
         return shouldUseRealtimeClose(normalizedDate, nowNY, windowMinutes);
@@ -507,16 +512,27 @@ export async function fetchDailyClose(
             return await recordOfficialClose(rt, 'close_rt');
           }
         } catch (_) {
-          // 获取不到就继续走日线/文件回退逻辑
+          // 获取不到就继续走后备逻辑
         }
+      }
 
-        const fallbackClose = options?.fallbackClose;
-        if (typeof fallbackClose === 'number' && Number.isFinite(fallbackClose) && fallbackClose > 0) {
-          return await recordOfficialClose(
-            fallbackClose,
-            options.fallbackSource ?? 'close_fallback',
-          );
-        }
+      const fallbackClose = options?.fallbackClose;
+      const afterOfficialClose = (() => {
+        const closeMoment = toNyDateTime(normalizedDate, 16, 0);
+        return !Number.isNaN(closeMoment.getTime()) && nowNY.getTime() >= closeMoment.getTime();
+      })();
+
+      if (
+        afterOfficialClose &&
+        isLatestTradingDay &&
+        typeof fallbackClose === 'number' &&
+        Number.isFinite(fallbackClose) &&
+        fallbackClose > 0
+      ) {
+        return await recordOfficialClose(
+          fallbackClose,
+          options.fallbackSource ?? 'close_fallback',
+        );
       }
 
       const dailyPrice = await tryDailyApis();
