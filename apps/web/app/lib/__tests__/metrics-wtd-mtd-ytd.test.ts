@@ -11,4 +11,31 @@ describe("calcWtdMtdYtd", () => {
     const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, "2024-01-03");
     expect({ wtd, mtd, ytd }).toEqual({ wtd: 140, mtd: 140, ytd: 140 });
   });
+
+  it("handles timezone-aware daily result timestamps", () => {
+    const daily: DailyResult[] = [
+      {
+        date: "2024-01-01T23:59:59-05:00",
+        realized: 40,
+        unrealized: 10,
+        unrealizedDelta: 10,
+      },
+      {
+        date: "2024-01-02T04:00:00+00:00",
+        realized: 20,
+        unrealized: 5,
+        unrealizedDelta: -5,
+      },
+      {
+        date: "2024-01-03T16:00:00-05:00",
+        realized: 35,
+        unrealized: 15,
+        unrealizedDelta: 5,
+      },
+    ];
+
+    const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, "2024-01-03");
+
+    expect({ wtd, mtd, ytd }).toEqual({ wtd: 105, mtd: 105, ytd: 105 });
+  });
 });
