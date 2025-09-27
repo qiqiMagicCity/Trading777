@@ -63,7 +63,7 @@ export interface CachedPrice {
   symbol: string;
   date: string;
   close: number;
-  source: "finnhub" | "alphavantage" | "import" | "tiingo" | "close_rt";
+  source: "finnhub" | "alphavantage" | "import" | "tiingo" | "close_rt" | "close_fallback";
 }
 
 // Interface for metricsDaily records

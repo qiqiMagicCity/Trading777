@@ -6,7 +6,9 @@ import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
-import { nyDateStr, toNY } from '../time';
+import { nyDateStr, toNY, NY_TZ } from '../time';
+import { getTradingDateStr } from '../tradingDay';
+import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -273,20 +275,67 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_LOOKBACK_DAYS = 365;
 const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
 
-/** 纽约收盘后判定（DST 安全）。默认 0 分钟缓冲，可用 CLOSE_GRACE_MIN 调整。 */
-function isAfterNyClose(ts: number = Date.now()): boolean {
-  const graceMin = Number(process.env.CLOSE_GRACE_MIN ?? '0');
-  const nowNY = toNY(ts);
-  const cutoffLocal = new Date(
-    nowNY.getFullYear(),
-    nowNY.getMonth(),
-    nowNY.getDate(),
-    16, // 美股收盘永远是纽约时间 16:00（DST 自动处理）
-    graceMin,
-    0,
-    0
-  );
-  return nowNY.getTime() >= cutoffLocal.getTime();
+// === 保留 PR 侧：日期工具与窗口解析 ===
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function parseYmd(date: string): { y: number; m: number; d: number } | null {
+  const match = DATE_ONLY_RE.exec(date);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  return { y: year, m: month, d: day };
+}
+
+function toNyDateTime(date: string, hour: number, minute: number): Date {
+  if (!parseYmd(date)) return new Date(NaN);
+  const iso = `${date} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+  const utc = zonedTimeToUtc(iso, NY_TZ);
+  return toNY(utc);
+}
+
+function resolveRtCloseWindow(): number {
+  const raw = process.env.RT_CLOSE_WINDOW_MIN;
+  if (raw === undefined || raw === null || raw === '') {
+    return DEFAULT_RT_CLOSE_WINDOW_MIN;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_RT_CLOSE_WINDOW_MIN;
+  if (parsed < 0) return DEFAULT_RT_CLOSE_WINDOW_MIN;
+  return parsed;
+}
+
+// === 保留 PR 侧：确定下次开盘 & 是否允许收盘后实时价 ===
+function nextTradingOpen(date: string): Date {
+  if (!parseYmd(date)) return new Date(NaN);
+  const base = toNyDateTime(date, 9, 30);
+  if (Number.isNaN(base.getTime())) return base;
+  const next = new Date(base.getTime());
+  next.setDate(next.getDate() + 1);
+  while (next.getDay() === 0 || next.getDay() === 6) {
+    next.setDate(next.getDate() + 1);
+  }
+  next.setHours(9, 30, 0, 0);
+  return next;
+}
+
+function shouldUseRealtimeClose(
+  targetDate: string,
+  nowNY: Date,
+  windowMinutes: number,
+): boolean {
+  const closeMoment = toNyDateTime(targetDate, 16, 0);
+  if (Number.isNaN(closeMoment.getTime())) return false;
+  const graceRaw = Number(process.env.CLOSE_GRACE_MIN ?? '0');
+  const graceMs = Number.isFinite(graceRaw) && graceRaw > 0 ? graceRaw * 60_000 : 0;
+  if (nowNY.getTime() < closeMoment.getTime() + graceMs) return false;
+  const diffMin = (nowNY.getTime() - closeMoment.getTime()) / 60_000;
+  if (windowMinutes > 0 && diffMin <= windowMinutes) return true;
+  const nextOpen = nextTradingOpen(targetDate);
+  if (Number.isNaN(nextOpen.getTime())) return false;
+  return nowNY.getTime() < nextOpen.getTime();
 }
 
 async function getPrevCloseWithin(
@@ -367,14 +416,28 @@ async function getPrevCloseWithin(
  * 顺序：缓存 -> close_prices.json -> 默认值(1)
  * close_prices.json 结构：{ [SYMBOL]: { [YYYY-MM-DD]: price } }
  */
-export async function fetchDailyClose(symbol: string, date: string): Promise<QuoteResult | null> {
+interface FetchDailyCloseOptions {
+  /**
+   * 当实时接口不可用但仍处于“收盘至下一次开盘”窗口时，可以传入一个备用收盘价（例如前台实时价），
+   * 让函数在确认窗口有效后依旧将该价格视为官方收盘价并落盘，避免周末/节假日缺口。
+   */
+  fallbackClose?: number | null;
+  /** 自定义数据来源标签，默认为 close_fallback */
+  fallbackSource?: CachedPrice['source'];
+}
+
+export async function fetchDailyClose(
+  symbol: string,
+  date: string,
+  options: FetchDailyCloseOptions = {},
+): Promise<QuoteResult | null> {
   const key = symbol.trim().toUpperCase();
   const normalizedDate = date.includes('T') ? nyDateStr(date) : date;
 
   try {
     const cachedPrice = await getPrice(key, normalizedDate);
     if (cachedPrice && typeof cachedPrice.close === 'number') {
-      saveToFile(key, normalizedDate, cachedPrice.close);
+      await saveToFile(key, normalizedDate, cachedPrice.close);
       return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
@@ -388,7 +451,7 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
     const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
-      saveToFile(key, normalizedDate, filePrice);
+      await saveToFile(key, normalizedDate, filePrice);
       return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
@@ -413,40 +476,41 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
       source: CachedPrice['source'] = 'import'
     ) => {
       await putPrice({ symbol: key, date: normalizedDate, close: price, source });
-      saveToFile(key, normalizedDate, price);
+      await saveToFile(key, normalizedDate, price);
       return { price, stale: false, priceOk: true, updatedAt: Date.now() } as QuoteResult;
     };
 
     const todayNY = nyDateStr(Date.now());
+    const latestTradingDate = getTradingDateStr(Date.now());
     const isToday = normalizedDate === todayNY;
+    const isLatestTradingDay = normalizedDate === latestTradingDate;
 
-    if (isToday) {
+    if (isToday || isLatestTradingDay) {
       const nowNY = toNY(Date.now());
-      const windowMinutes = (() => {
-        const raw = Number(process.env.RT_CLOSE_WINDOW_MIN ?? `${DEFAULT_RT_CLOSE_WINDOW_MIN}`);
-        if (!Number.isFinite(raw)) return DEFAULT_RT_CLOSE_WINDOW_MIN;
-        if (raw <= 0) return 0;
-        return raw;
-      })();
+
+      // === 保留 PR 侧：使用扩展窗口/次日开盘前窗口 ===
+      const windowMinutes = resolveRtCloseWindow();
       const allowRealtime = (() => {
-        if (windowMinutes <= 0) return false;
-        if (!isAfterNyClose()) return false;
-        const cutoff = new Date(
-          nowNY.getFullYear(),
-          nowNY.getMonth(),
-          nowNY.getDate(),
-          16,
-          0,
-          0,
-          0
-        );
-        const diffMs = nowNY.getTime() - cutoff.getTime();
-        if (diffMs < 0) return false;
-        const diffMin = diffMs / 60_000;
-        return diffMin <= windowMinutes;
+        if (!isLatestTradingDay && !isToday) return false;
+        return shouldUseRealtimeClose(normalizedDate, nowNY, windowMinutes);
       })();
 
       if (allowRealtime) {
+        // 1) 先用缓存的实时价（若时间戳晚于当日 16:00）
+        const cachedRealtime = readRealtimeCache(key);
+        if (cachedRealtime && typeof cachedRealtime.price === 'number' && cachedRealtime.price > 0) {
+          const closeMoment = toNyDateTime(normalizedDate, 16, 0);
+          const cachedMoment = toNY(cachedRealtime.ts);
+          if (
+            Number.isFinite(closeMoment.getTime()) &&
+            Number.isFinite(cachedMoment.getTime()) &&
+            cachedMoment.getTime() >= closeMoment.getTime()
+          ) {
+            return await recordOfficialClose(cachedRealtime.price, 'close_rt');
+          }
+        }
+
+        // 2) 其后再尝试实时接口
         try {
           const rt =
             (await fetchFinnhubRealtimeQuote(key)) ??
@@ -455,21 +519,44 @@ export async function fetchDailyClose(symbol: string, date: string): Promise<Quo
             return await recordOfficialClose(rt, 'close_rt');
           }
         } catch (_) {
-          // 获取不到就继续走日线/文件回退逻辑
+          // 获取不到就继续走后备逻辑
         }
       }
 
+      // 3) 仍在收盘后窗口，接受调用方 fallback 作为官方收盘价
+      const fallbackClose = options?.fallbackClose;
+      const afterOfficialClose = (() => {
+        const closeMoment = toNyDateTime(normalizedDate, 16, 0);
+        return !Number.isNaN(closeMoment.getTime()) && nowNY.getTime() >= closeMoment.getTime();
+      })();
+
+      if (
+        afterOfficialClose &&
+        isLatestTradingDay &&
+        typeof fallbackClose === 'number' &&
+        Number.isFinite(fallbackClose) &&
+        fallbackClose > 0
+      ) {
+        return await recordOfficialClose(
+          fallbackClose,
+          options.fallbackSource ?? 'close_fallback',
+        );
+      }
+
+      // 4) 最后再尝试日线 API
       const dailyPrice = await tryDailyApis();
       if (dailyPrice && dailyPrice.price > 0) {
         return await recordOfficialClose(dailyPrice.price, dailyPrice.source);
       }
     } else {
+      // 历史日，直接请求日线 API
       const historicalDaily = await tryDailyApis();
       if (historicalDaily && historicalDaily.price > 0) {
         return await recordOfficialClose(historicalDaily.price, historicalDaily.source);
       }
     }
 
+    // 日线与实时均失败，做回退
     if (process.env.MONITOR === '1') {
       const available = closeMap ? Object.keys(closeMap) : [];
       console.warn('MISSING_CLOSE', { symbol: key, date: normalizedDate, available });

@@ -50,9 +50,9 @@ function attachPrevClose(
   for (const pos of positions) {
     const prevClose = resolvePrevClose(pos.symbol, evalDate, closePrices);
     if (prevClose !== undefined) {
-      pos.prevClose = prevClose;
+      (pos as any).prevClose = prevClose;
     } else {
-      delete pos.prevClose;
+      delete (pos as any).prevClose;
     }
   }
 }
@@ -68,6 +68,40 @@ function collectSymbols(trades: Trade[], positions: Position[]): string[] {
     if (sym) symbols.add(sym);
   }
   return Array.from(symbols).sort();
+}
+
+// === PR 侧新增：用持仓最新价构建 fallback 收盘价，并在收盘后窗口补录官方收盘价 ===
+type CloseFallbackMap = Record<string, number>;
+
+function buildCloseFallbacks(positions: Position[]): CloseFallbackMap {
+  const fallbackMap: CloseFallbackMap = {};
+  for (const pos of positions) {
+    const symbol = pos.symbol?.trim().toUpperCase();
+    if (!symbol) continue;
+    const price = Number((pos as any).last);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    if ((pos as any).priceOk === false) continue;
+    if (fallbackMap[symbol] !== undefined) continue;
+    fallbackMap[symbol] = price;
+  }
+  return fallbackMap;
+}
+
+async function ensureDailyCloses(symbols: string[], targetDate: string, fallbackCloses?: CloseFallbackMap) {
+  if (!symbols.length || !targetDate) return;
+  const unique = Array.from(new Set(symbols.map(sym => sym.trim().toUpperCase()).filter(Boolean)));
+  if (!unique.length) return;
+  await Promise.all(
+    unique.map(symbol =>
+      fetchDailyClose(symbol, targetDate, {
+        fallbackClose: fallbackCloses?.[symbol],
+        fallbackSource: 'close_fallback',
+      }).catch(err => {
+        console.warn('[dashboard] ensureDailyCloses failed', { symbol, date: targetDate, error: err });
+        return null;
+      }),
+    ),
+  );
 }
 
 function findMissingCloseSymbols(
@@ -112,10 +146,10 @@ export default function DashboardPage() {
         for (const pos of posList) {
           const cached = getCachedRealtimeQuote(pos.symbol);
           if (cached?.price !== undefined) {
-            pos.last = cached.price;
-            pos.priceOk = true;
-            pos.stale = true;
-            pos.lastUpdatedAt = cached.updatedAt;
+            (pos as any).last = cached.price;
+            (pos as any).priceOk = true;
+            (pos as any).stale = true;
+            (pos as any).lastUpdatedAt = cached.updatedAt;
           }
 
           try {
@@ -129,31 +163,31 @@ export default function DashboardPage() {
             }
 
             if (result && typeof result.price === 'number' && result.price !== 1) {
-              pos.last = result.price;
-              pos.priceOk = result.priceOk !== false;
-              pos.stale = Boolean(result.stale);
-              pos.lastUpdatedAt = result.updatedAt ?? Date.now();
-            } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-              pos.priceOk = true;
-              pos.stale = true;
+              (pos as any).last = result.price;
+              (pos as any).priceOk = result.priceOk !== false;
+              (pos as any).stale = Boolean(result.stale);
+              (pos as any).lastUpdatedAt = result.updatedAt ?? Date.now();
+            } else if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
+              (pos as any).priceOk = true;
+              (pos as any).stale = true;
             } else {
-              pos.last = NaN;
-              pos.priceOk = false;
-              pos.stale = true;
+              (pos as any).last = NaN;
+              (pos as any).priceOk = false;
+              (pos as any).stale = true;
             }
           } catch (e) {
-            if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-              pos.priceOk = true;
-              pos.stale = true;
+            if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
+              (pos as any).priceOk = true;
+              (pos as any).stale = true;
             } else {
-              pos.last = NaN;
-              pos.priceOk = false;
-              pos.stale = true;
+              (pos as any).last = NaN;
+              (pos as any).priceOk = false;
+              (pos as any).stale = true;
             }
           }
         }
 
-        if (posList.some(p => !p.priceOk)) {
+        if (posList.some(p => !(p as any).priceOk)) {
           if (freezeDate) {
             setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
           } else {
@@ -164,6 +198,13 @@ export default function DashboardPage() {
         }
 
         const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+        // 收盘后→下次开盘前：用持仓最新价作为 fallback，驱动 fetchDailyClose 自动落盘官方收盘价
+        if (!freezeDate) {
+          const symbols = collectSymbols(dbTrades, posList);
+          const fallbackCloses = buildCloseFallbacks(posList);
+          await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
+        }
 
         const [fileClosePrices, cachedPrices] = await Promise.all([
           loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
@@ -198,7 +239,7 @@ export default function DashboardPage() {
         });
         setDailyResultsCache(dailyResults);
 
-        // 计算指标并存入全局状态
+        // 计算指标并存入全局状态（M6 = M4 + M5.2 + 当日MTM）
         const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
           tradingDateStr: evalDateStr,
         });
@@ -235,10 +276,10 @@ export default function DashboardPage() {
       for (const pos of posList) {
         const cached = getCachedRealtimeQuote(pos.symbol);
         if (cached?.price !== undefined) {
-          pos.last = cached.price;
-          pos.priceOk = true;
-          pos.stale = true;
-          pos.lastUpdatedAt = cached.updatedAt;
+          (pos as any).last = cached.price;
+          (pos as any).priceOk = true;
+          (pos as any).stale = true;
+          (pos as any).lastUpdatedAt = cached.updatedAt;
         }
 
         try {
@@ -251,31 +292,31 @@ export default function DashboardPage() {
             }
           }
           if (result && typeof result.price === 'number' && result.price !== 1) {
-            pos.last = result.price;
-            pos.priceOk = result.priceOk !== false;
-            pos.stale = Boolean(result.stale);
-            pos.lastUpdatedAt = result.updatedAt ?? Date.now();
-          } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-            pos.priceOk = true;
-            pos.stale = true;
+            (pos as any).last = result.price;
+            (pos as any).priceOk = result.priceOk !== false;
+            (pos as any).stale = Boolean(result.stale);
+            (pos as any).lastUpdatedAt = result.updatedAt ?? Date.now();
+          } else if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
+            (pos as any).priceOk = true;
+            (pos as any).stale = true;
           } else {
-            pos.last = NaN;
-            pos.priceOk = false;
-            pos.stale = true;
+            (pos as any).last = NaN;
+            (pos as any).priceOk = false;
+            (pos as any).stale = true;
           }
         } catch (e) {
-          if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-            pos.priceOk = true;
-            pos.stale = true;
+          if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
+            (pos as any).priceOk = true;
+            (pos as any).stale = true;
           } else {
-            pos.last = NaN;
-            pos.priceOk = false;
-            pos.stale = true;
+            (pos as any).last = NaN;
+            (pos as any).priceOk = false;
+            (pos as any).stale = true;
           }
         }
       }
 
-      if (posList.some(p => !p.priceOk)) {
+      if (posList.some(p => !(p as any).priceOk)) {
         if (freezeDate) {
           setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
         } else {
@@ -286,29 +327,35 @@ export default function DashboardPage() {
 
       const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
 
+      if (!freezeDate) {
+        const symbols = collectSymbols(dbTrades, posList);
+        const fallbackCloses = buildCloseFallbacks(posList);
+        await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
+      }
+
       const [fileClosePrices, cachedPrices] = await Promise.all([
         loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
         getAllPrices(),
       ]);
-        const mergedClosePrices = mergeClosePriceMaps(
-          normalizeClosePriceMap(fileClosePrices),
-          closePricesFromRows(cachedPrices),
-        );
+      const mergedClosePrices = mergeClosePriceMaps(
+        normalizeClosePriceMap(fileClosePrices),
+        closePricesFromRows(cachedPrices),
+      );
 
-        attachPrevClose(posList, mergedClosePrices, evalDateStr);
+      attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
-        const missingCloseSymbols = findMissingCloseSymbols(
-          collectSymbols(dbTrades, posList),
-          mergedClosePrices,
-          evalDateStr,
-        );
-        if (missingCloseSymbols.length > 0) {
-          setTrades(dbTrades);
-          setPositions(posList);
-          setEnrichedTrades(enriched);
-          setError(`缺少 ${evalDateStr} 的收盘价：${missingCloseSymbols.join('、')}。请编辑 close_prices.json 后重试。`);
-          return;
-        }
+      const missingCloseSymbols = findMissingCloseSymbols(
+        collectSymbols(dbTrades, posList),
+        mergedClosePrices,
+        evalDateStr,
+      );
+      if (missingCloseSymbols.length > 0) {
+        setTrades(dbTrades);
+        setPositions(posList);
+        setEnrichedTrades(enriched);
+        setError(`缺少 ${evalDateStr} 的收盘价：${missingCloseSymbols.join('、')}。请编辑 close_prices.json 后重试。`);
+        return;
+      }
 
       const dailyResults = generateDailyResults({
         trades: enriched,
