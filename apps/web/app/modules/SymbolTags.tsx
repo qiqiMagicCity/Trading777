@@ -14,9 +14,20 @@ export function SymbolTags({ symbols, realizedPnls }: SymbolTagsProps) {
     return null;
   }
 
+  const sortedSymbols = [...symbols].sort((a, b) => {
+    const pnlA = realizedPnls?.[a] ?? 0;
+    const pnlB = realizedPnls?.[b] ?? 0;
+
+    if (pnlA === pnlB) {
+      return 0;
+    }
+
+    return pnlB - pnlA;
+  });
+
   return (
     <div id="symbols-list" className="symbols-list">
-      {symbols.map(symbol => (
+      {sortedSymbols.map(symbol => (
         <Link
           key={symbol}
           href={`/stock?symbol=${symbol}`}
