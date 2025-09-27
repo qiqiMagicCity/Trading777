@@ -75,8 +75,8 @@ export function PositionsTable({ positions, trades }: Props) {
       .reduce((sum, t) => sum + (t.realizedPnl || 0), 0);
   };
 
-  // 计算市值和浮动盈亏
-  const marketValues = useMemo(() => {
+  // 计算市值、浮动盈亏和当日盈亏
+  const positionSummaries = useMemo(() => {
     // 添加日志帮助调试
     logger.debug('持仓数据:', positions);
     logger.debug('Price API results:', positions.map((pos, idx) => ({
@@ -97,12 +97,18 @@ export function PositionsTable({ positions, trades }: Props) {
           ? result.data.price
           : fallbackPrice;
       const resolvedPrice = Number.isFinite(lastPrice) ? lastPrice : pos.avgPrice;
+      const prevClose = Number(pos.prevClose);
+      const hasPrevClose = Number.isFinite(prevClose);
 
       // 修改：对于空头持仓，市值应该是正数（使用绝对值）
       const isShort = pos.qty < 0;
-      const marketValue = isShort ? Math.abs(resolvedPrice * pos.qty) : resolvedPrice * pos.qty;
+      const signedMarketValue = resolvedPrice * pos.qty;
+      const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
       // 按 (实时价格 - 成本价格) × 数量 计算浮动盈亏
       const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
+      const intraday = hasPrevClose
+        ? signedMarketValue - prevClose * pos.qty
+        : undefined;
 
       logger.debug(`${pos.symbol} 市值计算:`, {
         lastPrice: resolvedPrice,
@@ -111,31 +117,42 @@ export function PositionsTable({ positions, trades }: Props) {
         rawMarket: resolvedPrice * pos.qty,
         market: marketValue,
         avgPrice: pos.avgPrice,
-        unrealized
+        unrealized,
+        prevClose,
+        intraday,
       });
 
-      return { market: marketValue, unrealized };
+      return { market: marketValue, unrealized, intraday };
     });
   }, [positions, results]);
 
   // 计算总计
   const totals = useMemo(() => {
-    logger.debug('计算总计，marketValues:', marketValues);
+    logger.debug('计算总计，positionSummaries:', positionSummaries);
 
-    const totalMarketValue = marketValues.reduce((sum, item) => sum + item.market, 0);
-    const totalUnrealized = marketValues.reduce((sum, item) => sum + item.unrealized, 0);
+    const totalMarketValue = positionSummaries.reduce((sum, item) => sum + item.market, 0);
+    const totalUnrealized = positionSummaries.reduce((sum, item) => sum + item.unrealized, 0);
+    const hasIntraday = positionSummaries.some(item => item.intraday !== undefined);
+    const totalIntraday = positionSummaries.reduce((sum, item) => sum + (item.intraday ?? 0), 0);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
     const totalPnL = totalUnrealized + totalRealized;
 
     logger.debug('总计结果:', {
       totalMarketValue,
       totalUnrealized,
+      totalIntraday,
       totalRealized,
       totalPnL
     });
 
-    return { marketValue: totalMarketValue, unrealized: totalUnrealized, realized: totalRealized, total: totalPnL };
-  }, [marketValues, metrics?.M9]);
+    return {
+      marketValue: totalMarketValue,
+      unrealized: totalUnrealized,
+      intraday: hasIntraday ? totalIntraday : undefined,
+      realized: totalRealized,
+      total: totalPnL
+    };
+  }, [positionSummaries, metrics?.M9]);
 
   return (
     <div>
@@ -150,7 +167,7 @@ export function PositionsTable({ positions, trades }: Props) {
             <th>持仓单价</th>
             <th>持仓金额</th>
             <th>盈亏平衡点</th>
-            <th>当前浮盈亏</th>
+            <th>当日浮盈亏</th>
             <th>浮动百分比</th>
             <th>标的盈亏</th>
             <th>历史交易次数</th>
@@ -169,19 +186,26 @@ export function PositionsTable({ positions, trades }: Props) {
             const isStale = result?.data?.stale ?? pos.stale;
             const isPending = result?.isFetching ?? false;
             const isError = result?.isError;
+            const prevClose = Number(pos.prevClose);
+            const hasPrevClose = Number.isFinite(prevClose);
 
             // 使用回退价格计算市值和浮动盈亏
             const isShort = pos.qty < 0;
-            const marketValue = isShort ? Math.abs(resolvedPrice * pos.qty) : resolvedPrice * pos.qty;
-            // 当前浮盈亏 = (实时价格 - 持仓单价) × 数量
+            const signedMarketValue = resolvedPrice * pos.qty;
+            const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
             const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
+            // 当日浮盈亏 = 今日市值 - 昨日市值
+            const intraday = hasPrevClose
+              ? signedMarketValue - prevClose * pos.qty
+              : undefined;
             const unrealizedPercent =
               resolvedPrice && pos.avgPrice ? (resolvedPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
             const realized = getRealized(pos.symbol);
             const totalPNL = unrealized + realized;
 
-            const pnlClass = unrealized > 0 ? 'green' : unrealized < 0 ? 'red' : '';
+            const intradayClass =
+              intraday !== undefined ? (intraday > 0 ? 'green' : intraday < 0 ? 'red' : '') : '';
             const totalClass = totalPNL > 0 ? 'green' : totalPNL < 0 ? 'red' : '';
             const percentClass = unrealizedPercent !== undefined ? (unrealizedPercent > 0 ? 'green' : unrealizedPercent < 0 ? 'red' : '') : '';
 
@@ -208,7 +232,7 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{formatNumber(marketValue)}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>
-                <td className={pnlClass}>{formatNumber(unrealized)}</td>
+                <td className={intradayClass}>{formatNumber(intraday)}</td>
                 <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
                 <td>{getTradeCount(pos.symbol)}</td>
@@ -221,8 +245,18 @@ export function PositionsTable({ positions, trades }: Props) {
             <td colSpan={6}><strong>总计</strong></td>
             <td><strong>{formatCurrency(totals.marketValue)}</strong></td>
             <td></td>
-            <td className={totals.unrealized > 0 ? 'green' : totals.unrealized < 0 ? 'red' : ''}>
-              <strong>{formatCurrency(totals.unrealized)}</strong>
+            <td
+              className={
+                totals.intraday !== undefined
+                  ? totals.intraday > 0
+                    ? 'green'
+                    : totals.intraday < 0
+                      ? 'red'
+                      : ''
+                  : ''
+              }
+            >
+              <strong>{totals.intraday !== undefined ? formatCurrency(totals.intraday) : '--'}</strong>
             </td>
             <td></td>
             <td className={totals.total > 0 ? 'green' : totals.total < 0 ? 'red' : ''}>
