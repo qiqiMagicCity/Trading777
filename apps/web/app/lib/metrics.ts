@@ -25,6 +25,15 @@ function normalizeToNyDay(input: string | number | Date): Date | string | number
   }
   return input;
 }
+
+function nyDayStr(input: string | number | Date): string {
+  const normalized = normalizeToNyDay(input);
+  return toNY(normalized).toISOString().slice(0, 10);
+}
+
+function nyTodayStr(): string {
+  return nyDayStr(nowNY());
+}
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import { sortTrades } from "./sortTrades";
 import type { DailyResult } from "./types";
@@ -840,6 +849,56 @@ export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
   };
 }
 
+export function calcWtdMtdYtdFromSnapshots(
+  daily: DailyResult[] = [],
+  evalDayStr: string,
+) {
+  const evalDayNYStr = nyDayStr(evalDayStr);
+  const endTs = endOfDayNY(toNY(`${evalDayNYStr}T12:00:00Z`)).getTime();
+  const map = new Map<string, DailyResult>();
+
+  for (const r of daily ?? []) {
+    if (!r) continue;
+    const dayStr = nyDayStr(r.date);
+    const rTs = new Date(r.date).getTime();
+    if (!Number.isFinite(rTs)) continue;
+    const prev = map.get(dayStr);
+    if (!prev) {
+      map.set(dayStr, r);
+      continue;
+    }
+    const prevTs = new Date(prev.date).getTime();
+    if (!Number.isFinite(prevTs) || rTs >= prevTs) {
+      map.set(dayStr, r);
+    }
+  }
+
+  const rows = Array.from(map.entries())
+    .map(([day, rec]) => {
+      const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
+      const pnl = Number(rec.realized ?? 0) + Number(rec.unrealized ?? 0);
+      return { ts, pnl };
+    })
+    .filter((x) => Number.isFinite(x.ts) && x.ts <= endTs);
+
+  const evalDate = toNY(`${evalDayNYStr}T12:00:00Z`);
+  const wStart = startOfWeekNY(evalDate).getTime();
+  const mStart = startOfMonthNY(evalDate).getTime();
+  const yStart = startOfYearNY(evalDate).getTime();
+
+  const sumIn = (startTs: number) =>
+    rows.reduce(
+      (sum, item) => (item.ts >= startTs && item.ts <= endTs ? sum + item.pnl : sum),
+      0,
+    );
+
+  return {
+    wtd: sumIn(wStart),
+    mtd: sumIn(mStart),
+    ytd: sumIn(yStart),
+  };
+}
+
 export function calcM9FromDaily(
   daily: DailyResult[],
   evalDateStr: string,
@@ -1218,7 +1277,7 @@ export function collectCloseLots(
 /**
  * 计算所有交易指标
  */
-function calcMetricsInternal(
+export function calcMetricsInternal(
   trades: EnrichedTrade[],
   positions: Position[],
   dailyResults: DailyResult[] = [],
@@ -1238,6 +1297,8 @@ function calcMetricsInternal(
     rawTradingDate && /^\d{4}-\d{2}-\d{2}$/.test(rawTradingDate)
       ? rawTradingDate
       : undefined;
+  const inputTodayStr = providedTradingDate;
+  const snapEvalDayStr = nyDayStr(inputTodayStr ?? nyTodayStr());
   const evalDateNY = providedTradingDate
     ? toNY(`${providedTradingDate}T12:00:00Z`)
     : nowNY();
@@ -1410,7 +1471,10 @@ function calcMetricsInternal(
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13
-  const { wtd, mtd, ytd } = calcWtdMtdYtd(historicalDailyResults, todayStr);
+  const { wtd, mtd, ytd } = calcWtdMtdYtdFromSnapshots(
+    dailyResults,
+    snapEvalDayStr,
+  );
   if (DEBUG) {
     try {
       checkPeriodDebug(historicalDailyResults ?? dailyResults, todayStr);
