@@ -56,61 +56,56 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     isDebug() || process.env.NEXT_PUBLIC_METRICS_DEBUG === "1";
 
   const periodValues = useMemo(() => {
-    const raw = rawMetrics as Record<string, unknown> | null;
-    const pick = (candidate: unknown): number | undefined =>
-      typeof candidate === "number" && Number.isFinite(candidate)
-        ? candidate
-        : undefined;
-    const resolve = (
-      candidates: Array<unknown>,
-    ): number | undefined => {
-      for (const candidate of candidates) {
-        const value = pick(candidate);
-        if (value !== undefined) {
-          return value;
-        }
-      }
-      return undefined;
-    };
+    const safeNum = (n: unknown) =>
+      typeof n === "number" && Number.isFinite(n) ? n : undefined;
 
     return {
-      M11: resolve([
-        metrics?.M11,
-        raw?.M11,
-        raw?.wtd,
-        raw?.WTD,
-      ]),
-      M12: resolve([
-        metrics?.M12,
-        raw?.M12,
-        raw?.mtd,
-        raw?.MTD,
-      ]),
-      M13: resolve([
-        metrics?.M13,
-        raw?.M13,
-        raw?.ytd,
-        raw?.YTD,
-      ]),
+      M11: { value: safeNum(metrics?.M11), picked: "metrics.M11" },
+      M12: { value: safeNum(metrics?.M12), picked: "metrics.M12" },
+      M13: { value: safeNum(metrics?.M13), picked: "metrics.M13" },
     } as const;
-  }, [metrics, rawMetrics]);
+  }, [metrics]);
 
   useEffect(() => {
     if (!debugEnabled) return;
     if (!rawMetrics) return;
     const payload = {
-      WTD: periodValues.M11 ?? null,
-      MTD: periodValues.M12 ?? null,
-      YTD: periodValues.M13 ?? null,
+      WTD: periodValues.M11,
+      MTD: periodValues.M12,
+      YTD: periodValues.M13,
     };
     // eslint-disable-next-line no-console
-    console.debug("PERIOD-CARDS", payload);
+    console.log("PERIOD-CARDS (选中来源路径)", payload);
   }, [debugEnabled, periodValues, rawMetrics]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const usp = new URLSearchParams(window.location.search);
     if (usp.get("debugM11") !== "1") return;
+
+    try {
+      const ssr = JSON.parse(
+        document.getElementById("__NEXT_DATA__")?.textContent || "{}",
+      );
+      const ssrMetrics =
+        ssr?.props?.pageProps?.metrics ?? ssr?.props?.pageProps?.data?.metrics;
+      // eslint-disable-next-line no-console
+      console.log(
+        "SSR has metrics?",
+        !!ssrMetrics,
+        ssrMetrics ? Object.keys(ssrMetrics) : null,
+      );
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.log("SSR metrics inspect failed:", e);
+    }
+
+    // eslint-disable-next-line no-console
+    console.log("PERIOD-CARDS (选中来源路径)", {
+      WTD: periodValues.M11,
+      MTD: periodValues.M12,
+      YTD: periodValues.M13,
+    });
 
     let tries = 0;
     const maxTries = 20;
@@ -131,13 +126,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         clearInterval(timer);
       } else if (tries >= maxTries) {
         // eslint-disable-next-line no-console
-        console.warn("debugM11: no explain captured (did metrics compute on client?)");
+        console.warn(
+          "debugM11: no explain captured (did metrics compute on client?)",
+        );
         clearInterval(timer);
       }
     }, 300);
 
     return () => clearInterval(timer);
-  }, [rawMetrics]);
+  }, [periodValues, rawMetrics]);
 
   // 定义指标名称映射
   const metricNames: Partial<Record<keyof MetricsContract, string>> = useMemo(
@@ -185,11 +182,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     return order.map((key) => {
       const value =
         key === "M11"
-          ? (periodValues.M11 ?? 0)
+          ? periodValues.M11.value ?? 0
           : key === "M12"
-          ? (periodValues.M12 ?? 0)
+          ? periodValues.M12.value ?? 0
           : key === "M13"
-          ? (periodValues.M13 ?? 0)
+          ? periodValues.M13.value ?? 0
           : metrics[key];
       let formattedValue: ReactNode;
       let colorClass = "";
