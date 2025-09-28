@@ -3,9 +3,9 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { useStore } from "@/lib/store";
-import { formatCurrency, normalizeMetrics } from "@/app/lib/metrics";
+import { formatCurrency, normalizeMetrics, isDebug } from "@/app/lib/metrics";
 import type { MetricsContract } from "@/app/lib/types/metrics";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 
 /**
  * DashboardMetrics 组件的属性接口
@@ -24,13 +24,15 @@ function MetricCard({
   title,
   value,
   colorClass,
+  dataTestId,
 }: {
   title: string;
   value: ReactNode;
   colorClass?: string;
+  dataTestId?: string;
 }) {
   return (
-    <div className="box">
+    <div className="box" data-testid={dataTestId}>
       <div className="title">{title}</div>
       <div className={`value ${colorClass || ""}`}>{value}</div>
     </div>
@@ -45,6 +47,60 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   // 从全局状态获取指标
   const rawMetrics = useStore((state) => state.metrics);
   const metrics = normalizeMetrics(rawMetrics);
+  const debugEnabled =
+    isDebug() || process.env.NEXT_PUBLIC_METRICS_DEBUG === "1";
+
+  const periodValues = useMemo(() => {
+    const raw = rawMetrics as Record<string, unknown> | null;
+    const pick = (candidate: unknown): number | undefined =>
+      typeof candidate === "number" && Number.isFinite(candidate)
+        ? candidate
+        : undefined;
+    const resolve = (
+      candidates: Array<unknown>,
+    ): number | undefined => {
+      for (const candidate of candidates) {
+        const value = pick(candidate);
+        if (value !== undefined) {
+          return value;
+        }
+      }
+      return undefined;
+    };
+
+    return {
+      M11: resolve([
+        metrics?.M11,
+        raw?.M11,
+        raw?.wtd,
+        raw?.WTD,
+      ]),
+      M12: resolve([
+        metrics?.M12,
+        raw?.M12,
+        raw?.mtd,
+        raw?.MTD,
+      ]),
+      M13: resolve([
+        metrics?.M13,
+        raw?.M13,
+        raw?.ytd,
+        raw?.YTD,
+      ]),
+    } as const;
+  }, [metrics, rawMetrics]);
+
+  useEffect(() => {
+    if (!debugEnabled) return;
+    if (!rawMetrics) return;
+    const payload = {
+      WTD: periodValues.M11 ?? null,
+      MTD: periodValues.M12 ?? null,
+      YTD: periodValues.M13 ?? null,
+    };
+    // eslint-disable-next-line no-console
+    console.debug("PERIOD-CARDS", payload);
+  }, [debugEnabled, periodValues, rawMetrics]);
 
   // 定义指标名称映射
   const metricNames: Partial<Record<keyof MetricsContract, string>> = useMemo(
@@ -90,9 +146,24 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const formattedMetrics = useMemo(() => {
     if (!metrics) return [];
     return order.map((key) => {
-      const value = metrics[key];
+      const value =
+        key === "M11"
+          ? (periodValues.M11 ?? 0)
+          : key === "M12"
+          ? (periodValues.M12 ?? 0)
+          : key === "M13"
+          ? (periodValues.M13 ?? 0)
+          : metrics[key];
       let formattedValue: ReactNode;
       let colorClass = "";
+      const dataTestId =
+        key === "M11"
+          ? "metric-wtd"
+          : key === "M12"
+          ? "metric-mtd"
+          : key === "M13"
+          ? "metric-ytd"
+          : undefined;
 
       // 根据不同指标类型格式化值
       if (key === "M5") {
@@ -137,7 +208,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           </>
         );
       } else {
-        const numValue = (key === "M4" || key === "M6") ? (value as { total: number }).total : (value as number);
+        const numValue =
+          key === "M4" || key === "M6"
+            ? (value as { total: number }).total
+            : (value as number);
         formattedValue = formatCurrency(numValue);
 
         // 设置颜色
@@ -155,9 +229,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         title: metricNames[key],
         value: formattedValue,
         colorClass,
+        dataTestId,
       };
     });
-  }, [metrics, metricNames, order]);
+  }, [metrics, metricNames, order, periodValues]);
 
   const rows = useMemo(
     () => [
@@ -189,6 +264,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                 title={metric.title!}
                 value={metric.value}
                 colorClass={metric.colorClass}
+                dataTestId={metric.dataTestId}
               />
             ))}
           </div>
