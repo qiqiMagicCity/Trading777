@@ -543,6 +543,112 @@ export function getEvalDateStr(
   return (lastDaily > lastTrade ? lastDaily : lastTrade).slice(0, 10);
 }
 
+type PersistableTradeInput = Pick<
+  Trade,
+  "symbol" | "price" | "quantity" | "date" | "action"
+> & {
+  id?: number;
+  time?: Trade["time"];
+};
+
+interface PersistableTradePayload {
+  symbol: string;
+  price: number;
+  quantity: number;
+  date: string;
+  action: Trade["action"];
+  time: string;
+  id?: number;
+}
+
+function toPersistableTradePayload(
+  trade: PersistableTradeInput,
+): PersistableTradePayload | undefined {
+  const symbol = toUpperSafe(trade.symbol);
+  if (!symbol) return undefined;
+  const price = Number(trade.price);
+  const quantity = Number(trade.quantity);
+  if (!Number.isFinite(price) || !Number.isFinite(quantity)) return undefined;
+  if (!trade.date) return undefined;
+  const action = trade.action;
+  if (!action) return undefined;
+
+  let time: string;
+  const rawTime = trade.time;
+  if (rawTime instanceof Date) {
+    time = `${rawTime.getFullYear()}-${String(rawTime.getMonth() + 1).padStart(2, "0")}-${String(
+      rawTime.getDate(),
+    ).padStart(2, "0")}`;
+    time += `T${String(rawTime.getHours()).padStart(2, "0")}:${String(
+      rawTime.getMinutes(),
+    ).padStart(2, "0")}:${String(rawTime.getSeconds()).padStart(2, "0")}`;
+  } else if (typeof rawTime === "number" && Number.isFinite(rawTime)) {
+    const asDate = new Date(rawTime);
+    time = `${asDate.getFullYear()}-${String(asDate.getMonth() + 1).padStart(2, "0")}-${String(
+      asDate.getDate(),
+    ).padStart(2, "0")}`;
+    time += `T${String(asDate.getHours()).padStart(2, "0")}:${String(
+      asDate.getMinutes(),
+    ).padStart(2, "0")}:${String(asDate.getSeconds()).padStart(2, "0")}`;
+  } else if (typeof rawTime === "string" && rawTime.trim()) {
+    time = rawTime.trim();
+  } else {
+    time = `${trade.date}T00:00:00`;
+  }
+
+  const payload: PersistableTradePayload = {
+    symbol,
+    price,
+    quantity,
+    date: trade.date,
+    action,
+    time,
+  };
+
+  if (trade.id != null) {
+    payload.id = trade.id;
+  }
+
+  return payload;
+}
+
+async function persistTradesToPrimarySource(
+  snapshot?: PersistableTradeInput[],
+): Promise<void> {
+  if (typeof fetch !== "function") {
+    return;
+  }
+
+  try {
+    const trades = snapshot ?? (await findTrades());
+    const payload = trades
+      .map((trade) => toPersistableTradePayload(trade))
+      .filter((value): value is PersistableTradePayload => Boolean(value));
+
+    const res = await fetch("/api/trades", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ trades: payload }),
+    });
+
+    if (!res.ok) {
+      let detail = "";
+      try {
+        detail = await res.text();
+      } catch {
+        detail = "";
+      }
+      logger.warn(
+        `[dataService] persist trades failed: ${res.status} ${detail}`.trim(),
+      );
+    }
+  } catch (err) {
+    logger.warn("[dataService] persist trades request failed", err);
+  }
+}
+
 // --- New functions for price cache ---
 
 export async function getPrice(
@@ -593,6 +699,7 @@ export async function addTrade(trade: Trade): Promise<number> {
   const id = await db.add(TRADES_STORE_NAME, trade as Trade);
   clearDailyResultsCache();
   markDatasetAsCustom();
+  await persistTradesToPrimarySource();
   return id;
 }
 
@@ -605,6 +712,7 @@ export async function updateTrade(trade: Trade): Promise<void> {
   logger.info("交易更新成功");
   clearDailyResultsCache();
   markDatasetAsCustom();
+  await persistTradesToPrimarySource();
 }
 
 export async function deleteTrade(id: number): Promise<void> {
@@ -612,4 +720,5 @@ export async function deleteTrade(id: number): Promise<void> {
   await db.delete(TRADES_STORE_NAME, id);
   clearDailyResultsCache();
   markDatasetAsCustom();
+  await persistTradesToPrimarySource();
 }

@@ -54,14 +54,21 @@ function cloneSeed(): Parameters<typeof clearAndImportData>[0] {
 }
 
 describe("trade mutations promote dataset to custom", () => {
+  let fetchMock: jest.Mock;
+
   beforeEach(async () => {
     await indexedDB.deleteDatabase("TradingApp");
+    fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    // @ts-expect-error assign mock fetch for persistence side effects
+    global.fetch = fetchMock;
   });
 
   afterEach(async () => {
     await closeDb();
     // @ts-expect-error remove mocked storage between tests
     delete global.localStorage;
+    // @ts-expect-error cleanup mock fetch between tests
+    delete global.fetch;
   });
 
   test("addTrade marks dataset as custom", async () => {
@@ -91,6 +98,14 @@ describe("trade mutations promote dataset to custom", () => {
       DATASET_SOURCE_CUSTOM,
     );
     expect(localStorage.getItem("datasetHash")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.trades).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ symbol: "NEW", action: "buy" }),
+      ]),
+    );
   });
 
   test("updateTrade marks dataset as custom", async () => {
@@ -112,6 +127,7 @@ describe("trade mutations promote dataset to custom", () => {
       DATASET_SOURCE_CUSTOM,
     );
     expect(localStorage.getItem(DATASET_HASH_KEY)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   test("deleteTrade marks dataset as custom", async () => {
@@ -130,5 +146,6 @@ describe("trade mutations promote dataset to custom", () => {
       DATASET_SOURCE_CUSTOM,
     );
     expect(localStorage.getItem(DATASET_HASH_KEY)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
