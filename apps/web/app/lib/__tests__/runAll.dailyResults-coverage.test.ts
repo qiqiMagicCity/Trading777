@@ -41,6 +41,28 @@ describe("needsSyntheticDailyResults coverage heuristics", () => {
 
     expect(needsSyntheticDailyResults(okRows, evalISO)).toBe(false);
   });
+
+  it("flags snapshots missing unrealized on the eval date", () => {
+    const evalISO = "2025-05-02";
+    const rows = [
+      { date: "2025-04-26", realized: 0, unrealized: 100 },
+      { date: "2025-05-02", realized: 0 },
+    ];
+
+    expect(needsSyntheticDailyResults(rows as any, evalISO)).toBe(true);
+  });
+
+  it("requires usable baseline unrealized values", () => {
+    const evalISO = "2025-05-03";
+    const rows = [
+      { date: "2025-03-01", realized: 0 },
+      { date: "2025-05-01", realized: 0, unrealized: 100 },
+      { date: "2025-05-02", realized: 0, unrealized: 105 },
+      { date: "2025-05-03", realized: 0, unrealized: 110 },
+    ];
+
+    expect(needsSyntheticDailyResults(rows as any, evalISO)).toBe(true);
+  });
 });
 
 describe("runAll regenerates stale daily results for accurate M11/M12/M13", () => {
@@ -82,6 +104,43 @@ describe("runAll regenerates stale daily results for accurate M11/M12/M13", () =
         [] as RawTrade[],
         closePrices,
         { dailyResults: staleDaily },
+        { evalDate: evalISO },
+      );
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        `[runAll] regenerated dailyResults for ${evalISO} due to insufficient baseline coverage`,
+      );
+      expect(res.M11).toBeCloseTo(baseline.M11, 6);
+      expect(res.M12).toBeCloseTo(baseline.M12, 6);
+      expect(res.M13).toBeCloseTo(baseline.M13, 6);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("rebuilds when eval day lacks unrealized values", async () => {
+    const baseline = await runAll(
+      evalISO,
+      positions as any,
+      [] as RawTrade[],
+      closePrices,
+      { dailyResults: [] },
+      { evalDate: evalISO },
+    );
+
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const brokenDaily = [
+        { date: "2025-03-13", realized: 0, unrealized: 500 },
+        { date: "2025-03-14", realized: 0 },
+      ];
+
+      const res = await runAll(
+        evalISO,
+        positions as any,
+        [] as RawTrade[],
+        closePrices,
+        { dailyResults: brokenDaily as any },
         { evalDate: evalISO },
       );
 

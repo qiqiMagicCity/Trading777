@@ -297,7 +297,10 @@ type MinimalDailyResult = {
 type NormalizedDailyRow = {
   day: string;
   realized: number;
+  realizedValid: boolean;
   unrealized: number;
+  unrealizedValid: boolean;
+  hasUnrealizedDelta: boolean;
   unrealizedDelta?: number;
 };
 
@@ -322,19 +325,23 @@ function normalizeDailyRows(
 
     const tsRaw = new Date(entry.date).getTime();
     const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-    const realized = Number(entry.realized ?? 0);
+    const realizedValue = Number(entry.realized);
+    const realizedValid = Number.isFinite(realizedValue);
     const unrealizedValue = Number(entry.unrealized);
-    const unrealized = Number.isFinite(unrealizedValue) ? unrealizedValue : 0;
+    const unrealizedValid = Number.isFinite(unrealizedValue);
+    const unrealized = unrealizedValid ? unrealizedValue : 0;
+    const deltaValue = Number(entry.unrealizedDelta);
+    const deltaValid = Number.isFinite(deltaValue);
     const normalized: NormalizedDailyRow = {
       day,
-      realized: Number.isFinite(realized) ? realized : 0,
+      realized: realizedValid ? realizedValue : 0,
+      realizedValid,
       unrealized,
+      unrealizedValid,
+      hasUnrealizedDelta: deltaValid,
     };
-    if (
-      typeof entry.unrealizedDelta === "number" &&
-      Number.isFinite(entry.unrealizedDelta)
-    ) {
-      normalized.unrealizedDelta = entry.unrealizedDelta;
+    if (deltaValid) {
+      normalized.unrealizedDelta = deltaValue;
     }
 
     const prev = dedup.get(day);
@@ -393,6 +400,10 @@ function needsSyntheticDailyResults(
     return true;
   }
 
+  if (!last.unrealizedValid) {
+    return true;
+  }
+
   const windows = [
     { start: nyDateStr(startOfWeekNY(evalISO)), label: "week" as const },
     { start: nyDateStr(startOfMonthNY(evalISO)), label: "month" as const },
@@ -407,11 +418,14 @@ function needsSyntheticDailyResults(
     const first = windowRows[0]!;
     const baseline = findBaselineRow(rows, start);
     if (baseline) {
+      if (!baseline.unrealizedValid) {
+        return true;
+      }
       const gapDays = daysBetween(start, baseline.day);
       if (gapDays > MAX_BASELINE_GAP_DAYS) {
         return true;
       }
-    } else if (first.unrealizedDelta === undefined) {
+    } else if (!first.hasUnrealizedDelta) {
       return true;
     }
 
@@ -419,6 +433,12 @@ function needsSyntheticDailyResults(
       const lagDays = daysBetween(first.day, start);
       const lagLimit = label === "year" ? Number.POSITIVE_INFINITY : MAX_WINDOW_ENTRY_LAG_DAYS;
       if (lagDays > lagLimit) {
+        return true;
+      }
+    }
+
+    for (const row of windowRows) {
+      if (!row.unrealizedValid && !row.hasUnrealizedDelta) {
         return true;
       }
     }
