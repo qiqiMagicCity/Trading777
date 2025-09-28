@@ -1791,6 +1791,13 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6Excluded,
     missingPrevCloseSymbols,
   };
+  const pickFiniteNumber = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+  const M11 = pickFiniteNumber(input?.M11);
+  const M12 = pickFiniteNumber(input?.M12);
+  const M13 = pickFiniteNumber(input?.M13);
+
   return {
     M1,
     M2,
@@ -1803,9 +1810,9 @@ export function normalizeMetrics(input: any): MetricsContract {
     M8,
     M9,
     M10,
-    M11: input?.M11,
-    M12: input?.M12,
-    M13: input?.M13,
+    ...(M11 !== undefined ? { M11 } : {}),
+    ...(M12 !== undefined ? { M12 } : {}),
+    ...(M13 !== undefined ? { M13 } : {}),
     aux,
   };
 }

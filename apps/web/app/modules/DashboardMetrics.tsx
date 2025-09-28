@@ -66,6 +66,8 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     } as const;
   }, [metrics]);
 
+  // 卡片渲染时统一读取 periodValues.*.value，缺失时占位 0
+
   useEffect(() => {
     if (!debugEnabled) return;
     if (!rawMetrics) return;
@@ -75,7 +77,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       YTD: periodValues.M13,
     };
     // eslint-disable-next-line no-console
-    console.log("PERIOD-CARDS (选中来源路径)", payload);
+    console.log("PERIOD-CARDS (final source)", payload);
   }, [debugEnabled, periodValues, rawMetrics]);
 
   useEffect(() => {
@@ -100,11 +102,22 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       console.log("SSR metrics inspect failed:", e);
     }
 
+    const rawAny = rawMetrics as any;
+
     // eslint-disable-next-line no-console
-    console.log("PERIOD-CARDS (选中来源路径)", {
+    console.log("PERIOD-CARDS (final source)", {
       WTD: periodValues.M11,
       MTD: periodValues.M12,
       YTD: periodValues.M13,
+    });
+    // eslint-disable-next-line no-console
+    console.log("COMPARE raw alias vs Mxx:", {
+      M11: metrics?.M11,
+      M12: metrics?.M12,
+      M13: metrics?.M13,
+      raw_WTD: rawAny?.WTD ?? rawAny?.wtd,
+      raw_MTD: rawAny?.MTD ?? rawAny?.mtd,
+      raw_YTD: rawAny?.YTD ?? rawAny?.ytd,
     });
 
     let tries = 0;
@@ -134,7 +147,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     }, 300);
 
     return () => clearInterval(timer);
-  }, [periodValues, rawMetrics]);
+  }, [metrics, periodValues, rawMetrics]);
 
   // 定义指标名称映射
   const metricNames: Partial<Record<keyof MetricsContract, string>> = useMemo(
