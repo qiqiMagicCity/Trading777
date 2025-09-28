@@ -1,10 +1,1 @@
-[
-  { "symbol": "TSDD", "qty": 10000, "avgPrice": 11.04 },
-  { "symbol": "BA", "qty": 350, "avgPrice": 216.27 },
-  { "symbol": "GOOGL", "qty": 400, "avgPrice": 170.73 },
-  { "symbol": "AMD", "qty": 380, "avgPrice": 151.72 },
-  { "symbol": "PYPL", "qty": 555, "avgPrice": 68.54 },
-  { "symbol": "UAL", "qty": 300, "avgPrice": 103.7 },
-  { "symbol": "DIS", "qty": 250, "avgPrice": 116.83 },
-  { "symbol": "NVDL", "qty": 330, "avgPrice": 84.12 }
-]
+[]
