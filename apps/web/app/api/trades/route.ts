@@ -72,8 +72,8 @@ function normaliseTime(date: string, raw: unknown): string | null {
       return `${date}T${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
     }
 
-    const [datePart, timePartRaw = ''] = trimmed.split('T');
-    const baseDate = DATE_PATTERN.test(datePart) ? datePart : date;
+    const [datePartRaw = '', timePartRaw = ''] = trimmed.split('T');
+    const baseDate = DATE_PATTERN.test(datePartRaw) ? datePartRaw : date;
     const sanitized = timePartRaw.replace('Z', '').split('.')[0] ?? '';
     const [h = '00', m = '00', s = '00'] = sanitized.split(':');
     return `${baseDate}T${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
