@@ -951,6 +951,12 @@ function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): Peri
   return { sum, items };
 }
 
+export type WtdMtdYtdExplain = ReturnType<typeof explainWtdMtdYtdFromSnapshots>;
+let __lastWtdMtdYtdExplain: WtdMtdYtdExplain | null = null;
+export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
+  return __lastWtdMtdYtdExplain;
+}
+
 export function calcWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
@@ -964,6 +970,14 @@ export function calcWtdMtdYtdFromSnapshots(
   const w = sumWithDelta(rows, wStart, endTs).sum;
   const m = sumWithDelta(rows, mStart, endTs).sum;
   const y = sumWithDelta(rows, yStart, endTs).sum;
+
+  try {
+    if (typeof window !== "undefined") {
+      __lastWtdMtdYtdExplain = explainWtdMtdYtdFromSnapshots(daily, evalDayStr);
+    }
+  } catch {
+    // noop: 调试缓存失败不影响业务
+  }
 
   return {
     wtd: w,

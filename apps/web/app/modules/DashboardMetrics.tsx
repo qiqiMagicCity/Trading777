@@ -3,7 +3,12 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { useStore } from "@/lib/store";
-import { formatCurrency, normalizeMetrics, isDebug } from "@/app/lib/metrics";
+import {
+  formatCurrency,
+  normalizeMetrics,
+  isDebug,
+  getLastWtdMtdYtdExplain,
+} from "@/app/lib/metrics";
 import type { MetricsContract } from "@/app/lib/types/metrics";
 import { useEffect, useMemo, type ReactNode } from "react";
 
@@ -101,6 +106,38 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     // eslint-disable-next-line no-console
     console.debug("PERIOD-CARDS", payload);
   }, [debugEnabled, periodValues, rawMetrics]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const usp = new URLSearchParams(window.location.search);
+    if (usp.get("debugM11") !== "1") return;
+
+    let tries = 0;
+    const maxTries = 20;
+    const timer = setInterval(() => {
+      tries += 1;
+      const detail = getLastWtdMtdYtdExplain();
+      if (detail) {
+        // eslint-disable-next-line no-console
+        console.log("[M11/M12/M13 debug]", detail);
+        if (typeof console.table === "function") {
+          // eslint-disable-next-line no-console
+          console.table(detail.details?.w ?? []);
+          // eslint-disable-next-line no-console
+          console.table(detail.details?.m ?? []);
+          // eslint-disable-next-line no-console
+          console.table(detail.details?.y ?? []);
+        }
+        clearInterval(timer);
+      } else if (tries >= maxTries) {
+        // eslint-disable-next-line no-console
+        console.warn("debugM11: no explain captured (did metrics compute on client?)");
+        clearInterval(timer);
+      }
+    }, 300);
+
+    return () => clearInterval(timer);
+  }, [rawMetrics]);
 
   // 定义指标名称映射
   const metricNames: Partial<Record<keyof MetricsContract, string>> = useMemo(
