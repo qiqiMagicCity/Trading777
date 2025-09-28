@@ -16,7 +16,7 @@ import {
   startOfMonthNY,
   startOfYearNY,
 } from "@/lib/timezone";
-import { startOfDayNY } from "./time";
+import { nyDateStr, startOfDayNY } from "./time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -29,7 +29,7 @@ function normalizeToNyDay(input: string | number | Date): Date | string | number
 
 function nyDayStr(input: string | number | Date): string {
   const normalized = normalizeToNyDay(input);
-  return toNY(normalized).toISOString().slice(0, 10);
+  return nyDateStr(normalized);
 }
 
 function nyTodayStr(): string {
