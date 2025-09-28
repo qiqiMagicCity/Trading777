@@ -20,6 +20,19 @@ import { nyDateStr, startOfDayNY } from "./time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+function normalizeToNYMidday(ymd: string): string {
+  return `${ymd}T12:00:00`;
+}
+
+function addDaysYmd(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setUTCDate(d.getUTCDate() + n);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function normalizeToNyDay(input: string | number | Date): Date | string | number {
   if (typeof input === "string" && DATE_ONLY_RE.test(input)) {
     return `${input}T12:00:00Z`;
@@ -867,18 +880,6 @@ function lowerBound(arr: number[], target: number) {
   return l;
 }
 
-function upperBound(arr: number[], target: number) {
-  let l = 0,
-    r = arr.length;
-  while (l < r) {
-    const m = (l + r) >> 1;
-    const midVal = arr[m]!;
-    if (midVal <= target) l = m + 1;
-    else r = m;
-  }
-  return l - 1;
-}
-
 export function sumPeriod(
   daily: DailyResult[],
   fromStr: string,
@@ -892,27 +893,48 @@ export function sumPeriod(
     sumPeriodCache.lastDate !== lastDate
   ) {
     sumPeriodCache = rebuildSumPeriodCache(daily);
-  } else if (
-    sumPeriodCache.lastFrom === fromStr &&
-    sumPeriodCache.lastTo === toStr
+  }
+  const fromMidday = normalizeToNYMidday(fromStr);
+  const toExclusiveMidday = normalizeToNYMidday(addDaysYmd(toStr, 1));
+  const fromDate = startOfDayNY(fromMidday);
+  const toExclusiveDate = startOfDayNY(toExclusiveMidday);
+  const fromKey = fromDate.toISOString();
+  const toKey = toExclusiveDate.toISOString();
+
+  if (
+    sumPeriodCache.lastFrom === fromKey &&
+    sumPeriodCache.lastTo === toKey
   ) {
     return sumPeriodCache.lastResult ?? 0;
   }
 
-  const fromTS = startOfDayNY(normalizeToNyDay(fromStr)).getTime();
-  const toTS = startOfDayNY(normalizeToNyDay(toStr)).getTime();
+  const fromTS = fromDate.getTime();
+  const toExclusiveTS = toExclusiveDate.getTime();
+  if (
+    !Number.isFinite(fromTS) ||
+    !Number.isFinite(toExclusiveTS) ||
+    fromTS >= toExclusiveTS
+  ) {
+    sumPeriodCache.lastFrom = fromKey;
+    sumPeriodCache.lastTo = toKey;
+    sumPeriodCache.lastResult = 0;
+    return 0;
+  }
   const { dates, prefix } = sumPeriodCache;
 
   const startIdx = lowerBound(dates, fromTS);
-  const endIdx = upperBound(dates, toTS);
+  const endIdx = lowerBound(dates, toExclusiveTS);
   let total = 0;
-  if (endIdx >= startIdx && endIdx >= 0 && endIdx < prefix.length) {
-    const prev = startIdx === 0 ? 0 : prefix[startIdx - 1]!;
-    total = prefix[endIdx]! - prev;
+  if (startIdx < prefix.length) {
+    const lastIdx = endIdx - 1;
+    if (lastIdx >= startIdx && lastIdx < prefix.length) {
+      const prev = startIdx === 0 ? 0 : prefix[startIdx - 1]!;
+      total = prefix[lastIdx]! - prev;
+    }
   }
 
-  sumPeriodCache.lastFrom = fromStr;
-  sumPeriodCache.lastTo = toStr;
+  sumPeriodCache.lastFrom = fromKey;
+  sumPeriodCache.lastTo = toKey;
   sumPeriodCache.lastResult = total;
 
   return total;

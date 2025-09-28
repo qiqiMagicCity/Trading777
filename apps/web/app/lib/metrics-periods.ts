@@ -9,6 +9,19 @@ import {
 import { sumPeriodCached } from './period-sum-cache';
 import type { DailyResult } from './types';
 
+function normalizeToNYMidday(ymd: string): string {
+  return `${ymd}T12:00:00`;
+}
+
+function addDaysYmd(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setUTCDate(d.getUTCDate() + n);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export type Daily = Pick<
   DailyResult,
   'date' | 'realized' | 'unrealized' | 'unrealizedDelta'
@@ -28,9 +41,19 @@ export function sumM9(daily: Daily[], endISO?: string): number {
 }
 
 export function sumPeriod(daily: Daily[], startISO: string, endISO: string): number {
-  const start = startOfDayNY(startISO).getTime();
-  const end = startOfDayNY(endISO).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return 0;
+  const startDate = startOfDayNY(normalizeToNYMidday(startISO));
+  const endExclusiveDate = startOfDayNY(
+    normalizeToNYMidday(addDaysYmd(endISO, 1)),
+  );
+  const start = startDate.getTime();
+  const endExclusive = endExclusiveDate.getTime();
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(endExclusive) ||
+    start >= endExclusive
+  ) {
+    return 0;
+  }
 
   const sorted = (daily || [])
     .slice()
@@ -52,12 +75,12 @@ export function sumPeriod(daily: Daily[], startISO: string, endISO: string): num
         ? d.unrealizedDelta
         : unrealized - prevUnrealized;
 
-    if (dayTS >= start && dayTS <= end) {
+    if (dayTS >= start && dayTS < endExclusive) {
       total += (d?.realized ?? 0) + delta;
     }
 
     prevUnrealized = unrealized;
-    if (dayTS > end) break;
+    if (dayTS >= endExclusive) break;
   }
 
   return total;
