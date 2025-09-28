@@ -3,9 +3,16 @@
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { useStore } from "@/lib/store";
-import { formatCurrency, normalizeMetrics, isDebug } from "@/app/lib/metrics";
+import {
+  explainWtdMtdYtdFromSnapshots,
+  formatCurrency,
+  normalizeMetrics,
+  isDebug,
+} from "@/app/lib/metrics";
 import type { MetricsContract } from "@/app/lib/types/metrics";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { loadDailyResults } from "@/app/lib/services/dataService";
+import { getLatestTradingDayStr } from "@/lib/timezone";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 
 /**
  * DashboardMetrics 组件的属性接口
@@ -49,6 +56,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const metrics = normalizeMetrics(rawMetrics);
   const debugEnabled =
     isDebug() || process.env.NEXT_PUBLIC_METRICS_DEBUG === "1";
+  const debugLoggedRef = useRef(false);
 
   const periodValues = useMemo(() => {
     const raw = rawMetrics as Record<string, unknown> | null;
@@ -101,6 +109,50 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     // eslint-disable-next-line no-console
     console.debug("PERIOD-CARDS", payload);
   }, [debugEnabled, periodValues, rawMetrics]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (debugLoggedRef.current) return;
+    const usp = new URLSearchParams(window.location.search);
+    if (usp.get("debugM11") !== "1") return;
+    if (!rawMetrics) return;
+
+    debugLoggedRef.current = true;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const dailyResults = await loadDailyResults();
+        if (cancelled) return;
+        const freeze = process.env.NEXT_PUBLIC_FREEZE_DATE?.slice(0, 10);
+        const evalDayStr =
+          freeze && /^\d{4}-\d{2}-\d{2}$/.test(freeze)
+            ? freeze
+            : getLatestTradingDayStr();
+        const detail = explainWtdMtdYtdFromSnapshots(dailyResults, evalDayStr);
+        // eslint-disable-next-line no-console
+        console.log("[M11/M12/M13 debug]", detail);
+        if (typeof console.table === "function") {
+          // eslint-disable-next-line no-console
+          console.table(
+            detail.rows.map((r) => ({
+              day: r.day,
+              realized: r.realized,
+              unrealized: r.unrealized,
+              pnl: r.pnl,
+            })),
+          );
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn("debugM11 failed:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawMetrics]);
 
   // 定义指标名称映射
   const metricNames: Partial<Record<keyof MetricsContract, string>> = useMemo(
