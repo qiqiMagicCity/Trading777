@@ -849,13 +849,26 @@ export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
   };
 }
 
-export function calcWtdMtdYtdFromSnapshots(
+type SnapshotRow = {
+  day: string;
+  ts: number;
+  realized: number;
+  unrealized: number;
+};
+
+type SnapshotCollection = {
+  evalDayNYStr: string;
+  endTs: number;
+  rows: SnapshotRow[];
+};
+
+function collectSnapshotRowsForEval(
   daily: DailyResult[] = [],
   evalDayStr: string,
-) {
+): SnapshotCollection {
   const evalDayNYStr = nyDayStr(evalDayStr);
   const endTs = endOfDayNY(toNY(`${evalDayNYStr}T12:00:00Z`)).getTime();
-  const map = new Map<string, DailyResult>();
+  const map = new Map<string, { record: DailyResult; ts: number }>();
 
   for (const r of daily ?? []) {
     if (!r) continue;
@@ -863,39 +876,135 @@ export function calcWtdMtdYtdFromSnapshots(
     const rTs = new Date(r.date).getTime();
     if (!Number.isFinite(rTs)) continue;
     const prev = map.get(dayStr);
-    if (!prev) {
-      map.set(dayStr, r);
-      continue;
-    }
-    const prevTs = new Date(prev.date).getTime();
-    if (!Number.isFinite(prevTs) || rTs >= prevTs) {
-      map.set(dayStr, r);
+    if (!prev || rTs >= prev.ts) {
+      map.set(dayStr, { record: r, ts: rTs });
     }
   }
 
   const rows = Array.from(map.entries())
-    .map(([day, rec]) => {
+    .map(([day, { record }]) => {
       const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
-      const pnl = Number(rec.realized ?? 0) + Number(rec.unrealized ?? 0);
-      return { ts, pnl };
+      const realizedRaw = Number(record.realized ?? 0);
+      const unrealizedRaw = Number(record.unrealized ?? 0);
+      const realized = Number.isFinite(realizedRaw) ? realizedRaw : 0;
+      const unrealized = Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0;
+      return { day, ts, realized, unrealized };
     })
-    .filter((x) => Number.isFinite(x.ts) && x.ts <= endTs);
+    .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)
+    .sort((a, b) => a.ts - b.ts);
 
+  return { evalDayNYStr, endTs, rows };
+}
+
+type PeriodSum = {
+  sum: number;
+  items: Array<{
+    day: string;
+    realized: number;
+    unrealized: number;
+    deltaU: number;
+    dayPnL: number;
+  }>;
+};
+
+function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): PeriodSum {
+  const sorted = [...rows].sort((a, b) => a.ts - b.ts);
+
+  const firstIdxInWindow = sorted.findIndex(
+    (r) => r.ts >= startTs && r.ts <= endTs,
+  );
+
+  let hasBaseline = false;
+  let prevU = 0;
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    if (sorted[i]!.ts < startTs) {
+      prevU = sorted[i]!.unrealized;
+      hasBaseline = true;
+      break;
+    }
+  }
+
+  const items: PeriodSum["items"] = [];
+  let sum = 0;
+  for (let i = 0; i < sorted.length; i += 1) {
+    const r = sorted[i]!;
+    if (r.ts < startTs || r.ts > endTs) continue;
+
+    let deltaU: number;
+    if (!hasBaseline && i === firstIdxInWindow) {
+      deltaU = 0;
+    } else {
+      deltaU = r.unrealized - prevU;
+    }
+    const dayPnL = r.realized + deltaU;
+
+    items.push({
+      day: r.day,
+      realized: r.realized,
+      unrealized: r.unrealized,
+      deltaU,
+      dayPnL,
+    });
+    prevU = r.unrealized;
+    hasBaseline = true;
+    sum += dayPnL;
+  }
+
+  return { sum, items };
+}
+
+export function calcWtdMtdYtdFromSnapshots(
+  daily: DailyResult[] = [],
+  evalDayStr: string,
+) {
+  const { evalDayNYStr, endTs, rows } = collectSnapshotRowsForEval(daily, evalDayStr);
   const evalDate = toNY(`${evalDayNYStr}T12:00:00Z`);
   const wStart = startOfWeekNY(evalDate).getTime();
   const mStart = startOfMonthNY(evalDate).getTime();
   const yStart = startOfYearNY(evalDate).getTime();
 
-  const sumIn = (startTs: number) =>
-    rows.reduce(
-      (sum, item) => (item.ts >= startTs && item.ts <= endTs ? sum + item.pnl : sum),
-      0,
-    );
+  const w = sumWithDelta(rows, wStart, endTs).sum;
+  const m = sumWithDelta(rows, mStart, endTs).sum;
+  const y = sumWithDelta(rows, yStart, endTs).sum;
 
   return {
-    wtd: sumIn(wStart),
-    mtd: sumIn(mStart),
-    ytd: sumIn(yStart),
+    wtd: w,
+    mtd: m,
+    ytd: y,
+  };
+}
+
+export function explainWtdMtdYtdFromSnapshots(
+  daily: DailyResult[] = [],
+  evalDayStr: string,
+) {
+  const { evalDayNYStr, endTs, rows } = collectSnapshotRowsForEval(daily, evalDayStr);
+  const evalDate = toNY(`${evalDayNYStr}T12:00:00Z`);
+  const wStart = startOfWeekNY(evalDate).getTime();
+  const mStart = startOfMonthNY(evalDate).getTime();
+  const yStart = startOfYearNY(evalDate).getTime();
+
+  const w = sumWithDelta(rows, wStart, endTs);
+  const m = sumWithDelta(rows, mStart, endTs);
+  const y = sumWithDelta(rows, yStart, endTs);
+
+  const rowsWithTotals = rows.map((row) => ({
+    ...row,
+    pnl: row.realized + row.unrealized,
+  }));
+
+  return {
+    evalDay: evalDayNYStr,
+    boundaries: {
+      wStart: new Date(wStart).toISOString(),
+      mStart: new Date(mStart).toISOString(),
+      yStart: new Date(yStart).toISOString(),
+      end: new Date(endTs).toISOString(),
+    },
+    counts: { w: w.items.length, m: m.items.length, y: y.items.length },
+    totals: { wtd: w.sum, mtd: m.sum, ytd: y.sum },
+    rows: rowsWithTotals,
+    details: { w: w.items, m: m.items, y: y.items },
   };
 }
 
