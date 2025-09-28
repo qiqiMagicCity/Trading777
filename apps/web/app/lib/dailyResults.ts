@@ -9,6 +9,21 @@ const EPSILON = 1e-6;
 
 export type ClosePriceMap = Record<string, Record<string, number>>;
 
+export type MissingCloseFallback =
+  | "MARK_PRICE"
+  | "PREVIOUS_CLOSE"
+  | "AVERAGE_COST";
+
+export interface MissingCloseEntry {
+  symbol: string;
+  date: string;
+  fallback: MissingCloseFallback;
+}
+
+export interface DailyResultsDiagnostics {
+  missingCloses: MissingCloseEntry[];
+}
+
 function normalizeSymbol(symbol: string | undefined): string {
   return (symbol ?? "").trim().toUpperCase();
 }
@@ -86,7 +101,7 @@ export function generateDailyResults({
   positions = [],
   closePrices,
   evalDate,
-}: DailyResultsOptions): DailyResult[] {
+}: DailyResultsOptions, diagnostics?: DailyResultsDiagnostics): DailyResult[] {
   const evalDateStr = (evalDate || "").slice(0, 10);
   if (!isValidDateStr(evalDateStr)) {
     throw new Error(`Invalid evalDate provided: ${evalDate}`);
@@ -148,6 +163,32 @@ export function generateDailyResults({
   const results: DailyResult[] = [];
   let prevUnrealizedDec = new M(0);
 
+  const diagTracker = diagnostics
+    ? (() => {
+        const map = new Map<string, Set<MissingCloseFallback>>();
+        for (const entry of diagnostics.missingCloses) {
+          const key = `${entry.date}__${entry.symbol}`;
+          const current = map.get(key) ?? new Set<MissingCloseFallback>();
+          current.add(entry.fallback);
+          map.set(key, current);
+        }
+        return map;
+      })()
+    : null;
+  const reportMissing = (
+    symbol: string,
+    date: string,
+    fallback: MissingCloseFallback,
+  ) => {
+    if (!diagnostics || !diagTracker) return;
+    const key = `${date}__${symbol}`;
+    const set = diagTracker.get(key) ?? new Set<MissingCloseFallback>();
+    if (set.has(fallback)) return;
+    set.add(fallback);
+    diagTracker.set(key, set);
+    diagnostics.missingCloses.push({ symbol, date, fallback });
+  };
+
   for (const date of dates) {
     const tradesToday = tradesByDate.get(date) ?? [];
     const realizedDec = tradesToday.reduce((sum, trade) => sum.plus(trade.realizedPnl ?? 0), new M(0));
@@ -183,16 +224,19 @@ export function generateDailyResults({
         const final = finalPriceMap.get(symbol);
         if (final !== undefined && Number.isFinite(final)) {
           price = final;
+          reportMissing(symbol, date, "MARK_PRICE");
         }
       }
       if (price === undefined) {
         const prev = lastKnownPrice.get(symbol);
         if (prev !== undefined && Number.isFinite(prev)) {
           price = prev;
+          reportMissing(symbol, date, "PREVIOUS_CLOSE");
         }
       }
       if (price === undefined && Number.isFinite(posState.avgPrice)) {
         price = posState.avgPrice;
+        reportMissing(symbol, date, "AVERAGE_COST");
       }
       if (price === undefined) return sum;
       lastKnownPrice.set(symbol, price);
