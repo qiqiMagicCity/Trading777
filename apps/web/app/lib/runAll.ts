@@ -367,10 +367,20 @@ function runAllCore(
 
   // ---- 周/月/年周期指标与 M9（历史已实现累计）----
   const periods = computePeriods(input.dailyResults || [], evalISO);
-  const M9 = periods.M9;
-  const M11 = periods.M11;
-  const M12 = periods.M12;
-  const M13 = periods.M13;
+  const {
+    wtd: _legacyWtd,
+    mtd: _legacyMtd,
+    ytd: _legacyYtd,
+    M11: _legacyM11,
+    M12: _legacyM12,
+    M13: _legacyM13,
+    ...periodsRest
+  } = periods as ReturnType<typeof computePeriods> & {
+    wtd?: number;
+    mtd?: number;
+    ytd?: number;
+  };
+  const periodM9 = (periodsRest as { M9?: number }).M9 ?? metrics.M9;
   // ---- 用新的日内拆分算法计算 M4/M5，并重算 M6 ----
   bySym = {};
   breakdown = [];
@@ -449,6 +459,7 @@ function runAllCore(
   const winRatePct = round1(metrics.M10.rate * 100);
 
   const result = {
+    ...periodsRest,
     M1: round2(metrics.M1),
     M2: round2(metrics.M2),
     M3: M3_r,
@@ -459,11 +470,11 @@ function runAllCore(
     _m6: m6Details,
     M7: metrics.M7,
     M8: metrics.M8,
-    M9,
+    M9: periodM9,
     M10: { W: metrics.M10.win, L: metrics.M10.loss, winRatePct },
-    M11,
-    M12,
-    M13,
+    M11: metrics.M11,
+    M12: metrics.M12,
+    M13: metrics.M13,
     aux: {
       breakdown,
       m6PriceChange: priceChange_r,
