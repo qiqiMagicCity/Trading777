@@ -1,6 +1,19 @@
 import type { Daily } from './metrics-periods';
 import { startOfDayNY } from './time';
 
+function normalizeToNYMidday(ymd: string): string {
+  return `${ymd}T12:00:00`;
+}
+
+function addDaysYmd(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setUTCDate(d.getUTCDate() + n);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** 仅保留参与求和的核心字段，做稳定 stringify，再哈希 */
 function stableKeyForDaily(daily: Daily[]): string {
   const norm = (daily || []).map(d => [
@@ -75,18 +88,6 @@ function lowerBound(arr: number[], target: number) {
   return l;
 }
 
-function upperBound(arr: number[], target: number) {
-  let l = 0,
-    r = arr.length;
-  while (l < r) {
-    const m = (l + r) >> 1;
-    const mid = arr[m]!;
-    if (mid <= target) l = m + 1;
-    else r = m;
-  }
-  return l - 1;
-}
-
 /** 带缓存的周期求和（包含 realized + unrealized 变化量） */
 export function sumPeriodCached(daily: Daily[], startISO: string, endISO: string): number {
   const dsKey = stableKeyForDaily(daily);
@@ -97,23 +98,32 @@ export function sumPeriodCached(daily: Daily[], startISO: string, endISO: string
     gc();
   }
 
-  const key = `${startISO}|${endISO}`;
+  const startDate = startOfDayNY(normalizeToNYMidday(startISO));
+  const endExclusiveDate = startOfDayNY(normalizeToNYMidday(addDaysYmd(endISO, 1)));
+  const key = `${startDate.toISOString()}|${endExclusiveDate.toISOString()}`;
   if (inner.sums.has(key)) return inner.sums.get(key)!;
 
-  const start = startOfDayNY(startISO).getTime();
-  const end = startOfDayNY(endISO).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+  const start = startDate.getTime();
+  const endExclusive = endExclusiveDate.getTime();
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(endExclusive) ||
+    start >= endExclusive
+  ) {
     inner.sums.set(key, 0);
     return 0;
   }
 
   const startIdx = lowerBound(inner.dates, start);
-  const endIdx = upperBound(inner.dates, end);
+  const endIdx = lowerBound(inner.dates, endExclusive);
 
   let total = 0;
-  if (endIdx >= startIdx && endIdx >= 0 && endIdx < inner.prefix.length) {
-    const prev = startIdx === 0 ? 0 : inner.prefix[startIdx - 1]!;
-    total = inner.prefix[endIdx]! - prev;
+  if (startIdx < inner.prefix.length) {
+    const lastIdx = endIdx - 1;
+    if (lastIdx >= startIdx && lastIdx < inner.prefix.length) {
+      const prev = startIdx === 0 ? 0 : inner.prefix[startIdx - 1]!;
+      total = inner.prefix[lastIdx]! - prev;
+    }
   }
 
   inner.sums.set(key, total);
