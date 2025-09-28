@@ -1,0 +1,53 @@
+import { calcWtdMtdYtdFromSnapshots } from "../metrics";
+import type { DailyResult } from "../types";
+
+describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
+  test("Case A: 使用硬基线", () => {
+    const daily: DailyResult[] = [
+      { date: "2024-09-20", realized: 0, unrealized: 100, unrealizedDelta: 0 },
+      { date: "2024-09-23", realized: 3, unrealized: 110, unrealizedDelta: 10 },
+      { date: "2024-09-24", realized: -2, unrealized: 108, unrealizedDelta: -2 },
+      { date: "2024-09-25", realized: 4, unrealized: 120, unrealizedDelta: 12 },
+    ];
+
+    const { wtd } = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
+    expect(wtd).toBeCloseTo(25);
+  });
+
+  test("Case B: 基于 ΔU 反推基线", () => {
+    const daily: DailyResult[] = [
+      { date: "2024-10-01", realized: 10, unrealized: 100, unrealizedDelta: 5 },
+      { date: "2024-10-02", realized: 0, unrealized: 102, unrealizedDelta: 2 },
+    ];
+
+    const { wtd } = calcWtdMtdYtdFromSnapshots(daily, "2024-10-02");
+    expect(wtd).toBeCloseTo(17);
+  });
+
+  test("Case C: 仅评估日一行", () => {
+    const daily: DailyResult[] = [
+      { date: "2024-10-03", realized: 8, unrealized: 12, unrealizedDelta: 12 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-10-03");
+    expect(result).toMatchObject({ wtd: 20, mtd: 20, ytd: 20 });
+  });
+
+  test("Case D: ΔU 缺失触发退化分支", () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    const daily: DailyResult[] = [
+      { date: "2024-02-25", realized: 0, unrealized: 50 },
+      { date: "2024-03-01", realized: 5, unrealized: 50 },
+      { date: "2024-03-02", realized: -2, unrealized: 50 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
+
+    expect(result.ytd).toBeCloseTo(3);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith("[M11-13] degraded-baseline window=YTD");
+
+    warnSpy.mockRestore();
+  });
+});

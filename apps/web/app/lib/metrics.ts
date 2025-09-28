@@ -11,6 +11,7 @@ import {
   toNY,
   getLatestTradingDayStr,
   endOfDayNY,
+  weekStartNY,
   startOfWeekNY,
   startOfMonthNY,
   startOfYearNY,
@@ -115,6 +116,87 @@ export function isDebug() {
 const DEBUG = isDebug();
 
 const EPSILON = 1e-6;
+
+type WindowLabel = "WTD" | "MTD" | "YTD";
+
+function deriveWindowPnl(
+  drs: DailyResult[],
+  windowStart: string,
+  evalDay: string,
+  label: WindowLabel,
+): number {
+  const drsSorted = drs
+    .map((row) => ({
+      ...row,
+      day: nyDayStr(row.date),
+    }))
+    .filter((row) => row.day <= evalDay)
+    .sort((a, b) => a.day.localeCompare(b.day));
+
+  const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
+  const sumRealized = windowEntries.reduce(
+    (acc, row) => acc + (typeof row.realized === "number" ? row.realized : 0),
+    0,
+  );
+
+  const lastInRange = drsSorted.length
+    ? drsSorted[drsSorted.length - 1]!
+    : undefined;
+  const uEnd = typeof lastInRange?.unrealized === "number" ? lastInRange.unrealized : 0;
+
+  let baseline: number | null = null;
+  for (let i = drsSorted.length - 1; i >= 0; i -= 1) {
+    const row = drsSorted[i]!;
+    if (row.day < windowStart) {
+      baseline = typeof row.unrealized === "number" ? row.unrealized : 0;
+      break;
+    }
+  }
+
+  if (baseline !== null) {
+    return sumRealized + (uEnd - baseline);
+  }
+
+  const firstInWindow = windowEntries[0];
+  if (
+    firstInWindow &&
+    typeof firstInWindow.unrealizedDelta === "number" &&
+    Number.isFinite(firstInWindow.unrealizedDelta)
+  ) {
+    const inferredBaseline =
+      (typeof firstInWindow.unrealized === "number" ? firstInWindow.unrealized : 0) -
+      firstInWindow.unrealizedDelta;
+    return sumRealized + (uEnd - inferredBaseline);
+  }
+
+  let sumDelta = 0;
+  if (windowEntries.length > 0) {
+    let prevUnrealized =
+      typeof windowEntries[0]!.unrealized === "number" ? windowEntries[0]!.unrealized : 0;
+    for (let i = 0; i < windowEntries.length; i += 1) {
+      const row = windowEntries[i]!;
+      const delta = row.unrealizedDelta;
+      if (i === 0) {
+        if (typeof delta === "number" && Number.isFinite(delta)) {
+          sumDelta += delta;
+        }
+      } else if (typeof delta === "number" && Number.isFinite(delta)) {
+        sumDelta += delta;
+      } else {
+        const currentUnrealized =
+          typeof row.unrealized === "number" ? row.unrealized : prevUnrealized;
+        sumDelta += currentUnrealized - prevUnrealized;
+      }
+
+      if (typeof row.unrealized === "number") {
+        prevUnrealized = row.unrealized;
+      }
+    }
+  }
+
+  console.warn(`[M11-13] degraded-baseline window=${label}`);
+  return sumRealized + sumDelta;
+}
 
 function seedInitialLots(
   trades: EnrichedTrade[],
@@ -961,15 +1043,15 @@ export function calcWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
 ) {
-  const { evalDayNYStr, endTs, rows } = collectSnapshotRowsForEval(daily, evalDayStr);
-  const evalDate = toNY(`${evalDayNYStr}T12:00:00Z`);
-  const wStart = startOfWeekNY(evalDate).getTime();
-  const mStart = startOfMonthNY(evalDate).getTime();
-  const yStart = startOfYearNY(evalDate).getTime();
+  const evalDay = nyDayStr(evalDayStr);
+  const evalMidday = toNY(`${evalDay}T12:00:00Z`);
+  const wStart = weekStartNY(evalMidday);
+  const mStart = `${evalDay.slice(0, 7)}-01`;
+  const yStart = `${evalDay.slice(0, 4)}-01-01`;
 
-  const w = sumWithDelta(rows, wStart, endTs).sum;
-  const m = sumWithDelta(rows, mStart, endTs).sum;
-  const y = sumWithDelta(rows, yStart, endTs).sum;
+  const w = deriveWindowPnl(daily, wStart, evalDay, "WTD");
+  const m = deriveWindowPnl(daily, mStart, evalDay, "MTD");
+  const y = deriveWindowPnl(daily, yStart, evalDay, "YTD");
 
   try {
     if (typeof window !== "undefined") {
