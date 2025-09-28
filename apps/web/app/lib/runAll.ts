@@ -2,7 +2,9 @@ import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
 import { computePeriods } from "./metrics-periods";
-import { nyDateStrSafe } from "./time";
+import { generateDailyResults } from "./dailyResults";
+import { nyDateStr, nyDateStrSafe, startOfMonthNY, startOfWeekNY, startOfYearNY } from "./time";
+import type { DailyResult } from "./types";
 import { resolveTradingDateStr } from "./tradingDay";
 import {
   assertM6Equality,
@@ -278,6 +280,108 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
  * 为兼容旧版 calcMetrics/调试函数里对“今天”的判定：
  * 在本函数调用范围内临时设置 process.env.NEXT_PUBLIC_FREEZE_DATE=evalISO，完成后恢复。
  */
+type MinimalDailyResult = {
+  date?: string;
+  realized?: number;
+  unrealized?: number;
+  unrealizedDelta?: number;
+};
+
+type NormalizedDailyRow = {
+  day: string;
+  realized: number;
+  unrealized: number;
+  unrealizedDelta?: number;
+};
+
+function normalizeDailyRows(
+  daily: MinimalDailyResult[] | undefined,
+  evalISO: string,
+): NormalizedDailyRow[] {
+  if (!Array.isArray(daily) || daily.length === 0) return [];
+
+  const dedup = new Map<
+    string,
+    {
+      row: NormalizedDailyRow;
+      ts: number;
+    }
+  >();
+
+  for (const entry of daily) {
+    if (!entry?.date) continue;
+    const day = nyDateStrSafe(entry.date);
+    if (day > evalISO) continue;
+
+    const tsRaw = new Date(entry.date).getTime();
+    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
+    const realized = Number(entry.realized ?? 0);
+    const unrealizedValue = Number(entry.unrealized);
+    const unrealized = Number.isFinite(unrealizedValue) ? unrealizedValue : 0;
+    const normalized: NormalizedDailyRow = {
+      day,
+      realized: Number.isFinite(realized) ? realized : 0,
+      unrealized,
+    };
+    if (
+      typeof entry.unrealizedDelta === "number" &&
+      Number.isFinite(entry.unrealizedDelta)
+    ) {
+      normalized.unrealizedDelta = entry.unrealizedDelta;
+    }
+
+    const prev = dedup.get(day);
+    if (!prev || ts >= prev.ts) {
+      dedup.set(day, { row: normalized, ts });
+    }
+  }
+
+  return Array.from(dedup.values())
+    .sort((a, b) => {
+      if (a.row.day < b.row.day) return -1;
+      if (a.row.day > b.row.day) return 1;
+      return a.ts - b.ts;
+    })
+    .map(({ row }) => row);
+}
+
+function needsSyntheticDailyResults(
+  daily: MinimalDailyResult[] | undefined,
+  evalISO: string,
+): boolean {
+  const rows = normalizeDailyRows(daily, evalISO);
+  if (rows.length === 0) {
+    return true;
+  }
+
+  const last = rows[rows.length - 1]!;
+  if (last.day !== evalISO) {
+    return true;
+  }
+
+  const windows = [
+    nyDateStr(startOfWeekNY(evalISO)),
+    nyDateStr(startOfMonthNY(evalISO)),
+    nyDateStr(startOfYearNY(evalISO)),
+  ];
+
+  for (const start of windows) {
+    const windowRows = rows.filter((row) => row.day >= start);
+    if (windowRows.length === 0) {
+      return true;
+    }
+    const hasBaselineBefore = rows.some((row) => row.day < start);
+    if (!hasBaselineBefore) {
+      const first = windowRows[0]!;
+      if (first.unrealizedDelta === undefined) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function runAllCore(
   _date: string,
   initialPositions: InitialPosition[],
@@ -352,9 +456,28 @@ function runAllCore(
   const prevFreeze = process.env.NEXT_PUBLIC_FREEZE_DATE;
   process.env.NEXT_PUBLIC_FREEZE_DATE = evalISO;
 
+  const providedDaily = Array.isArray(input.dailyResults)
+    ? (input.dailyResults as MinimalDailyResult[])
+    : [];
+  const shouldRebuildDaily = needsSyntheticDailyResults(providedDaily, evalISO);
+  const effectiveDailyResults: DailyResult[] = shouldRebuildDaily
+    ? generateDailyResults({
+        trades: enriched,
+        positions,
+        closePrices,
+        evalDate: evalISO,
+      })
+    : (providedDaily as DailyResult[]);
+
+  if (shouldRebuildDaily) {
+    console.warn(
+      `[runAll] regenerated dailyResults for ${evalISO} due to insufficient baseline coverage`,
+    );
+  }
+
   let metrics;
   try {
-    metrics = calcMetrics(enriched, positions, input.dailyResults || [], {
+    metrics = calcMetrics(enriched, positions, effectiveDailyResults, {
       tradingDateStr: evalISO,
     });
   } finally {
@@ -366,7 +489,7 @@ function runAllCore(
   }
 
   // ---- 周/月/年周期指标与 M9（历史已实现累计）----
-  const periods = computePeriods(input.dailyResults || [], evalISO);
+  const periods = computePeriods(effectiveDailyResults, evalISO);
   const {
     wtd: _legacyWtd,
     mtd: _legacyMtd,
@@ -492,7 +615,7 @@ function runAllCore(
         initialPositions: baselinePositions,
         rawTrades,
         closePrices,
-        dailyResults: input.dailyResults || [],
+        dailyResults: effectiveDailyResults,
       },
       result,
     );
