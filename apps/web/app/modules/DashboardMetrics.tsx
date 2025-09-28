@@ -51,9 +51,12 @@ function MetricCard({
 export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   // 从全局状态获取指标
   const rawMetrics = useStore((state) => state.metrics);
+  const periodHealth = useStore((state) => state.periodHealth);
   const metrics = normalizeMetrics(rawMetrics);
   const debugEnabled =
     isDebug() || process.env.NEXT_PUBLIC_METRICS_DEBUG === "1";
+
+  const periodStatus = periodHealth?.status ?? "ok";
 
   const periodValues = useMemo(() => {
     const safeNum = (n: unknown) =>
@@ -259,7 +262,20 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           key === "M4" || key === "M6"
             ? (value as { total: number }).total
             : (value as number);
-        formattedValue = formatCurrency(numValue);
+        if (
+          (key === "M11" && periodStatus !== "ok") ||
+          (key === "M12" && periodStatus !== "ok") ||
+          (key === "M13" && periodStatus !== "ok")
+        ) {
+          formattedValue =
+            periodStatus === "missing" ? (
+              <span className="text-amber-600 font-semibold">数据缺失</span>
+            ) : (
+              <span className="text-muted-foreground font-medium">待补充</span>
+            );
+        } else {
+          formattedValue = formatCurrency(numValue);
+        }
 
         // 设置颜色
         if (
@@ -267,7 +283,21 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             key,
           )
         ) {
-          colorClass = numValue > 0 ? "green" : numValue < 0 ? "red" : "";
+          if (
+            key === "M11" ||
+            key === "M12" ||
+            key === "M13"
+          ) {
+            colorClass = periodStatus === "ok"
+              ? numValue > 0
+                ? "green"
+                : numValue < 0
+                ? "red"
+                : ""
+              : "";
+          } else {
+            colorClass = numValue > 0 ? "green" : numValue < 0 ? "red" : "";
+          }
         }
       }
 
@@ -279,7 +309,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         dataTestId,
       };
     });
-  }, [metrics, metricNames, order, periodValues]);
+  }, [metrics, metricNames, order, periodValues, periodStatus]);
 
   const rows = useMemo(
     () => [

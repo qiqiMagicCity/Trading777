@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   findTrades,
   getAllPrices,
@@ -20,7 +20,16 @@ import { calcMetrics, normalizeMetrics } from '@/app/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { getLatestTradingDayStr } from '@/lib/timezone';
-import { generateDailyResults, mergeClosePriceMaps, normalizeClosePriceMap, closePricesFromRows } from '@/lib/dailyResults';
+import {
+  generateDailyResults,
+  mergeClosePriceMaps,
+  normalizeClosePriceMap,
+  closePricesFromRows,
+  type DailyResultsDiagnostics,
+  type MissingCloseFallback,
+} from '@/lib/dailyResults';
+import { summarizeMissingCloses } from '@/app/lib/missingClose';
+import type { MissingCloseSummary } from '@/app/lib/types/health';
 
 function resolvePrevClose(
   symbol: string,
@@ -104,15 +113,83 @@ async function ensureDailyCloses(symbols: string[], targetDate: string, fallback
   );
 }
 
-function findMissingCloseSymbols(
-  symbols: string[],
-  closePrices: Record<string, Record<string, number>>,
-  targetDate: string,
-): string[] {
-  return symbols.filter(symbol => {
-    const price = closePrices?.[symbol]?.[targetDate];
-    return !(typeof price === 'number' && Number.isFinite(price));
-  });
+const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
+  MARK_PRICE: '使用最新价兜底',
+  PREVIOUS_CLOSE: '沿用上一日价格',
+  AVERAGE_COST: '使用均价兜底',
+};
+
+function areSummariesEqual(
+  a: MissingCloseSummary[],
+  b: MissingCloseSummary[],
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const left = a[i]!;
+    const right = b[i]!;
+    if (left.date !== right.date) return false;
+    if (left.symbols.length !== right.symbols.length) return false;
+    for (let j = 0; j < left.symbols.length; j += 1) {
+      const ls = left.symbols[j]!;
+      const rs = right.symbols[j]!;
+      if (ls.symbol !== rs.symbol) return false;
+      if (ls.fallbacks.length !== rs.fallbacks.length) return false;
+      for (let k = 0; k < ls.fallbacks.length; k += 1) {
+        if (ls.fallbacks[k] !== rs.fallbacks[k]) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function MissingCloseBanner({
+  summaries,
+  onIgnore,
+}: {
+  summaries: MissingCloseSummary[];
+  onIgnore: () => void;
+}) {
+  return (
+    <div
+      style={{
+        background: 'rgba(255, 193, 7, 0.12)',
+        border: '1px solid rgba(255, 193, 7, 0.6)',
+        borderRadius: '8px',
+        color: '#ffd966',
+        margin: '20px auto',
+        maxWidth: 'var(--page-max)',
+        padding: '16px',
+        width: '90%',
+      }}
+    >
+      <h3 style={{ marginTop: 0, marginBottom: '12px', color: '#ffe08a' }}>收盘价缺失提醒</h3>
+      <p style={{ marginTop: 0, marginBottom: '12px', color: '#fff5cc' }}>
+        以下日期缺少官方收盘价，请补录到 close_prices.json 或使用导入功能添加。
+      </p>
+      <ul style={{ paddingLeft: '20px', marginTop: 0, marginBottom: '16px' }}>
+        {summaries.map((summary) => (
+          <li key={summary.date} style={{ marginBottom: '6px' }}>
+            <strong style={{ color: '#ffe08a' }}>{summary.date}</strong>：
+            {summary.symbols.map((detail, idx) => {
+              const labels = detail.fallbacks
+                .map((fb) => FALLBACK_LABELS[fb] ?? '')
+                .filter(Boolean);
+              return (
+                <span key={`${summary.date}-${detail.symbol}`}>
+                  {detail.symbol}
+                  {labels.length > 0 ? `（${labels.join('、')}）` : ''}
+                  {idx < summary.symbols.length - 1 ? '、' : ''}
+                </span>
+              );
+            })}
+          </li>
+        ))}
+      </ul>
+      <button className="btn" onClick={onIgnore}>
+        忽略并暂时以“待补充”展示
+      </button>
+    </div>
+  );
 }
 
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
@@ -124,6 +201,43 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [missingCloseSummaries, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
+  const [missingDismissed, setMissingDismissed] = useState(false);
+  const summaryRef = useRef<MissingCloseSummary[]>([]);
+  const setMetrics = useStore((state) => state.setMetrics);
+  const setPeriodHealth = useStore((state) => state.setPeriodHealth);
+
+  const updateMissingCloseState = (summaries: MissingCloseSummary[]) => {
+    const prev = summaryRef.current;
+    if (summaries.length === 0) {
+      summaryRef.current = [];
+      setMissingCloseSummaries([]);
+      if (prev.length > 0) {
+        setMissingDismissed(false);
+      }
+      setPeriodHealth(null);
+      return;
+    }
+
+    let dismissed = missingDismissed;
+    if (dismissed && !areSummariesEqual(prev, summaries)) {
+      dismissed = false;
+      setMissingDismissed(false);
+    }
+
+    summaryRef.current = summaries;
+    setMissingCloseSummaries(summaries);
+    setPeriodHealth({
+      status: dismissed ? 'ignored' : 'missing',
+      summaries,
+    });
+  };
+
+  const handleIgnoreMissing = () => {
+    if (summaryRef.current.length === 0) return;
+    setMissingDismissed(true);
+    setPeriodHealth({ status: 'ignored', summaries: summaryRef.current });
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -193,6 +307,7 @@ export default function DashboardPage() {
           } else {
             setError('无法获取实时价格，指标计算失败');
           }
+          setPeriodHealth(null);
           setIsLoading(false);
           return;
         }
@@ -217,40 +332,31 @@ export default function DashboardPage() {
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
-        const missingCloseSymbols = findMissingCloseSymbols(
-          collectSymbols(dbTrades, posList),
-          mergedClosePrices,
-          evalDateStr,
-        );
-        if (missingCloseSymbols.length > 0) {
-          setTrades(dbTrades);
-          setPositions(posList);
-          setEnrichedTrades(enriched);
-          setError(`缺少 ${evalDateStr} 的收盘价：${missingCloseSymbols.join('、')}。请编辑 close_prices.json 后重试。`);
-          setIsLoading(false);
-          return;
-        }
-
+        const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
         const dailyResults = generateDailyResults({
           trades: enriched,
           positions: posList,
           closePrices: mergedClosePrices,
           evalDate: evalDateStr,
-        });
+        }, diagnostics);
         setDailyResultsCache(dailyResults);
+
+        const summaries = summarizeMissingCloses(diagnostics.missingCloses);
+        updateMissingCloseState(summaries);
 
         // 计算指标并存入全局状态（M6 = M4 + M5.2 + 当日MTM）
         const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
           tradingDateStr: evalDateStr,
         });
         const metrics = normalizeMetrics(rawMetrics);
-        useStore.getState().setMetrics(metrics as any);
+        setMetrics(metrics as any);
 
         setTrades(dbTrades);
         setPositions(posList);
         setEnrichedTrades(enriched);
       } catch (e) {
         console.error(e);
+        setPeriodHealth(null);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       } finally {
         setIsLoading(false);
@@ -331,6 +437,7 @@ export default function DashboardPage() {
         } else {
           setError('无法获取实时价格，指标计算失败');
         }
+        setPeriodHealth(null);
         return;
       }
 
@@ -353,33 +460,24 @@ export default function DashboardPage() {
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
-      const missingCloseSymbols = findMissingCloseSymbols(
-        collectSymbols(dbTrades, posList),
-        mergedClosePrices,
-        evalDateStr,
-      );
-      if (missingCloseSymbols.length > 0) {
-        setTrades(dbTrades);
-        setPositions(posList);
-        setEnrichedTrades(enriched);
-        setError(`缺少 ${evalDateStr} 的收盘价：${missingCloseSymbols.join('、')}。请编辑 close_prices.json 后重试。`);
-        return;
-      }
-
+      const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
       const dailyResults = generateDailyResults({
         trades: enriched,
         positions: posList,
         closePrices: mergedClosePrices,
         evalDate: evalDateStr,
-      });
+      }, diagnostics);
       setDailyResultsCache(dailyResults);
+
+      const summaries = summarizeMissingCloses(diagnostics.missingCloses);
+      updateMissingCloseState(summaries);
 
       // 计算指标并更新全局状态
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
         tradingDateStr: evalDateStr,
       });
       const metrics = normalizeMetrics(rawMetrics);
-      useStore.getState().setMetrics(metrics as any);
+      setMetrics(metrics as any);
 
       setTrades(dbTrades);
       setPositions(posList);
@@ -397,6 +495,12 @@ export default function DashboardPage() {
 
   return (
     <div>
+      {missingCloseSummaries.length > 0 && !missingDismissed && (
+        <MissingCloseBanner
+          summaries={missingCloseSummaries}
+          onIgnore={handleIgnoreMissing}
+        />
+      )}
       <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
 
       <h3 className="section-title" id="positions-title">目前持仓 <Link href="/analysis" className="details">交易分析</Link></h3>

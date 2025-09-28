@@ -1920,12 +1920,57 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6Excluded,
     missingPrevCloseSymbols,
   };
-  const pickFiniteNumber = (value: unknown) =>
-    typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  const parseFiniteNumber = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return undefined;
+  };
 
-  const M11 = pickFiniteNumber(input?.M11);
-  const M12 = pickFiniteNumber(input?.M12);
-  const M13 = pickFiniteNumber(input?.M13);
+  const pickPeriodNumber = (...candidates: unknown[]) => {
+    for (const candidate of candidates) {
+      const parsed = parseFiniteNumber(candidate);
+      if (parsed !== undefined) {
+        return parsed;
+      }
+    }
+    return undefined;
+  };
+
+  const periodSource = (input as { periods?: Record<string, unknown> })?.periods ?? {};
+
+  const M11 = pickPeriodNumber(
+    input?.M11,
+    periodSource["M11"],
+    periodSource["WTD"],
+    periodSource["wtd"],
+    input?.WTD,
+    input?.wtd,
+  );
+  const M12 = pickPeriodNumber(
+    input?.M12,
+    periodSource["M12"],
+    periodSource["MTD"],
+    periodSource["mtd"],
+    input?.MTD,
+    input?.mtd,
+  );
+  const M13 = pickPeriodNumber(
+    input?.M13,
+    periodSource["M13"],
+    periodSource["YTD"],
+    periodSource["ytd"],
+    input?.YTD,
+    input?.ytd,
+  );
 
   return {
     M1,

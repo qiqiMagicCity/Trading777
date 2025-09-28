@@ -1,14 +1,17 @@
 import { create } from 'zustand';
-import { Metrics } from './metrics';
+import type { Metrics } from './metrics';
+import type { PeriodHealth } from './types/health';
 
 interface StoreState {
-  // 指标数据
   metrics: Metrics | null;
-  // 设置指标方法
-  setMetrics: (metrics: Metrics) => void;
+  setMetrics: (metrics: Metrics | null) => void;
+  periodHealth: PeriodHealth | null;
+  setPeriodHealth: (health: PeriodHealth | null) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
   metrics: null,
   setMetrics: (metrics) => set({ metrics }),
-})); 
+  periodHealth: null,
+  setPeriodHealth: (periodHealth) => set({ periodHealth }),
+}));
