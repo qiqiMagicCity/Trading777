@@ -910,20 +910,32 @@ type PeriodSum = {
 function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): PeriodSum {
   const sorted = [...rows].sort((a, b) => a.ts - b.ts);
 
+  const firstIdxInWindow = sorted.findIndex((r) => r.ts >= startTs && r.ts <= endTs);
+
+  let hasBaseline = false;
   let prevU = 0;
   for (let i = sorted.length - 1; i >= 0; i -= 1) {
     if (sorted[i]!.ts < startTs) {
       prevU = sorted[i]!.unrealized;
+      hasBaseline = true;
       break;
     }
   }
 
   const items: PeriodSum["items"] = [];
   let sum = 0;
-  for (const r of sorted) {
+  for (let i = 0; i < sorted.length; i += 1) {
+    const r = sorted[i]!;
     if (r.ts < startTs || r.ts > endTs) continue;
-    const deltaU = r.unrealized - prevU;
+
+    let deltaU: number;
+    if (!hasBaseline && i === firstIdxInWindow) {
+      deltaU = 0;
+    } else {
+      deltaU = r.unrealized - prevU;
+    }
     const dayPnL = r.realized + deltaU;
+
     items.push({
       day: r.day,
       realized: r.realized,
@@ -931,8 +943,9 @@ function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): Peri
       deltaU,
       dayPnL,
     });
-    sum += dayPnL;
     prevU = r.unrealized;
+    hasBaseline = true;
+    sum += dayPnL;
   }
 
   return { sum, items };
