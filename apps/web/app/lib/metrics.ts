@@ -138,13 +138,38 @@ function deriveWindowPnl(
   evalDay: string,
   label: WindowLabel,
 ): number {
-  const drsSorted = drs
-    .map((row) => ({
-      ...row,
-      day: nyDayStr(row.date),
-    }))
-    .filter((row) => row.day <= evalDay)
-    .sort((a, b) => a.day.localeCompare(b.day));
+  type RowWithMeta = DailyResult & { day: string; __ts: number };
+  const rows: RowWithMeta[] = (drs ?? [])
+    .filter((row): row is DailyResult => Boolean(row))
+    .map((row) => {
+      const day =
+        typeof row.date === "string" && row.date.length > 10
+          ? nyDateStr(row.date)
+          : nyDayStr(row.date);
+      const tsRaw = new Date(row.date as any).getTime();
+      const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
+      return {
+        ...row,
+        day,
+        __ts: ts,
+      };
+    })
+    .filter((row) => row.day <= evalDay);
+
+  const byDay = new Map<string, RowWithMeta>();
+  for (const row of rows) {
+    const prev = byDay.get(row.day);
+    if (!prev || row.__ts > prev.__ts) {
+      byDay.set(row.day, row);
+    }
+  }
+
+  const drsSorted: Array<DailyResult & { day: string }> = Array.from(byDay.values())
+    .sort((a, b) => a.day.localeCompare(b.day))
+    .map((row) => {
+      const { __ts: _ts, ...pure } = row;
+      return pure;
+    });
 
   const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
   const sumRealized = windowEntries.reduce(
