@@ -32,6 +32,10 @@ export function nyDateStr(d: Date | string | number): string {
   return toETYYYYMMDD(d);
 }
 
+export function normalizeToNYMidday(ymd: string): string {
+  return `${ymd}T12:00:00Z`;
+}
+
 export function normalizeToNyDay(
   input: Date | string | number,
 ): Date | string | number {

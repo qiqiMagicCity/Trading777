@@ -1,9 +1,5 @@
 import type { Daily } from './metrics-periods';
-import { normalizeToNyDay, startOfDayNY } from './time';
-
-function normalizeToNYMidday(ymd: string): string {
-  return `${ymd}T12:00:00`;
-}
+import { normalizeToNYMidday, normalizeToNyDay, startOfDayNY } from './time';
 
 function addDaysYmd(ymd: string, n: number): string {
   const d = new Date(`${ymd}T00:00:00`);
