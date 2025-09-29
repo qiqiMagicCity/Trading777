@@ -57,11 +57,34 @@ export function normalizeClosePriceMap(input: ClosePriceMap | Record<string, any
   return result;
 }
 
+export interface ClosePriceRow {
+  symbol: string;
+  date: string;
+  close: number;
+  source?: string;
+}
+
+export interface ClosePriceRowOptions {
+  includeSources?: string[];
+  excludeSources?: string[];
+}
+
 export function closePricesFromRows(
-  rows: Array<{ symbol: string; date: string; close: number }>,
+  rows: ClosePriceRow[],
+  options: ClosePriceRowOptions = {},
 ): ClosePriceMap {
+  const { includeSources, excludeSources } = options;
+  const includeSet = includeSources ? new Set(includeSources) : null;
+  const excludeSet = excludeSources ? new Set(excludeSources) : null;
   const map: ClosePriceMap = {};
   for (const row of rows) {
+    const source = row.source;
+    if (includeSet && (!source || !includeSet.has(source))) {
+      continue;
+    }
+    if (excludeSet && source && excludeSet.has(source)) {
+      continue;
+    }
     const symbol = normalizeSymbol(row.symbol);
     if (!symbol || !isValidDateStr(row.date)) continue;
     const price = Number(row.close);
