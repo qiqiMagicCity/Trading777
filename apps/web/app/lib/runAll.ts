@@ -322,14 +322,17 @@ export function normalizeDailyRows(
     };
     const unrealizedSource = entry.unrealized;
     if (unrealizedSource !== null && unrealizedSource !== undefined) {
-      const trimmed =
-        typeof unrealizedSource === "string"
-          ? unrealizedSource.trim()
-          : unrealizedSource;
-      if (trimmed !== "") {
-        const unrealizedValue = Number(trimmed);
-        if (Number.isFinite(unrealizedValue)) {
-          normalized.unrealized = unrealizedValue;
+      if (typeof unrealizedSource === "number") {
+        if (Number.isFinite(unrealizedSource)) {
+          normalized.unrealized = unrealizedSource;
+        }
+      } else if (typeof unrealizedSource === "string") {
+        const trimmed = unrealizedSource.trim();
+        if (trimmed !== "") {
+          const unrealizedValue = Number(trimmed);
+          if (Number.isFinite(unrealizedValue)) {
+            normalized.unrealized = unrealizedValue;
+          }
         }
       }
     }
