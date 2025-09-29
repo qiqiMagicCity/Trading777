@@ -17,7 +17,7 @@ describe("WTD/MTD/YTD 应包含当天记录（无论 r.date 是否带时区）",
     expect(m.M13).toBeGreaterThanOrEqual(140);
   });
 
-  it("当 todayStr 因无当日交易而回退时 WTD/MTD/YTD 同步回退", () => {
+  it("当 todayStr 因无当日交易而回退时 WTD/MTD/YTD 仍使用当日快照", () => {
     const trades = [
       {
         id: 1,
@@ -44,14 +44,13 @@ describe("WTD/MTD/YTD 应包含当天记录（无论 r.date 是否带时区）",
       tradingDateStr: "2024-10-05",
     });
 
-    const expected = calcWtdMtdYtdFromSnapshots(
-      [daily[0]!],
-      "2024-10-04",
-    );
+    const expected = calcWtdMtdYtdFromSnapshots(daily, "2024-10-05");
 
     expect(metrics.M11).toBe(expected.wtd);
     expect(metrics.M12).toBe(expected.mtd);
     expect(metrics.M13).toBe(expected.ytd);
-    expect(metrics.M11).not.toBe(1099);
+
+    // 当日交易指标依旧使用回退日期
+    expect(metrics.M4).toBe(0);
   });
 });

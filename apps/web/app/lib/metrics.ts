@@ -1548,7 +1548,10 @@ function calcCumulativeTradeCounts(trades: EnrichedTrade[]) {
   return { B, S, P, C, total: B + S + P + C };
 }
 
-export function calcM9(days: DailyResult[]): number {
+export function calcM9(days: DailyResult[], evalDateStr?: string): number {
+  if (evalDateStr) {
+    return calcM9FromDaily(days, evalDateStr);
+  }
   return sumRealized(days);
 }
 
@@ -1663,6 +1666,7 @@ export function calcMetricsInternal(
 
   const initialTodayStr =
     providedTradingDate ?? getLatestTradingDayStr(evalDateNY);
+  const periodEvalStr = providedTradingDate ?? initialTodayStr;
   const evalEnd = endOfDayNY(toNY(`${initialTodayStr}T12:00:00Z`));
 
   const safeTrades: EnrichedTrade[] = [];
@@ -1815,14 +1819,14 @@ export function calcMetricsInternal(
   const allTradesByType = calcCumulativeTradeCounts(safeTrades);
   const totalTrades = allTradesByType.total;
 
-  const endTs = endOfDayNY(toNY(`${todayStr}T12:00:00Z`)).getTime();
+  const endTs = endOfDayNY(toNY(`${periodEvalStr}T12:00:00Z`)).getTime();
   const historicalDailyResults = dailyResults.filter((r) => {
     const dayTs = startOfDayNY(normalizeToNyDay(r.date)).getTime();
     return Number.isFinite(dayTs) && dayTs <= endTs;
   });
 
   // M9
-  const historicalRealizedPnl = calcM9(historicalDailyResults);
+  const historicalRealizedPnl = calcM9(historicalDailyResults, periodEvalStr);
 
   // M10
   const closes = collectCloseLots(sortedTrades, todayStr);
@@ -1831,12 +1835,12 @@ export function calcMetricsInternal(
   // M11-13
   const periodSnapshot = calcWtdMtdYtdFromSnapshots(
     historicalDailyResults,
-    todayStr,
+    periodEvalStr,
   );
   const { wtd, mtd, ytd, degraded } = periodSnapshot;
   if (DEBUG) {
     try {
-      checkPeriodDebug(historicalDailyResults ?? dailyResults, todayStr);
+      checkPeriodDebug(historicalDailyResults ?? dailyResults, periodEvalStr);
     } catch (error) {
       logger.debug("METRICS_DEBUG_PERIOD", { error });
     }
