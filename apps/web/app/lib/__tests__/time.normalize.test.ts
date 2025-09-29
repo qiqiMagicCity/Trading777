@@ -6,6 +6,8 @@ describe("normalizeToNyDay", () => {
     "2025-09-24T00:00:00",
     "2025-09-24T00:00:00.000",
     "2025-09-24 00:00:00",
+    "2025-09-24T00:00:00.000000Z",
+    "2025-09-24T00:00:00+0000",
   ] as const;
 
   test.each(inputs)("normalizes %s to NY midday and preserves day", (input) => {
