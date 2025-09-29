@@ -35,3 +35,8 @@
 - `normalizeMetrics` 在周/月/年窗口退化或指标为 `NaN` 时停止回退旧字段，避免沿用历史口径。
 - 补充 `metrics-normalize-period-alias.test.ts`，覆盖退化 + `NaN` 输入时不再带出 `M11` 的断言。
 - 在 `metrics.ts` 注释说明退化分支禁止回退旧字段，提示前端应展示“待补充”。
+
+## 2025-10-05
+- `normalizeMetrics` 透传 `_period` 元数据并浅拷贝退化标记，便于前端读取退化状态。
+- 新增 `metrics-normalize-period-metadata.test.ts`，验证 `_period.degraded` 保留且不会与原输入共享引用。
+- 检视 `runAll`、`page.tsx` 与 store 使用 `_period.degraded` 的逻辑，确认仍按退化状态渲染提示。
