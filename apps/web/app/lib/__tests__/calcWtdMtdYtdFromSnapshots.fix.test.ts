@@ -126,6 +126,28 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.ytd).toBeNaN();
   });
 
+  test("紧凑偏移的午夜快照会被最新快照覆盖", () => {
+    const evalDate = "2024-10-04";
+    const daily: DailyResult[] = [
+      { date: "2024-09-30", realized: 1000, unrealized: 2000, unrealizedDelta: 0 },
+      { date: "2024-10-01", realized: 1010, unrealized: 2010, unrealizedDelta: 10 },
+      { date: "2024-10-02", realized: 1020, unrealized: 2020, unrealizedDelta: 10 },
+      { date: "2024-10-03T00:00:00+0000", realized: 1030, unrealized: 2030, unrealizedDelta: 10 },
+      { date: "2024-10-03T23:00:00-04:00", realized: 1040, unrealized: 2040, unrealizedDelta: 10 },
+      { date: "2024-10-04T00:00:00+0000", realized: 26030.56, unrealized: 2050, unrealizedDelta: 10 },
+      { date: "2024-10-04T22:00:00-04:00", realized: 26050.56, unrealized: 2070, unrealizedDelta: 20 },
+    ];
+
+    const prevSnapshot = calcWtdMtdYtdFromSnapshots(daily.slice(0, -1), evalDate);
+    const snapshot = calcWtdMtdYtdFromSnapshots(daily, evalDate);
+
+    expect(snapshot.degraded.mtd).toBe(false);
+    expect(snapshot.wtd).not.toBeCloseTo(prevSnapshot.wtd ?? NaN, 10);
+    expect(snapshot.mtd).not.toBeCloseTo(prevSnapshot.mtd ?? NaN, 10);
+    expect(snapshot.ytd).not.toBeCloseTo(prevSnapshot.ytd ?? NaN, 10);
+    expect(snapshot.wtd).toBeGreaterThan(prevSnapshot.wtd ?? Number.NEGATIVE_INFINITY);
+  });
+
   test("字符串输入与数字输入得到一致的窗口 PnL", () => {
     const numericDaily: DailyResult[] = [
       { date: "2024-05-31", realized: 0, unrealized: 120, unrealizedDelta: 0 },
