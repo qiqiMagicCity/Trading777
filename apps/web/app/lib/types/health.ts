@@ -10,9 +10,16 @@ export interface MissingCloseSummary {
   symbols: MissingCloseSymbolDetail[];
 }
 
-export type PeriodHealthStatus = "ok" | "missing" | "ignored";
+export type PeriodHealthStatus = "ok" | "missing" | "ignored" | "degraded";
+
+export interface PeriodDegradedState {
+  wtd: boolean;
+  mtd: boolean;
+  ytd: boolean;
+}
 
 export interface PeriodHealth {
   status: PeriodHealthStatus;
   summaries: MissingCloseSummary[];
+  degraded?: PeriodDegradedState;
 }

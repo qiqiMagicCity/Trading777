@@ -68,6 +68,17 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     warnSpy.mockRestore();
   });
 
+  test("退化路径会标记 degraded 状态", () => {
+    const daily: DailyResult[] = [
+      { date: "2025-09-02", realized: 5, unrealized: 90 },
+      { date: "2025-09-03", realized: -3, unrealized: 91 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-03");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+  });
+
   test("字符串输入与数字输入得到一致的窗口 PnL", () => {
     const numericDaily: DailyResult[] = [
       { date: "2024-05-31", realized: 0, unrealized: 120, unrealizedDelta: 0 },

@@ -355,6 +355,14 @@ export default function DashboardPage() {
         const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
           tradingDateStr: evalDateStr,
         });
+        const degraded = rawMetrics?._period?.degraded;
+        if (degraded && (degraded.wtd || degraded.mtd || degraded.ytd)) {
+          setPeriodHealth({
+            status: 'degraded',
+            summaries: summaryRef.current,
+            degraded,
+          });
+        }
         const metrics = normalizeMetrics(rawMetrics);
         setMetrics(metrics as any);
 
@@ -490,6 +498,14 @@ export default function DashboardPage() {
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
         tradingDateStr: evalDateStr,
       });
+      const degraded = rawMetrics?._period?.degraded;
+      if (degraded && (degraded.wtd || degraded.mtd || degraded.ytd)) {
+        setPeriodHealth({
+          status: 'degraded',
+          summaries: summaryRef.current,
+          degraded,
+        });
+      }
       const metrics = normalizeMetrics(rawMetrics);
       setMetrics(metrics as any);
 
