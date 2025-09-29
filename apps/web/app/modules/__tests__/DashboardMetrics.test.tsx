@@ -5,6 +5,8 @@ import "@testing-library/jest-dom";
 
 import { DashboardMetrics } from "../DashboardMetrics";
 import { useStore } from "@/lib/store";
+import { calcWtdMtdYtdFromSnapshots } from "@/app/lib/metrics";
+import type { DailyResult } from "@/app/lib/types";
 
 const baseMetrics = {
   M11: 111.11,
@@ -144,6 +146,33 @@ describe("DashboardMetrics period cards", () => {
           status: "degraded",
           summaries: [],
           degraded: { wtd: true, mtd: true, ytd: true },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+  });
+
+  it("renders 待补充 when baseline snapshot expires before window start", () => {
+    const daily: DailyResult[] = [
+      { date: "2024-09-20", realized: 0, unrealized: 100, unrealizedDelta: 0 },
+      { date: "2024-09-24", realized: 5, unrealized: 130, unrealizedDelta: 30 },
+      { date: "2024-09-25", realized: -2, unrealized: 128, unrealizedDelta: -2 },
+    ];
+
+    const period = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
+
+    act(() => {
+      useStore.setState({
+        metrics: { M11: period.wtd as any, M12: period.mtd as any, M13: period.ytd as any },
+        periodHealth: {
+          status: "degraded",
+          summaries: [],
+          degraded: period.degraded,
         },
       });
     });
