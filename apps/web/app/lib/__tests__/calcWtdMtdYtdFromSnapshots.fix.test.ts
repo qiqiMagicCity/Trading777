@@ -45,7 +45,12 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
 
-    expect(result.ytd).toBeCloseTo(53);
+    expect(result).toMatchObject({
+      wtd: 3,
+      mtd: 3,
+      ytd: 3,
+      degraded: { wtd: false, mtd: false, ytd: true },
+    });
     expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
@@ -94,6 +99,19 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.ytd).toBeCloseTo(7);
   });
 
+  test("缺少窗口前快照但已有持仓时不会把整段浮盈计入", () => {
+    const daily: DailyResult[] = [
+      { date: "2025-09-24", realized: 0, unrealized: 500 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeCloseTo(0);
+    expect(result.mtd).toBeCloseTo(0);
+    expect(result.ytd).toBeCloseTo(0);
+  });
+
   test("缺少评估日快照会标记退化并返回 NaN", () => {
     const daily: DailyResult[] = [
       { date: "2024-09-22", realized: 5, unrealized: 10 },
@@ -131,7 +149,7 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(stringResult.ytd).toBeCloseTo(numericResult.ytd ?? 0, 10);
   });
 
-  test("Case F: 无 ΔU 快照回退与 computePeriods 对齐", () => {
+  test("Case F: 无 ΔU 快照退化时仅统计窗口内变动", () => {
     const evalDate = "2025-01-03";
     const daily: DailyResult[] = [
       { date: "2025-01-02", realized: 5, unrealized: 10 },
@@ -141,9 +159,14 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     const snapshot = calcWtdMtdYtdFromSnapshots(daily, evalDate);
     const periods = computePeriods(daily, evalDate);
 
-    expect(snapshot.wtd).toBeCloseTo(periods.M11 ?? 0, 10);
-    expect(snapshot.mtd).toBeCloseTo(periods.M12 ?? 0, 10);
-    expect(snapshot.ytd).toBeCloseTo(periods.M13 ?? 0, 10);
-    expect(snapshot.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(snapshot).toMatchObject({
+      wtd: 13,
+      mtd: 13,
+      ytd: 13,
+      degraded: { wtd: true, mtd: true, ytd: true },
+    });
+    expect(periods.M11).toBeGreaterThan(snapshot.wtd);
+    expect(periods.M12).toBeGreaterThan(snapshot.mtd);
+    expect(periods.M13).toBeGreaterThan(snapshot.ytd);
   });
 });
