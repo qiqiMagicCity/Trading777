@@ -45,8 +45,25 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
 
     expect(result.ytd).toBeCloseTo(3);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith("[M11-13] degraded-baseline window=YTD");
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+  });
+
+  test("Case E: 无基线但首日带 ΔU 时仅统计窗口内变动", () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+    const daily: DailyResult[] = [
+      { date: "2025-09-23", realized: 0, unrealized: 200, unrealizedDelta: 200 },
+      { date: "2025-09-24", realized: 10, unrealized: 180, unrealizedDelta: -20 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect(result.wtd).toBeCloseTo(190);
+    expect(result.mtd).toBeCloseTo(190);
+    expect(result.ytd).toBeCloseTo(190);
+    expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
   });
