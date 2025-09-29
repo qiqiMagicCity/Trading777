@@ -139,6 +139,17 @@ const EPSILON = 1e-6;
 type WindowLabel = "WTD" | "MTD" | "YTD";
 
 function parseFiniteNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return undefined;
+    }
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : undefined;
+  }
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
 }
@@ -1087,16 +1098,15 @@ function collectSnapshotRowsForEval(
       const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
       const realizedRaw = Number(record.realized ?? 0);
       const realized = Number.isFinite(realizedRaw) ? realizedRaw : 0;
-      const unrealizedRaw = Number(record.unrealized);
-      const unrealized = Number.isFinite(unrealizedRaw)
-        ? unrealizedRaw
-        : undefined;
+      const unrealized = parseUnrealized(record.unrealized);
       return { day, ts, realized, unrealized };
     })
     .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)
     .sort((a, b) => a.ts - b.ts);
 
-  const hasEvalRow = rows.some((row) => row.day === evalDayNYStr);
+  const hasEvalRow = rows.some(
+    (row) => row.day === evalDayNYStr && row.unrealized !== undefined,
+  );
 
   return { evalDayNYStr, endTs, rows, hasEvalRow };
 }

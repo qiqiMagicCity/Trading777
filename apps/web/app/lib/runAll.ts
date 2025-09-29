@@ -283,8 +283,8 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
 type MinimalDailyResult = {
   date?: string;
   realized?: number;
-  unrealized?: number;
-  unrealizedDelta?: number;
+  unrealized?: number | string | null;
+  unrealizedDelta?: number | string | null;
 };
 
 type NormalizedDailyRow = {
@@ -294,7 +294,7 @@ type NormalizedDailyRow = {
   unrealizedDelta?: number;
 };
 
-function normalizeDailyRows(
+export function normalizeDailyRows(
   daily: MinimalDailyResult[] | undefined,
   evalISO: string,
 ): NormalizedDailyRow[] {
@@ -320,9 +320,21 @@ function normalizeDailyRows(
       day,
       realized: Number.isFinite(realized) ? realized : 0,
     };
-    const unrealizedValue = Number(entry.unrealized);
-    if (Number.isFinite(unrealizedValue)) {
-      normalized.unrealized = unrealizedValue;
+    const unrealizedSource = entry.unrealized;
+    if (unrealizedSource !== null && unrealizedSource !== undefined) {
+      if (typeof unrealizedSource === "number") {
+        if (Number.isFinite(unrealizedSource)) {
+          normalized.unrealized = unrealizedSource;
+        }
+      } else if (typeof unrealizedSource === "string") {
+        const trimmed = unrealizedSource.trim();
+        if (trimmed !== "") {
+          const unrealizedValue = Number(trimmed);
+          if (Number.isFinite(unrealizedValue)) {
+            normalized.unrealized = unrealizedValue;
+          }
+        }
+      }
     }
     if (
       typeof entry.unrealizedDelta === "number" &&
