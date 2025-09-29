@@ -24,6 +24,13 @@ type ToNYArgs =
   | [string | number | Date]
   | [number, number, number?, number?, number?, number?, number?];
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const normalizeDateInput = (dateInput: string | Date): string | Date =>
+  typeof dateInput === "string" && DATE_ONLY_RE.test(dateInput)
+    ? `${dateInput}T12:00:00Z`
+    : dateInput;
+
 export function toNY(...args: ToNYArgs): Date {
   const TZ = "America/New_York";
 
@@ -124,29 +131,32 @@ export const endOfDayNY = (date: Date): Date => {
 
 /** 获取所在周的周一日期（纽约时区），返回 YYYY-MM-DD */
 export const weekStartNY = (dateInput: string | Date): string => {
-  const d = toNY(dateInput);
+  const d = toNY(normalizeDateInput(dateInput));
   const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 };
 
 /** 获取所在月的月初日期（纽约时区），返回 YYYY-MM-DD */
 export const monthStartNY = (dateInput: string | Date): string => {
-  const d = toNY(dateInput);
+  const d = toNY(normalizeDateInput(dateInput));
   d.setDate(1);
+  d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 };
 
 /** 获取所在年的年初日期（纽约时区），返回 YYYY-MM-DD */
 export const yearStartNY = (dateInput: string | Date): string => {
-  const d = toNY(dateInput);
+  const d = toNY(normalizeDateInput(dateInput));
   d.setMonth(0, 1);
+  d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 };
 
 /** 获取纽约时区当周周一零点的 Date 对象 */
 export const startOfWeekNY = (dateInput: string | Date): Date => {
-  const d = toNY(dateInput);
+  const d = toNY(normalizeDateInput(dateInput));
   const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day);
   d.setHours(0, 0, 0, 0);
@@ -155,7 +165,7 @@ export const startOfWeekNY = (dateInput: string | Date): Date => {
 
 /** 获取纽约时区当月月初零点的 Date 对象 */
 export const startOfMonthNY = (dateInput: string | Date): Date => {
-  const d = toNY(dateInput);
+  const d = toNY(normalizeDateInput(dateInput));
   d.setDate(1);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -163,7 +173,7 @@ export const startOfMonthNY = (dateInput: string | Date): Date => {
 
 /** 获取纽约时区当年年初零点的 Date 对象 */
 export const startOfYearNY = (dateInput: string | Date): Date => {
-  const d = toNY(dateInput);
+  const d = toNY(normalizeDateInput(dateInput));
   d.setMonth(0, 1);
   d.setHours(0, 0, 0, 0);
   return d;

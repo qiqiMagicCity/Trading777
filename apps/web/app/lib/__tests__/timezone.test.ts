@@ -1,4 +1,10 @@
-import { getLatestTradingDayStr, toNY } from "../timezone";
+import {
+  getLatestTradingDayStr,
+  monthStartNY,
+  weekStartNY,
+  yearStartNY,
+  toNY,
+} from "../timezone";
 
 describe("getLatestTradingDayStr", () => {
   it("returns previous Friday before market open on Monday", () => {
@@ -35,5 +41,19 @@ describe("DST transitions", () => {
   it("handles daylight saving time end", () => {
     const monday = toNY("2024-11-04T08:00:00");
     expect(getLatestTradingDayStr(monday)).toBe("2024-11-01");
+  });
+});
+
+describe("start-of-period formatting", () => {
+  it("keeps week start on same day for YYYY-MM-DD input", () => {
+    expect(weekStartNY("2024-05-06")).toBe("2024-05-06");
+  });
+
+  it("keeps month start on same day for YYYY-MM-DD input", () => {
+    expect(monthStartNY("2024-05-06")).toBe("2024-05-01");
+  });
+
+  it("keeps year start on same day for YYYY-MM-DD input", () => {
+    expect(yearStartNY("2024-05-06")).toBe("2024-01-01");
   });
 });
