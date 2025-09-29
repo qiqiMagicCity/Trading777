@@ -247,6 +247,7 @@ function deriveWindowPnl(
   let sumDelta = 0;
   const firstRow = windowEntries[0];
   const treatFirstUnrealizedAsDelta =
+    hasPreWindowRow &&
     baseline === null &&
     firstRow?.unrealizedDeltaParsed === undefined &&
     firstRow?.unrealizedParsed !== undefined;
@@ -259,12 +260,7 @@ function deriveWindowPnl(
   let degraded = false;
 
   if (!hasPreWindowRow && windowEntries.length > 0) {
-    const firstHasBaseline =
-      windowEntries[0]?.unrealizedParsed !== undefined ||
-      windowEntries[0]?.unrealizedDeltaParsed !== undefined;
-    if (!firstHasBaseline) {
-      degraded = true;
-    }
+    degraded = true;
   }
 
   if (windowEntries.length > 0) {
