@@ -290,7 +290,7 @@ type MinimalDailyResult = {
 type NormalizedDailyRow = {
   day: string;
   realized: number;
-  unrealized: number;
+  unrealized?: number;
   unrealizedDelta?: number;
 };
 
@@ -316,13 +316,14 @@ function normalizeDailyRows(
     const tsRaw = new Date(entry.date).getTime();
     const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
     const realized = Number(entry.realized ?? 0);
-    const unrealizedValue = Number(entry.unrealized);
-    const unrealized = Number.isFinite(unrealizedValue) ? unrealizedValue : 0;
     const normalized: NormalizedDailyRow = {
       day,
       realized: Number.isFinite(realized) ? realized : 0,
-      unrealized,
     };
+    const unrealizedValue = Number(entry.unrealized);
+    if (Number.isFinite(unrealizedValue)) {
+      normalized.unrealized = unrealizedValue;
+    }
     if (
       typeof entry.unrealizedDelta === "number" &&
       Number.isFinite(entry.unrealizedDelta)
@@ -373,7 +374,9 @@ function needsSyntheticDailyResults(
     const hasBaselineBefore = rows.some((row) => row.day < start);
     if (!hasBaselineBefore) {
       const first = windowRows[0]!;
-      if (first.unrealizedDelta === undefined) {
+      const hasBaselineData =
+        first.unrealizedDelta !== undefined || first.unrealized !== undefined;
+      if (!hasBaselineData) {
         return true;
       }
     }
