@@ -283,8 +283,8 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
 type MinimalDailyResult = {
   date?: string;
   realized?: number;
-  unrealized?: number;
-  unrealizedDelta?: number;
+  unrealized?: number | string | null;
+  unrealizedDelta?: number | string | null;
 };
 
 type NormalizedDailyRow = {
