@@ -8,6 +8,8 @@ import { startOfWeek, startOfMonth, startOfYear } from 'date-fns';
 export const NY_TZ = 'America/New_York';
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MIDNIGHT_ISO_RE =
+  /^(\d{4}-\d{2}-\d{2})T00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
 
 /** 将任意时间映射为纽约时区的 YYYY-MM-DD 字符串 */
 export function toETYYYYMMDD(d: Date | string | number): string {
@@ -30,11 +32,26 @@ export function nyDateStr(d: Date | string | number): string {
   return toETYYYYMMDD(d);
 }
 
-export function nyDateStrSafe(d: Date | string | number): string {
-  if (typeof d === 'string' && DATE_ONLY_RE.test(d)) {
-    return toETYYYYMMDD(`${d}T12:00:00Z`);
+export function normalizeToNyDay(
+  input: Date | string | number,
+): Date | string | number {
+  if (typeof input === 'string') {
+    if (DATE_ONLY_RE.test(input)) {
+      return `${input}T12:00:00Z`;
+    }
+
+    const midnightMatch = input.match(MIDNIGHT_ISO_RE);
+    if (midnightMatch) {
+      const [, datePart] = midnightMatch;
+      return `${datePart}T12:00:00Z`;
+    }
   }
-  return toETYYYYMMDD(d);
+
+  return input;
+}
+
+export function nyDateStrSafe(d: Date | string | number): string {
+  return toETYYYYMMDD(normalizeToNyDay(d));
 }
 
 export function startOfDayNY(d: Date | string | number): Date {

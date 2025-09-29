@@ -5,6 +5,7 @@ import {
   startOfMonthNY,
   startOfYearNY,
   startOfDayNY,
+  normalizeToNyDay,
 } from './time';
 import { sumPeriodCached } from './period-sum-cache';
 import type { DailyResult } from './types';
@@ -64,9 +65,11 @@ export function sumPeriod(daily: Daily[], startISO: string, endISO: string): num
 
   for (const d of sorted) {
     if (!d?.date) continue;
-    const dt = new Date(d.date);
+    const normalizedDate =
+      typeof d.date === 'string' ? normalizeToNyDay(d.date) : d.date;
+    const dt = new Date(normalizedDate);
     if (!Number.isFinite(dt.valueOf())) continue;
-    const dayTS = startOfDayNY(dt).getTime();
+    const dayTS = startOfDayNY(normalizedDate).getTime();
     if (!Number.isFinite(dayTS)) continue;
 
     const unrealized = d?.unrealized ?? 0;

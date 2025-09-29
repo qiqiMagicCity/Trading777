@@ -1,5 +1,5 @@
 import type { Daily } from './metrics-periods';
-import { startOfDayNY } from './time';
+import { normalizeToNyDay, startOfDayNY } from './time';
 
 function normalizeToNYMidday(ymd: string): string {
   return `${ymd}T12:00:00`;
@@ -56,9 +56,11 @@ function buildInner(daily: Daily[]): Inner {
 
   for (const d of sorted) {
     if (!d?.date) continue;
-    const dt = new Date(d.date);
+    const normalizedDate =
+      typeof d.date === 'string' ? normalizeToNyDay(d.date) : d.date;
+    const dt = new Date(normalizedDate);
     if (!Number.isFinite(dt.valueOf())) continue;
-    const dayTS = startOfDayNY(dt).getTime();
+    const dayTS = startOfDayNY(normalizedDate).getTime();
     if (!Number.isFinite(dayTS)) continue;
 
     const unrealized = d?.unrealized ?? 0;
