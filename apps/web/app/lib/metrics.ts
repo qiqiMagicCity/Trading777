@@ -19,6 +19,8 @@ import {
 import { nyDateStr, startOfDayNY } from "./time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MIDNIGHT_ISO_RE =
+  /^(\d{4}-\d{2}-\d{2})T00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
 
 function normalizeToNYMidday(ymd: string): string {
   return `${ymd}T12:00:00`;
@@ -34,8 +36,16 @@ function addDaysYmd(ymd: string, n: number): string {
 }
 
 function normalizeToNyDay(input: string | number | Date): Date | string | number {
-  if (typeof input === "string" && DATE_ONLY_RE.test(input)) {
-    return `${input}T12:00:00Z`;
+  if (typeof input === "string") {
+    if (DATE_ONLY_RE.test(input)) {
+      return `${input}T12:00:00Z`;
+    }
+
+    const midnightMatch = input.match(MIDNIGHT_ISO_RE);
+    if (midnightMatch) {
+      const [, datePart] = midnightMatch;
+      return `${datePart}T12:00:00Z`;
+    }
   }
   return input;
 }
@@ -166,10 +176,7 @@ function deriveWindowPnl(
   const rows: RowWithMeta[] = (drs ?? [])
     .filter((row): row is DailyResult => Boolean(row))
     .map((row) => {
-      const day =
-        typeof row.date === "string" && row.date.length > 10
-          ? nyDateStr(row.date)
-          : nyDayStr(row.date);
+      const day = nyDayStr(row.date);
       const tsRaw = new Date(row.date as any).getTime();
       const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
       return {

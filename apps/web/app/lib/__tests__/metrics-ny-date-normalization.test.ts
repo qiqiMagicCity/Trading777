@@ -46,4 +46,15 @@ describe("NY day normalization", () => {
     expect(metrics.M12).toBeCloseTo(120, 5);
     expect(metrics.M13).toBeCloseTo(120, 5);
   });
+
+  it("counts midnight ISO snapshots on the correct New York day", () => {
+    const daily: DailyResult[] = [
+      d("2025-09-23T23:00:00-04:00", 100, 0),
+      d("2025-09-24T00:00:00Z", 50, 0),
+    ];
+
+    const { wtd, mtd, ytd } = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect({ wtd, mtd, ytd }).toEqual({ wtd: 150, mtd: 150, ytd: 150 });
+  });
 });
