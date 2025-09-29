@@ -1722,8 +1722,8 @@ export function calcMetricsInternal(
 
   // M11-13
   const { wtd, mtd, ytd } = calcWtdMtdYtdFromSnapshots(
-    dailyResults,
-    snapEvalDayStr,
+    historicalDailyResults,
+    todayStr,
   );
   if (DEBUG) {
     try {
