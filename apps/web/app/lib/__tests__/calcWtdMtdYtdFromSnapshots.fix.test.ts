@@ -79,6 +79,20 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
   });
 
+  test("首行缺失浮盈会标记退化", () => {
+    const daily: DailyResult[] = [
+      { date: "2025-09-23", realized: 10, unrealized: Number.NaN as any },
+      { date: "2025-09-24", realized: -3, unrealized: 120 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeCloseTo(7);
+    expect(result.mtd).toBeCloseTo(7);
+    expect(result.ytd).toBeCloseTo(7);
+  });
+
   test("字符串输入与数字输入得到一致的窗口 PnL", () => {
     const numericDaily: DailyResult[] = [
       { date: "2024-05-31", realized: 0, unrealized: 120, unrealizedDelta: 0 },

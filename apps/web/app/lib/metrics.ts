@@ -245,31 +245,51 @@ function deriveWindowPnl(
   }
 
   let sumDelta = 0;
+  let prevUnrealized = windowEntries[0]?.unrealizedParsed;
+  let degraded = false;
+
+  if (!hasPreWindowRow && windowEntries.length > 0) {
+    const firstHasBaseline =
+      windowEntries[0]?.unrealizedParsed !== undefined ||
+      windowEntries[0]?.unrealizedDeltaParsed !== undefined;
+    if (!firstHasBaseline) {
+      degraded = true;
+    }
+  }
+
   if (windowEntries.length > 0) {
-    let prevUnrealized = windowEntries[0]!.unrealizedParsed ?? 0;
     for (let i = 0; i < windowEntries.length; i += 1) {
       const row = windowEntries[i]!;
       const delta = row.unrealizedDeltaParsed;
+      const currentUnrealized = row.unrealizedParsed;
       if (delta !== undefined) {
         sumDelta += delta;
-      } else {
-        const currentUnrealized = row.unrealizedParsed;
         if (currentUnrealized !== undefined) {
-          sumDelta += currentUnrealized - prevUnrealized;
+          prevUnrealized = currentUnrealized;
+        } else if (prevUnrealized !== undefined) {
+          prevUnrealized += delta;
+        } else {
+          degraded = true;
         }
+        continue;
       }
 
-      if (row.unrealizedParsed !== undefined) {
-        prevUnrealized = row.unrealizedParsed;
+      if (prevUnrealized !== undefined && currentUnrealized !== undefined) {
+        sumDelta += currentUnrealized - prevUnrealized;
+        prevUnrealized = currentUnrealized;
+      } else if (currentUnrealized !== undefined) {
+        prevUnrealized = currentUnrealized;
+        degraded = true;
+      } else {
+        degraded = true;
       }
     }
   }
 
-  const degraded = hasPreWindowRow || windowEntries.length > 0;
-  if (hasPreWindowRow) {
+  if (hasPreWindowRow && (baseline === null || degraded)) {
     console.warn(`[M11-13] degraded-baseline window=${label}`);
   }
-  if (degraded && markDegraded) {
+  if ((degraded || baseline === null) && markDegraded) {
     markDegraded(label);
   }
   return sumRealized + sumDelta;
@@ -1024,7 +1044,7 @@ type SnapshotRow = {
   day: string;
   ts: number;
   realized: number;
-  unrealized: number;
+  unrealized?: number;
 };
 
 type SnapshotCollection = {
@@ -1056,9 +1076,11 @@ function collectSnapshotRowsForEval(
     .map(([day, { record }]) => {
       const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
       const realizedRaw = Number(record.realized ?? 0);
-      const unrealizedRaw = Number(record.unrealized ?? 0);
       const realized = Number.isFinite(realizedRaw) ? realizedRaw : 0;
-      const unrealized = Number.isFinite(unrealizedRaw) ? unrealizedRaw : 0;
+      const unrealizedRaw = Number(record.unrealized);
+      const unrealized = Number.isFinite(unrealizedRaw)
+        ? unrealizedRaw
+        : undefined;
       return { day, ts, realized, unrealized };
     })
     .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)
@@ -1072,7 +1094,7 @@ type PeriodSum = {
   items: Array<{
     day: string;
     realized: number;
-    unrealized: number;
+    unrealized?: number;
     deltaU: number;
     dayPnL: number;
   }>;
@@ -1084,12 +1106,15 @@ function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): Peri
   const firstIdxInWindow = sorted.findIndex((r) => r.ts >= startTs && r.ts <= endTs);
 
   let hasBaseline = false;
-  let prevU = 0;
+  let prevU: number | undefined;
   for (let i = sorted.length - 1; i >= 0; i -= 1) {
     if (sorted[i]!.ts < startTs) {
-      prevU = sorted[i]!.unrealized;
-      hasBaseline = true;
-      break;
+      const baselineCandidate = sorted[i]!.unrealized;
+      if (baselineCandidate !== undefined) {
+        prevU = baselineCandidate;
+        hasBaseline = true;
+        break;
+      }
     }
   }
 
@@ -1099,23 +1124,26 @@ function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): Peri
     const r = sorted[i]!;
     if (r.ts < startTs || r.ts > endTs) continue;
 
-    let deltaU: number;
+    const currentUnrealized = r.unrealized;
+    let deltaU = 0;
     if (!hasBaseline && i === firstIdxInWindow) {
-      deltaU = 0;
-    } else {
-      deltaU = r.unrealized - prevU;
+    } else if (prevU !== undefined && currentUnrealized !== undefined) {
+      deltaU = currentUnrealized - prevU;
     }
+
     const dayPnL = r.realized + deltaU;
 
     items.push({
       day: r.day,
       realized: r.realized,
-      unrealized: r.unrealized,
+      unrealized: currentUnrealized,
       deltaU,
       dayPnL,
     });
-    prevU = r.unrealized;
-    hasBaseline = true;
+    if (currentUnrealized !== undefined) {
+      prevU = currentUnrealized;
+      hasBaseline = true;
+    }
     sum += dayPnL;
   }
 
@@ -1198,7 +1226,10 @@ export function explainWtdMtdYtdFromSnapshots(
 
   const rowsWithTotals = rows.map((row) => ({
     ...row,
-    pnl: row.realized + row.unrealized,
+    pnl:
+      row.unrealized === undefined
+        ? undefined
+        : row.realized + row.unrealized,
   }));
 
   return {
