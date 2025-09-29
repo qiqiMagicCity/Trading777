@@ -50,4 +50,27 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     warnSpy.mockRestore();
   });
+
+  test("字符串输入与数字输入得到一致的窗口 PnL", () => {
+    const numericDaily: DailyResult[] = [
+      { date: "2024-05-31", realized: 0, unrealized: 120, unrealizedDelta: 0 },
+      { date: "2024-06-03", realized: 5, unrealized: 130, unrealizedDelta: 10 },
+      { date: "2024-06-04", realized: -2, unrealized: 135, unrealizedDelta: 5 },
+      { date: "2024-06-05", realized: 4, unrealized: 140, unrealizedDelta: 5 },
+    ];
+
+    const stringDaily = numericDaily.map((row) => ({
+      ...row,
+      realized: String(row.realized),
+      unrealized: String(row.unrealized),
+      unrealizedDelta: String(row.unrealizedDelta ?? ""),
+    })) as unknown as DailyResult[];
+
+    const numericResult = calcWtdMtdYtdFromSnapshots(numericDaily, "2024-06-05");
+    const stringResult = calcWtdMtdYtdFromSnapshots(stringDaily, "2024-06-05");
+
+    expect(stringResult.wtd).toBeCloseTo(numericResult.wtd ?? 0, 10);
+    expect(stringResult.mtd).toBeCloseTo(numericResult.mtd ?? 0, 10);
+    expect(stringResult.ytd).toBeCloseTo(numericResult.ytd ?? 0, 10);
+  });
 });

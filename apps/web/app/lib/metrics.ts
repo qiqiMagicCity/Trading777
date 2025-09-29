@@ -132,13 +132,36 @@ const EPSILON = 1e-6;
 
 type WindowLabel = "WTD" | "MTD" | "YTD";
 
+function parseFiniteNumber(value: unknown): number | undefined {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function parseRealized(value: unknown): number | undefined {
+  return parseFiniteNumber(value);
+}
+
+function parseUnrealized(value: unknown): number | undefined {
+  return parseFiniteNumber(value);
+}
+
+function parseUnrealizedDelta(value: unknown): number | undefined {
+  return parseFiniteNumber(value);
+}
+
 function deriveWindowPnl(
   drs: DailyResult[],
   windowStart: string,
   evalDay: string,
   label: WindowLabel,
 ): number {
-  type RowWithMeta = DailyResult & { day: string; __ts: number };
+  type RowWithMeta = DailyResult & {
+    day: string;
+    __ts: number;
+    realizedParsed?: number;
+    unrealizedParsed?: number;
+    unrealizedDeltaParsed?: number;
+  };
   const rows: RowWithMeta[] = (drs ?? [])
     .filter((row): row is DailyResult => Boolean(row))
     .map((row) => {
@@ -152,6 +175,9 @@ function deriveWindowPnl(
         ...row,
         day,
         __ts: ts,
+        realizedParsed: parseRealized(row.realized),
+        unrealizedParsed: parseUnrealized(row.unrealized),
+        unrealizedDeltaParsed: parseUnrealizedDelta(row.unrealizedDelta),
       };
     })
     .filter((row) => row.day <= evalDay);
@@ -164,7 +190,7 @@ function deriveWindowPnl(
     }
   }
 
-  const drsSorted: Array<DailyResult & { day: string }> = Array.from(byDay.values())
+  const drsSorted: Array<Omit<RowWithMeta, "__ts">> = Array.from(byDay.values())
     .sort((a, b) => a.day.localeCompare(b.day))
     .map((row) => {
       const { __ts: _ts, ...pure } = row;
@@ -173,61 +199,59 @@ function deriveWindowPnl(
 
   const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
   const sumRealized = windowEntries.reduce(
-    (acc, row) => acc + (typeof row.realized === "number" ? row.realized : 0),
+    (acc, row) => acc + (row.realizedParsed ?? 0),
     0,
   );
 
   const lastInRange = drsSorted.length
     ? drsSorted[drsSorted.length - 1]!
     : undefined;
-  const uEnd = typeof lastInRange?.unrealized === "number" ? lastInRange.unrealized : 0;
+  const uEnd = lastInRange?.unrealizedParsed;
 
   let baseline: number | null = null;
   for (let i = drsSorted.length - 1; i >= 0; i -= 1) {
     const row = drsSorted[i]!;
     if (row.day < windowStart) {
-      baseline = typeof row.unrealized === "number" ? row.unrealized : 0;
-      break;
+      if (row.unrealizedParsed !== undefined) {
+        baseline = row.unrealizedParsed;
+        break;
+      }
     }
   }
 
-  if (baseline !== null) {
+  if (baseline !== null && uEnd !== undefined) {
     return sumRealized + (uEnd - baseline);
   }
 
   const firstInWindow = windowEntries[0];
   if (
     firstInWindow &&
-    typeof firstInWindow.unrealizedDelta === "number" &&
-    Number.isFinite(firstInWindow.unrealizedDelta)
+    firstInWindow.unrealizedParsed !== undefined &&
+    firstInWindow.unrealizedDeltaParsed !== undefined &&
+    uEnd !== undefined
   ) {
     const inferredBaseline =
-      (typeof firstInWindow.unrealized === "number" ? firstInWindow.unrealized : 0) -
-      firstInWindow.unrealizedDelta;
+      firstInWindow.unrealizedParsed - firstInWindow.unrealizedDeltaParsed;
     return sumRealized + (uEnd - inferredBaseline);
   }
 
   let sumDelta = 0;
   if (windowEntries.length > 0) {
-    let prevUnrealized =
-      typeof windowEntries[0]!.unrealized === "number" ? windowEntries[0]!.unrealized : 0;
+    let prevUnrealized = windowEntries[0]!.unrealizedParsed ?? 0;
     for (let i = 0; i < windowEntries.length; i += 1) {
       const row = windowEntries[i]!;
-      const delta = row.unrealizedDelta;
-      if (i === 0) {
-        if (typeof delta === "number" && Number.isFinite(delta)) {
-          sumDelta += delta;
-        }
-      } else if (typeof delta === "number" && Number.isFinite(delta)) {
+      const delta = row.unrealizedDeltaParsed;
+      if (delta !== undefined) {
         sumDelta += delta;
       } else {
-        const currentUnrealized =
-          typeof row.unrealized === "number" ? row.unrealized : prevUnrealized;
-        sumDelta += currentUnrealized - prevUnrealized;
+        const currentUnrealized = row.unrealizedParsed;
+        if (currentUnrealized !== undefined) {
+          sumDelta += currentUnrealized - prevUnrealized;
+        }
       }
 
-      if (typeof row.unrealized === "number") {
-        prevUnrealized = row.unrealized;
+      if (row.unrealizedParsed !== undefined) {
+        prevUnrealized = row.unrealizedParsed;
       }
     }
   }
