@@ -89,13 +89,23 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
   });
 
-  it("shows 待补充 when period data is degraded", () => {
+  it("shows 待补充 only for degraded periods and lists missing parameters", () => {
     act(() => {
       useStore.setState({
         metrics: baseMetrics as any,
         periodHealth: {
           status: "degraded",
-          summaries: [],
+          summaries: [
+            {
+              date: "2025-09-26",
+              symbols: [
+                {
+                  symbol: "AMD",
+                  fallbacks: ["MARK_PRICE"],
+                },
+              ],
+            },
+          ],
           degraded: { wtd: true, mtd: false, ytd: true },
         },
       });
@@ -104,7 +114,25 @@ describe("DashboardMetrics period cards", () => {
     render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
 
     expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
-    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("222.22");
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("period-health-summary")).toHaveTextContent(
+      "2025-09-26：AMD（使用最新价兜底）",
+    );
+  });
+
+  it("shows self-check warning when WTD/MTD/YTD are the same", () => {
+    act(() => {
+      useStore.setState({
+        metrics: { M11: 10, M12: 10, M13: 10 } as any,
+        periodHealth: { status: "ok", summaries: [] },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("period-self-check")).toHaveTextContent(
+      "检测到 WTD/MTD/YTD 数值完全一致",
+    );
   });
 });

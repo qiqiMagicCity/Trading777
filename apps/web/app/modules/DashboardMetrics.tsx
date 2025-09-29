@@ -10,7 +10,14 @@ import {
   getLastWtdMtdYtdExplain,
 } from "@/app/lib/metrics";
 import type { MetricsContract } from "@/app/lib/types/metrics";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { MissingCloseFallback } from "@/app/lib/dailyResults";
+
+const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
+  MARK_PRICE: "使用最新价兜底",
+  PREVIOUS_CLOSE: "沿用上一日价格",
+  AVERAGE_COST: "使用均价兜底",
+};
 
 /**
  * DashboardMetrics 组件的属性接口
@@ -58,6 +65,45 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
   const periodStatus = periodHealth?.status ?? "ok";
 
+  type PeriodCardState = "ok" | "missing" | "ignored" | "degraded";
+
+  const periodCardStates = useMemo(() => {
+    const degraded = periodHealth?.degraded;
+    const map: Record<"M11" | "M12" | "M13", PeriodCardState> = {
+      M11: "ok",
+      M12: "ok",
+      M13: "ok",
+    };
+
+    if (periodStatus === "missing") {
+      map.M11 = "missing";
+      map.M12 = "missing";
+      map.M13 = "missing";
+      return map;
+    }
+
+    if (periodStatus === "ignored") {
+      map.M11 = "ignored";
+      map.M12 = "ignored";
+      map.M13 = "ignored";
+      return map;
+    }
+
+    if (periodStatus === "degraded") {
+      if (!degraded) {
+        map.M11 = "degraded";
+        map.M12 = "degraded";
+        map.M13 = "degraded";
+      } else {
+        map.M11 = degraded.wtd ? "degraded" : "ok";
+        map.M12 = degraded.mtd ? "degraded" : "ok";
+        map.M13 = degraded.ytd ? "degraded" : "ok";
+      }
+    }
+
+    return map;
+  }, [periodHealth, periodStatus]);
+
   const periodValues = useMemo(() => {
     const safeNum = (n: unknown) =>
       typeof n === "number" && Number.isFinite(n) ? n : undefined;
@@ -82,6 +128,27 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     // eslint-disable-next-line no-console
     console.log("PERIOD-CARDS (final source)", payload);
   }, [debugEnabled, periodValues, rawMetrics]);
+
+  const [selfCheckMessage, setSelfCheckMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const m11 = periodValues.M11.value;
+    const m12 = periodValues.M12.value;
+    const m13 = periodValues.M13.value;
+
+    if (
+      m11 !== undefined &&
+      m12 !== undefined &&
+      m13 !== undefined &&
+      m11 === m12 &&
+      m12 === m13 &&
+      periodStatus === "ok"
+    ) {
+      setSelfCheckMessage("检测到 WTD/MTD/YTD 数值完全一致，请核对原始数据是否异常。");
+    } else {
+      setSelfCheckMessage(null);
+    }
+  }, [periodStatus, periodValues]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -262,17 +329,18 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           key === "M4" || key === "M6"
             ? (value as { total: number }).total
             : (value as number);
-        if (
-          (key === "M11" && periodStatus !== "ok") ||
-          (key === "M12" && periodStatus !== "ok") ||
-          (key === "M13" && periodStatus !== "ok")
-        ) {
-          formattedValue =
-            periodStatus === "missing" ? (
-              <span className="text-amber-600 font-semibold">数据缺失</span>
-            ) : (
-              <span className="text-muted-foreground font-medium">待补充</span>
-            );
+        if (key === "M11" || key === "M12" || key === "M13") {
+          const state = periodCardStates[key];
+          if (state !== "ok") {
+            formattedValue =
+              state === "missing" ? (
+                <span className="text-amber-600 font-semibold">数据缺失</span>
+              ) : (
+                <span className="text-muted-foreground font-medium">待补充</span>
+              );
+          } else {
+            formattedValue = formatCurrency(numValue);
+          }
         } else {
           formattedValue = formatCurrency(numValue);
         }
@@ -288,13 +356,14 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             key === "M12" ||
             key === "M13"
           ) {
-            colorClass = periodStatus === "ok"
-              ? numValue > 0
-                ? "green"
-                : numValue < 0
-                ? "red"
-                : ""
-              : "";
+            colorClass =
+              periodCardStates[key] === "ok"
+                ? numValue > 0
+                  ? "green"
+                  : numValue < 0
+                  ? "red"
+                  : ""
+                : "";
           } else {
             colorClass = numValue > 0 ? "green" : numValue < 0 ? "red" : "";
           }
@@ -309,7 +378,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         dataTestId,
       };
     });
-  }, [metrics, metricNames, order, periodValues, periodStatus]);
+  }, [metrics, metricNames, order, periodCardStates, periodValues]);
 
   const rows = useMemo(
     () => [
@@ -330,6 +399,53 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     return <section id="stats" className="stats-grid">正在加载指标...</section>;
   }
 
+  const degradedKeys = useMemo(
+    () =>
+      (["M11", "M12", "M13"] as const).filter(
+        (key) => periodCardStates[key] === "degraded",
+      ),
+    [periodCardStates],
+  );
+
+  const shouldShowPeriodSummary =
+    periodStatus === "missing" ||
+    periodStatus === "ignored" ||
+    degradedKeys.length > 0;
+
+  const summaryMessages = useMemo(() => {
+    if (!periodHealth?.summaries?.length) return [] as string[];
+    return periodHealth.summaries.map((summary) => {
+      const details = summary.symbols
+        .map((detail) => {
+          const labels = detail.fallbacks
+            .map((fb) => FALLBACK_LABELS[fb] ?? fb)
+            .filter(Boolean);
+          const suffix = labels.length > 0 ? `（${labels.join("、")}）` : "";
+          return `${detail.symbol}${suffix}`;
+        })
+        .join("、");
+      return `${summary.date}：${details}`;
+    });
+  }, [periodHealth?.summaries]);
+
+  const summaryIntroParts: string[] = [];
+  if (periodStatus === "missing") {
+    summaryIntroParts.push("缺少必要收盘价数据");
+  }
+  if (periodStatus === "ignored") {
+    summaryIntroParts.push("存在缺失数据已被忽略");
+  }
+  const periodLabelMap: Record<"M11" | "M12" | "M13", string> = {
+    M11: "WTD",
+    M12: "MTD",
+    M13: "YTD",
+  };
+  if (degradedKeys.length > 0) {
+    summaryIntroParts.push(
+      `指标退化：${degradedKeys.map((key) => periodLabelMap[key]).join("、")}`,
+    );
+  }
+
   return (
     <section id="stats" className="my-5">
       <div className="flex flex-col items-center gap-4">
@@ -346,6 +462,38 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             ))}
           </div>
         ))}
+        {selfCheckMessage && (
+          <div
+            className="w-full max-w-3xl rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700"
+            data-testid="period-self-check"
+          >
+            {selfCheckMessage}
+          </div>
+        )}
+        {shouldShowPeriodSummary && (
+          <div
+            className="w-full max-w-3xl rounded-md border border-amber-200 bg-amber-100/70 p-3 text-sm text-amber-900"
+            data-testid="period-health-summary"
+          >
+            <div className="font-medium">
+              指标异常提醒
+              {summaryIntroParts.length > 0
+                ? `（${summaryIntroParts.join("；")}）`
+                : ""}
+            </div>
+            {summaryMessages.length > 0 ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {summaryMessages.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2">
+                请检查 close_prices 数据源，补充缺失的收盘价或确认兜底策略。
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
