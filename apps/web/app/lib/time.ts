@@ -61,19 +61,19 @@ export function startOfDayNY(d: Date | string | number): Date {
 }
 
 export function startOfWeekNY(d: Date | string | number): Date {
-  const nd = toNY(d);
+  const nd = toNY(normalizeToNyDay(d));
   const mondayLocal = startOfWeek(new Date(nd.getFullYear(), nd.getMonth(), nd.getDate()), { weekStartsOn: 1 });
   return zonedTimeToUtc(mondayLocal, NY_TZ);
 }
 
 export function startOfMonthNY(d: Date | string | number): Date {
-  const nd = toNY(d);
+  const nd = toNY(normalizeToNyDay(d));
   const m0Local = startOfMonth(new Date(nd.getFullYear(), nd.getMonth(), nd.getDate()));
   return zonedTimeToUtc(m0Local, NY_TZ);
 }
 
 export function startOfYearNY(d: Date | string | number): Date {
-  const nd = toNY(d);
+  const nd = toNY(normalizeToNyDay(d));
   const y0Local = startOfYear(new Date(nd.getFullYear(), nd.getMonth(), nd.getDate()));
   return zonedTimeToUtc(y0Local, NY_TZ);
 }
