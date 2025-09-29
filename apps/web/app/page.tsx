@@ -325,9 +325,16 @@ export default function DashboardPage() {
           loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
           getAllPrices(),
         ]);
+        const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
+          includeSources: ["close_fallback"],
+        });
+        const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
+          excludeSources: ["close_fallback"],
+        });
         const mergedClosePrices = mergeClosePriceMaps(
+          cachedFallbackCloses,
           normalizeClosePriceMap(fileClosePrices),
-          closePricesFromRows(cachedPrices),
+          cachedOfficialCloses,
         );
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
@@ -453,9 +460,16 @@ export default function DashboardPage() {
         loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
         getAllPrices(),
       ]);
+      const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
+        includeSources: ["close_fallback"],
+      });
+      const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
+        excludeSources: ["close_fallback"],
+      });
       const mergedClosePrices = mergeClosePriceMaps(
+        cachedFallbackCloses,
         normalizeClosePriceMap(fileClosePrices),
-        closePricesFromRows(cachedPrices),
+        cachedOfficialCloses,
       );
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
