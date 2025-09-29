@@ -91,26 +91,12 @@ describe("[DIAG M11] Diagnose calcWtdMtdYtdFromSnapshots", () => {
     const truthM = groundTruthWindowPnL(drs1, "2025-09-01", eval1);
     const truthY = groundTruthWindowPnL(drs1, "2025-01-01", eval1);
 
-    console.log(
-      "[DIAG M11] Case1 WTD actual=%s truth=%s degraded=%s",
-      actual.wtd,
-      truthW.value,
-      truthW.degraded,
-    );
-    console.log(
-      "[DIAG M11] Case1 MTD actual=%s truth=%s degraded=%s",
-      actual.mtd,
-      truthM.value,
-      truthM.degraded,
-    );
-    console.log(
-      "[DIAG M11] Case1 YTD actual=%s truth=%s degraded=%s",
-      actual.ytd,
-      truthY.value,
-      truthY.degraded,
-    );
-
-    expect(true).toBe(true);
+    expect(actual.wtd).toBeCloseTo(truthW.value, 6);
+    expect(actual.mtd).toBeCloseTo(truthM.value, 6);
+    expect(actual.ytd).toBeCloseTo(truthY.value, 6);
+    expect(actual.degraded.wtd).toBe(truthW.degraded);
+    expect(actual.degraded.mtd).toBe(truthM.degraded);
+    expect(actual.degraded.ytd).toBe(truthY.degraded);
   });
 
   it("Case2 仅有评估日一行", () => {
@@ -124,26 +110,12 @@ describe("[DIAG M11] Diagnose calcWtdMtdYtdFromSnapshots", () => {
     const truthM = groundTruthWindowPnL(drs2, "2025-09-01", eval2);
     const truthY = groundTruthWindowPnL(drs2, "2025-01-01", eval2);
 
-    console.log(
-      "[DIAG M11] Case2 WTD actual=%s truth=%s degraded=%s",
-      actual.wtd,
-      truthW.value,
-      truthW.degraded,
-    );
-    console.log(
-      "[DIAG M11] Case2 MTD actual=%s truth=%s degraded=%s",
-      actual.mtd,
-      truthM.value,
-      truthM.degraded,
-    );
-    console.log(
-      "[DIAG M11] Case2 YTD actual=%s truth=%s degraded=%s",
-      actual.ytd,
-      truthY.value,
-      truthY.degraded,
-    );
-
-    expect(true).toBe(true);
+    expect(actual.wtd).toBeCloseTo(truthW.value, 6);
+    expect(actual.mtd).toBeCloseTo(truthM.value, 6);
+    expect(actual.ytd).toBeCloseTo(truthY.value, 6);
+    expect(actual.degraded.wtd).toBe(truthW.degraded);
+    expect(actual.degraded.mtd).toBe(truthM.degraded);
+    expect(actual.degraded.ytd).toBe(truthY.degraded);
   });
 
   it("Case3 有ΔU可反推基线", () => {
@@ -158,26 +130,12 @@ describe("[DIAG M11] Diagnose calcWtdMtdYtdFromSnapshots", () => {
     const truthM = groundTruthWindowPnL(drs3, "2025-09-01", eval3);
     const truthY = groundTruthWindowPnL(drs3, "2025-01-01", eval3);
 
-    console.log(
-      "[DIAG M11] Case3 WTD actual=%s truth=%s degraded=%s",
-      actual.wtd,
-      truthW.value,
-      truthW.degraded,
-    );
-    console.log(
-      "[DIAG M11] Case3 MTD actual=%s truth=%s degraded=%s",
-      actual.mtd,
-      truthM.value,
-      truthM.degraded,
-    );
-    console.log(
-      "[DIAG M11] Case3 YTD actual=%s truth=%s degraded=%s",
-      actual.ytd,
-      truthY.value,
-      truthY.degraded,
-    );
-
-    expect(true).toBe(true);
+    expect(actual.wtd).toBeCloseTo(truthW.value, 6);
+    expect(actual.mtd).toBeCloseTo(truthM.value, 6);
+    expect(actual.ytd).toBeCloseTo(truthY.value, 6);
+    expect(actual.degraded.wtd).toBe(truthW.degraded);
+    expect(actual.degraded.mtd).toBe(truthM.degraded);
+    expect(actual.degraded.ytd).toBe(truthY.degraded);
   });
 });
 

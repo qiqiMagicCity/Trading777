@@ -1,6 +1,6 @@
 import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
-import { calcMetrics } from "./metrics";
+import { calcMetrics, parseNumberLike } from "./metrics";
 import { computePeriods } from "./metrics-periods";
 import { generateDailyResults } from "./dailyResults";
 import { nyDateStr, nyDateStrSafe, startOfMonthNY, startOfWeekNY, startOfYearNY } from "./time";
@@ -283,8 +283,8 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
 type MinimalDailyResult = {
   date?: string;
   realized?: number;
-  unrealized?: number;
-  unrealizedDelta?: number;
+  unrealized?: number | string | null;
+  unrealizedDelta?: number | string | null;
 };
 
 type NormalizedDailyRow = {
@@ -294,7 +294,7 @@ type NormalizedDailyRow = {
   unrealizedDelta?: number;
 };
 
-function normalizeDailyRows(
+export function normalizeDailyRows(
   daily: MinimalDailyResult[] | undefined,
   evalISO: string,
 ): NormalizedDailyRow[] {
@@ -320,15 +320,16 @@ function normalizeDailyRows(
       day,
       realized: Number.isFinite(realized) ? realized : 0,
     };
-    const unrealizedValue = Number(entry.unrealized);
-    if (Number.isFinite(unrealizedValue)) {
-      normalized.unrealized = unrealizedValue;
+    const unrealizedSource = entry.unrealized;
+    if (unrealizedSource !== null && unrealizedSource !== undefined) {
+      const parsed = parseNumberLike(unrealizedSource);
+      if (parsed !== undefined) {
+        normalized.unrealized = parsed;
+      }
     }
-    if (
-      typeof entry.unrealizedDelta === "number" &&
-      Number.isFinite(entry.unrealizedDelta)
-    ) {
-      normalized.unrealizedDelta = entry.unrealizedDelta;
+    const deltaParsed = parseNumberLike(entry.unrealizedDelta);
+    if (deltaParsed !== undefined) {
+      normalized.unrealizedDelta = deltaParsed;
     }
 
     const prev = dedup.get(day);

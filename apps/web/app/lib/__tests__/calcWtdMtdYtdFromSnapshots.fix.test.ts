@@ -134,11 +134,14 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
       { date: "2024-06-05", realized: 4, unrealized: 140, unrealizedDelta: 5 },
     ];
 
+    const format = (value: number | undefined) =>
+      value === undefined ? "" : value.toLocaleString("en-US");
+
     const stringDaily = numericDaily.map((row) => ({
       ...row,
-      realized: String(row.realized),
-      unrealized: String(row.unrealized),
-      unrealizedDelta: String(row.unrealizedDelta ?? ""),
+      realized: format(row.realized),
+      unrealized: format(row.unrealized),
+      unrealizedDelta: format(row.unrealizedDelta ?? undefined),
     })) as unknown as DailyResult[];
 
     const numericResult = calcWtdMtdYtdFromSnapshots(numericDaily, "2024-06-05");
@@ -147,6 +150,37 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(stringResult.wtd).toBeCloseTo(numericResult.wtd ?? 0, 10);
     expect(stringResult.mtd).toBeCloseTo(numericResult.mtd ?? 0, 10);
     expect(stringResult.ytd).toBeCloseTo(numericResult.ytd ?? 0, 10);
+  });
+
+  test("支持千分位格式的浮盈数据", () => {
+    const numericDaily: DailyResult[] = [
+      {
+        date: "2025-07-01",
+        realized: 1234.56,
+        unrealized: 26030.56,
+        unrealizedDelta: 130.12,
+      },
+      {
+        date: "2025-07-02",
+        realized: -234.5,
+        unrealized: 26160.68,
+        unrealizedDelta: 130.12,
+      },
+    ];
+
+    const formatted = numericDaily.map((row) => ({
+      date: row.date,
+      realized: row.realized.toLocaleString("en-US"),
+      unrealized: row.unrealized.toLocaleString("en-US"),
+      unrealizedDelta: row.unrealizedDelta?.toLocaleString("en-US"),
+    })) as unknown as DailyResult[];
+
+    const numericResult = calcWtdMtdYtdFromSnapshots(numericDaily, "2025-07-02");
+    const formattedResult = calcWtdMtdYtdFromSnapshots(formatted, "2025-07-02");
+
+    expect(formattedResult.wtd).toBeCloseTo(numericResult.wtd ?? 0, 10);
+    expect(formattedResult.mtd).toBeCloseTo(numericResult.mtd ?? 0, 10);
+    expect(formattedResult.ytd).toBeCloseTo(numericResult.ytd ?? 0, 10);
   });
 
   test("Case F: 无 ΔU 快照退化时仅统计窗口内变动", () => {
@@ -168,5 +202,19 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(periods.M11).toBeGreaterThan(snapshot.wtd);
     expect(periods.M12).toBeGreaterThan(snapshot.mtd);
     expect(periods.M13).toBeGreaterThan(snapshot.ytd);
+  });
+
+  test("空字符串浮盈会被视为缺失并触发退化", () => {
+    const daily: DailyResult[] = [
+      { date: "2025-09-23", realized: 3, unrealized: "   " as any },
+      { date: "2025-09-24", realized: -1, unrealized: "" as any },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
   });
 });

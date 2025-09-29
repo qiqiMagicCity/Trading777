@@ -136,11 +136,40 @@ const DEBUG = isDebug();
 
 const EPSILON = 1e-6;
 
+export function parseNumberLike(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  if (typeof value === "string") {
+    let trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    let negative = false;
+    if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+      negative = true;
+      trimmed = trimmed.slice(1, -1);
+    }
+
+    const sanitized = trimmed
+      .replace(/[\s,\u00A0_$]/g, "")
+      .replace(/^[+]/, "");
+
+    if (!sanitized) return undefined;
+
+    const parsed = Number(sanitized);
+    if (Number.isFinite(parsed)) {
+      return negative ? -parsed : parsed;
+    }
+  }
+
+  return undefined;
+}
+
 type WindowLabel = "WTD" | "MTD" | "YTD";
 
 function parseFiniteNumber(value: unknown): number | undefined {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : undefined;
+  return parseNumberLike(value);
 }
 
 function parseRealized(value: unknown): number | undefined {
@@ -237,7 +266,6 @@ function deriveWindowPnl(
     Math.abs(firstUnrealized - firstUnrealizedDelta) <= EPSILON;
 
   const allowInferredBaseline =
-    hasPreWindowRow &&
     firstUnrealized !== undefined &&
     firstUnrealizedDelta !== undefined &&
     !firstHasSameDeltaAsTotal;
@@ -1087,16 +1115,15 @@ function collectSnapshotRowsForEval(
       const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
       const realizedRaw = Number(record.realized ?? 0);
       const realized = Number.isFinite(realizedRaw) ? realizedRaw : 0;
-      const unrealizedRaw = Number(record.unrealized);
-      const unrealized = Number.isFinite(unrealizedRaw)
-        ? unrealizedRaw
-        : undefined;
+      const unrealized = parseUnrealized(record.unrealized);
       return { day, ts, realized, unrealized };
     })
     .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)
     .sort((a, b) => a.ts - b.ts);
 
-  const hasEvalRow = rows.some((row) => row.day === evalDayNYStr);
+  const hasEvalRow = rows.some(
+    (row) => row.day === evalDayNYStr && row.unrealized !== undefined,
+  );
 
   return { evalDayNYStr, endTs, rows, hasEvalRow };
 }
@@ -2061,24 +2088,9 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6Excluded,
     missingPrevCloseSymbols,
   };
-  const parseFiniteNumber = (value: unknown) => {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      if (!trimmed) return undefined;
-      const parsed = Number(trimmed);
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-    return undefined;
-  };
-
   const pickPeriodNumber = (...candidates: unknown[]) => {
     for (const candidate of candidates) {
-      const parsed = parseFiniteNumber(candidate);
+      const parsed = parseNumberLike(candidate);
       if (parsed !== undefined) {
         return parsed;
       }
