@@ -94,6 +94,20 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.ytd).toBeCloseTo(7);
   });
 
+  test("缺少评估日快照会标记退化并返回 NaN", () => {
+    const daily: DailyResult[] = [
+      { date: "2024-09-22", realized: 5, unrealized: 10 },
+      { date: "2024-09-23", realized: -2, unrealized: 8 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-24");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
+  });
+
   test("字符串输入与数字输入得到一致的窗口 PnL", () => {
     const numericDaily: DailyResult[] = [
       { date: "2024-05-31", realized: 0, unrealized: 120, unrealizedDelta: 0 },
