@@ -59,6 +59,20 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.ytd).toBeCloseTo(102);
   });
 
+  test("Case H: 窗口仅含评估日时标记退化并返回 NaN", () => {
+    const daily: DailyResult[] = [
+      { date: "2023-12-29", realized: 0, unrealized: 80, unrealizedDelta: 0 },
+      { date: "2024-09-25", realized: 5, unrealized: 120, unrealizedDelta: 40 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
+  });
+
   test("Case D: ΔU 缺失触发退化分支", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 

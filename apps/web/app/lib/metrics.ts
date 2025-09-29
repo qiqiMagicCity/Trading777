@@ -217,6 +217,15 @@ function deriveWindowPnl(
     });
 
   const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
+  if (
+    windowEntries.length <= 1 &&
+    windowEntries[0]?.day === evalDay
+  ) {
+    if (markDegraded) {
+      markDegraded(label);
+    }
+    return Number.NaN;
+  }
   const hasPreWindowRow = drsSorted.some((row) => row.day < windowStart);
   const sumRealized = windowEntries.reduce(
     (acc, row) => acc + (row.realizedParsed ?? 0),
