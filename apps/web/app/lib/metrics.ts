@@ -154,6 +154,7 @@ function deriveWindowPnl(
   windowStart: string,
   evalDay: string,
   label: WindowLabel,
+  markDegraded?: (label: WindowLabel) => void,
 ): number {
   type RowWithMeta = DailyResult & {
     day: string;
@@ -264,8 +265,12 @@ function deriveWindowPnl(
     }
   }
 
+  const degraded = hasPreWindowRow || windowEntries.length > 0;
   if (hasPreWindowRow) {
     console.warn(`[M11-13] degraded-baseline window=${label}`);
+  }
+  if (degraded && markDegraded) {
+    markDegraded(label);
   }
   return sumRealized + sumDelta;
 }
@@ -307,6 +312,9 @@ export interface Metrics {
   _m6?: {
     overnightPnL: number;
     warnings: string[];
+  };
+  _period?: {
+    degraded: PeriodDegradedMap;
   };
   M7: {
     B: number;
@@ -1120,19 +1128,39 @@ export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
   return __lastWtdMtdYtdExplain;
 }
 
+export interface PeriodDegradedMap {
+  wtd: boolean;
+  mtd: boolean;
+  ytd: boolean;
+}
+
 export function calcWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
-) {
+): {
+  wtd: number;
+  mtd: number;
+  ytd: number;
+  degraded: PeriodDegradedMap;
+} {
   const evalDay = nyDayStr(evalDayStr);
   const evalMidday = toNY(`${evalDay}T12:00:00Z`);
   const wStart = weekStartNY(evalMidday);
   const mStart = `${evalDay.slice(0, 7)}-01`;
   const yStart = `${evalDay.slice(0, 4)}-01-01`;
 
-  const w = deriveWindowPnl(daily, wStart, evalDay, "WTD");
-  const m = deriveWindowPnl(daily, mStart, evalDay, "MTD");
-  const y = deriveWindowPnl(daily, yStart, evalDay, "YTD");
+  const degradedFlags: Record<WindowLabel, boolean> = {
+    WTD: false,
+    MTD: false,
+    YTD: false,
+  };
+  const markDegraded = (label: WindowLabel) => {
+    degradedFlags[label] = true;
+  };
+
+  const w = deriveWindowPnl(daily, wStart, evalDay, "WTD", markDegraded);
+  const m = deriveWindowPnl(daily, mStart, evalDay, "MTD", markDegraded);
+  const y = deriveWindowPnl(daily, yStart, evalDay, "YTD", markDegraded);
 
   try {
     if (typeof window !== "undefined") {
@@ -1146,6 +1174,11 @@ export function calcWtdMtdYtdFromSnapshots(
     wtd: w,
     mtd: m,
     ytd: y,
+    degraded: {
+      wtd: degradedFlags.WTD,
+      mtd: degradedFlags.MTD,
+      ytd: degradedFlags.YTD,
+    },
   };
 }
 
@@ -1755,10 +1788,11 @@ export function calcMetricsInternal(
   const { win, loss, flat, rate } = calcWinLossLots(closes);
 
   // M11-13
-  const { wtd, mtd, ytd } = calcWtdMtdYtdFromSnapshots(
+  const periodSnapshot = calcWtdMtdYtdFromSnapshots(
     historicalDailyResults,
     todayStr,
   );
+  const { wtd, mtd, ytd, degraded } = periodSnapshot;
   if (DEBUG) {
     try {
       checkPeriodDebug(historicalDailyResults ?? dailyResults, todayStr);
@@ -1809,6 +1843,10 @@ export function calcMetricsInternal(
       m6Legs: legsForAux,
     },
   };
+
+  if (degraded?.wtd || degraded?.mtd || degraded?.ytd) {
+    metrics._period = { degraded };
+  }
 
   assertM6(metrics);
 

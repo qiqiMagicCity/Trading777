@@ -88,4 +88,23 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
   });
+
+  it("shows 待补充 when period data is degraded", () => {
+    act(() => {
+      useStore.setState({
+        metrics: baseMetrics as any,
+        periodHealth: {
+          status: "degraded",
+          summaries: [],
+          degraded: { wtd: true, mtd: false, ytd: true },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+  });
 });
