@@ -16,15 +16,11 @@ import {
   startOfMonthNY,
   startOfYearNY,
 } from "@/lib/timezone";
-import { nyDateStr, startOfDayNY } from "./time";
+import { normalizeToNYMidday, nyDateStr, startOfDayNY } from "./time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
   /^(\d{4}-\d{2}-\d{2})(?:[T ])?00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})?$/i;
-
-function normalizeToNYMidday(ymd: string): string {
-  return `${ymd}T12:00:00`;
-}
 
 function addDaysYmd(ymd: string, n: number): string {
   const d = new Date(`${ymd}T00:00:00`);
