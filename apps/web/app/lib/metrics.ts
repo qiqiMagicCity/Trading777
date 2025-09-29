@@ -1226,7 +1226,10 @@ export function explainWtdMtdYtdFromSnapshots(
 
   const rowsWithTotals = rows.map((row) => ({
     ...row,
-    pnl: row.realized + row.unrealized,
+    pnl:
+      row.unrealized === undefined
+        ? undefined
+        : row.realized + row.unrealized,
   }));
 
   return {
