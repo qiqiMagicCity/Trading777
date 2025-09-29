@@ -17,3 +17,7 @@
 - `calcWtdMtdYtdFromSnapshots` 在任一窗口退化时改为返回 `NaN`，避免误读为 0。
 - 更新 WTD/MTD/YTD 快照单测覆盖退化返回 `NaN` 与正常路径不变。
 - 回归 `normalizeMetrics` 与 `DashboardMetrics`，新增单测确认遇到 `NaN` 时 UI 落入“待补充”分支。
+
+## 2025-10-01
+- `runAll` 结果透传 `calcMetrics` 的 `_period.degraded`，并在类型层补充退化映射定义。
+- `runAll.align` 单测扩展退化断言，同时新增覆盖退化传递的用例；`verify-golden` 脚本收到退化时提示“待补充”。

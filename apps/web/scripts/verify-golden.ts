@@ -18,6 +18,22 @@ async function main() {
   const result = await runAll({ symbols, from, to });
   const m = normalizeMetrics(result as any);
 
+  const periodDegraded = (result as any)?._period?.degraded;
+  if (periodDegraded && (periodDegraded.wtd || periodDegraded.mtd || periodDegraded.ytd)) {
+    const formatDisplay = (value: number | undefined, flagged: boolean) => {
+      if (flagged) return "待补充";
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value.toFixed(2);
+      }
+      return "0.00";
+    };
+    console.warn("[verify-golden] 周/月/年窗口退化，使用“待补充”占位", {
+      WTD: formatDisplay(m.M11, Boolean(periodDegraded.wtd)),
+      MTD: formatDisplay(m.M12, Boolean(periodDegraded.mtd)),
+      YTD: formatDisplay(m.M13, Boolean(periodDegraded.ytd)),
+    });
+  }
+
   // 恒等式校验（内部会抛错，CI 直接红）
   assertM6Equality(m);
 
