@@ -95,4 +95,56 @@ describe("period boundaries normalized to NY noon", () => {
     expect(cached.M12).toBe(nonCached.mtd);
     expect(cached.M13).toBe(nonCached.ytd);
   });
+
+  test("date-only daily entries stay in evaluation windows", () => {
+    const drs: DailyResult[] = [
+      {
+        date: "2025-11-05",
+        realized: 50,
+        unrealized: 0,
+        unrealizedDelta: 0,
+      },
+    ];
+    const evalYmd = "2025-11-05";
+
+    const computed = computePeriods(drs, evalYmd);
+    expect(computed.M11).toBe(50);
+    expect(computed.M12).toBe(50);
+    expect(computed.M13).toBe(50);
+
+    const evalMiddayISO = `${evalYmd}T12:00:00Z`;
+    const wStart = startOfWeekNY(evalMiddayISO).toISOString().slice(0, 10);
+    const mStart = startOfMonthNY(evalMiddayISO).toISOString().slice(0, 10);
+    const yStart = startOfYearNY(evalMiddayISO).toISOString().slice(0, 10);
+
+    expect(sumPeriodCached(drs, wStart, evalYmd)).toBe(50);
+    expect(sumPeriodCached(drs, mStart, evalYmd)).toBe(50);
+    expect(sumPeriodCached(drs, yStart, evalYmd)).toBe(50);
+  });
+
+  test("midnight ISO daily entries stay in evaluation windows", () => {
+    const drs: DailyResult[] = [
+      {
+        date: "2025-12-07T00:00:00Z",
+        realized: 70,
+        unrealized: 0,
+        unrealizedDelta: 0,
+      },
+    ];
+    const evalYmd = "2025-12-07";
+
+    const computed = computePeriods(drs, evalYmd);
+    expect(computed.M11).toBe(70);
+    expect(computed.M12).toBe(70);
+    expect(computed.M13).toBe(70);
+
+    const evalMiddayISO = `${evalYmd}T12:00:00Z`;
+    const wStart = startOfWeekNY(evalMiddayISO).toISOString().slice(0, 10);
+    const mStart = startOfMonthNY(evalMiddayISO).toISOString().slice(0, 10);
+    const yStart = startOfYearNY(evalMiddayISO).toISOString().slice(0, 10);
+
+    expect(sumPeriodCached(drs, wStart, evalYmd)).toBe(70);
+    expect(sumPeriodCached(drs, mStart, evalYmd)).toBe(70);
+    expect(sumPeriodCached(drs, yStart, evalYmd)).toBe(70);
+  });
 });
