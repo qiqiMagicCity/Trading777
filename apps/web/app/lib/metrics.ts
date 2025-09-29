@@ -139,7 +139,18 @@ const EPSILON = 1e-6;
 type WindowLabel = "WTD" | "MTD" | "YTD";
 
 function parseFiniteNumber(value: unknown): number | undefined {
-  const num = Number(value);
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  let normalized = value;
+  if (typeof normalized === "string") {
+    const trimmed = normalized.trim();
+    if (trimmed === "") {
+      return undefined;
+    }
+    normalized = trimmed;
+  }
+  const num = Number(normalized);
   return Number.isFinite(num) ? num : undefined;
 }
 
@@ -202,6 +213,12 @@ function deriveWindowPnl(
     });
 
   const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
+  const hasWindowSignal = windowEntries.some(
+    (row) =>
+      row.realizedParsed !== undefined ||
+      row.unrealizedParsed !== undefined ||
+      row.unrealizedDeltaParsed !== undefined,
+  );
   const hasPreWindowRow = drsSorted.some((row) => row.day < windowStart);
   const sumRealized = windowEntries.reduce(
     (acc, row) => acc + (row.realizedParsed ?? 0),
@@ -300,6 +317,9 @@ function deriveWindowPnl(
   }
   if ((degraded || baseline === null) && markDegraded) {
     markDegraded(label);
+  }
+  if (degraded && !hasWindowSignal) {
+    return Number.NaN;
   }
   return sumRealized + sumDelta;
 }
@@ -1085,12 +1105,9 @@ function collectSnapshotRowsForEval(
   const rows = Array.from(map.entries())
     .map(([day, { record }]) => {
       const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
-      const realizedRaw = Number(record.realized ?? 0);
-      const realized = Number.isFinite(realizedRaw) ? realizedRaw : 0;
-      const unrealizedRaw = Number(record.unrealized);
-      const unrealized = Number.isFinite(unrealizedRaw)
-        ? unrealizedRaw
-        : undefined;
+      const realizedParsed = parseRealized(record.realized);
+      const realized = realizedParsed ?? 0;
+      const unrealized = parseUnrealized(record.unrealized);
       return { day, ts, realized, unrealized };
     })
     .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)

@@ -315,14 +315,26 @@ function normalizeDailyRows(
 
     const tsRaw = new Date(entry.date).getTime();
     const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-    const realized = Number(entry.realized ?? 0);
+    const realizedSource =
+      typeof entry.realized === "string" ? entry.realized.trim() : entry.realized;
+    const realized = Number(realizedSource ?? 0);
     const normalized: NormalizedDailyRow = {
       day,
       realized: Number.isFinite(realized) ? realized : 0,
     };
-    const unrealizedValue = Number(entry.unrealized);
-    if (Number.isFinite(unrealizedValue)) {
-      normalized.unrealized = unrealizedValue;
+    const unrealizedSource =
+      typeof entry.unrealized === "string"
+        ? entry.unrealized.trim()
+        : entry.unrealized;
+    if (
+      unrealizedSource !== null &&
+      unrealizedSource !== undefined &&
+      !(typeof unrealizedSource === "string" && unrealizedSource === "")
+    ) {
+      const unrealizedValue = Number(unrealizedSource);
+      if (Number.isFinite(unrealizedValue)) {
+        normalized.unrealized = unrealizedValue;
+      }
     }
     if (
       typeof entry.unrealizedDelta === "number" &&
@@ -640,5 +652,9 @@ function runAllCore(
 
   return result;
 }
+
+export const __internal = {
+  normalizeDailyRows,
+};
 
 export default runAll;
