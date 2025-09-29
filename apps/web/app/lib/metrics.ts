@@ -198,6 +198,7 @@ function deriveWindowPnl(
     });
 
   const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
+  const hasPreWindowRow = drsSorted.some((row) => row.day < windowStart);
   const sumRealized = windowEntries.reduce(
     (acc, row) => acc + (row.realizedParsed ?? 0),
     0,
@@ -224,14 +225,21 @@ function deriveWindowPnl(
   }
 
   const firstInWindow = windowEntries[0];
-  if (
-    firstInWindow &&
-    firstInWindow.unrealizedParsed !== undefined &&
-    firstInWindow.unrealizedDeltaParsed !== undefined &&
-    uEnd !== undefined
-  ) {
-    const inferredBaseline =
-      firstInWindow.unrealizedParsed - firstInWindow.unrealizedDeltaParsed;
+  const firstUnrealized = firstInWindow?.unrealizedParsed;
+  const firstUnrealizedDelta = firstInWindow?.unrealizedDeltaParsed;
+  const firstHasSameDeltaAsTotal =
+    firstUnrealized !== undefined &&
+    firstUnrealizedDelta !== undefined &&
+    Math.abs(firstUnrealized - firstUnrealizedDelta) <= EPSILON;
+
+  const allowInferredBaseline =
+    hasPreWindowRow &&
+    firstUnrealized !== undefined &&
+    firstUnrealizedDelta !== undefined &&
+    !firstHasSameDeltaAsTotal;
+
+  if (allowInferredBaseline && uEnd !== undefined) {
+    const inferredBaseline = firstUnrealized - firstUnrealizedDelta;
     return sumRealized + (uEnd - inferredBaseline);
   }
 
@@ -256,7 +264,9 @@ function deriveWindowPnl(
     }
   }
 
-  console.warn(`[M11-13] degraded-baseline window=${label}`);
+  if (hasPreWindowRow) {
+    console.warn(`[M11-13] degraded-baseline window=${label}`);
+  }
   return sumRealized + sumDelta;
 }
 
