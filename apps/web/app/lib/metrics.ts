@@ -31,6 +31,20 @@ function addDaysYmd(ymd: string, n: number): string {
   return `${y}-${m}-${day}`;
 }
 
+function isWeekendYmd(ymd: string): boolean {
+  const d = new Date(`${ymd}T00:00:00`);
+  const day = d.getUTCDay();
+  return day === 0 || day === 6;
+}
+
+function prevBusinessDayYmd(ymd: string): string {
+  let cursor = addDaysYmd(ymd, -1);
+  while (isWeekendYmd(cursor)) {
+    cursor = addDaysYmd(cursor, -1);
+  }
+  return cursor;
+}
+
 function normalizeToNyDay(input: string | number | Date): Date | string | number {
   if (typeof input === "string") {
     if (DATE_ONLY_RE.test(input)) {
@@ -238,14 +252,33 @@ function deriveWindowPnl(
   const uEnd = lastInRange?.unrealizedParsed;
 
   let baseline: number | null = null;
+  let baselineDay: string | null = null;
   for (let i = drsSorted.length - 1; i >= 0; i -= 1) {
     const row = drsSorted[i]!;
     if (row.day < windowStart) {
       if (row.unrealizedParsed !== undefined) {
         baseline = row.unrealizedParsed;
+        baselineDay = row.day;
         break;
       }
     }
+  }
+
+  const firstWindowDay = windowEntries[0]?.day;
+  const expectedBaselineDay =
+    firstWindowDay !== undefined ? prevBusinessDayYmd(firstWindowDay) : null;
+  const baselineExpired =
+    baseline !== null &&
+    baselineDay !== null &&
+    baselineDay < windowStart &&
+    (firstWindowDay === undefined ||
+      (firstWindowDay > windowStart && baselineDay !== expectedBaselineDay));
+
+  if (baselineExpired) {
+    if (markDegraded) {
+      markDegraded(label);
+    }
+    return Number.NaN;
   }
 
   if (baseline !== null && uEnd !== undefined) {

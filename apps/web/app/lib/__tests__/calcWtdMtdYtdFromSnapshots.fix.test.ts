@@ -43,7 +43,7 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
   });
 
-  test("Case G: 具备完整基线时仍输出窗口 PnL", () => {
+  test("Case G: 周/月具备基线但年线缺口退化", () => {
     const daily: DailyResult[] = [
       { date: "2023-12-29", realized: 0, unrealized: 10, unrealizedDelta: 0 },
       { date: "2024-08-30", realized: 0, unrealized: 100, unrealizedDelta: 90 },
@@ -53,10 +53,10 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-03");
 
-    expect(result.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
+    expect(result.degraded).toEqual({ wtd: false, mtd: false, ytd: true });
     expect(result.wtd).toBeCloseTo(12);
     expect(result.mtd).toBeCloseTo(12);
-    expect(result.ytd).toBeCloseTo(102);
+    expect(result.ytd).toBeNaN();
   });
 
   test("Case H: 窗口仅含评估日时标记退化并返回 NaN", () => {
@@ -73,6 +73,23 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.ytd).toBeNaN();
   });
 
+  test("Case I: 基线过期时退化为 NaN", () => {
+    const daily: DailyResult[] = [
+      { date: "2024-09-20", realized: 0, unrealized: 100, unrealizedDelta: 0 },
+      { date: "2024-09-24", realized: 5, unrealized: 130, unrealizedDelta: 30 },
+      { date: "2024-09-25", realized: -2, unrealized: 128, unrealizedDelta: -2 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
+
+    expect(result.degraded.wtd).toBe(true);
+    expect(result.wtd).toBeNaN();
+    expect(result.degraded.mtd).toBe(true);
+    expect(result.degraded.ytd).toBe(true);
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
+  });
+
   test("Case D: ΔU 缺失触发退化分支", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -84,8 +101,8 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
 
-    expect(result.degraded).toEqual({ wtd: false, mtd: false, ytd: true });
-    expect(result.wtd).toBeCloseTo(3);
+    expect(result.degraded).toEqual({ wtd: true, mtd: false, ytd: true });
+    expect(result.wtd).toBeNaN();
     expect(result.mtd).toBeCloseTo(3);
     expect(result.ytd).toBeNaN();
     expect(warnSpy).not.toHaveBeenCalled();

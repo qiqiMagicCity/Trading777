@@ -25,3 +25,8 @@
 ## 2025-10-02
 - `deriveWindowPnl` 遇到仅含评估日的窗口时主动标记退化并返回 `NaN`，避免沿用旧基线。
 - `calcWtdMtdYtdFromSnapshots` 单测新增 Case H，覆盖仅评估日窗口的退化行为。
+
+## 2025-10-03
+- `deriveWindowPnl` 记录基线日期并校验是否与窗口首日相邻交易日，超期即标记退化并返回 `NaN`。
+- 更新 `calcWtdMtdYtdFromSnapshots` 单测：新增“基线过期”案例，并调整周/月/年期望覆盖退化情境。
+- `DashboardMetrics` 单测补充基线过期时应展示“待补充”的断言，确保 UI 呈现符合预期。
