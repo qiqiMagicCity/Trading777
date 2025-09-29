@@ -169,4 +169,18 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(periods.M12).toBeGreaterThan(snapshot.mtd);
     expect(periods.M13).toBeGreaterThan(snapshot.ytd);
   });
+
+  test("空字符串浮盈会被视为缺失并触发退化", () => {
+    const daily: DailyResult[] = [
+      { date: "2025-09-23", realized: 3, unrealized: "   " as any },
+      { date: "2025-09-24", realized: -1, unrealized: "" as any },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
+  });
 });
