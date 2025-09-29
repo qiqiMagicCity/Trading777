@@ -1,4 +1,5 @@
 import { calcWtdMtdYtdFromSnapshots } from "../metrics";
+import { computePeriods } from "../metrics-periods";
 import type { DailyResult } from "../types";
 
 describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
@@ -44,7 +45,7 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
 
-    expect(result.ytd).toBeCloseTo(3);
+    expect(result.ytd).toBeCloseTo(53);
     expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
@@ -114,5 +115,21 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(stringResult.wtd).toBeCloseTo(numericResult.wtd ?? 0, 10);
     expect(stringResult.mtd).toBeCloseTo(numericResult.mtd ?? 0, 10);
     expect(stringResult.ytd).toBeCloseTo(numericResult.ytd ?? 0, 10);
+  });
+
+  test("Case F: 无 ΔU 快照回退与 computePeriods 对齐", () => {
+    const evalDate = "2025-01-03";
+    const daily: DailyResult[] = [
+      { date: "2025-01-02", realized: 5, unrealized: 10 },
+      { date: "2025-01-03", realized: -2, unrealized: 20 },
+    ];
+
+    const snapshot = calcWtdMtdYtdFromSnapshots(daily, evalDate);
+    const periods = computePeriods(daily, evalDate);
+
+    expect(snapshot.wtd).toBeCloseTo(periods.M11 ?? 0, 10);
+    expect(snapshot.mtd).toBeCloseTo(periods.M12 ?? 0, 10);
+    expect(snapshot.ytd).toBeCloseTo(periods.M13 ?? 0, 10);
+    expect(snapshot.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
   });
 });
