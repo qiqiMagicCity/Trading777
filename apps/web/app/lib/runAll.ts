@@ -596,6 +596,8 @@ function runAllCore(
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
+  const periodHealth = metrics._period?.degraded;
+
   const result = {
     ...periodsRest,
     M1: round2(metrics.M1),
@@ -613,6 +615,9 @@ function runAllCore(
     M11: metrics.M11,
     M12: metrics.M12,
     M13: metrics.M13,
+    ...(periodHealth
+      ? { _period: { degraded: { ...periodHealth } } }
+      : {}),
     aux: {
       breakdown,
       m6PriceChange: priceChange_r,

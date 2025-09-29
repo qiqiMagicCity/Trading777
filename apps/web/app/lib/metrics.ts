@@ -61,7 +61,11 @@ import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
-import type { MetricsContract, SummaryMetrics } from "./types/metrics";
+import type {
+  MetricsContract,
+  PeriodDegradedMap,
+  SummaryMetrics,
+} from "./types/metrics";
 
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
@@ -1176,12 +1180,6 @@ export type WtdMtdYtdExplain = ReturnType<typeof explainWtdMtdYtdFromSnapshots>;
 let __lastWtdMtdYtdExplain: WtdMtdYtdExplain | null = null;
 export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
   return __lastWtdMtdYtdExplain;
-}
-
-export interface PeriodDegradedMap {
-  wtd: boolean;
-  mtd: boolean;
-  ytd: boolean;
 }
 
 export function calcWtdMtdYtdFromSnapshots(
