@@ -1061,6 +1061,7 @@ type SnapshotCollection = {
   evalDayNYStr: string;
   endTs: number;
   rows: SnapshotRow[];
+  hasEvalRow: boolean;
 };
 
 function collectSnapshotRowsForEval(
@@ -1096,7 +1097,9 @@ function collectSnapshotRowsForEval(
     .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)
     .sort((a, b) => a.ts - b.ts);
 
-  return { evalDayNYStr, endTs, rows };
+  const hasEvalRow = rows.some((row) => row.day === evalDayNYStr);
+
+  return { evalDayNYStr, endTs, rows, hasEvalRow };
 }
 
 type PeriodSum = {
@@ -1181,6 +1184,28 @@ export function calcWtdMtdYtdFromSnapshots(
   ytd: number;
   degraded: PeriodDegradedMap;
 } {
+  const { hasEvalRow } = collectSnapshotRowsForEval(
+    daily,
+    evalDayStr,
+  );
+
+  if (!hasEvalRow) {
+    const degradedAll = { wtd: true, mtd: true, ytd: true } as const;
+    try {
+      if (typeof window !== "undefined") {
+        __lastWtdMtdYtdExplain = null;
+      }
+    } catch {
+      // noop: explain 缓存失败不影响业务
+    }
+    return {
+      wtd: Number.NaN,
+      mtd: Number.NaN,
+      ytd: Number.NaN,
+      degraded: degradedAll,
+    };
+  }
+
   const evalDay = nyDayStr(evalDayStr);
   const evalMidday = toNY(`${evalDay}T12:00:00Z`);
   const wStart = weekStartNY(evalMidday);
