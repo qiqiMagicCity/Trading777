@@ -30,3 +30,8 @@
 - `deriveWindowPnl` 记录基线日期并校验是否与窗口首日相邻交易日，超期即标记退化并返回 `NaN`。
 - 更新 `calcWtdMtdYtdFromSnapshots` 单测：新增“基线过期”案例，并调整周/月/年期望覆盖退化情境。
 - `DashboardMetrics` 单测补充基线过期时应展示“待补充”的断言，确保 UI 呈现符合预期。
+
+## 2025-10-04
+- `normalizeMetrics` 在周/月/年窗口退化或指标为 `NaN` 时停止回退旧字段，避免沿用历史口径。
+- 补充 `metrics-normalize-period-alias.test.ts`，覆盖退化 + `NaN` 输入时不再带出 `M11` 的断言。
+- 在 `metrics.ts` 注释说明退化分支禁止回退旧字段，提示前端应展示“待补充”。

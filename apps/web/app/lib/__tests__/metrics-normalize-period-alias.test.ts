@@ -41,4 +41,14 @@ describe("normalizeMetrics period alias handling", () => {
     expect("M12" in result).toBe(false);
     expect("M13" in result).toBe(false);
   });
+
+  it("does not fallback to legacy WTD when degraded", () => {
+    const result = normalizeMetrics({
+      M11: Number.NaN,
+      periods: { WTD: 26030.56 },
+      _period: { degraded: { wtd: true } },
+    });
+
+    expect("M11" in result).toBe(false);
+  });
 });
