@@ -9,7 +9,7 @@ export const NY_TZ = 'America/New_York';
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
-  /^(\d{4}-\d{2}-\d{2})T00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})$/i;
+  /^(\d{4}-\d{2}-\d{2})(?:[T ])?00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})?$/i;
 
 /** 将任意时间映射为纽约时区的 YYYY-MM-DD 字符串 */
 export function toETYYYYMMDD(d: Date | string | number): string {
