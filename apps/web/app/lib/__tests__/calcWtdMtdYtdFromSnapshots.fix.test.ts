@@ -11,8 +11,11 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
       { date: "2024-09-25", realized: 4, unrealized: 120, unrealizedDelta: 12 },
     ];
 
-    const { wtd } = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
-    expect(wtd).toBeCloseTo(25);
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
+    expect(result.wtd).toBeCloseTo(25);
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
+    expect(result.degraded).toEqual({ wtd: false, mtd: true, ytd: true });
   });
 
   test("Case B: 基于 ΔU 反推基线", () => {
@@ -21,8 +24,11 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
       { date: "2024-10-02", realized: 0, unrealized: 102, unrealizedDelta: 2 },
     ];
 
-    const { wtd } = calcWtdMtdYtdFromSnapshots(daily, "2024-10-02");
-    expect(wtd).toBeCloseTo(17);
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-10-02");
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
   });
 
   test("Case C: 仅评估日一行", () => {
@@ -31,7 +37,26 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     ];
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-10-03");
-    expect(result).toMatchObject({ wtd: 20, mtd: 20, ytd: 20 });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+  });
+
+  test("Case G: 具备完整基线时仍输出窗口 PnL", () => {
+    const daily: DailyResult[] = [
+      { date: "2023-12-29", realized: 0, unrealized: 10, unrealizedDelta: 0 },
+      { date: "2024-08-30", realized: 0, unrealized: 100, unrealizedDelta: 90 },
+      { date: "2024-09-02", realized: 5, unrealized: 105, unrealizedDelta: 5 },
+      { date: "2024-09-03", realized: -3, unrealized: 110, unrealizedDelta: 5 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-03");
+
+    expect(result.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
+    expect(result.wtd).toBeCloseTo(12);
+    expect(result.mtd).toBeCloseTo(12);
+    expect(result.ytd).toBeCloseTo(102);
   });
 
   test("Case D: ΔU 缺失触发退化分支", () => {
@@ -45,12 +70,10 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
 
-    expect(result).toMatchObject({
-      wtd: 3,
-      mtd: 3,
-      ytd: 3,
-      degraded: { wtd: false, mtd: false, ytd: true },
-    });
+    expect(result.degraded).toEqual({ wtd: false, mtd: false, ytd: true });
+    expect(result.wtd).toBeCloseTo(3);
+    expect(result.mtd).toBeCloseTo(3);
+    expect(result.ytd).toBeNaN();
     expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
@@ -66,9 +89,10 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
 
-    expect(result.wtd).toBeCloseTo(190);
-    expect(result.mtd).toBeCloseTo(190);
-    expect(result.ytd).toBeCloseTo(190);
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
     expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
@@ -83,6 +107,9 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-03");
 
     expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
   });
 
   test("首行缺失浮盈会标记退化", () => {
@@ -94,9 +121,9 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
 
     expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
-    expect(result.wtd).toBeCloseTo(7);
-    expect(result.mtd).toBeCloseTo(7);
-    expect(result.ytd).toBeCloseTo(7);
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
   });
 
   test("缺少窗口前快照但已有持仓时不会把整段浮盈计入", () => {
@@ -107,9 +134,9 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
 
     expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
-    expect(result.wtd).toBeCloseTo(0);
-    expect(result.mtd).toBeCloseTo(0);
-    expect(result.ytd).toBeCloseTo(0);
+    expect(result.wtd).toBeNaN();
+    expect(result.mtd).toBeNaN();
+    expect(result.ytd).toBeNaN();
   });
 
   test("缺少评估日快照会标记退化并返回 NaN", () => {
@@ -146,7 +173,9 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     expect(stringResult.wtd).toBeCloseTo(numericResult.wtd ?? 0, 10);
     expect(stringResult.mtd).toBeCloseTo(numericResult.mtd ?? 0, 10);
-    expect(stringResult.ytd).toBeCloseTo(numericResult.ytd ?? 0, 10);
+    expect(Number.isNaN(stringResult.ytd)).toBe(true);
+    expect(Number.isNaN(numericResult.ytd)).toBe(true);
+    expect(stringResult.degraded).toEqual(numericResult.degraded);
   });
 
   test("Case F: 无 ΔU 快照退化时仅统计窗口内变动", () => {
@@ -159,15 +188,13 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     const snapshot = calcWtdMtdYtdFromSnapshots(daily, evalDate);
     const periods = computePeriods(daily, evalDate);
 
-    expect(snapshot).toMatchObject({
-      wtd: 13,
-      mtd: 13,
-      ytd: 13,
-      degraded: { wtd: true, mtd: true, ytd: true },
-    });
-    expect(periods.M11).toBeGreaterThan(snapshot.wtd);
-    expect(periods.M12).toBeGreaterThan(snapshot.mtd);
-    expect(periods.M13).toBeGreaterThan(snapshot.ytd);
+    expect(snapshot.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(snapshot.wtd).toBeNaN();
+    expect(snapshot.mtd).toBeNaN();
+    expect(snapshot.ytd).toBeNaN();
+    expect(periods.M11).toBeGreaterThan(0);
+    expect(periods.M12).toBeGreaterThan(0);
+    expect(periods.M13).toBeGreaterThan(0);
   });
 
   test("空字符串浮盈会被视为缺失并触发退化", () => {

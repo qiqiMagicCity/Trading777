@@ -135,4 +135,23 @@ describe("DashboardMetrics period cards", () => {
       "检测到 WTD/MTD/YTD 数值完全一致",
     );
   });
+
+  it("renders 待补充 when normalizeMetrics filters out NaN period values", () => {
+    act(() => {
+      useStore.setState({
+        metrics: { M11: Number.NaN, M12: "NaN", M13: undefined } as any,
+        periodHealth: {
+          status: "degraded",
+          summaries: [],
+          degraded: { wtd: true, mtd: true, ytd: true },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+  });
 });

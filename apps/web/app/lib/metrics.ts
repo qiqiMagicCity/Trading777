@@ -1234,6 +1234,10 @@ export function calcWtdMtdYtdFromSnapshots(
   const m = deriveWindowPnl(daily, mStart, evalDay, "MTD", markDegraded);
   const y = deriveWindowPnl(daily, yStart, evalDay, "YTD", markDegraded);
 
+  const wFinal = degradedFlags.WTD ? Number.NaN : w;
+  const mFinal = degradedFlags.MTD ? Number.NaN : m;
+  const yFinal = degradedFlags.YTD ? Number.NaN : y;
+
   try {
     if (typeof window !== "undefined") {
       __lastWtdMtdYtdExplain = explainWtdMtdYtdFromSnapshots(daily, evalDayStr);
@@ -1243,9 +1247,9 @@ export function calcWtdMtdYtdFromSnapshots(
   }
 
   return {
-    wtd: w,
-    mtd: m,
-    ytd: y,
+    wtd: wFinal,
+    mtd: mFinal,
+    ytd: yFinal,
     degraded: {
       wtd: degradedFlags.WTD,
       mtd: degradedFlags.MTD,

@@ -29,4 +29,16 @@ describe("normalizeMetrics period alias handling", () => {
     expect(result.M12).toBe(12);
     expect(result.M13).toBe(13);
   });
+
+  it("drops NaN period inputs so downstream UI can treat them as missing", () => {
+    const result = normalizeMetrics({
+      M11: Number.NaN,
+      periods: { M12: "NaN", M13: "   " },
+      MTD: "NaN",
+    });
+
+    expect("M11" in result).toBe(false);
+    expect("M12" in result).toBe(false);
+    expect("M13" in result).toBe(false);
+  });
 });
