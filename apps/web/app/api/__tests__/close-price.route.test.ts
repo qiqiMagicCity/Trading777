@@ -27,6 +27,7 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 
 describe('close price route', () => {
   beforeEach(() => {
+    delete process.env.VERCEL;
     readFileMock.mockReset();
     writeFileMock.mockReset();
     writeFileMock.mockResolvedValue();
@@ -126,6 +127,32 @@ describe('close price route', () => {
     });
     expect(writeFileMock).toHaveBeenCalledWith(
       path.join('/tmp/app', 'public/close_prices.json'),
+      expect.any(String),
+      'utf8',
+    );
+
+    cwdSpy.mockRestore();
+  });
+
+  it('bypasses apps/web/public when running on Vercel', async () => {
+    process.env.VERCEL = '1';
+    const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/var/task');
+    readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+    await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
+
+    expect(statMock).not.toHaveBeenCalledWith(
+      path.join('/var/task', 'apps/web/public'),
+    );
+    expect(readFileMock).toHaveBeenCalledWith(
+      path.join('/var/task', 'public/close_prices.json'),
+      'utf8',
+    );
+    expect(mkdirMock).toHaveBeenCalledWith(path.join('/var/task', 'public'), {
+      recursive: true,
+    });
+    expect(writeFileMock).toHaveBeenCalledWith(
+      path.join('/var/task', 'public/close_prices.json'),
       expect.any(String),
       'utf8',
     );

@@ -12,10 +12,14 @@ async function directoryExists(dir: string): Promise<boolean> {
 
 export async function resolvePublicFilePath(fileName: string): Promise<string> {
   const cwd = process.cwd();
-  const preferredDir = path.join(cwd, 'apps/web/public');
+  const preferAppPublic = process.env.VERCEL !== '1';
 
-  if (await directoryExists(preferredDir)) {
-    return path.join(preferredDir, fileName);
+  if (preferAppPublic) {
+    const preferredDir = path.join(cwd, 'apps/web/public');
+
+    if (await directoryExists(preferredDir)) {
+      return path.join(preferredDir, fileName);
+    }
   }
 
   const fallbackDir = path.join(cwd, 'public');

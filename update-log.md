@@ -86,3 +86,7 @@
 - 新增 `_lib/public-file-path.ts` 抽象公共文件路径解析，优先检测 `apps/web/public`，不存在时回退到 `public`。
 - `trades/route.ts` 与 `close-price/route.ts` 使用新 helper，写入前确保目录存在。
 - 调整对应 API 单测，覆盖目录判定与回退路径断言。
+
+## 2025-10-15
+- 修复 Vercel 构建体积超限：在运行于 Vercel 环境时跳过 `apps/web/public` 目录检测，避免将 600MB 静态资产打包进函数。
+- 扩展 trades 与 close-price API 单测，覆盖 `process.env.VERCEL=1` 时直接落到 `cwd/public` 的分支，确认本地与云端路径均正确。

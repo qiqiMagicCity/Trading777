@@ -25,6 +25,7 @@ function makeRequest(body: unknown): NextRequest {
 
 describe('trades persistence route', () => {
   beforeEach(() => {
+    delete process.env.VERCEL;
     writeFileMock.mockReset();
     writeFileMock.mockResolvedValue();
     statMock.mockReset();
@@ -160,6 +161,37 @@ describe('trades persistence route', () => {
     });
     expect(writeFileMock).toHaveBeenCalledWith(
       path.join('/tmp/app', 'public/trades.json'),
+      expect.any(String),
+      'utf8',
+    );
+
+    cwdSpy.mockRestore();
+  });
+
+  it('uses cwd/public directly when running on Vercel', async () => {
+    process.env.VERCEL = '1';
+    const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/var/task');
+
+    await PUT(
+      makeRequest([
+        {
+          symbol: 'googl',
+          price: 10,
+          quantity: 1,
+          date: '2024-05-21',
+          action: 'BUY',
+        },
+      ]),
+    );
+
+    expect(statMock).not.toHaveBeenCalledWith(
+      path.join('/var/task', 'apps/web/public'),
+    );
+    expect(mkdirMock).toHaveBeenCalledWith(path.join('/var/task', 'public'), {
+      recursive: true,
+    });
+    expect(writeFileMock).toHaveBeenCalledWith(
+      path.join('/var/task', 'public/trades.json'),
       expect.any(String),
       'utf8',
     );
