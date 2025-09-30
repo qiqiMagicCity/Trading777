@@ -68,6 +68,8 @@ import type {
   SummaryMetrics,
 } from "./types/metrics";
 
+const EPSILON = 1e-6;
+
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
 }
