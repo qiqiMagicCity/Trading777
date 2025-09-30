@@ -200,11 +200,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         console.log("[M11/M12/M13 debug]", detail);
         if (typeof console.table === "function") {
           // eslint-disable-next-line no-console
-          console.table(detail.details?.w ?? []);
+          console.table(detail.ranges.week.rows);
           // eslint-disable-next-line no-console
-          console.table(detail.details?.m ?? []);
+          console.table(detail.ranges.month.rows);
           // eslint-disable-next-line no-console
-          console.table(detail.details?.y ?? []);
+          console.table(detail.ranges.year.rows);
         }
         clearInterval(timer);
       } else if (tries >= maxTries) {

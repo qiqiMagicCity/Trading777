@@ -11,12 +11,8 @@ import {
   toNY,
   getLatestTradingDayStr,
   endOfDayNY,
-  weekStartNY,
-  startOfWeekNY,
-  startOfMonthNY,
-  startOfYearNY,
 } from "@/lib/timezone";
-import { normalizeToNYMidday, nyDateStr, startOfDayNY } from "./time";
+import { nyDateStr, startOfDayNY } from "./time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
@@ -29,20 +25,6 @@ function addDaysYmd(ymd: string, n: number): string {
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function isWeekendYmd(ymd: string): boolean {
-  const d = new Date(`${ymd}T00:00:00`);
-  const day = d.getUTCDay();
-  return day === 0 || day === 6;
-}
-
-function prevBusinessDayYmd(ymd: string): string {
-  let cursor = addDaysYmd(ymd, -1);
-  while (isWeekendYmd(cursor)) {
-    cursor = addDaysYmd(cursor, -1);
-  }
-  return cursor;
 }
 
 function normalizeToNyDay(input: string | number | Date): Date | string | number {
@@ -75,11 +57,18 @@ import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
+import {
+  computeDailyPeriodTotals,
+  sumPeriod as sumPeriodBase,
+  type PeriodTotalsOptions,
+} from "./metrics-periods";
 import type {
   MetricsContract,
   PeriodDegradedMap,
   SummaryMetrics,
 } from "./types/metrics";
+
+const EPSILON = 1e-6;
 
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
@@ -151,214 +140,6 @@ export function isDebug() {
 
 // Only enable verbose logging outside production
 const DEBUG = isDebug();
-
-const EPSILON = 1e-6;
-
-type WindowLabel = "WTD" | "MTD" | "YTD";
-
-function parseFiniteNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined) {
-    return undefined;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) {
-      return undefined;
-    }
-    const num = Number(trimmed);
-    return Number.isFinite(num) ? num : undefined;
-  }
-  const num = Number(value);
-  return Number.isFinite(num) ? num : undefined;
-}
-
-function parseRealized(value: unknown): number | undefined {
-  return parseFiniteNumber(value);
-}
-
-function parseUnrealized(value: unknown): number | undefined {
-  return parseFiniteNumber(value);
-}
-
-function parseUnrealizedDelta(value: unknown): number | undefined {
-  return parseFiniteNumber(value);
-}
-
-function deriveWindowPnl(
-  drs: DailyResult[],
-  windowStart: string,
-  evalDay: string,
-  label: WindowLabel,
-  markDegraded?: (label: WindowLabel) => void,
-): number {
-  type RowWithMeta = DailyResult & {
-    day: string;
-    __ts: number;
-    realizedParsed?: number;
-    unrealizedParsed?: number;
-    unrealizedDeltaParsed?: number;
-  };
-  const rows: RowWithMeta[] = (drs ?? [])
-    .filter((row): row is DailyResult => Boolean(row))
-    .map((row) => {
-      const day = nyDayStr(row.date);
-      const tsRaw = new Date(row.date as any).getTime();
-      const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-      return {
-        ...row,
-        day,
-        __ts: ts,
-        realizedParsed: parseRealized(row.realized),
-        unrealizedParsed: parseUnrealized(row.unrealized),
-        unrealizedDeltaParsed: parseUnrealizedDelta(row.unrealizedDelta),
-      };
-    })
-    .filter((row) => row.day <= evalDay);
-
-  const byDay = new Map<string, RowWithMeta>();
-  for (const row of rows) {
-    const prev = byDay.get(row.day);
-    if (!prev || row.__ts > prev.__ts) {
-      byDay.set(row.day, row);
-    }
-  }
-
-  const drsSorted: Array<Omit<RowWithMeta, "__ts">> = Array.from(byDay.values())
-    .sort((a, b) => a.day.localeCompare(b.day))
-    .map((row) => {
-      const { __ts: _ts, ...pure } = row;
-      return pure;
-    });
-
-  const windowEntries = drsSorted.filter((d) => d.day >= windowStart);
-  const hasPreWindowRow = drsSorted.some((row) => row.day < windowStart);
-  const sumRealized = windowEntries.reduce(
-    (acc, row) => acc + (row.realizedParsed ?? 0),
-    0,
-  );
-
-  const lastInRange = drsSorted.length
-    ? drsSorted[drsSorted.length - 1]!
-    : undefined;
-  const uEnd = lastInRange?.unrealizedParsed;
-
-  let baseline: number | null = null;
-  let baselineDay: string | null = null;
-  for (let i = drsSorted.length - 1; i >= 0; i -= 1) {
-    const row = drsSorted[i]!;
-    if (row.day < windowStart) {
-      if (row.unrealizedParsed !== undefined) {
-        baseline = row.unrealizedParsed;
-        baselineDay = row.day;
-        break;
-      }
-    }
-  }
-
-  const hasOnlyEvalDay =
-    windowEntries.length <= 1 && windowEntries[0]?.day === evalDay;
-  if (hasOnlyEvalDay && baseline === null) {
-    if (markDegraded) {
-      markDegraded(label);
-    }
-    return Number.NaN;
-  }
-
-  const firstWindowDay = windowEntries[0]?.day;
-  const expectedBaselineDay =
-    firstWindowDay !== undefined ? prevBusinessDayYmd(firstWindowDay) : null;
-  const baselineExpired =
-    baseline !== null &&
-    baselineDay !== null &&
-    baselineDay < windowStart &&
-    (expectedBaselineDay === null || baselineDay !== expectedBaselineDay);
-
-  if (baselineExpired) {
-    if (markDegraded) {
-      markDegraded(label);
-    }
-    return Number.NaN;
-  }
-
-  if (baseline !== null && uEnd !== undefined) {
-    return sumRealized + (uEnd - baseline);
-  }
-
-  const firstInWindow = windowEntries[0];
-  const firstUnrealized = firstInWindow?.unrealizedParsed;
-  const firstUnrealizedDelta = firstInWindow?.unrealizedDeltaParsed;
-  const firstHasSameDeltaAsTotal =
-    firstUnrealized !== undefined &&
-    firstUnrealizedDelta !== undefined &&
-    Math.abs(firstUnrealized - firstUnrealizedDelta) <= EPSILON;
-
-  const allowInferredBaseline =
-    hasPreWindowRow &&
-    firstUnrealized !== undefined &&
-    firstUnrealizedDelta !== undefined &&
-    !firstHasSameDeltaAsTotal;
-
-  if (allowInferredBaseline && uEnd !== undefined) {
-    const inferredBaseline = firstUnrealized - firstUnrealizedDelta;
-    return sumRealized + (uEnd - inferredBaseline);
-  }
-
-  let sumDelta = 0;
-  const firstRow = windowEntries[0];
-  const treatFirstUnrealizedAsDelta =
-    hasPreWindowRow &&
-    baseline === null &&
-    firstRow?.unrealizedDeltaParsed === undefined &&
-    firstRow?.unrealizedParsed !== undefined;
-
-  if (treatFirstUnrealizedAsDelta) {
-    sumDelta += firstRow!.unrealizedParsed!;
-  }
-
-  let prevUnrealized = windowEntries[0]?.unrealizedParsed;
-  let degraded = false;
-
-  if (!hasPreWindowRow && windowEntries.length > 0) {
-    degraded = true;
-  }
-
-  if (windowEntries.length > 0) {
-    for (let i = 0; i < windowEntries.length; i += 1) {
-      const row = windowEntries[i]!;
-      const delta = row.unrealizedDeltaParsed;
-      const currentUnrealized = row.unrealizedParsed;
-      if (delta !== undefined) {
-        sumDelta += delta;
-        if (currentUnrealized !== undefined) {
-          prevUnrealized = currentUnrealized;
-        } else if (prevUnrealized !== undefined) {
-          prevUnrealized += delta;
-        } else {
-          degraded = true;
-        }
-        continue;
-      }
-
-      if (prevUnrealized !== undefined && currentUnrealized !== undefined) {
-        sumDelta += currentUnrealized - prevUnrealized;
-        prevUnrealized = currentUnrealized;
-      } else if (currentUnrealized !== undefined) {
-        prevUnrealized = currentUnrealized;
-        degraded = true;
-      } else {
-        degraded = true;
-      }
-    }
-  }
-
-  if (hasPreWindowRow && (baseline === null || degraded)) {
-    console.warn(`[M11-13] degraded-baseline window=${label}`);
-  }
-  if ((degraded || baseline === null) && markDegraded) {
-    markDegraded(label);
-  }
-  return sumRealized + sumDelta;
-}
 
 function seedInitialLots(
   trades: EnrichedTrade[],
@@ -977,244 +758,17 @@ function isValidTradeDate(
   return true;
 }
 
-/**
- * 缓存结构用于快速计算区间盈亏
- */
-type SumPeriodCache = {
-  daily: DailyResult[];
-  dailyLength: number;
-  lastDate?: string;
-  dates: number[];
-  prefix: number[];
-  lastFrom?: string;
-  lastTo?: string;
-  lastResult?: number;
-};
-
-let sumPeriodCache: SumPeriodCache | null = null;
-
-function rebuildSumPeriodCache(daily: DailyResult[]): SumPeriodCache {
-  const sorted = daily.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
-  const dates: number[] = [];
-  const prefix: number[] = [];
-  let prevUnrealized = 0;
-  let acc = 0;
-  for (const r of sorted) {
-    const ts = startOfDayNY(normalizeToNyDay(r.date)).getTime();
-    const unrealized = r.unrealized ?? 0;
-    const delta =
-      r.unrealizedDelta !== undefined
-        ? r.unrealizedDelta
-        : unrealized - prevUnrealized;
-    acc += (r.realized ?? 0) + delta;
-    dates.push(ts);
-    prefix.push(acc);
-    prevUnrealized = unrealized;
-  }
-  return {
-    daily,
-    dailyLength: daily.length,
-    lastDate: daily[daily.length - 1]?.date,
-    dates,
-    prefix,
-  };
-}
-
-function lowerBound(arr: number[], target: number) {
-  let l = 0,
-    r = arr.length;
-  while (l < r) {
-    const m = (l + r) >> 1;
-    const midVal = arr[m]!;
-    if (midVal < target) l = m + 1;
-    else r = m;
-  }
-  return l;
-}
-
 export function sumPeriod(
   daily: DailyResult[],
   fromStr: string,
   toStr: string,
 ) {
-  const lastDate = daily[daily.length - 1]?.date;
-  if (
-    !sumPeriodCache ||
-    sumPeriodCache.daily !== daily ||
-    sumPeriodCache.dailyLength !== daily.length ||
-    sumPeriodCache.lastDate !== lastDate
-  ) {
-    sumPeriodCache = rebuildSumPeriodCache(daily);
-  }
-  const fromMidday = normalizeToNYMidday(fromStr);
-  const toExclusiveMidday = normalizeToNYMidday(addDaysYmd(toStr, 1));
-  const fromDate = startOfDayNY(fromMidday);
-  const toExclusiveDate = startOfDayNY(toExclusiveMidday);
-  const fromKey = fromDate.toISOString();
-  const toKey = toExclusiveDate.toISOString();
-
-  if (
-    sumPeriodCache.lastFrom === fromKey &&
-    sumPeriodCache.lastTo === toKey
-  ) {
-    return sumPeriodCache.lastResult ?? 0;
-  }
-
-  const fromTS = fromDate.getTime();
-  const toExclusiveTS = toExclusiveDate.getTime();
-  if (
-    !Number.isFinite(fromTS) ||
-    !Number.isFinite(toExclusiveTS) ||
-    fromTS >= toExclusiveTS
-  ) {
-    sumPeriodCache.lastFrom = fromKey;
-    sumPeriodCache.lastTo = toKey;
-    sumPeriodCache.lastResult = 0;
-    return 0;
-  }
-  const { dates, prefix } = sumPeriodCache;
-
-  const startIdx = lowerBound(dates, fromTS);
-  const endIdx = lowerBound(dates, toExclusiveTS);
-  let total = 0;
-  if (startIdx < prefix.length) {
-    const lastIdx = endIdx - 1;
-    if (lastIdx >= startIdx && lastIdx < prefix.length) {
-      const prev = startIdx === 0 ? 0 : prefix[startIdx - 1]!;
-      total = prefix[lastIdx]! - prev;
-    }
-  }
-
-  sumPeriodCache.lastFrom = fromKey;
-  sumPeriodCache.lastTo = toKey;
-  sumPeriodCache.lastResult = total;
-
-  return total;
+  return sumPeriodBase(daily, fromStr, toStr);
 }
 
 export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
-  const evalDate = toNY(evalDateStr);
-  const wStart = startOfWeekNY(evalDate);
-  const mStart = startOfMonthNY(evalDate);
-  const yStart = startOfYearNY(evalDate);
-  const endStr = evalDateStr;
-  return {
-    wtd: sumPeriod(daily, wStart.toISOString().slice(0, 10), endStr),
-    mtd: sumPeriod(daily, mStart.toISOString().slice(0, 10), endStr),
-    ytd: sumPeriod(daily, yStart.toISOString().slice(0, 10), endStr),
-  };
-}
-
-type SnapshotRow = {
-  day: string;
-  ts: number;
-  realized: number;
-  unrealized?: number;
-};
-
-type SnapshotCollection = {
-  evalDayNYStr: string;
-  endTs: number;
-  rows: SnapshotRow[];
-  hasEvalRow: boolean;
-};
-
-function collectSnapshotRowsForEval(
-  daily: DailyResult[] = [],
-  evalDayStr: string,
-): SnapshotCollection {
-  const evalDayNYStr = nyDayStr(evalDayStr);
-  const endTs = endOfDayNY(toNY(`${evalDayNYStr}T12:00:00Z`)).getTime();
-  const map = new Map<string, { record: DailyResult; ts: number }>();
-
-  for (const r of daily ?? []) {
-    if (!r) continue;
-    const dayStr = nyDayStr(r.date);
-    const rTs = new Date(r.date).getTime();
-    if (!Number.isFinite(rTs)) continue;
-    const prev = map.get(dayStr);
-    if (!prev || rTs >= prev.ts) {
-      map.set(dayStr, { record: r, ts: rTs });
-    }
-  }
-
-  const rows = Array.from(map.entries())
-    .map(([day, { record }]) => {
-      const ts = startOfDayNY(normalizeToNyDay(day)).getTime();
-      const realizedRaw = Number(record.realized ?? 0);
-      const realized = Number.isFinite(realizedRaw) ? realizedRaw : 0;
-      const unrealized = parseUnrealized(record.unrealized);
-      return { day, ts, realized, unrealized };
-    })
-    .filter((row) => Number.isFinite(row.ts) && row.ts <= endTs)
-    .sort((a, b) => a.ts - b.ts);
-
-  const hasEvalRow = rows.some(
-    (row) => row.day === evalDayNYStr && row.unrealized !== undefined,
-  );
-
-  return { evalDayNYStr, endTs, rows, hasEvalRow };
-}
-
-type PeriodSum = {
-  sum: number;
-  items: Array<{
-    day: string;
-    realized: number;
-    unrealized?: number;
-    deltaU: number;
-    dayPnL: number;
-  }>;
-};
-
-function sumWithDelta(rows: SnapshotRow[], startTs: number, endTs: number): PeriodSum {
-  const sorted = [...rows].sort((a, b) => a.ts - b.ts);
-
-  const firstIdxInWindow = sorted.findIndex((r) => r.ts >= startTs && r.ts <= endTs);
-
-  let hasBaseline = false;
-  let prevU: number | undefined;
-  for (let i = sorted.length - 1; i >= 0; i -= 1) {
-    if (sorted[i]!.ts < startTs) {
-      const baselineCandidate = sorted[i]!.unrealized;
-      if (baselineCandidate !== undefined) {
-        prevU = baselineCandidate;
-        hasBaseline = true;
-        break;
-      }
-    }
-  }
-
-  const items: PeriodSum["items"] = [];
-  let sum = 0;
-  for (let i = 0; i < sorted.length; i += 1) {
-    const r = sorted[i]!;
-    if (r.ts < startTs || r.ts > endTs) continue;
-
-    const currentUnrealized = r.unrealized;
-    let deltaU = 0;
-    if (!hasBaseline && i === firstIdxInWindow) {
-    } else if (prevU !== undefined && currentUnrealized !== undefined) {
-      deltaU = currentUnrealized - prevU;
-    }
-
-    const dayPnL = r.realized + deltaU;
-
-    items.push({
-      day: r.day,
-      realized: r.realized,
-      unrealized: currentUnrealized,
-      deltaU,
-      dayPnL,
-    });
-    if (currentUnrealized !== undefined) {
-      prevU = currentUnrealized;
-      hasBaseline = true;
-    }
-    sum += dayPnL;
-  }
-
-  return { sum, items };
+  const { wtd, mtd, ytd } = computeDailyPeriodTotals(daily, evalDateStr);
+  return { wtd, mtd, ytd };
 }
 
 export type WtdMtdYtdExplain = ReturnType<typeof explainWtdMtdYtdFromSnapshots>;
@@ -1226,111 +780,77 @@ export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
 export function calcWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
+  options: PeriodTotalsOptions = {},
 ): {
   wtd: number;
   mtd: number;
   ytd: number;
   degraded: PeriodDegradedMap;
 } {
-  const { hasEvalRow } = collectSnapshotRowsForEval(
-    daily,
-    evalDayStr,
-  );
-
-  if (!hasEvalRow) {
-    const degradedAll = { wtd: true, mtd: true, ytd: true } as const;
-    try {
-      if (typeof window !== "undefined") {
-        __lastWtdMtdYtdExplain = null;
-      }
-    } catch {
-      // noop: explain 缓存失败不影响业务
-    }
-    return {
-      wtd: Number.NaN,
-      mtd: Number.NaN,
-      ytd: Number.NaN,
-      degraded: degradedAll,
-    };
-  }
-
   const evalDay = nyDayStr(evalDayStr);
-  const evalMidday = toNY(`${evalDay}T12:00:00Z`);
-  const wStart = weekStartNY(evalMidday);
-  const mStart = `${evalDay.slice(0, 7)}-01`;
-  const yStart = `${evalDay.slice(0, 4)}-01-01`;
-
-  const degradedFlags: Record<WindowLabel, boolean> = {
-    WTD: false,
-    MTD: false,
-    YTD: false,
-  };
-  const markDegraded = (label: WindowLabel) => {
-    degradedFlags[label] = true;
-  };
-
-  const w = deriveWindowPnl(daily, wStart, evalDay, "WTD", markDegraded);
-  const m = deriveWindowPnl(daily, mStart, evalDay, "MTD", markDegraded);
-  const y = deriveWindowPnl(daily, yStart, evalDay, "YTD", markDegraded);
-
-  const wFinal = degradedFlags.WTD ? Number.NaN : w;
-  const mFinal = degradedFlags.MTD ? Number.NaN : m;
-  const yFinal = degradedFlags.YTD ? Number.NaN : y;
+  const totals = computeDailyPeriodTotals(daily, evalDay, options);
 
   try {
     if (typeof window !== "undefined") {
-      __lastWtdMtdYtdExplain = explainWtdMtdYtdFromSnapshots(daily, evalDayStr);
+      __lastWtdMtdYtdExplain = explainWtdMtdYtdFromSnapshots(
+        daily,
+        evalDayStr,
+        options,
+      );
     }
   } catch {
     // noop: 调试缓存失败不影响业务
   }
 
   return {
-    wtd: wFinal,
-    mtd: mFinal,
-    ytd: yFinal,
-    degraded: {
-      wtd: degradedFlags.WTD,
-      mtd: degradedFlags.MTD,
-      ytd: degradedFlags.YTD,
-    },
+    wtd: totals.wtd,
+    mtd: totals.mtd,
+    ytd: totals.ytd,
+    degraded: { wtd: false, mtd: false, ytd: false },
   };
 }
 
 export function explainWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
+  options: PeriodTotalsOptions = {},
 ) {
-  const { evalDayNYStr, endTs, rows } = collectSnapshotRowsForEval(daily, evalDayStr);
-  const evalDate = toNY(`${evalDayNYStr}T12:00:00Z`);
-  const wStart = startOfWeekNY(evalDate).getTime();
-  const mStart = startOfMonthNY(evalDate).getTime();
-  const yStart = startOfYearNY(evalDate).getTime();
+  const evalDay = nyDayStr(evalDayStr);
+  const totals = computeDailyPeriodTotals(daily, evalDay, options);
+  const { calendar, weekStart, monthStart, yearStart, yearEnd, ytdEnd, wtd, mtd, ytd } =
+    totals;
 
-  const w = sumWithDelta(rows, wStart, endTs);
-  const m = sumWithDelta(rows, mStart, endTs);
-  const y = sumWithDelta(rows, yStart, endTs);
+  const toRows = (start: string, end: string) => {
+    const rows: { day: string; pnl: number }[] = [];
+    let cursor = start;
+    while (cursor <= end) {
+      rows.push({ day: cursor, pnl: calendar.get(cursor) ?? 0 });
+      cursor = addDaysYmd(cursor, 1);
+    }
+    return rows;
+  };
 
-  const rowsWithTotals = rows.map((row) => ({
-    ...row,
-    pnl:
-      row.unrealized === undefined
-        ? undefined
-        : row.realized + row.unrealized,
+  const calendarRows = Array.from(calendar.entries()).map(([day, pnl]) => ({
+    day,
+    pnl,
   }));
 
   return {
-    evalDay: evalDayNYStr,
-    boundaries: {
-      wStart: new Date(wStart).toISOString(),
-      mStart: new Date(mStart).toISOString(),
-      yStart: new Date(yStart).toISOString(),
-      end: new Date(endTs).toISOString(),
+    evalDay,
+    calendar: calendarRows,
+    totals: { wtd, mtd, ytd },
+    ranges: {
+      week: { start: weekStart, end: evalDay, rows: toRows(weekStart, evalDay) },
+      month: { start: monthStart, end: evalDay, rows: toRows(monthStart, evalDay) },
+      year: { start: yearStart, end: ytdEnd, rows: toRows(yearStart, ytdEnd) },
     },
-    counts: { w: w.items.length, m: m.items.length, y: y.items.length },
-    totals: { wtd: w.sum, mtd: m.sum, ytd: y.sum },
-    rows: rowsWithTotals,
-    details: { w: w.items, m: m.items, y: y.items },
+    boundaries: {
+      yearStart,
+      yearEnd,
+      weekStart,
+      monthStart,
+      ytdEnd,
+    },
   };
 }
 
@@ -1349,17 +869,15 @@ export function calcM9FromDaily(
 
 export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
   if (!DEBUG) return;
-  const evalDate = toNY(evalDateStr);
-  const wStart = startOfWeekNY(evalDate).toISOString().slice(0, 10);
-  const mStart = startOfMonthNY(evalDate).toISOString().slice(0, 10);
-  const yStart = startOfYearNY(evalDate).toISOString().slice(0, 10);
-  const { wtd, mtd, ytd } = calcWtdMtdYtd(daily, evalDateStr);
+  const totals = computeDailyPeriodTotals(daily, evalDateStr);
+  const { weekStart, monthStart, yearStart, ytdEnd, wtd, mtd, ytd } = totals;
   const m9 = calcM9FromDaily(daily, evalDateStr);
   console.table([
     { metric: "evalDateStr", value: evalDateStr },
-    { metric: "weekStart", value: wStart },
-    { metric: "monthStart", value: mStart },
-    { metric: "yearStart", value: yStart },
+    { metric: "weekStart", value: weekStart },
+    { metric: "monthStart", value: monthStart },
+    { metric: "yearStart", value: yearStart },
+    { metric: "ytdEnd", value: ytdEnd },
     { metric: "wtd", value: wtd, expected: 8952.5 },
     { metric: "mtd", value: mtd, expected: 8952.5 },
     { metric: "ytd", value: ytd, expected: 8952.5 },

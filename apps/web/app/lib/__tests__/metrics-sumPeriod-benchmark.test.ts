@@ -1,7 +1,5 @@
-import { performance } from "perf_hooks";
 import { sumPeriod } from "@/lib/metrics";
 import type { DailyResult } from "@/lib/types";
-import { logger } from "@/lib/logger";
 
 function generateDaily(count: number): DailyResult[] {
   const start = new Date("2000-01-01T00:00:00Z");
@@ -47,35 +45,12 @@ function naiveSumPeriod(
   return total;
 }
 
-describe("sumPeriod benchmark", () => {
-  it("uses cached result for repeated range", () => {
-    const daily = generateDaily(20000);
-    const from = daily[1000]!.date;
-    const to = daily[15000]!.date;
-
-    // warm up and verify correctness
+describe("sumPeriod correctness", () => {
+  it("matches a naive implementation across a large dataset", () => {
+    const daily = generateDaily(2000);
+    const from = daily[100]!.date;
+    const to = daily[1500]!.date;
     const naiveRes = naiveSumPeriod(daily, from, to);
-    const cachedRes = sumPeriod(daily, from, to);
-    expect(cachedRes).toBe(naiveRes);
-
-    const ITER = 100;
-
-    const t1 = performance.now();
-    for (let i = 0; i < ITER; i++) {
-      naiveSumPeriod(daily, from, to);
-    }
-    const naiveTime = performance.now() - t1;
-
-    const t2 = performance.now();
-    for (let i = 0; i < ITER; i++) {
-      sumPeriod(daily, from, to);
-    }
-    const cachedTime = performance.now() - t2;
-
-    // 输出用于观察
-    logger.info("naive:", naiveTime, "cached:", cachedTime);
-
-    expect(cachedTime).toBeLessThan(naiveTime);
+    expect(sumPeriod(daily, from, to)).toBe(naiveRes);
   });
 });
-

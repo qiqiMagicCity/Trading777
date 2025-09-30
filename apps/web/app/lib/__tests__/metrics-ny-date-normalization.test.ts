@@ -21,12 +21,8 @@ describe("NY day normalization", () => {
     const explain = explainWtdMtdYtdFromSnapshots(daily, "2025-09-23");
 
     expect(explain.evalDay).toBe("2025-09-23");
-    expect(explain.rows).toHaveLength(1);
-    expect(explain.rows[0]).toMatchObject({
-      day: "2025-09-23",
-      realized: 40,
-      unrealized: 30,
-    });
+    const target = explain.calendar.find((row) => row.day === "2025-09-23");
+    expect(target).toMatchObject({ day: "2025-09-23", pnl: 40 });
   });
 
   it("retains correct WTD/MTD/YTD when the latest snapshot is late-night", () => {
