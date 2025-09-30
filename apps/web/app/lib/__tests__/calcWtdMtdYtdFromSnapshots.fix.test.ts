@@ -90,6 +90,27 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.ytd).toBeNaN();
   });
 
+  test(
+    "Case J: 窗口首日存在但最近基线早于上一交易日时退化",
+    () => {
+      const daily: DailyResult[] = [
+        { date: "2023-12-28", realized: 0, unrealized: 80, unrealizedDelta: 0 },
+        { date: "2024-09-27", realized: 0, unrealized: 120, unrealizedDelta: 0 },
+        { date: "2024-10-01", realized: 3, unrealized: 125, unrealizedDelta: 5 },
+        { date: "2024-10-02", realized: -1, unrealized: 124, unrealizedDelta: -1 },
+        { date: "2024-10-07", realized: 4, unrealized: 130, unrealizedDelta: 6 },
+        { date: "2024-10-08", realized: 2, unrealized: 131, unrealizedDelta: 1 },
+      ];
+
+      const result = calcWtdMtdYtdFromSnapshots(daily, "2024-10-08");
+
+      expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+      expect(result.wtd).toBeNaN();
+      expect(result.mtd).toBeNaN();
+      expect(result.ytd).toBeNaN();
+    },
+  );
+
   test("Case D: ΔU 缺失触发退化分支", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -101,9 +122,9 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
 
     const result = calcWtdMtdYtdFromSnapshots(daily, "2024-03-02");
 
-    expect(result.degraded).toEqual({ wtd: true, mtd: false, ytd: true });
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
     expect(result.wtd).toBeNaN();
-    expect(result.mtd).toBeCloseTo(3);
+    expect(result.mtd).toBeNaN();
     expect(result.ytd).toBeNaN();
     expect(warnSpy).not.toHaveBeenCalled();
 
