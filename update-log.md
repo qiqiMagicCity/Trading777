@@ -50,3 +50,8 @@
 - 调整 `deriveWindowPnl` 基线过期判定：只要实际基线日不等于预期上一交易日，即视为退化。
 - 新增 `calcWtdMtdYtdFromSnapshots` 回归用例，覆盖“窗口首日存在但基线早于上一交易日”导致的退化行为。
 - 运行 `npm test -- apps/web/app/lib/__tests__/calcWtdMtdYtdFromSnapshots.fix.test.ts` 确认退化逻辑覆盖。
+
+## 2025-10-08
+- 更新 `DashboardMetrics`：去除周期指标的 `?? 0` 兜底，确保缺失值保持 `undefined` 供 UI 识别。
+- 调整周期卡片渲染逻辑，缺失值时统一展示“待补充”且不再套用红绿配色，避免误判为 `$0.00`。
+- 补充 `DashboardMetrics` 单测，覆盖周期指标缺失时显示占位提示的场景。
