@@ -13,6 +13,8 @@ export default function TradesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
   const [editingTrade, setEditingTrade] = useState<EnrichedTrade | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -56,6 +58,19 @@ export default function TradesPage() {
     setTrades(computeFifo(valid));
   };
 
+  function handleTradeAdded() {
+    setRefreshError(null);
+    setIsRefreshing(true);
+    const promise = reload();
+    void promise.catch(err => {
+      logger.error('[TradesPage] 后台刷新交易失败', err);
+      setRefreshError(err instanceof Error ? err.message : '刷新交易失败');
+    });
+    void promise.finally(() => {
+      setIsRefreshing(false);
+    });
+  }
+
   function formatNumber(value: number | undefined, decimals = 2) {
     if (value === undefined || value === null) return '-';
     return value.toFixed(decimals);
@@ -85,6 +100,34 @@ export default function TradesPage() {
   return (
     <div>
       <h2 className="section-title">全部交易记录</h2>
+      {isRefreshing && (
+        <div
+          style={{
+            background: 'rgba(59,130,246,0.15)',
+            border: '1px solid rgba(59,130,246,0.4)',
+            borderRadius: 8,
+            color: '#bfdbfe',
+            margin: '12px 0',
+            padding: '8px 16px',
+          }}
+        >
+          正在后台刷新交易列表...
+        </div>
+      )}
+      {refreshError && (
+        <div
+          style={{
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.4)',
+            borderRadius: 8,
+            color: '#fecaca',
+            margin: '12px 0',
+            padding: '8px 16px',
+          }}
+        >
+          后台刷新失败：{refreshError}
+        </div>
+      )}
       <table id="all-trades" className="table">
         <thead>
           <tr>
@@ -155,7 +198,13 @@ export default function TradesPage() {
           </tr>
         </tbody>
       </table>
-      {editingTrade && <AddTradeModal trade={editingTrade} onClose={() => setEditingTrade(null)} onAdded={async () => { await reload(); setEditingTrade(null); }} />}
+      {editingTrade && (
+        <AddTradeModal
+          trade={editingTrade}
+          onClose={() => setEditingTrade(null)}
+          onAdded={handleTradeAdded}
+        />
+      )}
     </div>
   );
-} 
+}

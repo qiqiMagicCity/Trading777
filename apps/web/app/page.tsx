@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { calcMetrics, normalizeMetrics } from '@/app/lib/metrics';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
+import { logger } from '@/lib/logger';
 import { getLatestTradingDayStr } from '@/lib/timezone';
 import {
   generateDailyResults,
@@ -198,6 +199,8 @@ export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [enrichedTrades, setEnrichedTrades] = useState<EnrichedTrade[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -520,7 +523,23 @@ export default function DashboardPage() {
       setTrades(dbTrades);
       setPositions(posList);
       setEnrichedTrades(enriched);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      logger.error('[DashboardPage] reloadData failed', e);
+      throw e;
+    }
+  }
+
+  function handleTradeAdded() {
+    setRefreshError(null);
+    setIsRefreshing(true);
+    const promise = reloadData();
+    void promise.catch(err => {
+      logger.error('[DashboardPage] 后台刷新交易数据失败', err);
+      setRefreshError(err instanceof Error ? err.message : '刷新交易数据失败');
+    });
+    void promise.finally(() => {
+      setIsRefreshing(false);
+    });
   }
 
   if (isLoading) {
@@ -539,6 +558,38 @@ export default function DashboardPage() {
           onIgnore={handleIgnoreMissing}
         />
       )}
+      {isRefreshing && (
+        <div
+          style={{
+            background: 'rgba(59,130,246,0.15)',
+            border: '1px solid rgba(59,130,246,0.4)',
+            borderRadius: 8,
+            color: '#bfdbfe',
+            margin: '12px auto',
+            maxWidth: 'var(--page-max)',
+            padding: '8px 16px',
+            width: '90%',
+          }}
+        >
+          正在后台刷新交易与指标...
+        </div>
+      )}
+      {refreshError && (
+        <div
+          style={{
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.4)',
+            borderRadius: 8,
+            color: '#fecaca',
+            margin: '12px auto',
+            maxWidth: 'var(--page-max)',
+            padding: '8px 16px',
+            width: '90%',
+          }}
+        >
+          后台刷新失败：{refreshError}
+        </div>
+      )}
       <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
 
       <h3 className="section-title" id="positions-title">目前持仓 <Link href="/analysis" className="details">交易分析</Link></h3>
@@ -556,7 +607,7 @@ export default function DashboardPage() {
       >
         +
       </button>
-      {showModal && <AddTradeModal onClose={() => setShowModal(false)} onAdded={reloadData} />}
+      {showModal && <AddTradeModal onClose={() => setShowModal(false)} onAdded={handleTradeAdded} />}
     </div>
   );
 }
