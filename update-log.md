@@ -40,3 +40,8 @@
 - `normalizeMetrics` 透传 `_period` 元数据并浅拷贝退化标记，便于前端读取退化状态。
 - 新增 `metrics-normalize-period-metadata.test.ts`，验证 `_period.degraded` 保留且不会与原输入共享引用。
 - 检视 `runAll`、`page.tsx` 与 store 使用 `_period.degraded` 的逻辑，确认仍按退化状态渲染提示。
+
+## 2025-10-06
+- 移除 `normalizeMetrics` 对 WTD/MTD/YTD 旧别名的回退，仅保留显式 `M11/M12/M13` 选值。
+- 更新周期别名单测，确保旧别名输入不会带出 `M11/M12/M13`，并维持显式字段优先级。
+- 补充 `DashboardMetrics` 26030.56 退化场景回归测试，确认 UI 通过“待补充”路径提示用户。

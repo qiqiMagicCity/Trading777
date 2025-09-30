@@ -123,6 +123,31 @@ describe("DashboardMetrics period cards", () => {
     );
   });
 
+  it("renders 待补充 when backend only returns legacy WTD alias for degraded window", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          periods: { WTD: 26030.56 },
+          M12: 222.22,
+          M13: 333.33,
+          _period: { degraded: { wtd: true, mtd: false, ytd: false } },
+        } as any,
+        periodHealth: {
+          status: "degraded",
+          summaries: [],
+          degraded: { wtd: true, mtd: false, ytd: false },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-wtd")).not.toHaveTextContent("26030.56");
+    expect(screen.getByTestId("metric-mtd").textContent || "").toMatch(/222\.22/);
+    expect(screen.getByTestId("metric-ytd").textContent || "").toMatch(/333\.33/);
+  });
+
   it("shows self-check warning when WTD/MTD/YTD are the same", () => {
     act(() => {
       useStore.setState({

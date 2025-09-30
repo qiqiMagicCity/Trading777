@@ -2151,44 +2151,10 @@ export function normalizeMetrics(input: any): MetricsContract {
   };
 
   const periodSource = (input as { periods?: Record<string, unknown> })?.periods ?? {};
-  const periodDegraded = (input?._period?.degraded ?? {}) as Partial<PeriodDegradedMap>;
-  const shouldBlockLegacyFallback = (
-    rawValue: unknown,
-    degradedFlag: unknown,
-  ): boolean => {
-    if (degradedFlag === true) {
-      return true;
-    }
-    return typeof rawValue === "number" && Number.isNaN(rawValue);
-  };
 
-  const wtdBlocked = shouldBlockLegacyFallback(input?.M11, periodDegraded?.wtd);
-  const mtdBlocked = shouldBlockLegacyFallback(input?.M12, periodDegraded?.mtd);
-  const ytdBlocked = shouldBlockLegacyFallback(input?.M13, periodDegraded?.ytd);
-
-  const M11 = pickPeriodNumber(
-    input?.M11,
-    periodSource["M11"],
-    ...(wtdBlocked
-      ? []
-      : [periodSource["WTD"], periodSource["wtd"], input?.WTD, input?.wtd]),
-  );
-  const M12 = pickPeriodNumber(
-    input?.M12,
-    periodSource["M12"],
-    ...(mtdBlocked
-      ? []
-      : [periodSource["MTD"], periodSource["mtd"], input?.MTD, input?.mtd]),
-  );
-  const M13 = pickPeriodNumber(
-    input?.M13,
-    periodSource["M13"],
-    ...(ytdBlocked
-      ? []
-      : [periodSource["YTD"], periodSource["ytd"], input?.YTD, input?.ytd]),
-  );
-
-  // 当窗口退化或指标明确为 NaN 时，禁止继续回退到旧字段，避免把历史数值误当成最新评估结果。
+  const M11 = pickPeriodNumber(input?.M11, periodSource["M11"]);
+  const M12 = pickPeriodNumber(input?.M12, periodSource["M12"]);
+  const M13 = pickPeriodNumber(input?.M13, periodSource["M13"]);
 
   return {
     M1,
