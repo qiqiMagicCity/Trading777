@@ -59,3 +59,9 @@
 ## 2025-10-09
 - 修复 Vercel 构建报错：`formatCurrency` 仍按 `number` 类型要求入参，周期/常规指标去掉 `?? 0` 后传入 `undefined` 触发 TS 报错。
 - 调整 `DashboardMetrics` 渲染逻辑，缺值时统一走“待补充”占位并跳过配色，仅在取得有效数值后再调用 `formatCurrency` 与判定红绿，构建恢复通过。
+- 阅读 `deriveWindowPnl` 与相关单测记录，准备处理上一交易日基线退化的问题。
+
+## 2025-10-10
+- 更新 `deriveWindowPnl`：仅在窗口内仅剩评估日且无法找到窗口前的可用基线时才退化，确保带上一交易日基线的场景仍可计算。
+- 新增 `Case K` 单测，覆盖上一交易日基线 + 评估日快照的场景，验证 WTD/MTD/YTD 数值正确且未标记退化。
+- 回归 `calcWtdMtdYtdFromSnapshots` 与 `DashboardMetrics` 单测，确认退化分支维持预期表现。
