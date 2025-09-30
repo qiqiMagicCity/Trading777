@@ -44,4 +44,28 @@ describe("calcMetrics daily trade detection", () => {
     expect(metrics.M7.total).toBe(2);
     expect(metrics.M5.behavior).toBeCloseTo(100, 5);
   });
+
+  it("keeps evaluation day when there are no trades", () => {
+    process.env[FREEZE_KEY] = "2024-05-02";
+    const trades = [
+      {
+        symbol: "AAPL",
+        action: "buy",
+        quantity: 100,
+        price: 120,
+        date: "2024-05-01",
+        time: "09:35",
+      },
+    ];
+
+    const metrics = normalizeMetrics(calcMetrics(trades as any, [], []));
+
+    expect(metrics.M7.total).toBe(0);
+    expect(metrics.M7.B).toBe(0);
+    expect(metrics.M7.S).toBe(0);
+    expect(metrics.M5.behavior).toBe(0);
+    expect(metrics.M5.fifo).toBe(0);
+    expect(metrics.M4.total).toBe(0);
+    expect(metrics.M6.total).toBe(0);
+  });
 });
