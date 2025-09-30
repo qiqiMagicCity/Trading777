@@ -111,6 +111,26 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     },
   );
 
+  test(
+    "Case K: 首日快照存在但上一笔跨越多个交易日时退化",
+    () => {
+      const daily: DailyResult[] = [
+        { date: "2024-09-26", realized: 0, unrealized: 100, unrealizedDelta: 0 },
+        { date: "2024-10-01", realized: 2, unrealized: 110, unrealizedDelta: 10 },
+        { date: "2024-10-02", realized: -1, unrealized: 111, unrealizedDelta: 1 },
+        { date: "2024-10-07", realized: 4, unrealized: 120, unrealizedDelta: 9 },
+        { date: "2024-10-08", realized: 3, unrealized: 124, unrealizedDelta: 4 },
+      ];
+
+      const result = calcWtdMtdYtdFromSnapshots(daily, "2024-10-08");
+
+      expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+      expect(result.wtd).toBeNaN();
+      expect(result.mtd).toBeNaN();
+      expect(result.ytd).toBeNaN();
+    },
+  );
+
   test("Case D: ΔU 缺失触发退化分支", () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
