@@ -1294,21 +1294,7 @@ export function calcMetricsInternal(
     tradeEntries.push({ trade: normalizedTrade, date: parsed, day });
   }
 
-  let todayStr = initialTodayStr;
-  const hasTradeOnInitialDay = tradeEntries.some(
-    (entry) => entry.day === todayStr,
-  );
-  if (!hasTradeOnInitialDay) {
-    let latestTradeDay: string | null = null;
-    for (const entry of tradeEntries) {
-      if (!latestTradeDay || entry.day > latestTradeDay) {
-        latestTradeDay = entry.day;
-      }
-    }
-    if (latestTradeDay && latestTradeDay < todayStr) {
-      todayStr = latestTradeDay;
-    }
-  }
+  const todayStr = initialTodayStr;
 
   const todayTrades = tradeEntries
     .filter((entry) => entry.day === todayStr)
