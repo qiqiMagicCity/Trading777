@@ -138,6 +138,24 @@ describe("DashboardMetrics period cards", () => {
     );
   });
 
+  it("renders 待补充 and prompts missing parameters when period values are undefined", () => {
+    act(() => {
+      useStore.setState({
+        metrics: { M11: undefined, M12: undefined, M13: undefined } as any,
+        periodHealth: { status: "ok", summaries: [] },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("period-self-check")).toHaveTextContent(
+      "缺少计算参数：WTD、MTD、YTD",
+    );
+  });
+
   it("renders 待补充 when normalizeMetrics filters out NaN period values", () => {
     act(() => {
       useStore.setState({

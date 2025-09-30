@@ -35,3 +35,7 @@
 - `normalizeMetrics` 在周/月/年窗口退化或指标为 `NaN` 时停止回退旧字段，避免沿用历史口径。
 - 补充 `metrics-normalize-period-alias.test.ts`，覆盖退化 + `NaN` 输入时不再带出 `M11` 的断言。
 - 在 `metrics.ts` 注释说明退化分支禁止回退旧字段，提示前端应展示“待补充”。
+
+## 2025-10-05
+- `DashboardMetrics` 周/月/年指标保留 `undefined`，在缺少数据或退化时统一展示“待补充/数据缺失”，并新增缺参自检提示。
+- 更新 `DashboardMetrics` 单测，覆盖缺参场景不再回退为 0 以及提示文案。

@@ -136,6 +136,16 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     const m12 = periodValues.M12.value;
     const m13 = periodValues.M13.value;
 
+    const missingLabels: string[] = [];
+    if (m11 === undefined) missingLabels.push("WTD");
+    if (m12 === undefined) missingLabels.push("MTD");
+    if (m13 === undefined) missingLabels.push("YTD");
+
+    if (missingLabels.length > 0) {
+      setSelfCheckMessage(`缺少计算参数：${missingLabels.join("、")}`);
+      return;
+    }
+
     if (
       m11 !== undefined &&
       m12 !== undefined &&
@@ -265,11 +275,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     return order.map((key) => {
       const value =
         key === "M11"
-          ? periodValues.M11.value ?? 0
+          ? periodValues.M11.value
           : key === "M12"
-          ? periodValues.M12.value ?? 0
+          ? periodValues.M12.value
           : key === "M13"
-          ? periodValues.M13.value ?? 0
+          ? periodValues.M13.value
           : metrics[key];
       let formattedValue: ReactNode;
       let colorClass = "";
@@ -328,16 +338,17 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const numValue =
           key === "M4" || key === "M6"
             ? (value as { total: number }).total
-            : (value as number);
+            : (value as number | undefined);
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
-          if (state !== "ok") {
-            formattedValue =
-              state === "missing" ? (
-                <span className="text-amber-600 font-semibold">数据缺失</span>
-              ) : (
-                <span className="text-muted-foreground font-medium">待补充</span>
-              );
+          if (state === "missing") {
+            formattedValue = (
+              <span className="text-amber-600 font-semibold">数据缺失</span>
+            );
+          } else if (state !== "ok" || numValue === undefined) {
+            formattedValue = (
+              <span className="text-muted-foreground font-medium">待补充</span>
+            );
           } else {
             formattedValue = formatCurrency(numValue);
           }
@@ -357,7 +368,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             key === "M13"
           ) {
             colorClass =
-              periodCardStates[key] === "ok"
+              periodCardStates[key] === "ok" && numValue !== undefined
                 ? numValue > 0
                   ? "green"
                   : numValue < 0
