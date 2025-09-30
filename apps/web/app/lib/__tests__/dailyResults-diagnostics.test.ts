@@ -23,25 +23,75 @@ function buildTrade(partial: Partial<EnrichedTrade>): EnrichedTrade {
 }
 
 describe("generateDailyResults diagnostics", () => {
-  it("records fallback usage when close prices are missing", () => {
+  let originalFreeze: string | undefined;
+
+  beforeEach(() => {
+    originalFreeze = process.env.NEXT_PUBLIC_FREEZE_DATE;
+    delete process.env.NEXT_PUBLIC_FREEZE_DATE;
+  });
+
+  afterEach(() => {
+    if (originalFreeze === undefined) {
+      delete process.env.NEXT_PUBLIC_FREEZE_DATE;
+    } else {
+      process.env.NEXT_PUBLIC_FREEZE_DATE = originalFreeze;
+    }
+    jest.useRealTimers();
+  });
+
+  const trades: EnrichedTrade[] = [buildTrade({})];
+  const positions: Position[] = [
+    {
+      symbol: "AMD",
+      qty: 10,
+      avgPrice: 100,
+      last: 105,
+      priceOk: true,
+    },
+  ];
+
+  const evalDate = "2025-09-26";
+
+  it("does not record MARK_PRICE fallback during market hours", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2025-09-26T18:00:00Z")); // 14:00 NY time
+
     const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
-    const trades: EnrichedTrade[] = [buildTrade({})];
-    const positions: Position[] = [
-      {
-        symbol: "AMD",
-        qty: 10,
-        avgPrice: 100,
-        last: 105,
-        priceOk: true,
-      },
-    ];
 
     generateDailyResults(
       {
         trades,
         positions,
         closePrices: {},
-        evalDate: "2025-09-26",
+        evalDate,
+      },
+      diagnostics,
+    );
+
+    expect(diagnostics.missingCloses).toContainEqual({
+      symbol: "AMD",
+      date: "2025-09-22",
+      fallback: "AVERAGE_COST",
+    });
+    expect(diagnostics.missingCloses).not.toContainEqual({
+      symbol: "AMD",
+      date: "2025-09-26",
+      fallback: "MARK_PRICE",
+    });
+  });
+
+  it("records MARK_PRICE fallback after market close", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2025-09-26T22:00:00Z")); // 18:00 NY time
+
+    const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
+
+    generateDailyResults(
+      {
+        trades,
+        positions,
+        closePrices: {},
+        evalDate,
       },
       diagnostics,
     );

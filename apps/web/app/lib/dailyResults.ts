@@ -2,7 +2,7 @@ import type { EnrichedTrade } from "@/lib/fifo";
 import { MoneyDecimal as M, round2 } from "@/lib/money";
 import type { Position } from "@/lib/services/dataService";
 import sortTrades from "@/lib/sortTrades";
-import { toNY } from "@/lib/timezone";
+import { nowNY, toNY } from "@/lib/timezone";
 import type { DailyResult } from "@/lib/types";
 
 const EPSILON = 1e-6;
@@ -130,6 +130,21 @@ export function generateDailyResults({
     throw new Error(`Invalid evalDate provided: ${evalDate}`);
   }
 
+  const freezeDate =
+    (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_FREEZE_DATE?.trim()) ||
+    (() => {
+      const freeze = (globalThis as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE;
+      return typeof freeze === "string" ? freeze.trim() : "";
+    })();
+  const treatRealtimeAsClose = (() => {
+    if (freezeDate) return false;
+    const now = nowNY();
+    const nowDateStr = now.toISOString().slice(0, 10);
+    if (nowDateStr !== evalDateStr) return false;
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+  })();
+
   const normalizedClose = normalizeClosePriceMap(closePrices as any);
   const finalPriceMap = new Map<string, number>();
   for (const pos of positions) {
@@ -247,7 +262,9 @@ export function generateDailyResults({
         const final = finalPriceMap.get(symbol);
         if (final !== undefined && Number.isFinite(final)) {
           price = final;
-          reportMissing(symbol, date, "MARK_PRICE");
+          if (!treatRealtimeAsClose) {
+            reportMissing(symbol, date, "MARK_PRICE");
+          }
         }
       }
       if (price === undefined) {
