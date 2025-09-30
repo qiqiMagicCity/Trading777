@@ -178,7 +178,9 @@ export interface Metrics {
   };
   M6: number;
   _m6?: {
-    overnightPnL: number;
+    realizedToday: number;
+    mtmOvernight: number;
+    mtmIntradayOpen: number;
     warnings: string[];
   };
   _period?: {
@@ -1460,7 +1462,7 @@ export function calcMetricsInternal(
     logger.debug("M6_DEBUG_STRICT", {
       prevRealized: todayHistoricalRealizedPnl,
       fifo: pnlFifo,
-      overnightPnL: priceChangeRounded,
+      mtmNetChange: priceChangeRounded,
       total: todayTotalPnlChange,
     });
 
