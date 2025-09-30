@@ -265,11 +265,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     return order.map((key) => {
       const value =
         key === "M11"
-          ? periodValues.M11.value ?? 0
+          ? periodValues.M11.value
           : key === "M12"
-          ? periodValues.M12.value ?? 0
+          ? periodValues.M12.value
           : key === "M13"
-          ? periodValues.M13.value ?? 0
+          ? periodValues.M13.value
           : metrics[key];
       let formattedValue: ReactNode;
       let colorClass = "";
@@ -327,11 +327,17 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       } else {
         const numValue =
           key === "M4" || key === "M6"
-            ? (value as { total: number }).total
-            : (value as number);
+            ? (value as { total: number } | undefined)?.total
+            : (value as number | undefined);
+        let numericForColor: number | undefined;
+
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
-          if (state !== "ok") {
+          if (numValue === undefined) {
+            formattedValue = (
+              <span className="text-muted-foreground font-medium">待补充</span>
+            );
+          } else if (state !== "ok") {
             formattedValue =
               state === "missing" ? (
                 <span className="text-amber-600 font-semibold">数据缺失</span>
@@ -340,9 +346,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
               );
           } else {
             formattedValue = formatCurrency(numValue);
+            numericForColor = numValue;
           }
+        } else if (numValue === undefined || Number.isNaN(numValue)) {
+          formattedValue = (
+            <span className="text-muted-foreground font-medium">待补充</span>
+          );
         } else {
           formattedValue = formatCurrency(numValue);
+          numericForColor = numValue;
         }
 
         // 设置颜色
@@ -351,21 +363,24 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             key,
           )
         ) {
-          if (
-            key === "M11" ||
-            key === "M12" ||
-            key === "M13"
-          ) {
+          if (key === "M11" || key === "M12" || key === "M13") {
             colorClass =
-              periodCardStates[key] === "ok"
-                ? numValue > 0
+              periodCardStates[key] === "ok" && numericForColor !== undefined
+                ? numericForColor > 0
                   ? "green"
-                  : numValue < 0
+                  : numericForColor < 0
                   ? "red"
                   : ""
                 : "";
           } else {
-            colorClass = numValue > 0 ? "green" : numValue < 0 ? "red" : "";
+            colorClass =
+              numericForColor !== undefined
+                ? numericForColor > 0
+                  ? "green"
+                  : numericForColor < 0
+                  ? "red"
+                  : ""
+                : "";
           }
         }
       }

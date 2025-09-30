@@ -182,6 +182,22 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
   });
 
+  it("falls back to 待补充 when period value is undefined without degrading state", () => {
+    act(() => {
+      useStore.setState({
+        metrics: { M11: undefined, M12: undefined, M13: undefined } as any,
+        periodHealth: { status: "ok", summaries: [] },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-wtd")).not.toHaveTextContent("$0.00");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+  });
+
   it("renders 待补充 when baseline snapshot expires before window start", () => {
     const daily: DailyResult[] = [
       { date: "2024-09-20", realized: 0, unrealized: 100, unrealizedDelta: 0 },
