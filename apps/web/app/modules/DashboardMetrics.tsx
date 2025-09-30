@@ -90,7 +90,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     }
 
     if (periodStatus === "degraded") {
-      if (!degraded) {
+      const hasSpecificFlags =
+        (degraded?.wtd ?? false) ||
+        (degraded?.mtd ?? false) ||
+        (degraded?.ytd ?? false);
+      if (!degraded || !hasSpecificFlags) {
         map.M11 = "degraded";
         map.M12 = "degraded";
         map.M13 = "degraded";
@@ -422,10 +426,12 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     [periodCardStates],
   );
 
+  const hasMissingOrIgnored =
+    periodStatus === "missing" || periodStatus === "ignored";
+  const shouldShowMissingSummary =
+    hasMissingOrIgnored && periodHealth?.origin !== "missing-close-banner";
   const shouldShowPeriodSummary =
-    periodStatus === "missing" ||
-    periodStatus === "ignored" ||
-    degradedKeys.length > 0;
+    shouldShowMissingSummary || degradedKeys.length > 0;
 
   const summaryMessages = useMemo(() => {
     if (!periodHealth?.summaries?.length) return [] as string[];

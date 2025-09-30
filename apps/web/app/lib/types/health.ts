@@ -18,8 +18,11 @@ export interface PeriodDegradedState {
   ytd: boolean;
 }
 
+export type PeriodHealthOrigin = "missing-close-banner" | "metrics";
+
 export interface PeriodHealth {
   status: PeriodHealthStatus;
   summaries: MissingCloseSummary[];
   degraded?: PeriodDegradedState;
+  origin?: PeriodHealthOrigin;
 }

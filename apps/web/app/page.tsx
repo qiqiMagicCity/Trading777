@@ -227,16 +227,22 @@ export default function DashboardPage() {
 
     summaryRef.current = summaries;
     setMissingCloseSummaries(summaries);
+    const origin = dismissed ? 'metrics' : 'missing-close-banner';
     setPeriodHealth({
       status: dismissed ? 'ignored' : 'missing',
       summaries,
+      origin,
     });
   };
 
   const handleIgnoreMissing = () => {
     if (summaryRef.current.length === 0) return;
     setMissingDismissed(true);
-    setPeriodHealth({ status: 'ignored', summaries: summaryRef.current });
+    setPeriodHealth({
+      status: 'ignored',
+      summaries: summaryRef.current,
+      origin: 'metrics',
+    });
   };
 
   useEffect(() => {
@@ -361,6 +367,7 @@ export default function DashboardPage() {
             status: 'degraded',
             summaries: summaryRef.current,
             degraded,
+            origin: 'metrics',
           });
         }
         const metrics = normalizeMetrics(rawMetrics);
@@ -504,6 +511,7 @@ export default function DashboardPage() {
           status: 'degraded',
           summaries: summaryRef.current,
           degraded,
+          origin: 'metrics',
         });
       }
       const metrics = normalizeMetrics(rawMetrics);
