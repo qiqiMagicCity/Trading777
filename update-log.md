@@ -71,3 +71,8 @@
 - `calcMetrics`、`runAll` 与 `normalizeMetrics` 同步读取新结构，`m6Legs` 记录 `basis/mark/amount` 字段并维持 M6 恒等式。
 - 更新黄金案例与拆解单测，验证 MTM legs 汇总等于价格变动，realized legs 汇总等于 `_m6.realizedToday`。
 - 修复 Vercel 构建报错：`Metrics._m6` 类型仍旧要求 `overnightPnL` 字段，导致 `_calcM6Strict` 输出的新结构无法赋值。现更新接口定义与调试日志字段，统一为 `realizedToday`/`mtmOvernight`/`mtmIntradayOpen`，构建恢复通过。
+
+## 2025-10-12
+- 调整 `AddTradeModal` 在提交后不再等待 `onAdded` 完成，若返回 Promise 则捕获异常记录日志，并立即关闭弹窗。
+- `DashboardPage` 与 `TradesPage` 的 `onAdded` 均改为自行处理异步错误，同时新增后台刷新状态与失败提示横幅，避免依赖弹窗阻塞。
+- `DashboardPage.reloadData` 失败时抛出异常，便于触发刷新错误提示。

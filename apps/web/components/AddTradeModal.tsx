@@ -84,10 +84,11 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
         action
       });
     }
-    try {
-      await onAdded();
-    } catch (err) {
-      logger.error('[AddTradeModal] 刷新交易数据失败', err);
+    const refreshPromise = onAdded?.();
+    if (refreshPromise && typeof (refreshPromise as Promise<unknown>).catch === 'function') {
+      (refreshPromise as Promise<unknown>).catch(err => {
+        logger.error('[AddTradeModal] 刷新交易数据失败', err);
+      });
     }
     onClose();
   };
