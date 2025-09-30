@@ -113,7 +113,9 @@ export async function fetchSummaryMetrics(init?: {
     _m6:
       summary?._m6 && typeof summary._m6 === "object"
         ? {
-            overnightPnL: Number(summary._m6.overnightPnL) || 0,
+            realizedToday: Number(summary._m6.realizedToday) || 0,
+            mtmOvernight: Number(summary._m6.mtmOvernight) || 0,
+            mtmIntradayOpen: Number(summary._m6.mtmIntradayOpen) || 0,
             warnings: Array.isArray(summary._m6.warnings)
               ? summary._m6.warnings.filter(
                   (msg: unknown): msg is string => typeof msg === "string",
@@ -176,7 +178,9 @@ export interface Metrics {
   };
   M6: number;
   _m6?: {
-    overnightPnL: number;
+    realizedToday: number;
+    mtmOvernight: number;
+    mtmIntradayOpen: number;
     warnings: string[];
   };
   _period?: {
@@ -213,11 +217,13 @@ export interface Metrics {
     m6Legs?: Array<{
       symbol: string;
       qty: number;
-      prevClose: number;
-      priceNow: number;
-      fx: number;
-      mtm: number;
-      component?: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT";
+      basis: number;
+      mark: number;
+      amount: number;
+      component?:
+        | "realized_today"
+        | "mtm_overnight"
+        | "mtm_intraday_open";
     }>;
     m6Excluded?: Array<{
       symbol: string;
@@ -496,11 +502,46 @@ function _buildTodayLots(
 function _calcM6Strict(params: {
   positions: Position[];
   todayTrades: EnrichedTrade[]; // 仅 todayStr 的交易
+  sortedTrades: EnrichedTrade[];
+  todayStr: string;
   M4: number;
   M5_2: number; // FIFO 未实现（当日）
   lastPriceFallback?: (symbol: string) => number | null; // 可选：没有行情时从当日成交价取
 }) {
-  const { positions, todayTrades, M4, M5_2, lastPriceFallback } = params;
+  const {
+    positions,
+    todayTrades,
+    sortedTrades,
+    todayStr,
+    M4,
+    M5_2,
+    lastPriceFallback,
+  } = params;
+
+  const realizedRows = debugTodayRealizedBreakdown(sortedTrades, todayStr);
+  let realizedToday = 0;
+
+  const legs: Array<{
+    symbol: string;
+    qty: number;
+    basis: number;
+    mark: number;
+    amount: number;
+    component: "realized_today" | "mtm_overnight" | "mtm_intraday_open";
+  }> = [];
+
+  for (const row of realizedRows.rows) {
+    const amount = row.pnl;
+    realizedToday += amount;
+    legs.push({
+      symbol: row.symbol,
+      qty: row.qty,
+      basis: row.openPrice,
+      mark: row.closePrice,
+      amount,
+      component: "realized_today",
+    });
+  }
 
   // 2) 做一个 Position 索引
   const posMap = new Map<string, Position>();
@@ -547,16 +588,9 @@ function _calcM6Strict(params: {
 
   const todayLots = _buildTodayLots(todayTrades, baselineSeed);
 
-  let overnightPnL = 0;
+  let mtmOvernight = 0;
+  let mtmIntradayOpen = 0;
   const warnings: string[] = [];
-  const legs: Array<{
-    symbol: string;
-    qty: number;
-    basis: number;
-    priceNow: number;
-    mtm: number;
-    component: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT";
-  }> = [];
 
   for (const [symbol, lots] of Object.entries(todayLots)) {
     const pos = posMap.get(symbol);
@@ -589,12 +623,24 @@ function _calcM6Strict(params: {
       Math.abs(overnightSignedRaw) > EPSILON ? overnightSignedRaw : 0;
 
     const recordLeg = (
-      component: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT",
+      component: "mtm_overnight" | "mtm_intraday_open",
       qty: number,
       basis: number,
       pnl: number,
     ) => {
-      legs.push({ symbol, qty, basis, priceNow: mark, mtm: pnl, component });
+      legs.push({
+        symbol,
+        qty,
+        basis,
+        mark,
+        amount: pnl,
+        component,
+      });
+      if (component === "mtm_overnight") {
+        mtmOvernight += pnl;
+      } else {
+        mtmIntradayOpen += pnl;
+      }
     };
 
     // === 当日新开未平部分 ===
@@ -603,8 +649,7 @@ function _calcM6Strict(params: {
         const basis = Number(lots.longCost ?? NaN);
         if (Number.isFinite(basis)) {
           const pnl = (mark - basis) * todayLongOpen;
-          overnightPnL += pnl;
-          recordLeg("TODAY_LONG", todayLongOpen, basis, pnl);
+          recordLeg("mtm_intraday_open", todayLongOpen, basis, pnl);
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日多头成本，当日新开未平不计入。`);
         }
@@ -613,8 +658,7 @@ function _calcM6Strict(params: {
         const basis = Number(lots.shortCost ?? NaN);
         if (Number.isFinite(basis)) {
           const pnl = (basis - mark) * todayShortOpen;
-          overnightPnL += pnl;
-          recordLeg("TODAY_SHORT", todayShortOpen, basis, pnl);
+          recordLeg("mtm_intraday_open", todayShortOpen, basis, pnl);
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日空头成本，当日新开未平不计入。`);
         }
@@ -628,13 +672,11 @@ function _calcM6Strict(params: {
       if (hasMark && hasPrev) {
         if (overnightSigned > 0) {
           const pnl = (mark - prevClose) * overnightSigned; // 多头过夜
-          overnightPnL += pnl;
-          recordLeg("OVERNIGHT_LONG", overnightSigned, prevClose, pnl);
+          recordLeg("mtm_overnight", overnightSigned, prevClose, pnl);
         } else {
           const absQty = Math.abs(overnightSigned);
           const pnl = (prevClose - mark) * absQty; // 空头过夜
-          overnightPnL += pnl;
-          recordLeg("OVERNIGHT_SHORT", absQty, prevClose, pnl);
+          recordLeg("mtm_overnight", absQty, prevClose, pnl);
         }
       } else {
         const miss: string[] = [];
@@ -664,13 +706,27 @@ function _calcM6Strict(params: {
     if (hasMark && hasPrev) {
       if (currentQty > 0) {
         const pnl = (mark - prevClose) * currentQty;
-        overnightPnL += pnl;
-        legs.push({ symbol, qty: currentQty, basis: prevClose, priceNow: mark, mtm: pnl, component: "OVERNIGHT_LONG" });
+        legs.push({
+          symbol,
+          qty: currentQty,
+          basis: prevClose,
+          mark,
+          amount: pnl,
+          component: "mtm_overnight",
+        });
+        mtmOvernight += pnl;
       } else {
         const absQty = Math.abs(currentQty);
         const pnl = (prevClose - mark) * absQty;
-        overnightPnL += pnl;
-        legs.push({ symbol, qty: absQty, basis: prevClose, priceNow: mark, mtm: pnl, component: "OVERNIGHT_SHORT" });
+        legs.push({
+          symbol,
+          qty: absQty,
+          basis: prevClose,
+          mark,
+          amount: pnl,
+          component: "mtm_overnight",
+        });
+        mtmOvernight += pnl;
       }
     } else {
       const miss: string[] = [];
@@ -680,8 +736,23 @@ function _calcM6Strict(params: {
     }
   }
 
-  const M6 = M4 + M5_2 + overnightPnL;
-  return { M6, overnightPnL, warnings, legs };
+  const realizedTotal = M4 + M5_2;
+  if (Math.abs(realizedToday - realizedTotal) > 1e-6) {
+    warnings.push(
+      `M6 严格口径：已实现拆解(${realizedToday.toFixed(2)}) 与总计(${realizedTotal.toFixed(
+        2,
+      )}) 不一致。`,
+    );
+  }
+  const M6 = realizedTotal + mtmOvernight + mtmIntradayOpen;
+  return {
+    M6,
+    realizedToday: realizedTotal,
+    mtmOvernight,
+    mtmIntradayOpen,
+    warnings,
+    legs,
+  };
 }
 
 function _count(list: { action?: string }[] | undefined) {
@@ -1358,6 +1429,8 @@ export function calcMetricsInternal(
   const strict = _calcM6Strict({
     positions,
     todayTrades,
+    sortedTrades,
+    todayStr,
     M4: todayHistoricalRealizedPnl,
     M5_2: pnlFifo,
     lastPriceFallback: (symbol) => {
@@ -1367,18 +1440,21 @@ export function calcMetricsInternal(
   });
 
   const todayTotalPnlChange = strict.M6;
-  const priceChangeRounded = mRound2(strict.overnightPnL);
+  const priceChangeRounded = mRound2(
+    strict.mtmOvernight + strict.mtmIntradayOpen,
+  );
   const legsForAux = strict.legs.map((leg) => ({
     symbol: leg.symbol,
     qty: leg.qty,
-    prevClose: leg.basis,
-    priceNow: leg.priceNow,
-    fx: 1,
-    mtm: leg.mtm,
+    basis: leg.basis,
+    mark: leg.mark,
+    amount: leg.amount,
     component: leg.component,
   }));
   const m6Details = {
-    overnightPnL: priceChangeRounded,
+    realizedToday: mRound2(strict.realizedToday),
+    mtmOvernight: mRound2(strict.mtmOvernight),
+    mtmIntradayOpen: mRound2(strict.mtmIntradayOpen),
     warnings: strict.warnings,
   };
 
@@ -1386,7 +1462,7 @@ export function calcMetricsInternal(
     logger.debug("M6_DEBUG_STRICT", {
       prevRealized: todayHistoricalRealizedPnl,
       fifo: pnlFifo,
-      overnightPnL: priceChangeRounded,
+      mtmNetChange: priceChangeRounded,
       total: todayTotalPnlChange,
     });
 
@@ -1552,15 +1628,31 @@ export function normalizeMetrics(input: any): MetricsContract {
     fifo: Number(input?.M5?.fifo ?? input?.M5_2 ?? 0),
   };
   const M6 = { total: pickTotal(input?.M6) };
-  const rawOvernightPnL =
-    typeof input?._m6?.overnightPnL === "number"
-      ? input._m6.overnightPnL
-      : input?.aux?.m6PriceChange;
+  const rawPriceChange = input?.aux?.m6PriceChange ?? input?.M6?.priceChange;
+  const priceChange =
+    typeof rawPriceChange === "number" && Number.isFinite(rawPriceChange)
+      ? rawPriceChange
+      : undefined;
+  const prevRealized = input?.aux?.m6PrevRealizedTotal;
+  const fifoToday = input?.aux?.m6FifoToday;
+  const rawRealizedToday = Number(input?._m6?.realizedToday);
+  const rawMtmOvernight = Number(input?._m6?.mtmOvernight);
+  const rawMtmIntraday = Number(input?._m6?.mtmIntradayOpen);
+  const realizedToday = Number.isFinite(rawRealizedToday)
+    ? rawRealizedToday
+    : Number.isFinite(prevRealized) && Number.isFinite(fifoToday)
+    ? Number(prevRealized) + Number(fifoToday)
+    : 0;
+  const mtmOvernight = Number.isFinite(rawMtmOvernight)
+    ? rawMtmOvernight
+    : priceChange ?? 0;
+  const mtmIntradayOpen = Number.isFinite(rawMtmIntraday)
+    ? rawMtmIntraday
+    : 0;
   const _m6 = {
-    overnightPnL:
-      typeof rawOvernightPnL === "number" && Number.isFinite(rawOvernightPnL)
-        ? rawOvernightPnL
-        : 0,
+    realizedToday,
+    mtmOvernight,
+    mtmIntradayOpen,
     warnings: Array.isArray(input?._m6?.warnings)
       ? input._m6.warnings.filter(
           (msg: unknown): msg is string =>
@@ -1574,18 +1666,44 @@ export function normalizeMetrics(input: any): MetricsContract {
     input?.M9 ?? input?.realized ?? input?.aux?.m6PrevRealizedTotal ?? 0,
   );
   const M10 = normalizeWinLoss(input?.M10 ?? {});
-  const rawPriceChange = input?.aux?.m6PriceChange ?? input?.M6?.priceChange;
-  const priceChange =
-    typeof rawPriceChange === "number" && Number.isFinite(rawPriceChange)
-      ? rawPriceChange
-      : undefined;
-  const prevRealized = input?.aux?.m6PrevRealizedTotal;
-  const fifoToday = input?.aux?.m6FifoToday;
   const m6Legs = Array.isArray(input?.aux?.m6Legs)
-    ? input.aux.m6Legs.filter(
-        (leg: any) =>
-          leg && typeof leg.symbol === "string" && Number.isFinite(leg.qty),
-      )
+    ? input.aux.m6Legs
+        .map((leg: any) => {
+          if (!leg || typeof leg.symbol !== "string") return undefined;
+          const qty = Number(leg.qty);
+          const basis = Number.isFinite(Number(leg.basis))
+            ? Number(leg.basis)
+            : Number(leg.prevClose);
+          const mark = Number.isFinite(Number(leg.mark))
+            ? Number(leg.mark)
+            : Number(leg.priceNow);
+          const amount = Number.isFinite(Number(leg.amount))
+            ? Number(leg.amount)
+            : Number(leg.mtm);
+          if (
+            !Number.isFinite(qty) ||
+            !Number.isFinite(basis) ||
+            !Number.isFinite(mark) ||
+            !Number.isFinite(amount)
+          ) {
+            return undefined;
+          }
+          const component =
+            leg.component === "realized_today" ||
+            leg.component === "mtm_overnight" ||
+            leg.component === "mtm_intraday_open"
+              ? leg.component
+              : undefined;
+          return { symbol: leg.symbol, qty, basis, mark, amount, component };
+        })
+        .filter((leg: any): leg is {
+          symbol: string;
+          qty: number;
+          basis: number;
+          mark: number;
+          amount: number;
+          component?: "realized_today" | "mtm_overnight" | "mtm_intraday_open";
+        } => Boolean(leg))
     : undefined;
   const m6Excluded = Array.isArray(input?.aux?.m6Excluded)
     ? input.aux.m6Excluded.filter(

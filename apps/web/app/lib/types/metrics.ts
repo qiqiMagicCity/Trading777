@@ -18,7 +18,12 @@ export interface MetricsContract {
   M4: { total: number };
   M5: { behavior: number; fifo: number };
   M6: { total: number };
-  _m6?: { overnightPnL: number; warnings: string[] };
+  _m6?: {
+    realizedToday: number;
+    mtmOvernight: number;
+    mtmIntradayOpen: number;
+    warnings: string[];
+  };
   _period?: { degraded: PeriodDegradedMap };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
   aux?: {
@@ -32,11 +37,13 @@ export interface MetricsContract {
     m6Legs?: Array<{
       symbol: string;
       qty: number;
-      prevClose: number;
-      priceNow: number;
-      fx: number;
-      mtm: number;
-      component?: "OVERNIGHT_LONG" | "OVERNIGHT_SHORT" | "TODAY_LONG" | "TODAY_SHORT";
+      basis: number;
+      mark: number;
+      amount: number;
+      component?:
+        | "realized_today"
+        | "mtm_overnight"
+        | "mtm_intraday_open";
     }>;
     /** 因行情缺失等原因未计入 MTM 的标的 */
     m6Excluded?: Array<{
@@ -60,6 +67,11 @@ export interface SummaryMetrics {
   M5_2?: number; // 今日未平日内（FIFO 未实现）
   M6?: number;   // 今日总盈亏（后端已按规则计算）
   M7?: number;
-  _m6?: { overnightPnL: number; warnings: string[] };
+  _m6?: {
+    realizedToday: number;
+    mtmOvernight: number;
+    mtmIntradayOpen: number;
+    warnings: string[];
+  };
   tradingDateStr?: string;
 }
