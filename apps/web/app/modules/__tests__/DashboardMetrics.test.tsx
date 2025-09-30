@@ -63,6 +63,25 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("数据缺失");
   });
 
+  it("shows 缺少计算参数 when period values are omitted", () => {
+    act(() => {
+      useStore.setState({
+        metrics: { M12: 222.22 } as any,
+        periodHealth: { status: "ok", summaries: [] },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("缺少计算参数");
+    expect(screen.getByTestId("metric-wtd")).not.toHaveTextContent("0");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("222.22");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("缺少计算参数");
+    expect(screen.getByTestId("period-self-check")).toHaveTextContent(
+      "缺少计算参数：请检查 normalizeMetrics 是否返回了 WTD/MTD/YTD。",
+    );
+  });
+
   it("shows 待补充 when missing data is ignored", () => {
     act(() => {
       useStore.setState({
