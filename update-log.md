@@ -81,3 +81,8 @@
 - `DashboardPage.reloadData` 改为优先使用 IndexedDB 与缓存价格即时刷新交易、持仓与指标，再异步刷新远程行情与收盘价。
 - 新增 `refreshPricesAndMetrics`，集中处理实时行情与收盘价拉取，异常时仅回退到刷新提示而不阻塞前序缓存结果。
 - 后台流程复用缺口诊断更新逻辑，并在成功时清理刷新错误提示，保持缺价横幅与退化状态及时同步。
+
+## 2025-10-14
+- 新增 `_lib/public-file-path.ts` 抽象公共文件路径解析，优先检测 `apps/web/public`，不存在时回退到 `public`。
+- `trades/route.ts` 与 `close-price/route.ts` 使用新 helper，写入前确保目录存在。
+- 调整对应 API 单测，覆盖目录判定与回退路径断言。

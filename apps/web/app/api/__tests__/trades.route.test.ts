@@ -3,6 +3,8 @@ import { jest } from '@jest/globals';
 jest.mock('fs', () => ({
   promises: {
     writeFile: jest.fn(),
+    stat: jest.fn(),
+    mkdir: jest.fn(),
   },
 }));
 
@@ -12,6 +14,8 @@ import { promises as fs } from 'fs';
 import { PUT } from '../trades/route';
 
 const writeFileMock = fs.writeFile as unknown as jest.MockedFunction<typeof fs.writeFile>;
+const statMock = fs.stat as unknown as jest.MockedFunction<typeof fs.stat>;
+const mkdirMock = fs.mkdir as unknown as jest.MockedFunction<typeof fs.mkdir>;
 
 function makeRequest(body: unknown): NextRequest {
   return {
@@ -23,6 +27,12 @@ describe('trades persistence route', () => {
   beforeEach(() => {
     writeFileMock.mockReset();
     writeFileMock.mockResolvedValue();
+    statMock.mockReset();
+    statMock.mockResolvedValue({
+      isDirectory: () => true,
+    } as unknown as import('fs').Stats);
+    mkdirMock.mockReset();
+    mkdirMock.mockResolvedValue(undefined);
   });
 
   it('normalises and sorts trade payloads before persisting', async () => {
@@ -53,6 +63,13 @@ describe('trades persistence route', () => {
     expect(res.status).toBe(200);
     expect(writeFileMock).toHaveBeenCalledTimes(1);
     const [filePath, payload] = writeFileMock.mock.calls[0]!;
+    expect(statMock).toHaveBeenCalledWith(
+      path.join(process.cwd(), 'apps/web/public'),
+    );
+    expect(mkdirMock).toHaveBeenCalledWith(
+      path.join(process.cwd(), 'apps/web/public'),
+      { recursive: true },
+    );
     expect(filePath).toBe(
       path.join(process.cwd(), 'apps/web/public/trades.json'),
     );
@@ -109,5 +126,44 @@ describe('trades persistence route', () => {
         time: '2024-05-21T00:00:00',
       },
     ]);
+  });
+
+  it('falls back to cwd/public when apps/web/public is missing', async () => {
+    const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/tmp/app');
+    statMock.mockImplementation(async (dir) => {
+      if (dir === path.join('/tmp/app', 'apps/web/public')) {
+        throw Object.assign(new Error('not found'), { code: 'ENOENT' });
+      }
+
+      return {
+        isDirectory: () => true,
+      } as unknown as import('fs').Stats;
+    });
+
+    await PUT(
+      makeRequest([
+        {
+          symbol: 'googl',
+          price: 10,
+          quantity: 1,
+          date: '2024-05-21',
+          action: 'BUY',
+        },
+      ]),
+    );
+
+    expect(statMock).toHaveBeenCalledWith(
+      path.join('/tmp/app', 'apps/web/public'),
+    );
+    expect(mkdirMock).toHaveBeenCalledWith(path.join('/tmp/app', 'public'), {
+      recursive: true,
+    });
+    expect(writeFileMock).toHaveBeenCalledWith(
+      path.join('/tmp/app', 'public/trades.json'),
+      expect.any(String),
+      'utf8',
+    );
+
+    cwdSpy.mockRestore();
   });
 });

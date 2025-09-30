@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-const FILE_PATH = path.join(process.cwd(), 'apps/web/public/trades.json');
+import { resolvePublicFilePath } from '../_lib/public-file-path';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIONS = new Set(['buy', 'sell', 'short', 'cover']);
 
@@ -156,7 +156,9 @@ export async function PUT(req: NextRequest) {
     }
 
     const sorted = sortTrades(parsed);
-    await fs.writeFile(FILE_PATH, JSON.stringify(sorted, null, 2), 'utf8');
+    const filePath = await resolvePublicFilePath('trades.json');
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(sorted, null, 2), 'utf8');
     return new Response(JSON.stringify({ ok: true, count: sorted.length }));
   } catch (err) {
     console.error('persist trades error', err);
