@@ -2115,6 +2115,16 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6Excluded,
     missingPrevCloseSymbols,
   };
+  const normalizedPeriodMeta =
+    input?._period && typeof input._period === "object"
+      ? {
+          ...input._period,
+          ...(input._period?.degraded &&
+          typeof input._period.degraded === "object"
+            ? { degraded: { ...input._period.degraded } }
+            : {}),
+        }
+      : undefined;
   const parseFiniteNumber = (value: unknown) => {
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
@@ -2196,6 +2206,7 @@ export function normalizeMetrics(input: any): MetricsContract {
     ...(M12 !== undefined ? { M12 } : {}),
     ...(M13 !== undefined ? { M13 } : {}),
     aux,
+    ...(normalizedPeriodMeta ? { _period: normalizedPeriodMeta } : {}),
   };
 }
 
