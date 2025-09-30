@@ -4,15 +4,21 @@ jest.mock('fs', () => ({
   promises: {
     readFile: jest.fn(),
     writeFile: jest.fn(),
+    stat: jest.fn(),
+    mkdir: jest.fn(),
   },
 }));
 
+import path from 'path';
 import type { NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import { POST } from '../close-price/route';
+import { getAppPublicDir } from '../_lib/public-file-path';
 
 const readFileMock = fs.readFile as unknown as jest.MockedFunction<typeof fs.readFile>;
 const writeFileMock = fs.writeFile as unknown as jest.MockedFunction<typeof fs.writeFile>;
+const statMock = fs.stat as unknown as jest.MockedFunction<typeof fs.stat>;
+const mkdirMock = fs.mkdir as unknown as jest.MockedFunction<typeof fs.mkdir>;
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
   return {
@@ -22,9 +28,16 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 
 describe('close price route', () => {
   beforeEach(() => {
+    delete process.env.VERCEL;
     readFileMock.mockReset();
     writeFileMock.mockReset();
     writeFileMock.mockResolvedValue();
+    statMock.mockReset();
+    statMock.mockResolvedValue({
+      isDirectory: () => true,
+    } as unknown as import('fs').Stats);
+    mkdirMock.mockReset();
+    mkdirMock.mockResolvedValue(undefined);
   });
 
   it('persists close prices using symbol-first structure', async () => {
@@ -36,7 +49,11 @@ describe('close price route', () => {
 
     expect(res.status).toBe(200);
     expect(writeFileMock).toHaveBeenCalledTimes(1);
-    const [, payload] = writeFileMock.mock.calls[0]!;
+    const [filePath, payload] = writeFileMock.mock.calls[0]!;
+    const expectedDir = getAppPublicDir(process.cwd());
+    expect(statMock).toHaveBeenCalledWith(expectedDir);
+    expect(mkdirMock).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(filePath).toBe(path.join(expectedDir, 'close_prices.json'));
     const data = JSON.parse(payload as string);
     expect(data).toEqual({ AAPL: { '2024-05-20': 123.45 } });
   });
@@ -76,5 +93,61 @@ describe('close price route', () => {
 
     expect(res.status).toBe(400);
     expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to cwd/public when apps/web/public is missing', async () => {
+    const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/tmp/app');
+    statMock.mockImplementation(async (dir) => {
+      if (dir === getAppPublicDir('/tmp/app')) {
+        throw Object.assign(new Error('not found'), { code: 'ENOENT' });
+      }
+
+      return {
+        isDirectory: () => true,
+      } as unknown as import('fs').Stats;
+    });
+    readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+    await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
+
+    expect(statMock).toHaveBeenCalledWith(getAppPublicDir('/tmp/app'));
+    expect(readFileMock).toHaveBeenCalledWith(
+      path.join('/tmp/app', 'public/close_prices.json'),
+      'utf8',
+    );
+    expect(mkdirMock).toHaveBeenCalledWith(path.join('/tmp/app', 'public'), {
+      recursive: true,
+    });
+    expect(writeFileMock).toHaveBeenCalledWith(
+      path.join('/tmp/app', 'public/close_prices.json'),
+      expect.any(String),
+      'utf8',
+    );
+
+    cwdSpy.mockRestore();
+  });
+
+  it('bypasses apps/web/public when running on Vercel', async () => {
+    process.env.VERCEL = '1';
+    const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/var/task');
+    readFileMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+    await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
+
+    expect(statMock).not.toHaveBeenCalledWith(getAppPublicDir('/var/task'));
+    expect(readFileMock).toHaveBeenCalledWith(
+      path.join('/var/task', 'public/close_prices.json'),
+      'utf8',
+    );
+    expect(mkdirMock).toHaveBeenCalledWith(path.join('/var/task', 'public'), {
+      recursive: true,
+    });
+    expect(writeFileMock).toHaveBeenCalledWith(
+      path.join('/var/task', 'public/close_prices.json'),
+      expect.any(String),
+      'utf8',
+    );
+
+    cwdSpy.mockRestore();
   });
 });

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-const FILE_PATH = path.join(process.cwd(), 'apps/web/public/close_prices.json');
+import { resolvePublicFilePath } from '../_lib/public-file-path';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type ClosePriceMap = Record<string, Record<string, number>>;
@@ -65,9 +65,10 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'symbol,date,close required' }), { status: 400 });
     }
 
+    const filePath = await resolvePublicFilePath('close_prices.json');
     let data: ClosePriceMap = {};
     try {
-      const txt = await fs.readFile(FILE_PATH, 'utf8');
+      const txt = await fs.readFile(filePath, 'utf8');
       data = toSymbolFirstMap(JSON.parse(txt || '{}'));
     } catch (_err) {
       data = {};
@@ -75,7 +76,8 @@ export async function POST(req: NextRequest) {
 
     (data[symbol] ??= {})[date] = close;
 
-    await fs.writeFile(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
     return new Response(JSON.stringify({ ok: true }));
   } catch (err) {
     console.error('save close price error', err);

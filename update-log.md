@@ -81,3 +81,22 @@
 - `DashboardPage.reloadData` 改为优先使用 IndexedDB 与缓存价格即时刷新交易、持仓与指标，再异步刷新远程行情与收盘价。
 - 新增 `refreshPricesAndMetrics`，集中处理实时行情与收盘价拉取，异常时仅回退到刷新提示而不阻塞前序缓存结果。
 - 后台流程复用缺口诊断更新逻辑，并在成功时清理刷新错误提示，保持缺价横幅与退化状态及时同步。
+
+## 2025-10-14
+- 新增 `_lib/public-file-path.ts` 抽象公共文件路径解析，优先检测 `apps/web/public`，不存在时回退到 `public`。
+- `trades/route.ts` 与 `close-price/route.ts` 使用新 helper，写入前确保目录存在。
+- 调整对应 API 单测，覆盖目录判定与回退路径断言。
+
+## 2025-10-15
+- 修复 Vercel 构建体积超限：在运行于 Vercel 环境时跳过 `apps/web/public` 目录检测，避免将 600MB 静态资产打包进函数。
+- 扩展 trades 与 close-price API 单测，覆盖 `process.env.VERCEL=1` 时直接落到 `cwd/public` 的分支，确认本地与云端路径均正确。
+
+## 2025-10-16
+- Vercel 构建仍然因 `apps/web/public` 被追踪而超出 300MB，定位到 Node tracing 即使分支短路仍会收集硬编码路径。
+- 将公共目录路径改为运行时解码的 Base64 字符串，并复用 helper 暴露的 `getAppPublicDir` 计算期望路径，防止追踪器静态解析出整目录。
+- 更新 trades / close-price API 单测使用新 helper 断言目录，同时在 `turbo.json` 声明 `VERCEL` 环境变量以消除构建警告。
+
+## 2025-10-17
+- Vercel 构建依旧打包 `apps/web/public/logos`，导致 `api/trades` 与 `api/close-price` 函数体积达到 548MB 超出上限。
+- 在 `vercel.json` 为上述两个 API 增加 `excludeFiles`，将 `apps/web/public/logos/**` 排除出打包追踪范围，保留运行时写入 `public` 的能力。
+- 复查公共目录解析逻辑与相关单测，确认本地/云端路径与目录创建流程无需调整即可兼容新排除策略。

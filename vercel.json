@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "apps/web/app/api/trades/route.ts": {
+      "excludeFiles": "apps/web/public/logos/**"
+    },
+    "apps/web/app/api/close-price/route.ts": {
+      "excludeFiles": "apps/web/public/logos/**"
+    }
+  }
+}
