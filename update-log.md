@@ -95,3 +95,8 @@
 - Vercel 构建仍然因 `apps/web/public` 被追踪而超出 300MB，定位到 Node tracing 即使分支短路仍会收集硬编码路径。
 - 将公共目录路径改为运行时解码的 Base64 字符串，并复用 helper 暴露的 `getAppPublicDir` 计算期望路径，防止追踪器静态解析出整目录。
 - 更新 trades / close-price API 单测使用新 helper 断言目录，同时在 `turbo.json` 声明 `VERCEL` 环境变量以消除构建警告。
+
+## 2025-10-17
+- Vercel 构建依旧打包 `apps/web/public/logos`，导致 `api/trades` 与 `api/close-price` 函数体积达到 548MB 超出上限。
+- 在 `vercel.json` 为上述两个 API 增加 `excludeFiles`，将 `apps/web/public/logos/**` 排除出打包追踪范围，保留运行时写入 `public` 的能力。
+- 复查公共目录解析逻辑与相关单测，确认本地/云端路径与目录创建流程无需调整即可兼容新排除策略。
