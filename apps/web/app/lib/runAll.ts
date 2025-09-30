@@ -587,8 +587,13 @@ function runAllCore(
   const priceChange_r = round2(priceChangeRaw);
   const prevRealized_r = M4_r;
   const M6_override = prevRealized_r + priceChange_r + M5_2_r;
+  const realizedFallback = prevRealized_r + M5_2_r;
+  const mtmOvernightRaw = metrics._m6?.mtmOvernight ?? priceChange_r;
+  const mtmIntradayRaw = metrics._m6?.mtmIntradayOpen ?? 0;
   const m6Details = {
-    overnightPnL: round2(metrics._m6?.overnightPnL ?? priceChange_r),
+    realizedToday: round2(metrics._m6?.realizedToday ?? realizedFallback),
+    mtmOvernight: round2(mtmOvernightRaw),
+    mtmIntradayOpen: round2(mtmIntradayRaw),
     warnings: Array.isArray(metrics._m6?.warnings)
       ? [...metrics._m6.warnings]
       : [],

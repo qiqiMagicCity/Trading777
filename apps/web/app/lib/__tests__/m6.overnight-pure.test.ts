@@ -137,14 +137,21 @@ describe("calcM6Detailed pure scenarios", () => {
 
     const legs = metrics.aux?.m6Legs ?? [];
     const flipLeg = legs.find(
-      (leg) => leg.symbol === "FLIPLS" && leg.component === "TODAY_SHORT",
+      (leg) => leg.symbol === "FLIPLS" && leg.component === "mtm_intraday_open",
     );
-    expect(flipLeg).toMatchObject({ qty: 50 });
+    expect(flipLeg).toMatchObject({ qty: 50, basis: 120, mark: 110 });
     expect(
-      legs.find(
-        (leg) => leg.symbol === "FLIPLS" && leg.component?.startsWith("OVERNIGHT"),
+      legs.some(
+        (leg) =>
+          leg.symbol === "FLIPLS" && leg.component === "mtm_overnight",
       ),
-    ).toBeUndefined();
+    ).toBe(false);
+    expect(
+      legs.some(
+        (leg) =>
+          leg.symbol === "FLIPLS" && leg.component === "realized_today",
+      ),
+    ).toBe(true);
   });
 
   it("overnight short fully closed then finishes net long", () => {
@@ -192,13 +199,19 @@ describe("calcM6Detailed pure scenarios", () => {
 
     const legs = metrics.aux?.m6Legs ?? [];
     const todayLongLeg = legs.find(
-      (leg) => leg.symbol === "FLIPSL" && leg.component === "TODAY_LONG",
+      (leg) => leg.symbol === "FLIPSL" && leg.component === "mtm_intraday_open",
     );
-    expect(todayLongLeg).toMatchObject({ qty: 40 });
+    expect(todayLongLeg).toMatchObject({ qty: 40, basis: 180, mark: 190 });
     expect(
-      legs.find(
-        (leg) => leg.symbol === "FLIPSL" && leg.component?.startsWith("OVERNIGHT"),
+      legs.some(
+        (leg) => leg.symbol === "FLIPSL" && leg.component === "mtm_overnight",
       ),
-    ).toBeUndefined();
+    ).toBe(false);
+    expect(
+      legs.some(
+        (leg) =>
+          leg.symbol === "FLIPSL" && leg.component === "realized_today",
+      ),
+    ).toBe(true);
   });
 });

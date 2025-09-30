@@ -65,3 +65,8 @@
 - 更新 `deriveWindowPnl`：仅在窗口内仅剩评估日且无法找到窗口前的可用基线时才退化，确保带上一交易日基线的场景仍可计算。
 - 新增 `Case K` 单测，覆盖上一交易日基线 + 评估日快照的场景，验证 WTD/MTD/YTD 数值正确且未标记退化。
 - 回归 `calcWtdMtdYtdFromSnapshots` 与 `DashboardMetrics` 单测，确认退化分支维持预期表现。
+
+## 2025-10-11
+- 调整 `_calcM6Strict` 输出今日已实现、隔夜 MTM、日内未平 MTM 三段贡献，并返回 `realized_today`/`mtm_overnight`/`mtm_intraday_open` legs。
+- `calcMetrics`、`runAll` 与 `normalizeMetrics` 同步读取新结构，`m6Legs` 记录 `basis/mark/amount` 字段并维持 M6 恒等式。
+- 更新黄金案例与拆解单测，验证 MTM legs 汇总等于价格变动，realized legs 汇总等于 `_m6.realizedToday`。

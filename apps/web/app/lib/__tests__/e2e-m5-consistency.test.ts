@@ -32,12 +32,23 @@ test("页面口径与算法一致（黄金案例）", async () => {
   const prevRealized = m.aux?.m6PrevRealizedTotal ?? 0;
   const priceChange = m.aux?.m6PriceChange ?? 0;
   const legs = m.aux?.m6Legs ?? [];
-  const legSum = legs.reduce((sum, leg) => sum + (leg?.mtm ?? 0), 0);
+  const mtmLegSum = legs
+    .filter(
+      (leg) =>
+        leg.component === "mtm_overnight" ||
+        leg.component === "mtm_intraday_open",
+    )
+    .reduce((sum, leg) => sum + (leg?.amount ?? 0), 0);
+  const realizedLegSum = legs
+    .filter((leg) => leg.component === "realized_today")
+    .reduce((sum, leg) => sum + (leg?.amount ?? 0), 0);
   expect(legs.every((leg) => leg.qty !== 0)).toBe(true);
-  expect(legSum).toBeCloseTo(priceChange, 6);
+  expect(mtmLegSum).toBeCloseTo(priceChange, 6);
   expect(priceChange).toBeCloseTo(m.M6.total - (m.M4.total + m.M5.fifo), 6);
   expect(prevRealized).toBeCloseTo(m.M4.total, 6);
   expect(m.M6.total).toBeCloseTo(prevRealized + m.M5.fifo + priceChange, 6);
+  const realizedToday = m._m6?.realizedToday ?? 0;
+  expect(realizedLegSum).toBeCloseTo(realizedToday, 6);
   expect(m.aux?.m6Excluded ?? []).toHaveLength(0);
   const warnings = m._m6?.warnings ?? [];
   expect(warnings).toHaveLength(3);
