@@ -148,6 +148,31 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-ytd").textContent || "").toMatch(/333\.33/);
   });
 
+  it("masks legacy period values when periodHealth 标记 degraded", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          periods: { WTD: 26030.56 },
+          M12: 222.22,
+          M13: 333.33,
+          _period: { degraded: { wtd: true, mtd: true, ytd: true } },
+        } as any,
+        periodHealth: {
+          status: "degraded",
+          summaries: [],
+          degraded: { wtd: true, mtd: true, ytd: true },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-wtd")).not.toHaveTextContent("26030.56");
+  });
+
   it("shows self-check warning when WTD/MTD/YTD are the same", () => {
     act(() => {
       useStore.setState({

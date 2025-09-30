@@ -59,3 +59,8 @@
 ## 2025-10-09
 - 修复 Vercel 构建报错：`formatCurrency` 仍按 `number` 类型要求入参，周期/常规指标去掉 `?? 0` 后传入 `undefined` 触发 TS 报错。
 - 调整 `DashboardMetrics` 渲染逻辑，缺值时统一走“待补充”占位并跳过配色，仅在取得有效数值后再调用 `formatCurrency` 与判定红绿，构建恢复通过。
+
+## 2025-10-10
+- 调整 `deriveWindowPnl` 基线过期判定，允许仅凭上一交易日偏差直接退化窗口浮盈。
+- `calcWtdMtdYtdFromSnapshots` 回归测试新增 Case K，覆盖窗口首日虽有数据但上一笔快照跨越多个交易日的退化情境。
+- `DashboardMetrics` 单测补充 periodHealth 标记退化时应渲染“待补充”而非沿用 26030.56 的断言，覆盖前端降级展示。
