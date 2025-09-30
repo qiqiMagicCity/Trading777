@@ -271,8 +271,7 @@ function deriveWindowPnl(
     baseline !== null &&
     baselineDay !== null &&
     baselineDay < windowStart &&
-    (firstWindowDay === undefined ||
-      (firstWindowDay > windowStart && baselineDay !== expectedBaselineDay));
+    (expectedBaselineDay === null || baselineDay !== expectedBaselineDay);
 
   if (baselineExpired) {
     if (markDegraded) {

@@ -45,3 +45,8 @@
 - 移除 `normalizeMetrics` 对 WTD/MTD/YTD 旧别名的回退，仅保留显式 `M11/M12/M13` 选值。
 - 更新周期别名单测，确保旧别名输入不会带出 `M11/M12/M13`，并维持显式字段优先级。
 - 补充 `DashboardMetrics` 26030.56 退化场景回归测试，确认 UI 通过“待补充”路径提示用户。
+
+## 2025-10-07
+- 调整 `deriveWindowPnl` 基线过期判定：只要实际基线日不等于预期上一交易日，即视为退化。
+- 新增 `calcWtdMtdYtdFromSnapshots` 回归用例，覆盖“窗口首日存在但基线早于上一交易日”导致的退化行为。
+- 运行 `npm test -- apps/web/app/lib/__tests__/calcWtdMtdYtdFromSnapshots.fix.test.ts` 确认退化逻辑覆盖。
