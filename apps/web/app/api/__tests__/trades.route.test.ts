@@ -12,6 +12,7 @@ import path from 'path';
 import type { NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import { PUT } from '../trades/route';
+import { getAppPublicDir } from '../_lib/public-file-path';
 
 const writeFileMock = fs.writeFile as unknown as jest.MockedFunction<typeof fs.writeFile>;
 const statMock = fs.stat as unknown as jest.MockedFunction<typeof fs.stat>;
@@ -64,16 +65,10 @@ describe('trades persistence route', () => {
     expect(res.status).toBe(200);
     expect(writeFileMock).toHaveBeenCalledTimes(1);
     const [filePath, payload] = writeFileMock.mock.calls[0]!;
-    expect(statMock).toHaveBeenCalledWith(
-      path.join(process.cwd(), 'apps/web/public'),
-    );
-    expect(mkdirMock).toHaveBeenCalledWith(
-      path.join(process.cwd(), 'apps/web/public'),
-      { recursive: true },
-    );
-    expect(filePath).toBe(
-      path.join(process.cwd(), 'apps/web/public/trades.json'),
-    );
+    const expectedDir = getAppPublicDir(process.cwd());
+    expect(statMock).toHaveBeenCalledWith(expectedDir);
+    expect(mkdirMock).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(filePath).toBe(path.join(expectedDir, 'trades.json'));
     const data = JSON.parse(payload as string);
     expect(data).toEqual([
       {
@@ -132,7 +127,7 @@ describe('trades persistence route', () => {
   it('falls back to cwd/public when apps/web/public is missing', async () => {
     const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/tmp/app');
     statMock.mockImplementation(async (dir) => {
-      if (dir === path.join('/tmp/app', 'apps/web/public')) {
+      if (dir === getAppPublicDir('/tmp/app')) {
         throw Object.assign(new Error('not found'), { code: 'ENOENT' });
       }
 
@@ -153,9 +148,7 @@ describe('trades persistence route', () => {
       ]),
     );
 
-    expect(statMock).toHaveBeenCalledWith(
-      path.join('/tmp/app', 'apps/web/public'),
-    );
+    expect(statMock).toHaveBeenCalledWith(getAppPublicDir('/tmp/app'));
     expect(mkdirMock).toHaveBeenCalledWith(path.join('/tmp/app', 'public'), {
       recursive: true,
     });
@@ -184,9 +177,7 @@ describe('trades persistence route', () => {
       ]),
     );
 
-    expect(statMock).not.toHaveBeenCalledWith(
-      path.join('/var/task', 'apps/web/public'),
-    );
+    expect(statMock).not.toHaveBeenCalledWith(getAppPublicDir('/var/task'));
     expect(mkdirMock).toHaveBeenCalledWith(path.join('/var/task', 'public'), {
       recursive: true,
     });

@@ -9,7 +9,8 @@
     "MONITOR",
     "LOG_LEVEL",
     "FREEZE_DATE",
-    "TIINGO_API_KEY"
+    "TIINGO_API_KEY",
+    "VERCEL"
   ],
   "tasks": {
     "build": {

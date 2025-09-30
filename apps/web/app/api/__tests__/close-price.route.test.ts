@@ -13,6 +13,7 @@ import path from 'path';
 import type { NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import { POST } from '../close-price/route';
+import { getAppPublicDir } from '../_lib/public-file-path';
 
 const readFileMock = fs.readFile as unknown as jest.MockedFunction<typeof fs.readFile>;
 const writeFileMock = fs.writeFile as unknown as jest.MockedFunction<typeof fs.writeFile>;
@@ -49,16 +50,10 @@ describe('close price route', () => {
     expect(res.status).toBe(200);
     expect(writeFileMock).toHaveBeenCalledTimes(1);
     const [filePath, payload] = writeFileMock.mock.calls[0]!;
-    expect(statMock).toHaveBeenCalledWith(
-      path.join(process.cwd(), 'apps/web/public'),
-    );
-    expect(mkdirMock).toHaveBeenCalledWith(
-      path.join(process.cwd(), 'apps/web/public'),
-      { recursive: true },
-    );
-    expect(filePath).toBe(
-      path.join(process.cwd(), 'apps/web/public/close_prices.json'),
-    );
+    const expectedDir = getAppPublicDir(process.cwd());
+    expect(statMock).toHaveBeenCalledWith(expectedDir);
+    expect(mkdirMock).toHaveBeenCalledWith(expectedDir, { recursive: true });
+    expect(filePath).toBe(path.join(expectedDir, 'close_prices.json'));
     const data = JSON.parse(payload as string);
     expect(data).toEqual({ AAPL: { '2024-05-20': 123.45 } });
   });
@@ -103,7 +98,7 @@ describe('close price route', () => {
   it('falls back to cwd/public when apps/web/public is missing', async () => {
     const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue('/tmp/app');
     statMock.mockImplementation(async (dir) => {
-      if (dir === path.join('/tmp/app', 'apps/web/public')) {
+      if (dir === getAppPublicDir('/tmp/app')) {
         throw Object.assign(new Error('not found'), { code: 'ENOENT' });
       }
 
@@ -115,9 +110,7 @@ describe('close price route', () => {
 
     await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
 
-    expect(statMock).toHaveBeenCalledWith(
-      path.join('/tmp/app', 'apps/web/public'),
-    );
+    expect(statMock).toHaveBeenCalledWith(getAppPublicDir('/tmp/app'));
     expect(readFileMock).toHaveBeenCalledWith(
       path.join('/tmp/app', 'public/close_prices.json'),
       'utf8',
@@ -141,9 +134,7 @@ describe('close price route', () => {
 
     await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
 
-    expect(statMock).not.toHaveBeenCalledWith(
-      path.join('/var/task', 'apps/web/public'),
-    );
+    expect(statMock).not.toHaveBeenCalledWith(getAppPublicDir('/var/task'));
     expect(readFileMock).toHaveBeenCalledWith(
       path.join('/var/task', 'public/close_prices.json'),
       'utf8',

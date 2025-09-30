@@ -90,3 +90,8 @@
 ## 2025-10-15
 - 修复 Vercel 构建体积超限：在运行于 Vercel 环境时跳过 `apps/web/public` 目录检测，避免将 600MB 静态资产打包进函数。
 - 扩展 trades 与 close-price API 单测，覆盖 `process.env.VERCEL=1` 时直接落到 `cwd/public` 的分支，确认本地与云端路径均正确。
+
+## 2025-10-16
+- Vercel 构建仍然因 `apps/web/public` 被追踪而超出 300MB，定位到 Node tracing 即使分支短路仍会收集硬编码路径。
+- 将公共目录路径改为运行时解码的 Base64 字符串，并复用 helper 暴露的 `getAppPublicDir` 计算期望路径，防止追踪器静态解析出整目录。
+- 更新 trades / close-price API 单测使用新 helper 断言目录，同时在 `turbo.json` 声明 `VERCEL` 环境变量以消除构建警告。
