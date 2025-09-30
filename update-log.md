@@ -55,3 +55,7 @@
 - 更新 `DashboardMetrics`：去除周期指标的 `?? 0` 兜底，确保缺失值保持 `undefined` 供 UI 识别。
 - 调整周期卡片渲染逻辑，缺失值时统一展示“待补充”且不再套用红绿配色，避免误判为 `$0.00`。
 - 补充 `DashboardMetrics` 单测，覆盖周期指标缺失时显示占位提示的场景。
+
+## 2025-10-09
+- 修复 Vercel 构建报错：`formatCurrency` 仍按 `number` 类型要求入参，周期/常规指标去掉 `?? 0` 后传入 `undefined` 触发 TS 报错。
+- 调整 `DashboardMetrics` 渲染逻辑，缺值时统一走“待补充”占位并跳过配色，仅在取得有效数值后再调用 `formatCurrency` 与判定红绿，构建恢复通过。

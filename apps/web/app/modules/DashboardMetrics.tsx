@@ -329,6 +329,8 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           key === "M4" || key === "M6"
             ? (value as { total: number } | undefined)?.total
             : (value as number | undefined);
+        let numericForColor: number | undefined;
+
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
           if (numValue === undefined) {
@@ -344,9 +346,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
               );
           } else {
             formattedValue = formatCurrency(numValue);
+            numericForColor = numValue;
           }
+        } else if (numValue === undefined || Number.isNaN(numValue)) {
+          formattedValue = (
+            <span className="text-muted-foreground font-medium">待补充</span>
+          );
         } else {
           formattedValue = formatCurrency(numValue);
+          numericForColor = numValue;
         }
 
         // 设置颜色
@@ -357,15 +365,22 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         ) {
           if (key === "M11" || key === "M12" || key === "M13") {
             colorClass =
-              periodCardStates[key] === "ok" && numValue !== undefined
-                ? numValue > 0
+              periodCardStates[key] === "ok" && numericForColor !== undefined
+                ? numericForColor > 0
                   ? "green"
-                  : numValue < 0
+                  : numericForColor < 0
                   ? "red"
                   : ""
                 : "";
           } else {
-            colorClass = numValue > 0 ? "green" : numValue < 0 ? "red" : "";
+            colorClass =
+              numericForColor !== undefined
+                ? numericForColor > 0
+                  ? "green"
+                  : numericForColor < 0
+                  ? "red"
+                  : ""
+                : "";
           }
         }
       }
