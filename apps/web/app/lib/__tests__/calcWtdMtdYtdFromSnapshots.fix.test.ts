@@ -43,6 +43,24 @@ describe("calcWtdMtdYtdFromSnapshots baseline fix", () => {
     expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
   });
 
+  test("Case K: 上一交易日存在可用基线时不退化", () => {
+    const daily: DailyResult[] = [
+      { date: "2023-12-29", realized: 0, unrealized: 50, unrealizedDelta: 0 },
+      { date: "2024-01-01", realized: 0, unrealized: 55, unrealizedDelta: 5 },
+      { date: "2024-08-30", realized: 4, unrealized: 80, unrealizedDelta: 25 },
+      { date: "2024-09-02", realized: 2, unrealized: 85, unrealizedDelta: 5 },
+      { date: "2024-09-27", realized: -2, unrealized: 100, unrealizedDelta: 15 },
+      { date: "2024-09-30", realized: 5, unrealized: 115, unrealizedDelta: 15 },
+    ];
+
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2024-09-30");
+
+    expect(result.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
+    expect(result.wtd).toBeCloseTo(20);
+    expect(result.mtd).toBeCloseTo(40);
+    expect(result.ytd).toBeCloseTo(74);
+  });
+
   test("Case G: 周/月具备基线但年线缺口退化", () => {
     const daily: DailyResult[] = [
       { date: "2023-12-29", realized: 0, unrealized: 10, unrealizedDelta: 0 },
