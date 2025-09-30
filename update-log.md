@@ -81,3 +81,8 @@
 - `DashboardPage.reloadData` 改为优先使用 IndexedDB 与缓存价格即时刷新交易、持仓与指标，再异步刷新远程行情与收盘价。
 - 新增 `refreshPricesAndMetrics`，集中处理实时行情与收盘价拉取，异常时仅回退到刷新提示而不阻塞前序缓存结果。
 - 后台流程复用缺口诊断更新逻辑，并在成功时清理刷新错误提示，保持缺价横幅与退化状态及时同步。
+
+## 2025-10-14
+- `trades` API 持久化路径改为以 `process.cwd()` + `public/trades.json` 为基准，并在根目录执行时回退到 `apps/web/public`，保证不同工作目录下一致写入。
+- 更新 `trades.route` 单测的路径断言以匹配新的计算逻辑，保持路径检测与生产代码一致。
+- 本地运行 `npm test -w web` 并实际调用 `/api/trades`，确认写入行为与单测均按预期通过。

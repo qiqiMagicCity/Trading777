@@ -53,9 +53,11 @@ describe('trades persistence route', () => {
     expect(res.status).toBe(200);
     expect(writeFileMock).toHaveBeenCalledTimes(1);
     const [filePath, payload] = writeFileMock.mock.calls[0]!;
-    expect(filePath).toBe(
-      path.join(process.cwd(), 'apps/web/public/trades.json'),
-    );
+    const candidate = path.join(process.cwd(), 'public', 'trades.json');
+    const expectedPath = candidate.includes(`${path.sep}apps${path.sep}web${path.sep}`)
+      ? candidate
+      : path.join(process.cwd(), 'apps', 'web', 'public', 'trades.json');
+    expect(filePath).toBe(expectedPath);
     const data = JSON.parse(payload as string);
     expect(data).toEqual([
       {
