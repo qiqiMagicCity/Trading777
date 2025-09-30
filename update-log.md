@@ -76,3 +76,8 @@
 - 调整 `AddTradeModal` 在提交后不再等待 `onAdded` 完成，若返回 Promise 则捕获异常记录日志，并立即关闭弹窗。
 - `DashboardPage` 与 `TradesPage` 的 `onAdded` 均改为自行处理异步错误，同时新增后台刷新状态与失败提示横幅，避免依赖弹窗阻塞。
 - `DashboardPage.reloadData` 失败时抛出异常，便于触发刷新错误提示。
+
+## 2025-10-13
+- `DashboardPage.reloadData` 改为优先使用 IndexedDB 与缓存价格即时刷新交易、持仓与指标，再异步刷新远程行情与收盘价。
+- 新增 `refreshPricesAndMetrics`，集中处理实时行情与收盘价拉取，异常时仅回退到刷新提示而不阻塞前序缓存结果。
+- 后台流程复用缺口诊断更新逻辑，并在成功时清理刷新错误提示，保持缺价横幅与退化状态及时同步。
