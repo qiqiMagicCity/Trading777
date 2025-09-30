@@ -2,7 +2,12 @@ import { NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-const FILE_PATH = path.join(process.cwd(), 'apps/web/public/trades.json');
+const CANDIDATE_FILE_PATH = path.join(process.cwd(), 'public', 'trades.json');
+const FILE_PATH = CANDIDATE_FILE_PATH.includes(
+  `${path.sep}apps${path.sep}web${path.sep}`,
+)
+  ? CANDIDATE_FILE_PATH
+  : path.join(process.cwd(), 'apps', 'web', 'public', 'trades.json');
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIONS = new Set(['buy', 'sell', 'short', 'cover']);
 
