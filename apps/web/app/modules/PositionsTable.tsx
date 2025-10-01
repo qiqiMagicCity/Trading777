@@ -203,20 +203,32 @@ export function PositionsTable({ positions, trades }: Props) {
 
             const realized = getRealized(pos.symbol);
             const totalPNL = unrealized + realized;
-            const breakEven = pos.breakEvenPrice;
-            const hasBreakEven =
-              typeof breakEven === 'number' && Number.isFinite(breakEven);
-            const breakEvenDisplay = hasBreakEven ? (
+            const breakEvenJ =
+              typeof pos.breakEvenJ === 'number' && Number.isFinite(pos.breakEvenJ)
+                ? pos.breakEvenJ
+                : undefined;
+            const breakEvenJSticky =
+              typeof pos.breakEvenJSticky === 'number' && Number.isFinite(pos.breakEvenJSticky)
+                ? pos.breakEvenJSticky
+                : undefined;
+            const breakEvenDisplay = breakEvenJ !== undefined ? (
               <span className="flex items-center gap-1">
-                <span>{formatNumber(Math.abs(breakEven))}</span>
-                {breakEven < 0 ? (
+                <span>{formatNumber(Math.abs(breakEvenJ))}</span>
+                {breakEvenJ < 0 ? (
                   <span className="rounded bg-gray-200 px-1 text-xs text-gray-600">
                     空头
                   </span>
                 ) : null}
               </span>
+            ) : breakEvenJSticky !== undefined ? (
+              <div className="flex flex-col leading-tight">
+                <span>—</span>
+                <span className="text-xs text-gray-500">
+                  上次保本价 {formatNumber(Math.abs(breakEvenJSticky))}
+                </span>
+              </div>
             ) : (
-              <span className="text-xs text-orange-500">数据不足</span>
+              <span>—</span>
             );
 
             const intradayClass =

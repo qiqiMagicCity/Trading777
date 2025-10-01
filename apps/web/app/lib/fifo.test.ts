@@ -48,7 +48,7 @@ describe('computeFifo', () => {
     expect(result.map(t => t.quantityAfter)).toEqual([50, 100]);
     const second = result[1]!;
     expect(second.averageCost).toBe(9);
-    expect(second.breakEvenPrice).toBe(8);
+    expect(second.breakEvenJ).toBe(8);
   });
 
   it('computes short position break-even with realized gains', () => {
@@ -59,6 +59,6 @@ describe('computeFifo', () => {
     const result = computeFifo(trades);
     const second = result[1]!;
     expect(second.quantityAfter).toBe(-50);
-    expect(second.breakEvenPrice).toBe(-55);
+    expect(second.breakEvenJ).toBe(-55);
   });
 });

@@ -41,6 +41,8 @@ export default function PositionsPage() {
             qty: t.quantityAfter,
             avgPrice: t.averageCost,
             breakEvenPrice: t.breakEvenPrice,
+            breakEvenJ: t.breakEvenJ ?? null,
+            breakEvenJSticky: t.breakEvenJSticky ?? null,
             last: 0,
             priceOk: true,
             stale: true,
