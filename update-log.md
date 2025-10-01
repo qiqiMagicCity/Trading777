@@ -115,3 +115,9 @@
 - 重写 FIFO 成交回放的滚动保本价计算：新增累计持仓成本字段，按“(累计持仓成本 − 累计已实现盈亏) ÷ |当前净持仓|” 生成多头/空头盈亏平衡点，空头返回负值。
 - 更新 `PositionsPage` 与 `PositionsTable`，为每个持仓附带新的盈亏平衡价，空头在前端展示绝对值并加“空头”标签，缺乏数据时提示“数据不足”。
 - 扩充 `computeFifo` 单测覆盖空头回补盈利后的保本价为负场景，并调整相关指标单测的基准数据。
+
+## 2025-10-21
+- FIFO 成交回放新增 breakEvenJ/breakEvenJSticky、自检字段与 Sticky 逻辑，净仓归零保留最近 J 并输出恒等式所需的累计成本/实盈/净仓。
+- Position/PositionsTable 引入新字段，盈亏平衡列按绝对值 + 空头徽标展示，无实时 J 时回落到“— / 上次保本价 …”。
+- 新增 `breakevenJ.sticky` 与 `PositionsTable.breakevenJ` 单测覆盖 6 大场景及 UI 展示恒等式，自检脚本 `npm run selfcheck:j:sticky` 通过。
+- package.json 增加 `selfcheck:j:sticky` 脚本，后续可一键校验 J 与 UI 自检。

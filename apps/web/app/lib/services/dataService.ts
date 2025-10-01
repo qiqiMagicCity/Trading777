@@ -58,6 +58,10 @@ export interface Position {
   prevClose?: number;
   /** 含历史盈亏的滚动保本价，空头为负值 */
   breakEvenPrice?: number | null;
+  /** 裸 J：实时滚动保本价，空头为负值 */
+  breakEvenJ?: number | null;
+  /** Sticky J：净仓归零后保留的上一笔 J */
+  breakEvenJSticky?: number | null;
 }
 
 // New interface for cached prices

@@ -15,6 +15,7 @@ type SymbolState = {
   accumulatedRealizedPnl: number;
   accumulatedTotalCost: number;
   tradeCount: number;
+  breakEvenJSticky?: number;
 };
 
 export type EnrichedTrade = Trade & {
@@ -26,6 +27,11 @@ export type EnrichedTrade = Trade & {
   realizedPnl: number;
   quantityAfter: number;
   averageCost: number;
+  breakEvenJ?: number;
+  breakEvenJSticky?: number;
+  accTotalCost: number;
+  accRealizedPnl: number;
+  netPosition: number;
 };
 
 export type InitialPosition = {
@@ -43,14 +49,22 @@ export function computeFifo(
   for (const pos of initialPositions) {
     const quantity = Math.abs(pos.qty);
     if (quantity <= EPSILON) continue;
+    const direction = pos.qty < 0 ? 'SHORT' : 'LONG';
+    const accumulatedTotalCost = direction === 'SHORT'
+      ? new M(pos.avgPrice).mul(quantity).mul(-1).toNumber()
+      : new M(pos.avgPrice).mul(quantity).toNumber();
+    const netAbs = quantity;
+    const initialJ =
+      netAbs > EPSILON
+        ? new M(accumulatedTotalCost).div(netAbs).toNumber()
+        : undefined;
     symbolStateMap[pos.symbol] = {
       positionList: [{ price: pos.avgPrice, quantity }],
-      direction: pos.qty < 0 ? 'SHORT' : 'LONG',
+      direction,
       accumulatedRealizedPnl: 0,
-      accumulatedTotalCost: pos.qty < 0
-        ? new M(pos.avgPrice).mul(quantity).mul(-1).toNumber()
-        : new M(pos.avgPrice).mul(quantity).toNumber(),
+      accumulatedTotalCost,
       tradeCount: 0,
+      breakEvenJSticky: initialJ,
     };
   }
 
@@ -75,6 +89,7 @@ export function computeFifo(
       accumulatedRealizedPnl: 0,
       accumulatedTotalCost: 0,
       tradeCount: 0,
+      breakEvenJSticky: undefined,
     });
 
     state.tradeCount += 1;
@@ -175,13 +190,20 @@ export function computeFifo(
 
     const averageCost = totalQuantity > EPSILON ? avgPrice(costOfPositions, totalQuantity, 4) : 0;
     const netPosition = state.direction === 'SHORT' ? -totalQuantity : totalQuantity;
-    const breakEvenPrice =
-      Math.abs(netPosition) > EPSILON
+    const netAbs = Math.abs(netPosition);
+    const currentJ =
+      netAbs > EPSILON
         ? new M(state.accumulatedTotalCost)
             .minus(state.accumulatedRealizedPnl)
-            .div(Math.abs(netPosition))
+            .div(netAbs)
             .toNumber()
-        : 0;
+        : undefined;
+    if (currentJ !== undefined) {
+      state.breakEvenJSticky = currentJ;
+    }
+    const breakEvenJ = currentJ;
+    const breakEvenJSticky = state.breakEvenJSticky ?? undefined;
+    const breakEvenPrice = breakEvenJ ?? 0;
 
     const date = toNY(trade.date);
     const weekday = ((date.getUTCDay() + 6) % 7) + 1; // Monday: 1, Sunday: 7
@@ -196,6 +218,11 @@ export function computeFifo(
       realizedPnl,
       quantityAfter: netPosition,
       averageCost,
+      breakEvenJ,
+      breakEvenJSticky,
+      accTotalCost: state.accumulatedTotalCost,
+      accRealizedPnl: state.accumulatedRealizedPnl,
+      netPosition,
     };
   });
-} 
+}
