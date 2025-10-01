@@ -58,13 +58,20 @@ describe("PositionsTable breakEvenJ display", () => {
     const shortRow = screen.getByText("SHORT").closest("tr");
     expect(shortRow).not.toBeNull();
     if (!shortRow) return;
-    expect(within(shortRow).getByText("55.00")).toBeInTheDocument();
-    expect(within(shortRow).getByText("空头")).toBeInTheDocument();
+    const shortCells = within(shortRow).getAllByRole("cell");
+    const shortBreakEvenCell = shortCells[7];
+    expect(shortBreakEvenCell).toHaveClass("text-center");
+    expect(shortBreakEvenCell).toHaveTextContent("55.00");
+    const shortBadge = within(shortBreakEvenCell).getByText("（空头）");
+    expect(shortBadge).toHaveClass("text-red-500");
 
     const stickyRow = screen.getByText("STICK").closest("tr");
     expect(stickyRow).not.toBeNull();
     if (!stickyRow) return;
-    expect(within(stickyRow).getByText("—")).toBeInTheDocument();
+    const stickyCells = within(stickyRow).getAllByRole("cell");
+    const stickyBreakEvenCell = stickyCells[7];
+    expect(stickyBreakEvenCell).toHaveClass("text-center");
+    expect(within(stickyBreakEvenCell).getByText("—")).toBeInTheDocument();
     expect(within(stickyRow).getByText(/上次保本价 12\.34/)).toBeInTheDocument();
   });
 
@@ -94,6 +101,9 @@ describe("PositionsTable breakEvenJ display", () => {
     expect(row).not.toBeNull();
     if (!row) return;
 
-    expect(within(row).getByText("90.00")).toBeInTheDocument();
+    const cells = within(row).getAllByRole("cell");
+    const breakEvenCell = cells[7];
+    expect(breakEvenCell).toHaveClass("text-center");
+    expect(within(breakEvenCell).getByText("90.00")).toBeInTheDocument();
   });
 });
