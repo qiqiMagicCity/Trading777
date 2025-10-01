@@ -152,7 +152,6 @@ export default function StockPage() {
                 </span>
               ) : breakEvenJSticky !== undefined ? (
                 <div className="flex flex-col items-center leading-tight">
-                  <span>—</span>
                   <span className="text-xs text-gray-500">
                     历史滚动成本：{formatNumber(Math.abs(breakEvenJSticky))}
                   </span>
