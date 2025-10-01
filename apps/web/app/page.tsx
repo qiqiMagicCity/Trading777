@@ -9,7 +9,7 @@ import {
 import { loadJson } from '@/app/lib/dataSource';
 import type { Trade, Position } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
-import { buildEnrichedTrades, replayPortfolio } from '@/app/lib/tradeReplay';
+import { applyBreakEvenToPositions, buildEnrichedTrades, replayPortfolio } from '@/app/lib/tradeReplay';
 import { DashboardMetrics } from '@/modules/DashboardMetrics';
 import { PositionsTable } from '@/modules/PositionsTable';
 import { TradesTable } from '@/modules/TradesTable';
@@ -346,6 +346,7 @@ export default function DashboardPage() {
         const replay = replayPortfolio(dbTrades);
         const enriched = buildEnrichedTrades(replay.baseline);
         const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
+        applyBreakEvenToPositions(posList, enriched);
 
         // 为每个持仓获取最新价格
         for (const pos of posList) {
@@ -494,6 +495,7 @@ export default function DashboardPage() {
     const replay = replayPortfolio(tradesSnapshot);
     const enriched = buildEnrichedTrades(replay.baseline);
     const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
+    applyBreakEvenToPositions(posList, enriched);
 
     for (const pos of posList) {
       const cached = getCachedRealtimeQuote(pos.symbol);
@@ -643,6 +645,7 @@ export default function DashboardPage() {
         }
         return clone;
       });
+      applyBreakEvenToPositions(posList, enriched);
 
       const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
 
