@@ -383,15 +383,6 @@ function needsSyntheticDailyResults(
     if (windowRows.length === 0) {
       return true;
     }
-    const hasBaselineBefore = rows.some((row) => row.day < start);
-    if (!hasBaselineBefore) {
-      const first = windowRows[0]!;
-      const hasBaselineData =
-        first.unrealizedDelta !== undefined || first.unrealized !== undefined;
-      if (!hasBaselineData) {
-        return true;
-      }
-    }
   }
 
   return false;

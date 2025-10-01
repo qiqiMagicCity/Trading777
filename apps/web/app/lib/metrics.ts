@@ -12,7 +12,7 @@ import {
   getLatestTradingDayStr,
   endOfDayNY,
 } from "@/lib/timezone";
-import { nyDateStr, startOfDayNY } from "./time";
+import { nyDateStr, startOfDayNY, startOfWeekNY } from "./time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
@@ -57,11 +57,7 @@ import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
-import {
-  computeDailyPeriodTotals,
-  sumPeriod as sumPeriodBase,
-  type PeriodTotalsOptions,
-} from "./metrics-periods";
+import { sumPeriod as sumPeriodBase, type PeriodTotalsOptions } from "./metrics-periods";
 import type {
   MetricsContract,
   PeriodDegradedMap,
@@ -837,9 +833,230 @@ export function sumPeriod(
   return sumPeriodBase(daily, fromStr, toStr);
 }
 
+type NormalizedDailyForWindow = {
+  day: string;
+  realized: number;
+  unrealized?: number;
+  unrealizedDelta?: number;
+  resolvedUnrealized?: number;
+};
+
+function normalizeDailyRowsForWindow(
+  daily: DailyResult[] = [],
+  endISO: string,
+): NormalizedDailyForWindow[] {
+  const dedup = new Map<
+    string,
+    { row: NormalizedDailyForWindow; ts: number; order: number }
+  >();
+
+  (daily || []).forEach((entry, idx) => {
+    if (!entry?.date) return;
+    const day = nyDayStr(entry.date);
+    if (!day || day > endISO) return;
+
+    const tsRaw = new Date(normalizeToNyDay(entry.date)).getTime();
+    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
+    const realized = Number(entry.realized ?? 0);
+    const row: NormalizedDailyForWindow = {
+      day,
+      realized: Number.isFinite(realized) ? realized : 0,
+    };
+
+    if (typeof entry.unrealized === "number" && Number.isFinite(entry.unrealized)) {
+      row.unrealized = entry.unrealized;
+    }
+
+    if (
+      typeof entry.unrealizedDelta === "number" &&
+      Number.isFinite(entry.unrealizedDelta)
+    ) {
+      row.unrealizedDelta = entry.unrealizedDelta;
+    }
+
+    const prev = dedup.get(day);
+    if (!prev || ts > prev.ts || (ts === prev.ts && idx > prev.order)) {
+      dedup.set(day, { row, ts, order: idx });
+    }
+  });
+
+  return Array.from(dedup.values())
+    .sort((a, b) => {
+      if (a.row.day < b.row.day) return -1;
+      if (a.row.day > b.row.day) return 1;
+      if (a.ts < b.ts) return -1;
+      if (a.ts > b.ts) return 1;
+      return a.order - b.order;
+    })
+    .map(({ row }) => row);
+}
+
+function resolveUnrealizedForWindow(
+  rows: NormalizedDailyForWindow[],
+): NormalizedDailyForWindow[] {
+  let prev: number | undefined;
+  return rows.map((row) => {
+    let resolved: number | undefined;
+    if (typeof row.unrealized === "number" && Number.isFinite(row.unrealized)) {
+      resolved = row.unrealized;
+    } else if (
+      typeof row.unrealizedDelta === "number" &&
+      Number.isFinite(row.unrealizedDelta) &&
+      typeof prev === "number"
+    ) {
+      resolved = prev + row.unrealizedDelta;
+    } else if (typeof prev === "number") {
+      resolved = prev;
+    }
+
+    if (typeof resolved === "number" && Number.isFinite(resolved)) {
+      prev = resolved;
+      return { ...row, resolvedUnrealized: resolved };
+    }
+
+    return { ...row, resolvedUnrealized: undefined };
+  });
+}
+
+function findRowOnOrBefore(
+  rows: NormalizedDailyForWindow[],
+  day: string,
+): NormalizedDailyForWindow | undefined {
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const row = rows[i]!;
+    if (row.day <= day) return row;
+  }
+  return undefined;
+}
+
+function findRowBefore(
+  rows: NormalizedDailyForWindow[],
+  day: string,
+): NormalizedDailyForWindow | undefined {
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const row = rows[i]!;
+    if (row.day < day) return row;
+  }
+  return undefined;
+}
+
+function prevTradingDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  do {
+    d.setUTCDate(d.getUTCDate() - 1);
+  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function firstMondayOfYear(yearStart: string): string {
+  const jan1 = toNY(`${yearStart}T12:00:00Z`);
+  const offset = (8 - jan1.getDay()) % 7;
+  return addDaysYmd(yearStart, offset);
+}
+
+function weekStartForEvalDay(evalDay: string): string {
+  const yearStart = `${evalDay.slice(0, 4)}-01-01`;
+  const firstMonday = firstMondayOfYear(yearStart);
+  if (evalDay < firstMonday) {
+    return yearStart;
+  }
+  const monday = nyDateStr(startOfWeekNY(`${evalDay}T12:00:00Z`));
+  return monday < firstMonday ? firstMonday : monday;
+}
+
+function sumRealizedBetween(
+  rows: NormalizedDailyForWindow[],
+  start: string,
+  end: string,
+): number {
+  let total = 0;
+  for (const row of rows) {
+    if (row.day < start) continue;
+    if (row.day > end) break;
+    total += row.realized;
+  }
+  return total;
+}
+
+type WindowTotalsOptions = PeriodTotalsOptions & { firstActiveDate?: string };
+
+function deriveWindowTotals(
+  rowsInput: NormalizedDailyForWindow[],
+  evalDay: string,
+  options: WindowTotalsOptions,
+): { wtd: number; mtd: number; ytd: number; degraded: PeriodDegradedMap } {
+  const rows = resolveUnrealizedForWindow(rowsInput);
+  const endRow = findRowOnOrBefore(rows, evalDay);
+  const firstActiveCandidate = (() => {
+    const raw = options.firstActiveDate?.trim();
+    if (raw) return nyDayStr(raw);
+    return rows[0]?.day;
+  })();
+  const firstActive = firstActiveCandidate || evalDay;
+
+  const computeWindow = (windowStart: string) => {
+    const realized = sumRealizedBetween(rows, windowStart, evalDay);
+    const baselineRow = findRowBefore(rows, windowStart);
+    const expectedBaseline = prevTradingDay(windowStart);
+
+    let baseline = 0;
+    let degraded = false;
+
+    if (baselineRow && baselineRow.day >= firstActive) {
+      const resolved = baselineRow.resolvedUnrealized;
+      if (typeof resolved === "number" && Number.isFinite(resolved)) {
+        baseline = resolved;
+      } else {
+        degraded = true;
+      }
+    } else if (expectedBaseline >= firstActive) {
+      degraded = true;
+    }
+
+    let endValue = 0;
+    const resolvedEnd = endRow?.resolvedUnrealized;
+    if (typeof resolvedEnd === "number" && Number.isFinite(resolvedEnd)) {
+      endValue = resolvedEnd;
+    } else {
+      degraded = true;
+    }
+
+    const total = realized + (endValue - baseline);
+    return { total, degraded };
+  };
+
+  const weekStart = weekStartForEvalDay(evalDay);
+  const monthStart = `${evalDay.slice(0, 7)}-01`;
+  const yearStart = `${evalDay.slice(0, 4)}-01-01`;
+
+  const week = computeWindow(weekStart);
+  const month = computeWindow(monthStart);
+  const year = computeWindow(yearStart);
+
+  return {
+    wtd: week.total,
+    mtd: month.total,
+    ytd: year.total,
+    degraded: {
+      wtd: week.degraded,
+      mtd: month.degraded,
+      ytd: year.degraded,
+    },
+  };
+}
+
 export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
-  const { wtd, mtd, ytd } = computeDailyPeriodTotals(daily, evalDateStr);
-  return { wtd, mtd, ytd };
+  const evalDay = nyDayStr(evalDateStr);
+  const rows = normalizeDailyRowsForWindow(daily, evalDay);
+  const firstActive = rows[0]?.day;
+  const totals = deriveWindowTotals(rows, evalDay, {
+    firstActiveDate: firstActive,
+  });
+  return { wtd: totals.wtd, mtd: totals.mtd, ytd: totals.ytd };
 }
 
 export type WtdMtdYtdExplain = ReturnType<typeof explainWtdMtdYtdFromSnapshots>;
@@ -851,7 +1068,7 @@ export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
 export function calcWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
-  options: PeriodTotalsOptions = {},
+  options: WindowTotalsOptions = {},
 ): {
   wtd: number;
   mtd: number;
@@ -859,7 +1076,8 @@ export function calcWtdMtdYtdFromSnapshots(
   degraded: PeriodDegradedMap;
 } {
   const evalDay = nyDayStr(evalDayStr);
-  const totals = computeDailyPeriodTotals(daily, evalDay, options);
+  const rows = normalizeDailyRowsForWindow(daily, evalDay);
+  const totals = deriveWindowTotals(rows, evalDay, options);
 
   try {
     if (typeof window !== "undefined") {
@@ -873,54 +1091,54 @@ export function calcWtdMtdYtdFromSnapshots(
     // noop: 调试缓存失败不影响业务
   }
 
-  return {
-    wtd: totals.wtd,
-    mtd: totals.mtd,
-    ytd: totals.ytd,
-    degraded: { wtd: false, mtd: false, ytd: false },
-  };
+  return totals;
 }
 
 export function explainWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
-  options: PeriodTotalsOptions = {},
+  options: WindowTotalsOptions = {},
 ) {
   const evalDay = nyDayStr(evalDayStr);
-  const totals = computeDailyPeriodTotals(daily, evalDay, options);
-  const { calendar, weekStart, monthStart, yearStart, yearEnd, ytdEnd, wtd, mtd, ytd } =
-    totals;
+  const rows = normalizeDailyRowsForWindow(daily, evalDay);
+  const resolved = resolveUnrealizedForWindow(rows);
+  const totals = deriveWindowTotals(rows, evalDay, options);
+
+  const calendar = new Map<string, number>();
+  for (const row of resolved) {
+    calendar.set(row.day, row.realized + (row.unrealizedDelta ?? 0));
+  }
 
   const toRows = (start: string, end: string) => {
-    const rows: { day: string; pnl: number }[] = [];
+    const list: { day: string; pnl: number }[] = [];
     let cursor = start;
     while (cursor <= end) {
-      rows.push({ day: cursor, pnl: calendar.get(cursor) ?? 0 });
+      list.push({ day: cursor, pnl: calendar.get(cursor) ?? 0 });
       cursor = addDaysYmd(cursor, 1);
     }
-    return rows;
+    return list;
   };
 
-  const calendarRows = Array.from(calendar.entries()).map(([day, pnl]) => ({
-    day,
-    pnl,
-  }));
+  const weekStart = weekStartForEvalDay(evalDay);
+  const monthStart = `${evalDay.slice(0, 7)}-01`;
+  const yearStart = `${evalDay.slice(0, 4)}-01-01`;
+  const yearEnd = `${evalDay.slice(0, 4)}-12-31`;
 
   return {
     evalDay,
-    calendar: calendarRows,
-    totals: { wtd, mtd, ytd },
+    calendar: Array.from(calendar.entries()).map(([day, pnl]) => ({ day, pnl })),
+    totals: { wtd: totals.wtd, mtd: totals.mtd, ytd: totals.ytd },
     ranges: {
       week: { start: weekStart, end: evalDay, rows: toRows(weekStart, evalDay) },
       month: { start: monthStart, end: evalDay, rows: toRows(monthStart, evalDay) },
-      year: { start: yearStart, end: ytdEnd, rows: toRows(yearStart, ytdEnd) },
+      year: { start: yearStart, end: evalDay, rows: toRows(yearStart, evalDay) },
     },
     boundaries: {
       yearStart,
       yearEnd,
       weekStart,
       monthStart,
-      ytdEnd,
+      ytdEnd: evalDay,
     },
   };
 }
@@ -940,18 +1158,24 @@ export function calcM9FromDaily(
 
 export function checkPeriodDebug(daily: DailyResult[], evalDateStr: string) {
   if (!DEBUG) return;
-  const totals = computeDailyPeriodTotals(daily, evalDateStr);
-  const { weekStart, monthStart, yearStart, ytdEnd, wtd, mtd, ytd } = totals;
+  const evalDay = nyDayStr(evalDateStr);
+  const rows = normalizeDailyRowsForWindow(daily, evalDay);
+  const totals = deriveWindowTotals(rows, evalDay, {
+    firstActiveDate: rows[0]?.day,
+  });
+  const weekStart = weekStartForEvalDay(evalDay);
+  const monthStart = `${evalDay.slice(0, 7)}-01`;
+  const yearStart = `${evalDay.slice(0, 4)}-01-01`;
   const m9 = calcM9FromDaily(daily, evalDateStr);
   console.table([
     { metric: "evalDateStr", value: evalDateStr },
     { metric: "weekStart", value: weekStart },
     { metric: "monthStart", value: monthStart },
     { metric: "yearStart", value: yearStart },
-    { metric: "ytdEnd", value: ytdEnd },
-    { metric: "wtd", value: wtd, expected: 8952.5 },
-    { metric: "mtd", value: mtd, expected: 8952.5 },
-    { metric: "ytd", value: ytd, expected: 8952.5 },
+    { metric: "ytdEnd", value: evalDay },
+    { metric: "wtd", value: totals.wtd, expected: 8952.5 },
+    { metric: "mtd", value: totals.mtd, expected: 8952.5 },
+    { metric: "ytd", value: totals.ytd, expected: 8952.5 },
     { metric: "M9", value: m9, expected: 7850 },
   ]);
 }
@@ -1338,6 +1562,7 @@ export function calcMetricsInternal(
   const safeTrades: EnrichedTrade[] = [];
   const tradeEntries: Array<{ trade: EnrichedTrade; date: Date; day: string }> =
     [];
+  let earliestTradeDay: string | undefined;
 
   for (const trade of trades) {
     const parsed = resolveTradeDate(trade);
@@ -1363,6 +1588,11 @@ export function calcMetricsInternal(
 
     safeTrades.push(normalizedTrade);
     tradeEntries.push({ trade: normalizedTrade, date: parsed, day });
+    if (!normalizedTrade.isInitialPosition) {
+      if (!earliestTradeDay || day < earliestTradeDay) {
+        earliestTradeDay = day;
+      }
+    }
   }
 
   const todayStr = initialTodayStr;
@@ -1482,6 +1712,18 @@ export function calcMetricsInternal(
     return Number.isFinite(dayTs) && dayTs <= endTs;
   });
 
+  let earliestDailyDay: string | undefined;
+  for (const row of historicalDailyResults) {
+    const day = nyDayStr(row.date);
+    if (!earliestDailyDay || day < earliestDailyDay) {
+      earliestDailyDay = day;
+    }
+  }
+
+  const firstActiveDate = [earliestTradeDay, earliestDailyDay]
+    .filter((d): d is string => typeof d === "string" && d.length > 0)
+    .sort()[0];
+
   // M9
   const historicalRealizedPnl = calcM9(historicalDailyResults, periodEvalStr);
 
@@ -1493,6 +1735,7 @@ export function calcMetricsInternal(
   const periodSnapshot = calcWtdMtdYtdFromSnapshots(
     historicalDailyResults,
     periodEvalStr,
+    { firstActiveDate },
   );
   const { wtd, mtd, ytd, degraded } = periodSnapshot;
   if (DEBUG) {
