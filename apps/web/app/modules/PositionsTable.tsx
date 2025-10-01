@@ -212,16 +212,14 @@ export function PositionsTable({ positions, trades }: Props) {
                 ? pos.breakEvenJSticky
                 : undefined;
             const breakEvenDisplay = breakEvenJ !== undefined ? (
-              <span className="flex items-center gap-1">
-                <span>{formatNumber(Math.abs(breakEvenJ))}</span>
+              <span>
+                {formatNumber(Math.abs(breakEvenJ))}
                 {breakEvenJ < 0 ? (
-                  <span className="rounded bg-gray-200 px-1 text-xs text-gray-600">
-                    空头
-                  </span>
+                  <span className="text-red-500">（空头）</span>
                 ) : null}
               </span>
             ) : breakEvenJSticky !== undefined ? (
-              <div className="flex flex-col leading-tight">
+              <div className="flex flex-col items-center leading-tight">
                 <span>—</span>
                 <span className="text-xs text-gray-500">
                   上次保本价 {formatNumber(Math.abs(breakEvenJSticky))}
@@ -258,7 +256,7 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{formatNumber(marketValue)}</td>
-                <td>{breakEvenDisplay}</td>
+                <td className="text-center">{breakEvenDisplay}</td>
                 <td className={intradayClass}>{formatNumber(intraday)}</td>
                 <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
