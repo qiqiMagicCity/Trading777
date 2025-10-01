@@ -12,6 +12,7 @@
     "check:conflicts": "node scripts/check-conflicts.mjs",
     "snapshot:daily": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/snapshot.ts",
     "verify:history": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-history.ts",
+    "selfcheck:j:sticky": "jest --runInBand apps/web/app/lib/__tests__/breakevenJ.sticky.test.ts apps/web/app/modules/__tests__/PositionsTable.breakevenJ.test.tsx",
     "ci:pr": "npm run check:conflicts && npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only",
     "check:types": "tsc -p apps/web/tsconfig.json --noEmit",
     "ci": "npm run check:types -w web && npm run test -w web && npm run build -w web",
