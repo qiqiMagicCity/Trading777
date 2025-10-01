@@ -7,6 +7,79 @@ import type { Position, Trade } from "@/lib/services/dataService";
 
 const EPSILON = 1e-6;
 
+function normalizeSymbol(value: string | undefined | null): string {
+  if (!value) return "";
+  return value.trim().toUpperCase();
+}
+
+export function applyBreakEvenToPositions(
+  positions: Position[],
+  enrichedTrades: EnrichedTrade[],
+): void {
+  const grouped = new Map<string, EnrichedTrade[]>();
+  for (const trade of enrichedTrades) {
+    const symbol = normalizeSymbol(trade.symbol);
+    if (!symbol) continue;
+    const bucket = grouped.get(symbol);
+    if (bucket) {
+      bucket.push(trade);
+    } else {
+      grouped.set(symbol, [trade]);
+    }
+  }
+
+  for (const pos of positions) {
+    const symbol = normalizeSymbol(pos.symbol);
+    if (!symbol) {
+      pos.breakEvenPrice = null;
+      pos.breakEvenJ = null;
+      pos.breakEvenJSticky = null;
+      continue;
+    }
+
+    const trades = grouped.get(symbol);
+    if (!trades || trades.length === 0) {
+      pos.breakEvenPrice = null;
+      pos.breakEvenJ = null;
+      pos.breakEvenJSticky = null;
+      continue;
+    }
+
+    let matched: EnrichedTrade | undefined;
+    for (let idx = trades.length - 1; idx >= 0; idx -= 1) {
+      const trade = trades[idx]!;
+      if (Math.abs(trade.quantityAfter - pos.qty) <= EPSILON) {
+        matched = trade;
+        break;
+      }
+    }
+
+    if (!matched) {
+      for (let idx = trades.length - 1; idx >= 0; idx -= 1) {
+        const trade = trades[idx]!;
+        if (Math.abs(trade.netPosition - pos.qty) <= EPSILON) {
+          matched = trade;
+          break;
+        }
+      }
+    }
+
+    if (!matched) {
+      matched = trades[trades.length - 1];
+    }
+
+    if (matched) {
+      pos.breakEvenPrice = matched.breakEvenPrice ?? null;
+      pos.breakEvenJ = matched.breakEvenJ ?? null;
+      pos.breakEvenJSticky = matched.breakEvenJSticky ?? null;
+    } else {
+      pos.breakEvenPrice = null;
+      pos.breakEvenJ = null;
+      pos.breakEvenJSticky = null;
+    }
+  }
+}
+
 export interface TradeReplayBaseline {
   baselineTrades: Trade[];
   actualTrades: Trade[];
@@ -156,13 +229,16 @@ export function replayPortfolio(trades: Trade[]): TradeReplayResult {
   const actualTrades = sortedTrades.filter((t) => !t.isInitialPosition);
   const initialPositions = deriveInitialPositions(baselineTrades);
   const positions = replayPositions(sortedTrades);
+  const baseline: TradeReplayBaseline = {
+    baselineTrades,
+    actualTrades,
+    initialPositions,
+  };
+  const enrichedForPositions = buildEnrichedTrades(baseline);
+  applyBreakEvenToPositions(positions, enrichedForPositions);
 
   return {
-    baseline: {
-      baselineTrades,
-      actualTrades,
-      initialPositions,
-    },
+    baseline,
     positions,
   };
 }

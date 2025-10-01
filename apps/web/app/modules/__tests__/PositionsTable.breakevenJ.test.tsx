@@ -67,4 +67,33 @@ describe("PositionsTable breakEvenJ display", () => {
     expect(within(stickyRow).getByText("—")).toBeInTheDocument();
     expect(within(stickyRow).getByText(/上次保本价 12\.34/)).toBeInTheDocument();
   });
+
+  it("renders break-even J for 多头持仓", () => {
+    const queryClient = new QueryClient();
+
+    const positions: Position[] = [
+      {
+        symbol: "LONG",
+        qty: 8,
+        avgPrice: 80,
+        breakEvenPrice: 90,
+        breakEvenJ: 90,
+        breakEvenJSticky: 90,
+        last: 0,
+        priceOk: true,
+      },
+    ];
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PositionsTable positions={positions} trades={[]} />
+      </QueryClientProvider>,
+    );
+
+    const row = screen.getByText("LONG").closest("tr");
+    expect(row).not.toBeNull();
+    if (!row) return;
+
+    expect(within(row).getByText("90.00")).toBeInTheDocument();
+  });
 });
