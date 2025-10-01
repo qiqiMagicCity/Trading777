@@ -34,14 +34,17 @@ export default function PositionsPage() {
           lastMap[t.symbol] = t; // 由于 computeFifo 已按日期升序，遍历结束时即为最后状态
         }
 
-        const posList: Position[] = Object.values(lastMap).map((t) => ({
-          symbol: t.symbol,
-          qty: t.quantityAfter,
-          avgPrice: t.averageCost,
-          last: 0,
-          priceOk: true,
-          stale: true,
-        }));
+        const posList: Position[] = Object.values(lastMap)
+          .filter((t) => Math.abs(t.quantityAfter) > 1e-6)
+          .map((t) => ({
+            symbol: t.symbol,
+            qty: t.quantityAfter,
+            avgPrice: t.averageCost,
+            breakEvenPrice: t.breakEvenPrice,
+            last: 0,
+            priceOk: true,
+            stale: true,
+          }));
 
         setPositions(posList);
       } catch (e) {

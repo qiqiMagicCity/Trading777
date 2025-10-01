@@ -13,6 +13,7 @@ type SymbolState = {
   positionList: Position[];
   direction: 'NONE' | 'LONG' | 'SHORT';
   accumulatedRealizedPnl: number;
+  accumulatedTotalCost: number;
   tradeCount: number;
 };
 
@@ -46,6 +47,9 @@ export function computeFifo(
       positionList: [{ price: pos.avgPrice, quantity }],
       direction: pos.qty < 0 ? 'SHORT' : 'LONG',
       accumulatedRealizedPnl: 0,
+      accumulatedTotalCost: pos.qty < 0
+        ? new M(pos.avgPrice).mul(quantity).mul(-1).toNumber()
+        : new M(pos.avgPrice).mul(quantity).toNumber(),
       tradeCount: 0,
     };
   }
@@ -69,6 +73,7 @@ export function computeFifo(
       positionList: [],
       direction: 'NONE',
       accumulatedRealizedPnl: 0,
+      accumulatedTotalCost: 0,
       tradeCount: 0,
     });
 
@@ -81,6 +86,9 @@ export function computeFifo(
       if (state.direction === 'NONE' || state.direction === 'LONG') {
         state.positionList.push({ price, quantity });
         state.direction = 'LONG';
+        state.accumulatedTotalCost = new M(state.accumulatedTotalCost)
+          .plus(new M(price).mul(quantity))
+          .toNumber();
       } else { // direction is 'SHORT', so this is a covering buy
         let remainingQuantity = quantity;
         while (remainingQuantity > EPSILON && state.positionList.length > 0) {
@@ -88,6 +96,9 @@ export function computeFifo(
           const matchedQuantity = Math.min(remainingQuantity, lot.quantity);
           realizedPnl = new M(realizedPnl)
             .plus(realizedPnLShort(lot.price, price, matchedQuantity))
+            .toNumber();
+          state.accumulatedTotalCost = new M(state.accumulatedTotalCost)
+            .plus(new M(lot.price).mul(matchedQuantity))
             .toNumber();
           lot.quantity -= matchedQuantity;
           remainingQuantity -= matchedQuantity;
@@ -101,14 +112,21 @@ export function computeFifo(
         if (remainingQuantity > EPSILON) {
           state.positionList = [{ price, quantity: remainingQuantity }];
           state.direction = 'LONG';
+          state.accumulatedTotalCost = new M(price)
+            .mul(remainingQuantity)
+            .toNumber();
         } else if (state.positionList.length === 0) {
           state.direction = 'NONE';
+          state.accumulatedTotalCost = 0;
         }
       }
     } else { // action is 'sell' or 'short'
       if (state.direction === 'NONE' || state.direction === 'SHORT') {
         state.positionList.push({ price, quantity });
         state.direction = 'SHORT';
+        state.accumulatedTotalCost = new M(state.accumulatedTotalCost)
+          .minus(new M(price).mul(quantity))
+          .toNumber();
       } else { // direction is 'LONG', so this is a closing sell
         let remainingQuantity = quantity;
         while (remainingQuantity > EPSILON && state.positionList.length > 0) {
@@ -116,6 +134,9 @@ export function computeFifo(
           const matchedQuantity = Math.min(remainingQuantity, lot.quantity);
           realizedPnl = new M(realizedPnl)
             .plus(realizedPnLLong(price, lot.price, matchedQuantity))
+            .toNumber();
+          state.accumulatedTotalCost = new M(state.accumulatedTotalCost)
+            .minus(new M(lot.price).mul(matchedQuantity))
             .toNumber();
           lot.quantity -= matchedQuantity;
           remainingQuantity -= matchedQuantity;
@@ -129,8 +150,13 @@ export function computeFifo(
         if (remainingQuantity > EPSILON) {
           state.positionList = [{ price, quantity: remainingQuantity }];
           state.direction = 'SHORT';
+          state.accumulatedTotalCost = new M(price)
+            .mul(remainingQuantity)
+            .mul(-1)
+            .toNumber();
         } else if (state.positionList.length === 0) {
           state.direction = 'NONE';
+          state.accumulatedTotalCost = 0;
         }
       }
     }
@@ -148,15 +174,13 @@ export function computeFifo(
     const costOfPositions = costOfPositionsDec.toNumber();
 
     const averageCost = totalQuantity > EPSILON ? avgPrice(costOfPositions, totalQuantity, 4) : 0;
+    const netPosition = state.direction === 'SHORT' ? -totalQuantity : totalQuantity;
     const breakEvenPrice =
-      totalQuantity > EPSILON
-        ? avgPrice(
-            costOfPositionsDec
-              .minus(state.accumulatedRealizedPnl)
-              .toNumber(),
-            totalQuantity,
-            4,
-          )
+      Math.abs(netPosition) > EPSILON
+        ? new M(state.accumulatedTotalCost)
+            .minus(state.accumulatedRealizedPnl)
+            .div(Math.abs(netPosition))
+            .toNumber()
         : 0;
 
     const date = toNY(trade.date);
@@ -170,7 +194,7 @@ export function computeFifo(
       amount: new M(price).mul(quantity).toNumber(),
       breakEvenPrice,
       realizedPnl,
-      quantityAfter: state.direction === 'SHORT' ? -totalQuantity : totalQuantity,
+      quantityAfter: netPosition,
       averageCost,
     };
   });
