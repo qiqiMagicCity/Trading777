@@ -135,6 +135,31 @@ export default function StockPage() {
                   ? 'red'
                   : 'white';
               const amount = trade.price * trade.quantity;
+              const breakEvenJ =
+                typeof trade.breakEvenJ === 'number' && Number.isFinite(trade.breakEvenJ)
+                  ? trade.breakEvenJ
+                  : undefined;
+              const breakEvenJSticky =
+                typeof trade.breakEvenJSticky === 'number' && Number.isFinite(trade.breakEvenJSticky)
+                  ? trade.breakEvenJSticky
+                  : undefined;
+              const breakEvenDisplay = breakEvenJ !== undefined ? (
+                <span>
+                  {formatNumber(Math.abs(breakEvenJ))}
+                  {breakEvenJ < 0 ? (
+                    <span className="text-red-500">（空头）</span>
+                  ) : null}
+                </span>
+              ) : breakEvenJSticky !== undefined ? (
+                <div className="flex flex-col items-center leading-tight">
+                  <span>—</span>
+                  <span className="text-xs text-gray-500">
+                    上次保本价 {formatNumber(Math.abs(breakEvenJSticky))}
+                  </span>
+                </div>
+              ) : (
+                <span>—</span>
+              );
 
               return (
                 <tr key={idx}>
@@ -146,7 +171,7 @@ export default function StockPage() {
                   <td>{formatNumber(trade.price)}</td>
                   <td className={sideCls}>{trade.quantity}</td>
                   <td>{formatNumber(amount)}</td>
-                  <td>{formatNumber(trade.price)}</td>
+                  <td className="text-center">{breakEvenDisplay}</td>
                   <td className={plCls}>{formatNumber(trade.realizedPnl)}</td>
                   <td>{trade.quantity || 0}</td>
                   <td>{formatNumber(trade.averageCost)}</td>
