@@ -10,6 +10,7 @@ import { useStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
+import { calculateIntradayValue, getResolvedPrice } from "./positionMetrics";
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '--';
@@ -91,12 +92,7 @@ export function PositionsTable({ positions, trades }: Props) {
 
     return positions.map((pos, idx) => {
       const result = results[idx];
-      const fallbackPrice = Number.isFinite(pos.last) ? pos.last : pos.avgPrice;
-      const lastPrice =
-        result?.data && typeof result.data.price === 'number'
-          ? result.data.price
-          : fallbackPrice;
-      const resolvedPrice = Number.isFinite(lastPrice) ? lastPrice : pos.avgPrice;
+      const resolvedPrice = getResolvedPrice(pos, result?.data?.price);
       const prevClose = Number(pos.prevClose);
       const hasPrevClose = Number.isFinite(prevClose);
 
@@ -106,9 +102,7 @@ export function PositionsTable({ positions, trades }: Props) {
       const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
       // 按 (实时价格 - 成本价格) × 数量 计算浮动盈亏
       const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
-      const intraday = hasPrevClose
-        ? signedMarketValue - prevClose * pos.qty
-        : undefined;
+      const intraday = calculateIntradayValue(pos, resolvedPrice);
 
       logger.debug(`${pos.symbol} 市值计算:`, {
         lastPrice: resolvedPrice,
@@ -119,6 +113,7 @@ export function PositionsTable({ positions, trades }: Props) {
         avgPrice: pos.avgPrice,
         unrealized,
         prevClose,
+        hasPrevClose,
         intraday,
       });
 
@@ -177,17 +172,10 @@ export function PositionsTable({ positions, trades }: Props) {
         <tbody>
           {positions.map((pos, idx) => {
             const result = results[idx];
-            const fallbackPrice = Number.isFinite(pos.last) ? pos.last : pos.avgPrice;
-            const lastPrice =
-              result?.data && typeof result.data.price === 'number'
-                ? result.data.price
-                : fallbackPrice;
-            const resolvedPrice = Number.isFinite(lastPrice) ? lastPrice : pos.avgPrice;
+            const resolvedPrice = getResolvedPrice(pos, result?.data?.price);
             const isStale = result?.data?.stale ?? pos.stale;
             const isPending = result?.isFetching ?? false;
             const isError = result?.isError;
-            const prevClose = Number(pos.prevClose);
-            const hasPrevClose = Number.isFinite(prevClose);
 
             // 使用回退价格计算市值和浮动盈亏
             const isShort = pos.qty < 0;
@@ -195,9 +183,7 @@ export function PositionsTable({ positions, trades }: Props) {
             const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
             const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
             // 当日浮盈亏 = 今日市值 - 昨日市值
-            const intraday = hasPrevClose
-              ? signedMarketValue - prevClose * pos.qty
-              : undefined;
+            const intraday = calculateIntradayValue(pos, resolvedPrice);
             const unrealizedPercent =
               resolvedPrice && pos.avgPrice ? (resolvedPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
