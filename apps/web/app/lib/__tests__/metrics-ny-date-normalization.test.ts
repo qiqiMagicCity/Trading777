@@ -53,4 +53,18 @@ describe("NY day normalization", () => {
 
     expect({ wtd, mtd, ytd }).toEqual({ wtd: 150, mtd: 150, ytd: 150 });
   });
+
+  it("resolves previous trading day baseline for Monday windows", () => {
+    const daily: DailyResult[] = [
+      d("2025-09-26T16:00:00-04:00", 0, 40),
+      d("2025-09-29T21:00:00Z", 10, 55),
+    ];
+
+    const explain = explainWtdMtdYtdFromSnapshots(daily, "2025-09-29", {
+      firstActiveDate: "2025-09-20",
+    });
+
+    expect(explain.baseline.week.baselineDate).toBe("2025-09-26");
+    expect(explain.baselineMode.week).toBe("priced");
+  });
 });

@@ -101,3 +101,12 @@
 - 重写 `calcWtdMtdYtd`/`calcWtdMtdYtdFromSnapshots`，按“累计实盈 + 端点浮盈差”口径求值，并在缺失预期基线时标记退化而不返回 NaN。
 - 调整 `needsSyntheticDailyResults` 不再强制窗口前一日具备浮盈字段，避免无历史场景下的快照重算。
 - 更新多组单测（去重、缺基线、时区守护等）并运行若干 `npm test` 用例覆盖新口径。
+
+## 2025-10-18
+- `calcWtdMtdYtdFromSnapshots` 与 `explainWtdMtdYtdFromSnapshots` 增加基线模式、首个活跃日、拆解信息，支持零基线与 partial 状态区分；`WindowTotalsResult` 透出 per-period breakdown。
+- `collectPeriodHealthIssues` 新增 ΔU 缺基线价诊断：基线在首日之前视为零基线，partial 场景生成灰色提示并列出缺价标的；允许带 `missingBaselineSymbols` 的快照缺失 `unrealized`。
+- Dashboard 周/月/年卡片接入 `_period.status` 与 breakdown：partial 周期仅展示实盈 + “ΔU 待补充”徽标；`period-health` 摘要新增 partial 灰色样式，`syncPeriodHealth` 接入完整 `_period` 元数据。
+- 补充 `metrics-wtd-mtd-ytd.week-start-monday.partial-baseline.test.ts`、`dataHealth.partial-baseline.test.ts` 等单测，回归 `metrics-ny-date-normalization.test.ts` 验证周一基线解析；针对 ok_zero/partial 状态扩展既有测试断言。
+
+## 2025-10-19
+- 调整 Dashboard 指标摘要文案，仅在状态为 `missing`/`degraded` 且存在阻断性诊断时提示“检测到其它关键数据缺失”，避免 partial 灰框重复出现警告语。

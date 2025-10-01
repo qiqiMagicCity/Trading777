@@ -19,5 +19,8 @@ describe("WTD/MTD/YTD: no baseline snapshot → first-day ΔU=0", () => {
     expect(Number(r.wtd.toFixed(2))).toBe(20.0);
     expect(Number(r.mtd.toFixed(2))).toBe(20.0);
     expect(Number(r.ytd.toFixed(2))).toBe(20.0);
+    expect(r.status.wtd).toBe("ok_zero");
+    expect(r.status.mtd).toBe("ok_zero");
+    expect(r.status.ytd).toBe("ok_zero");
   });
 });
