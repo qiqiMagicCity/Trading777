@@ -10,7 +10,14 @@ export interface MissingCloseSummary {
   symbols: MissingCloseSymbolDetail[];
 }
 
-export type PeriodHealthStatus = "ok" | "missing" | "ignored" | "degraded";
+export type PeriodHealthStatus =
+  | "ok"
+  | "missing"
+  | "ignored"
+  | "degraded"
+  | "partial";
+
+export type PeriodWindowStatus = "ok" | "ok_zero" | "partial" | "missing";
 
 export interface PeriodDegradedState {
   wtd: boolean;
@@ -40,4 +47,9 @@ export interface PeriodHealth {
   degraded?: PeriodDegradedState;
   origin?: PeriodHealthOrigin;
   issues?: PeriodHealthIssue[];
+  periodStatus?: {
+    wtd: PeriodWindowStatus;
+    mtd: PeriodWindowStatus;
+    ytd: PeriodWindowStatus;
+  };
 }

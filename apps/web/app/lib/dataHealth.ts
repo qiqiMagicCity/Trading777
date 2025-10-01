@@ -1,7 +1,11 @@
 import { explainWtdMtdYtdFromSnapshots } from "@/app/lib/metrics";
 import type { DailyResult } from "@/app/lib/types";
 import type { Position, Trade } from "@/lib/services/dataService";
-import type { MetricsContract } from "@/app/lib/types/metrics";
+import type {
+  MetricsContract,
+  PeriodBaselineMeta,
+  PeriodWindowStatus,
+} from "@/app/lib/types/metrics";
 import type { PeriodHealthIssue, PeriodHealthIssueKind } from "@/app/lib/types/health";
 
 interface CollectIssuesOptions {
@@ -36,6 +40,7 @@ function diagnoseSnapshots(
   issues: PeriodHealthIssue[],
   evalDay: string,
   dailyResults: DailyResult[],
+  baselineMeta?: PeriodBaselineMeta | null,
 ) {
   const rowsByDay = new Map<string, DailyResult>();
   for (const row of dailyResults ?? []) {
@@ -77,6 +82,59 @@ function diagnoseSnapshots(
       kind: "MISSING_SNAPSHOT",
       message: `评估日 ${evalDay} 的快照缺失或数值无效，周期统计无法保证正确性。`,
     });
+  }
+
+  const handleBaselineEntry = (
+    status: PeriodWindowStatus,
+    label: string,
+    baselineDate: string,
+    missingSnapshot?: boolean,
+    missingSymbols: string[] = [],
+  ) => {
+    const dayLabel = baselineDate && baselineDate.length > 0 ? baselineDate : "未知日期";
+    if (status === "ok" || status === "ok_zero") {
+      return;
+    }
+    if (status === "partial") {
+      const list = missingSymbols.length > 0 ? missingSymbols.join("、") : "标的待补充";
+      pushUnique(issues, {
+        kind: "MISSING_BASELINE",
+        message: `ΔU 缺基线价（${dayLabel}，${list}）`,
+      });
+      return;
+    }
+    if (status === "missing") {
+      const reasonLabel = missingSnapshot ? "缺少可用快照" : "缺少必要数据";
+      pushUnique(issues, {
+        kind: "MISSING_BASELINE",
+        message: `${label}（${dayLabel}）${reasonLabel}，相关周期指标可能退化。`,
+      });
+    }
+  };
+
+  if (baselineMeta) {
+    handleBaselineEntry(
+      baselineMeta.wtd?.status ?? "missing",
+      "周度基线",
+      baselineMeta.wtd?.baselineDate ?? "",
+      baselineMeta.wtd?.missingSnapshot,
+      baselineMeta.wtd?.missingSymbols ?? [],
+    );
+    handleBaselineEntry(
+      baselineMeta.mtd?.status ?? "missing",
+      "月度基线",
+      baselineMeta.mtd?.baselineDate ?? "",
+      baselineMeta.mtd?.missingSnapshot,
+      baselineMeta.mtd?.missingSymbols ?? [],
+    );
+    handleBaselineEntry(
+      baselineMeta.ytd?.status ?? "missing",
+      "年度基线",
+      baselineMeta.ytd?.baselineDate ?? "",
+      baselineMeta.ytd?.missingSnapshot,
+      baselineMeta.ytd?.missingSymbols ?? [],
+    );
+    return;
   }
 
   try {
@@ -230,7 +288,12 @@ export function collectPeriodHealthIssues({
       message: "无法确定评估日，周期指标已暂停计算。",
     });
   } else {
-    diagnoseSnapshots(issues, evalDay, dailyResults);
+    diagnoseSnapshots(
+      issues,
+      evalDay,
+      dailyResults,
+      metrics?._period?.baseline ?? null,
+    );
   }
 
   diagnoseRecords(issues, trades, positions);

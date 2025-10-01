@@ -13,6 +13,26 @@ export interface PeriodDegradedMap {
   ytd: boolean;
 }
 
+export type PeriodBaselineMode = "zero" | "priced" | "partial";
+export type PeriodWindowStatus = "ok" | "ok_zero" | "partial" | "missing";
+
+export interface PeriodBaselineEntry {
+  baselineDate: string;
+  baselineMode: PeriodBaselineMode;
+  status: PeriodWindowStatus;
+  realized: number;
+  unrealizedDelta: number | null;
+  missingSnapshot?: boolean;
+  missingSymbols?: string[];
+}
+
+export interface PeriodBaselineMeta {
+  firstActiveDate?: string;
+  wtd: PeriodBaselineEntry;
+  mtd: PeriodBaselineEntry;
+  ytd: PeriodBaselineEntry;
+}
+
 export interface MetricsContract {
   M1: number; M2: number; M3: number;
   M4: { total: number };
@@ -24,7 +44,7 @@ export interface MetricsContract {
     mtmIntradayOpen: number;
     warnings: string[];
   };
-  _period?: { degraded: PeriodDegradedMap };
+  _period?: { degraded: PeriodDegradedMap; baseline?: PeriodBaselineMeta };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
   aux?: {
     breakdown?: BreakdownRow[];

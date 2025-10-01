@@ -35,8 +35,10 @@ import type {
   MissingCloseSummary,
   PeriodDegradedState,
   PeriodHealthIssue,
+  PeriodHealthStatus,
+  PeriodWindowStatus,
 } from '@/app/lib/types/health';
-import type { MetricsContract } from '@/app/lib/types/metrics';
+import type { MetricsContract, PeriodBaselineMeta } from '@/app/lib/types/metrics';
 
 function resolvePrevClose(
   symbol: string,
@@ -215,11 +217,15 @@ export default function DashboardPage() {
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
   const degradedRef = useRef<PeriodDegradedState | undefined>(undefined);
+  const periodStatusRef = useRef<
+    | { wtd: PeriodWindowStatus; mtd: PeriodWindowStatus; ytd: PeriodWindowStatus }
+    | undefined
+  >(undefined);
   const setMetrics = useStore((state) => state.setMetrics);
   const setPeriodHealth = useStore((state) => state.setPeriodHealth);
 
   const syncPeriodHealth = useCallback(
-    (options?: { degraded?: PeriodDegradedState | null }) => {
+    (options?: { degraded?: PeriodDegradedState | null; baseline?: PeriodBaselineMeta | null }) => {
       if (options && Object.prototype.hasOwnProperty.call(options, 'degraded')) {
         const next = options.degraded;
         if (next && (next.wtd || next.mtd || next.ytd)) {
@@ -229,21 +235,40 @@ export default function DashboardPage() {
         }
       }
 
+      if (options && Object.prototype.hasOwnProperty.call(options, 'baseline')) {
+        const baseline = options.baseline;
+        if (baseline) {
+          periodStatusRef.current = {
+            wtd: baseline.wtd?.status ?? 'ok',
+            mtd: baseline.mtd?.status ?? 'ok',
+            ytd: baseline.ytd?.status ?? 'ok',
+          };
+        } else {
+          periodStatusRef.current = undefined;
+        }
+      }
+
       const summaries = summaryRef.current;
       const issues = issuesRef.current;
       const degraded = degradedRef.current;
+      const periodStatus = periodStatusRef.current;
       const hasMissingClose = summaries.length > 0;
       const hasIssues = issues.length > 0;
       const hasDegraded = Boolean(
         degraded && (degraded.wtd || degraded.mtd || degraded.ytd),
       );
+      const statusList = periodStatus
+        ? [periodStatus.wtd, periodStatus.mtd, periodStatus.ytd]
+        : [];
+      const hasMissingBaseline = statusList.some((s) => s === 'missing');
+      const hasPartial = statusList.some((s) => s === 'partial');
 
-      if (!hasMissingClose && !hasIssues && !hasDegraded) {
+      if (!hasMissingClose && !hasIssues && !hasDegraded && !hasMissingBaseline && !hasPartial) {
         setPeriodHealth(null);
         return;
       }
 
-      let status: 'ok' | 'missing' | 'ignored' | 'degraded' = 'ok';
+      let status: PeriodHealthStatus = 'ok';
       let origin: 'missing-close-banner' | 'metrics' = 'metrics';
 
       if (hasMissingClose) {
@@ -256,8 +281,12 @@ export default function DashboardPage() {
           : 'missing-close-banner';
       } else if (hasIssues) {
         status = 'missing';
-      } else {
+      } else if (hasMissingBaseline) {
+        status = 'missing';
+      } else if (hasDegraded) {
         status = 'degraded';
+      } else if (hasPartial) {
+        status = 'partial';
       }
 
       setPeriodHealth({
@@ -266,6 +295,7 @@ export default function DashboardPage() {
         degraded: hasDegraded ? degraded : undefined,
         origin,
         issues,
+        periodStatus: periodStatus ?? undefined,
       });
     },
     [missingDismissed, setPeriodHealth],
@@ -279,6 +309,7 @@ export default function DashboardPage() {
     summaryRef.current = [];
     issuesRef.current = [];
     degradedRef.current = undefined;
+    periodStatusRef.current = undefined;
     setMissingCloseSummaries([]);
     setMissingDismissed(false);
     setPeriodHealth(null);
@@ -435,7 +466,10 @@ export default function DashboardPage() {
           positions: posList,
           metrics: (metrics as MetricsContract | null),
         });
-        syncPeriodHealth({ degraded: rawMetrics?._period?.degraded ?? null });
+        syncPeriodHealth({
+          degraded: rawMetrics?._period?.degraded ?? null,
+          baseline: rawMetrics?._period?.baseline ?? null,
+        });
         setMetrics(metrics as any);
 
         setTrades(dbTrades);
@@ -585,7 +619,10 @@ export default function DashboardPage() {
       positions: posList,
       metrics: (metrics as MetricsContract | null),
     });
-    syncPeriodHealth({ degraded: rawMetrics?._period?.degraded ?? null });
+    syncPeriodHealth({
+      degraded: rawMetrics?._period?.degraded ?? null,
+      baseline: rawMetrics?._period?.baseline ?? null,
+    });
     setMetrics(metrics as any);
 
     setTrades(tradesSnapshot);
@@ -678,7 +715,10 @@ export default function DashboardPage() {
         positions: posList,
         metrics: (metrics as MetricsContract | null),
       });
-      syncPeriodHealth({ degraded: rawMetrics?._period?.degraded ?? null });
+      syncPeriodHealth({
+        degraded: rawMetrics?._period?.degraded ?? null,
+        baseline: rawMetrics?._period?.baseline ?? null,
+      });
       setMetrics(metrics as any);
 
       setTrades(dbTrades);

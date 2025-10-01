@@ -95,3 +95,16 @@
 ## 2025-10-16
 - 修复 Vercel 构建报错：在 `collectPeriodHealthIssues` 中将 `metrics` 强转为 `Record<string, unknown>` 触发 TS 类型不兼容，导致 `next build` 中断。
 - 改为预先列举 WTD/MTD/YTD 三个周期条目并读取 `metrics.M11/M12/M13`，既保持 `unknown` 判定，又避免不必要的强转，构建恢复通过。
+
+## 2025-10-17
+- 引入 `firstActiveDate` 标记首个有效交易/快照日，基线早于该日时直接以零基线求 WTD/MTD/YTD。
+- 重写 `calcWtdMtdYtd`/`calcWtdMtdYtdFromSnapshots`，按“累计实盈 + 端点浮盈差”口径求值，并在缺失预期基线时标记退化而不返回 NaN。
+- 调整 `needsSyntheticDailyResults` 不再强制窗口前一日具备浮盈字段，避免无历史场景下的快照重算。
+- 更新多组单测（去重、缺基线、时区守护等）并运行若干 `npm test` 用例覆盖新口径。
+
+## 2025-10-18
+- `calcWtdMtdYtdFromSnapshots` 返回基线元数据（基线日期、模式、窗口状态、实盈/ΔU），并将 `firstActiveDate` 与窗口状态透传至 `_period.baseline`。
+- `collectPeriodHealthIssues` 基于基线模式区分 zero/partial/missing，仅在 missing/partial 时生成告警文案，partial 期提示“ΔU 缺基线价（YYYY-MM-DD，…）”。
+- `DashboardMetrics` 新增 partial 渲染：周期卡片展示实盈数值与“ΔU 待补充”徽标；`ok_zero` 视为正常值，partial 状态不再触发黄色告警。
+- `DashboardPage.syncPeriodHealth` 汇总 `_period.baseline` 并维护 `periodStatus`，对 partial 显示灰色提示，其余老文案仅在 missing/degraded 场景触发。
+- 补充/更新周期相关单测，包括 partial 场景、首日零基线、纽约周起始校验及 `normalizeMetrics` 元数据断言。

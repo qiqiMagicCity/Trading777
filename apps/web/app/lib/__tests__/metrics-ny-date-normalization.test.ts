@@ -32,15 +32,15 @@ describe("NY day normalization", () => {
     ];
 
     const { wtd, mtd, ytd } = calcWtdMtdYtdFromSnapshots(daily, "2025-09-23");
-    expect({ wtd, mtd, ytd }).toEqual({ wtd: 120, mtd: 120, ytd: 120 });
+    expect({ wtd, mtd, ytd }).toEqual({ wtd: 170, mtd: 170, ytd: 170 });
 
     const metrics = calcMetricsInternal([] as any, [] as any, daily, {
       tradingDateStr: "2025-09-23",
     });
 
-    expect(metrics.M11).toBeCloseTo(120, 5);
-    expect(metrics.M12).toBeCloseTo(120, 5);
-    expect(metrics.M13).toBeCloseTo(120, 5);
+    expect(metrics.M11).toBeCloseTo(170, 5);
+    expect(metrics.M12).toBeCloseTo(170, 5);
+    expect(metrics.M13).toBeCloseTo(170, 5);
   });
 
   it("counts midnight ISO snapshots on the correct New York day", () => {
@@ -52,5 +52,16 @@ describe("NY day normalization", () => {
     const { wtd, mtd, ytd } = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
 
     expect({ wtd, mtd, ytd }).toEqual({ wtd: 150, mtd: 150, ytd: 150 });
+  });
+
+  it("uses the previous Friday as the week baseline for Monday eval day", () => {
+    const daily: DailyResult[] = [
+      d("2025-09-26T21:00:00Z", 5, 12),
+      d("2025-09-29T21:00:00Z", 3, 15),
+    ];
+
+    const snapshot = calcWtdMtdYtdFromSnapshots(daily, "2025-09-29");
+
+    expect(snapshot.baseline.wtd.baselineDate).toBe("2025-09-26");
   });
 });

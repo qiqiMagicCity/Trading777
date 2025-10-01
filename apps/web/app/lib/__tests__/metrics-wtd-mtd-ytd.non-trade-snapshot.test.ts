@@ -24,6 +24,6 @@ describe("M11/M12/M13 snapshots with Δ-unrealized (updated baseline)", () => {
       d("2025-09-23T21:00:00Z", -30, 20),
     ];
     const r = calcWtdMtdYtdFromSnapshots(daily, "2025-09-23");
-    expect(Number(r.wtd.toFixed(2))).toBe(40.0); // +100 + (-60) = 40
+    expect(Number(r.wtd.toFixed(2))).toBe(90.0); // 累计实盈70 + 期末浮盈20
   });
 });

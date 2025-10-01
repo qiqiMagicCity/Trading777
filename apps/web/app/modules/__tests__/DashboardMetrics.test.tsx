@@ -63,7 +63,7 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("数据缺失");
   });
 
-  it("shows 待补充 when missing data is ignored", () => {
+  it("shows 已忽略 when missing data is ignored", () => {
     act(() => {
       useStore.setState({
         metrics: baseMetrics as any,
@@ -86,9 +86,9 @@ describe("DashboardMetrics period cards", () => {
 
     render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
 
-    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
-    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
-    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("已忽略");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("已忽略");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("已忽略");
   });
 
   it("renders issues reported by period health", () => {
@@ -171,6 +171,62 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-wtd")).not.toHaveTextContent("26030.56");
     expect(screen.getByTestId("metric-mtd").textContent || "").toMatch(/222\.22/);
     expect(screen.getByTestId("metric-ytd").textContent || "").toMatch(/333\.33/);
+  });
+
+  it("renders 实盈与 ΔU 待补充徽标当周期状态为 partial", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          M11: 8,
+          M12: 0,
+          M13: 0,
+          _period: {
+            baseline: {
+              firstActiveDate: "2025-09-22",
+              wtd: {
+                baselineDate: "2025-09-26",
+                baselineMode: "partial",
+                status: "partial",
+                realized: 8,
+                unrealizedDelta: null,
+                missingSnapshot: false,
+                missingSymbols: ["TSLA"],
+              },
+              mtd: {
+                baselineDate: "2025-09-01",
+                baselineMode: "zero",
+                status: "ok_zero",
+                realized: 8,
+                unrealizedDelta: 0,
+                missingSnapshot: false,
+                missingSymbols: [],
+              },
+              ytd: {
+                baselineDate: "2025-01-02",
+                baselineMode: "zero",
+                status: "ok_zero",
+                realized: 8,
+                unrealizedDelta: 0,
+                missingSnapshot: false,
+                missingSymbols: [],
+              },
+            },
+          },
+        } as any,
+        periodHealth: {
+          status: "partial",
+          summaries: [],
+          periodStatus: { wtd: "partial", mtd: "ok_zero", ytd: "ok_zero" },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("$8.00");
+    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("ΔU 待补充");
+    expect(screen.getByTestId("metric-mtd")).toHaveTextContent("$0.00");
+    expect(screen.getByTestId("metric-ytd")).toHaveTextContent("$0.00");
   });
 
   it("shows self-check warning when WTD/MTD/YTD are the same", () => {
