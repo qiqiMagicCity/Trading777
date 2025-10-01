@@ -86,3 +86,12 @@
 - `trades` API 持久化路径改为以 `process.cwd()` + `public/trades.json` 为基准，并在根目录执行时回退到 `apps/web/public`，保证不同工作目录下一致写入。
 - 更新 `trades.route` 单测的路径断言以匹配新的计算逻辑，保持路径检测与生产代码一致。
 - 本地运行 `npm test -w web` 并实际调用 `/api/trades`，确认写入行为与单测均按预期通过。
+
+## 2025-10-15
+- 新增 `collectPeriodHealthIssues`，统一诊断缺失快照、非法成交/持仓字段、昨收缺口与 MTM 排除标的，并在周期健康状态中记录详细问题。
+- `DashboardPage` 整合数据诊断结果：缺项时即使未缺收盘价也会触发告警，忽略缺价后若仍有其它缺项将继续提示，后台刷新亦同步更新状态。
+- `DashboardMetrics` 支持展示诊断信息摘要，并扩充单测覆盖缺项提示渲染，确保用户能看到所有关键缺口警示。
+
+## 2025-10-16
+- 修复 Vercel 构建报错：在 `collectPeriodHealthIssues` 中将 `metrics` 强转为 `Record<string, unknown>` 触发 TS 类型不兼容，导致 `next build` 中断。
+- 改为预先列举 WTD/MTD/YTD 三个周期条目并读取 `metrics.M11/M12/M13`，既保持 `unknown` 判定，又避免不必要的强转，构建恢复通过。

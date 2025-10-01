@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   findTrades,
   getAllPrices,
@@ -17,6 +17,7 @@ import { SymbolTags } from '@/modules/SymbolTags';
 import AddTradeModal from '@/components/AddTradeModal';
 import Link from 'next/link';
 import { calcMetrics, normalizeMetrics } from '@/app/lib/metrics';
+import { collectPeriodHealthIssues } from '@/app/lib/dataHealth';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { logger } from '@/lib/logger';
@@ -30,7 +31,12 @@ import {
   type MissingCloseFallback,
 } from '@/lib/dailyResults';
 import { summarizeMissingCloses } from '@/app/lib/missingClose';
-import type { MissingCloseSummary } from '@/app/lib/types/health';
+import type {
+  MissingCloseSummary,
+  PeriodDegradedState,
+  PeriodHealthIssue,
+} from '@/app/lib/types/health';
+import type { MetricsContract } from '@/app/lib/types/metrics';
 
 function resolvePrevClose(
   symbol: string,
@@ -207,8 +213,76 @@ export default function DashboardPage() {
   const [missingCloseSummaries, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
   const [missingDismissed, setMissingDismissed] = useState(false);
   const summaryRef = useRef<MissingCloseSummary[]>([]);
+  const issuesRef = useRef<PeriodHealthIssue[]>([]);
+  const degradedRef = useRef<PeriodDegradedState | undefined>(undefined);
   const setMetrics = useStore((state) => state.setMetrics);
   const setPeriodHealth = useStore((state) => state.setPeriodHealth);
+
+  const syncPeriodHealth = useCallback(
+    (options?: { degraded?: PeriodDegradedState | null }) => {
+      if (options && Object.prototype.hasOwnProperty.call(options, 'degraded')) {
+        const next = options.degraded;
+        if (next && (next.wtd || next.mtd || next.ytd)) {
+          degradedRef.current = { ...next };
+        } else {
+          degradedRef.current = undefined;
+        }
+      }
+
+      const summaries = summaryRef.current;
+      const issues = issuesRef.current;
+      const degraded = degradedRef.current;
+      const hasMissingClose = summaries.length > 0;
+      const hasIssues = issues.length > 0;
+      const hasDegraded = Boolean(
+        degraded && (degraded.wtd || degraded.mtd || degraded.ytd),
+      );
+
+      if (!hasMissingClose && !hasIssues && !hasDegraded) {
+        setPeriodHealth(null);
+        return;
+      }
+
+      let status: 'ok' | 'missing' | 'ignored' | 'degraded' = 'ok';
+      let origin: 'missing-close-banner' | 'metrics' = 'metrics';
+
+      if (hasMissingClose) {
+        const allowIgnore = missingDismissed && !hasIssues;
+        status = allowIgnore ? 'ignored' : 'missing';
+        origin = allowIgnore
+          ? 'metrics'
+          : missingDismissed
+          ? 'metrics'
+          : 'missing-close-banner';
+      } else if (hasIssues) {
+        status = 'missing';
+      } else {
+        status = 'degraded';
+      }
+
+      setPeriodHealth({
+        status,
+        summaries,
+        degraded: hasDegraded ? degraded : undefined,
+        origin,
+        issues,
+      });
+    },
+    [missingDismissed, setPeriodHealth],
+  );
+
+  useEffect(() => {
+    syncPeriodHealth();
+  }, [missingDismissed, syncPeriodHealth]);
+
+  const clearPeriodHealthState = useCallback(() => {
+    summaryRef.current = [];
+    issuesRef.current = [];
+    degradedRef.current = undefined;
+    setMissingCloseSummaries([]);
+    setMissingDismissed(false);
+    setPeriodHealth(null);
+  }, [setMissingCloseSummaries, setMissingDismissed, setPeriodHealth]);
 
   const updateMissingCloseState = (summaries: MissingCloseSummary[]) => {
     const prev = summaryRef.current;
@@ -218,34 +292,23 @@ export default function DashboardPage() {
       if (prev.length > 0) {
         setMissingDismissed(false);
       }
-      setPeriodHealth(null);
+      syncPeriodHealth();
       return;
     }
 
-    let dismissed = missingDismissed;
-    if (dismissed && !areSummariesEqual(prev, summaries)) {
-      dismissed = false;
+    if (missingDismissed && !areSummariesEqual(prev, summaries)) {
       setMissingDismissed(false);
     }
 
-    summaryRef.current = summaries;
+    summaryRef.current = summaries.slice();
     setMissingCloseSummaries(summaries);
-    const origin = dismissed ? 'metrics' : 'missing-close-banner';
-    setPeriodHealth({
-      status: dismissed ? 'ignored' : 'missing',
-      summaries,
-      origin,
-    });
+    syncPeriodHealth();
   };
 
   const handleIgnoreMissing = () => {
     if (summaryRef.current.length === 0) return;
     setMissingDismissed(true);
-    setPeriodHealth({
-      status: 'ignored',
-      summaries: summaryRef.current,
-      origin: 'metrics',
-    });
+    syncPeriodHealth();
   };
 
   useEffect(() => {
@@ -316,7 +379,7 @@ export default function DashboardPage() {
           } else {
             setError('无法获取实时价格，指标计算失败');
           }
-          setPeriodHealth(null);
+          clearPeriodHealthState();
           setIsLoading(false);
           return;
         }
@@ -364,16 +427,15 @@ export default function DashboardPage() {
         const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
           tradingDateStr: evalDateStr,
         });
-        const degraded = rawMetrics?._period?.degraded;
-        if (degraded && (degraded.wtd || degraded.mtd || degraded.ytd)) {
-          setPeriodHealth({
-            status: 'degraded',
-            summaries: summaryRef.current,
-            degraded,
-            origin: 'metrics',
-          });
-        }
         const metrics = normalizeMetrics(rawMetrics);
+        issuesRef.current = collectPeriodHealthIssues({
+          evalDate: evalDateStr,
+          dailyResults,
+          trades: dbTrades,
+          positions: posList,
+          metrics: (metrics as MetricsContract | null),
+        });
+        syncPeriodHealth({ degraded: rawMetrics?._period?.degraded ?? null });
         setMetrics(metrics as any);
 
         setTrades(dbTrades);
@@ -381,7 +443,7 @@ export default function DashboardPage() {
         setEnrichedTrades(enriched);
       } catch (e) {
         console.error(e);
-        setPeriodHealth(null);
+        clearPeriodHealthState();
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       } finally {
         setIsLoading(false);
@@ -458,7 +520,7 @@ export default function DashboardPage() {
     }
 
     if (posList.some(p => !(p as any).priceOk)) {
-      setPeriodHealth(null);
+      clearPeriodHealthState();
       throw new Error(
         freezeDate
           ? `缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`
@@ -515,16 +577,15 @@ export default function DashboardPage() {
     const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
       tradingDateStr: evalDateStr,
     });
-    const degraded = rawMetrics?._period?.degraded;
-    if (degraded && (degraded.wtd || degraded.mtd || degraded.ytd)) {
-      setPeriodHealth({
-        status: 'degraded',
-        summaries: summaryRef.current,
-        degraded,
-        origin: 'metrics',
-      });
-    }
     const metrics = normalizeMetrics(rawMetrics);
+    issuesRef.current = collectPeriodHealthIssues({
+      evalDate: evalDateStr,
+      dailyResults,
+      trades: tradesSnapshot,
+      positions: posList,
+      metrics: (metrics as MetricsContract | null),
+    });
+    syncPeriodHealth({ degraded: rawMetrics?._period?.degraded ?? null });
     setMetrics(metrics as any);
 
     setTrades(tradesSnapshot);
@@ -609,16 +670,15 @@ export default function DashboardPage() {
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
         tradingDateStr: evalDateStr,
       });
-      const degraded = rawMetrics?._period?.degraded;
-      if (degraded && (degraded.wtd || degraded.mtd || degraded.ytd)) {
-        setPeriodHealth({
-          status: 'degraded',
-          summaries: summaryRef.current,
-          degraded,
-          origin: 'metrics',
-        });
-      }
       const metrics = normalizeMetrics(rawMetrics);
+      issuesRef.current = collectPeriodHealthIssues({
+        evalDate: evalDateStr,
+        dailyResults,
+        trades: dbTrades,
+        positions: posList,
+        metrics: (metrics as MetricsContract | null),
+      });
+      syncPeriodHealth({ degraded: rawMetrics?._period?.degraded ?? null });
       setMetrics(metrics as any);
 
       setTrades(dbTrades);
