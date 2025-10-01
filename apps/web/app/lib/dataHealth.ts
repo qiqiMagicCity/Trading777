@@ -36,6 +36,7 @@ function diagnoseSnapshots(
   issues: PeriodHealthIssue[],
   evalDay: string,
   dailyResults: DailyResult[],
+  positions: Position[],
 ) {
   const rowsByDay = new Map<string, DailyResult>();
   for (const row of dailyResults ?? []) {
@@ -43,9 +44,25 @@ function diagnoseSnapshots(
     const day = toDay(row.date);
     if (!day) continue;
     rowsByDay.set(day, row);
+    const missingBaselineSymbols = Array.isArray(
+      (row as unknown as { missingBaselineSymbols?: unknown[] })
+        ?.missingBaselineSymbols,
+    )
+      ? (
+          (row as unknown as { missingBaselineSymbols?: unknown[] })
+            ?.missingBaselineSymbols || []
+        )
+          .map((sym) =>
+            typeof sym === "string" ? sym.trim().toUpperCase() : null,
+          )
+          .filter((sym): sym is string => Boolean(sym))
+      : [];
+
+    const allowUnrealizedMissing = missingBaselineSymbols.length > 0;
+
     if (
       !isFiniteNumber(row.realized) ||
-      !isFiniteNumber(row.unrealized) ||
+      (!allowUnrealizedMissing && !isFiniteNumber(row.unrealized)) ||
       (row.unrealizedDelta !== undefined &&
         !isFiniteNumber(row.unrealizedDelta))
     ) {
@@ -81,33 +98,50 @@ function diagnoseSnapshots(
 
   try {
     const explain = explainWtdMtdYtdFromSnapshots(dailyResults, evalDay);
-    const rangeEntries: Array<{
-      kind: PeriodHealthIssueKind;
-      day: string;
+    const firstActive = explain.firstActiveDate;
+
+    const fallbackSymbols = Array.from(
+      new Set(
+        positions
+          .map((pos) => (pos?.symbol ?? "").trim().toUpperCase())
+          .filter((sym): sym is string => Boolean(sym)),
+      ),
+    );
+
+    const baselineEntries: Array<{
+      key: "week" | "month" | "year";
       label: string;
     }> = [
-      {
-        kind: "MISSING_BASELINE",
-        day: explain.ranges.week.start,
-        label: "周度基线",
-      },
-      {
-        kind: "MISSING_BASELINE",
-        day: explain.ranges.month.start,
-        label: "月度基线",
-      },
-      {
-        kind: "MISSING_BASELINE",
-        day: explain.ranges.year.start,
-        label: "年度基线",
-      },
+      { key: "week", label: "周度基线" },
+      { key: "month", label: "月度基线" },
+      { key: "year", label: "年度基线" },
     ];
-    for (const entry of rangeEntries) {
-      if (!entry.day) continue;
-      if (!hasCompleteRow(entry.day)) {
+
+    for (const entry of baselineEntries) {
+      const baseline = explain.baseline?.[entry.key];
+      if (!baseline) continue;
+      const baselineDate = baseline.baselineDate;
+      if (!baselineDate) continue;
+      if (firstActive && baselineDate < firstActive) continue;
+
+      if (baseline.baselineMode === "missing") {
+        if (!hasCompleteRow(baselineDate)) {
+          pushUnique(issues, {
+            kind: "MISSING_BASELINE",
+            message: `${entry.label}（${baselineDate}）缺少可用快照，相关周期指标可能退化。`,
+          });
+        }
+        continue;
+      }
+
+      if (baseline.baselineMode === "partial") {
+        const symbols = baseline.missingBaselineSymbols?.length
+          ? baseline.missingBaselineSymbols
+          : fallbackSymbols;
+        const suffix = symbols.length > 0 ? `, ${symbols.join("、")}` : "";
         pushUnique(issues, {
-          kind: entry.kind,
-          message: `${entry.label}（${entry.day}）缺少可用快照，相关周期指标可能退化。`,
+          kind: "BASELINE_DELTA_MISSING",
+          message: `ΔU 缺基线价（${baselineDate}${suffix}）`,
         });
       }
     }
@@ -230,7 +264,7 @@ export function collectPeriodHealthIssues({
       message: "无法确定评估日，周期指标已暂停计算。",
     });
   } else {
-    diagnoseSnapshots(issues, evalDay, dailyResults);
+    diagnoseSnapshots(issues, evalDay, dailyResults, positions);
   }
 
   diagnoseRecords(issues, trades, positions);

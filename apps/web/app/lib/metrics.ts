@@ -62,6 +62,10 @@ import type {
   MetricsContract,
   PeriodDegradedMap,
   SummaryMetrics,
+  PeriodWindowBreakdown,
+  PeriodWindowKey,
+  PeriodWindowStatus,
+  PeriodBaselineMode,
 } from "./types/metrics";
 
 const EPSILON = 1e-6;
@@ -181,6 +185,9 @@ export interface Metrics {
   };
   _period?: {
     degraded: PeriodDegradedMap;
+    status?: Record<"wtd" | "mtd" | "ytd", PeriodWindowStatus>;
+    breakdown?: Record<"wtd" | "mtd" | "ytd", PeriodWindowBreakdown>;
+    firstActiveDate?: string;
   };
   M7: {
     B: number;
@@ -839,7 +846,18 @@ type NormalizedDailyForWindow = {
   unrealized?: number;
   unrealizedDelta?: number;
   resolvedUnrealized?: number;
+  missingBaselineSymbols?: string[];
 };
+
+export interface WindowTotalsResult {
+  wtd: number;
+  mtd: number;
+  ytd: number;
+  degraded: PeriodDegradedMap;
+  firstActiveDate: string;
+  breakdown: Record<PeriodWindowKey, PeriodWindowBreakdown>;
+  status: Record<PeriodWindowKey, PeriodWindowStatus>;
+}
 
 function normalizeDailyRowsForWindow(
   daily: DailyResult[] = [],
@@ -862,6 +880,18 @@ function normalizeDailyRowsForWindow(
       day,
       realized: Number.isFinite(realized) ? realized : 0,
     };
+
+    const missingSymbolsSource = (entry as any)?.missingBaselineSymbols;
+    if (Array.isArray(missingSymbolsSource)) {
+      const normalizedSymbols = missingSymbolsSource
+        .map((symbol: unknown) =>
+          typeof symbol === "string" ? symbol.trim().toUpperCase() : null,
+        )
+        .filter((symbol): symbol is string => Boolean(symbol));
+      if (normalizedSymbols.length > 0) {
+        row.missingBaselineSymbols = normalizedSymbols;
+      }
+    }
 
     if (typeof entry.unrealized === "number" && Number.isFinite(entry.unrealized)) {
       row.unrealized = entry.unrealized;
@@ -988,7 +1018,7 @@ function deriveWindowTotals(
   rowsInput: NormalizedDailyForWindow[],
   evalDay: string,
   options: WindowTotalsOptions,
-): { wtd: number; mtd: number; ytd: number; degraded: PeriodDegradedMap } {
+): WindowTotalsResult {
   const rows = resolveUnrealizedForWindow(rowsInput);
   const endRow = findRowOnOrBefore(rows, evalDay);
   const firstActiveCandidate = (() => {
@@ -1005,28 +1035,86 @@ function deriveWindowTotals(
 
     let baseline = 0;
     let degraded = false;
+    let baselineMode: PeriodBaselineMode = "zero";
+    let baselineDate: string | undefined;
+    let missingBaselineSymbols: string[] | undefined;
 
     if (baselineRow && baselineRow.day >= firstActive) {
+      baselineDate = baselineRow.day;
+      if (Array.isArray(baselineRow.missingBaselineSymbols)) {
+        missingBaselineSymbols = baselineRow.missingBaselineSymbols;
+      }
       const resolved = baselineRow.resolvedUnrealized;
       if (typeof resolved === "number" && Number.isFinite(resolved)) {
         baseline = resolved;
+        baselineMode = "priced";
       } else {
-        degraded = true;
+        baselineMode = "partial";
       }
     } else if (expectedBaseline >= firstActive) {
-      degraded = true;
+      baselineDate = baselineRow?.day ?? expectedBaseline;
+      baselineMode = "missing";
+    } else {
+      baselineDate = expectedBaseline;
     }
 
     let endValue = 0;
     const resolvedEnd = endRow?.resolvedUnrealized;
+    let missingEndValue = false;
     if (typeof resolvedEnd === "number" && Number.isFinite(resolvedEnd)) {
       endValue = resolvedEnd;
     } else {
+      missingEndValue = true;
+    }
+
+    let unrealizedDelta: number | undefined;
+    if (!missingEndValue) {
+      if (baselineMode === "priced" || baselineMode === "zero") {
+        unrealizedDelta = endValue - baseline;
+      } else if (baselineMode === "missing") {
+        unrealizedDelta = endValue - baseline;
+      }
+    }
+
+    if (baselineMode === "missing") {
+      degraded = true;
+    }
+    if (missingEndValue) {
       degraded = true;
     }
 
-    const total = realized + (endValue - baseline);
-    return { total, degraded };
+    let total = realized;
+    if (typeof unrealizedDelta === "number") {
+      total += unrealizedDelta;
+    }
+
+    let status: PeriodWindowStatus = "ok";
+    if (baselineMode === "zero") {
+      status = "ok_zero";
+    } else if (baselineMode === "partial") {
+      status = "partial";
+    }
+
+    if (baselineMode === "missing") {
+      status = "missing";
+    }
+    if (missingEndValue) {
+      status = "degraded";
+    }
+
+    const breakdown: PeriodWindowBreakdown = {
+      realized,
+      ...(typeof unrealizedDelta === "number"
+        ? { unrealizedDelta }
+        : {}),
+      ...(baselineDate ? { baselineDate } : {}),
+      baselineMode,
+      ...(missingBaselineSymbols?.length
+        ? { missingBaselineSymbols }
+        : {}),
+    };
+
+    return { total, degraded, status, breakdown };
   };
 
   const weekStart = weekStartForEvalDay(evalDay);
@@ -1045,6 +1133,17 @@ function deriveWindowTotals(
       wtd: week.degraded,
       mtd: month.degraded,
       ytd: year.degraded,
+    },
+    firstActiveDate: firstActive,
+    breakdown: {
+      wtd: week.breakdown,
+      mtd: month.breakdown,
+      ytd: year.breakdown,
+    },
+    status: {
+      wtd: week.status,
+      mtd: month.status,
+      ytd: year.status,
     },
   };
 }
@@ -1069,12 +1168,7 @@ export function calcWtdMtdYtdFromSnapshots(
   daily: DailyResult[] = [],
   evalDayStr: string,
   options: WindowTotalsOptions = {},
-): {
-  wtd: number;
-  mtd: number;
-  ytd: number;
-  degraded: PeriodDegradedMap;
-} {
+): WindowTotalsResult {
   const evalDay = nyDayStr(evalDayStr);
   const rows = normalizeDailyRowsForWindow(daily, evalDay);
   const totals = deriveWindowTotals(rows, evalDay, options);
@@ -1139,6 +1233,22 @@ export function explainWtdMtdYtdFromSnapshots(
       weekStart,
       monthStart,
       ytdEnd: evalDay,
+    },
+    firstActiveDate: totals.firstActiveDate,
+    baselineMode: {
+      week: totals.breakdown.wtd.baselineMode,
+      month: totals.breakdown.mtd.baselineMode,
+      year: totals.breakdown.ytd.baselineMode,
+    },
+    baseline: {
+      week: totals.breakdown.wtd,
+      month: totals.breakdown.mtd,
+      year: totals.breakdown.ytd,
+    },
+    status: {
+      week: totals.status.wtd,
+      month: totals.status.mtd,
+      year: totals.status.ytd,
     },
   };
 }
@@ -1737,7 +1847,15 @@ export function calcMetricsInternal(
     periodEvalStr,
     { firstActiveDate },
   );
-  const { wtd, mtd, ytd, degraded } = periodSnapshot;
+  const {
+    wtd,
+    mtd,
+    ytd,
+    degraded,
+    breakdown: periodBreakdown,
+    status: periodStatus,
+    firstActiveDate: resolvedFirstActiveDate,
+  } = periodSnapshot;
   if (DEBUG) {
     try {
       checkPeriodDebug(historicalDailyResults ?? dailyResults, periodEvalStr);
@@ -1789,8 +1907,22 @@ export function calcMetricsInternal(
     },
   };
 
-  if (degraded?.wtd || degraded?.mtd || degraded?.ytd) {
-    metrics._period = { degraded };
+  const hasDegradedFlag = Boolean(
+    degraded?.wtd || degraded?.mtd || degraded?.ytd,
+  );
+  const hasNonOkStatus = Object.values(periodStatus ?? {}).some(
+    (state) => state && state !== "ok" && state !== "ok_zero",
+  );
+
+  if (hasDegradedFlag || hasNonOkStatus) {
+    metrics._period = {
+      degraded,
+      ...(periodStatus ? { status: periodStatus } : {}),
+      ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
+      ...(resolvedFirstActiveDate
+        ? { firstActiveDate: resolvedFirstActiveDate }
+        : {}),
+    };
   }
 
   assertM6(metrics);
@@ -1986,6 +2118,22 @@ export function normalizeMetrics(input: any): MetricsContract {
           ...(input._period?.degraded &&
           typeof input._period.degraded === "object"
             ? { degraded: { ...input._period.degraded } }
+            : {}),
+          ...(input._period?.status && typeof input._period.status === "object"
+            ? { status: { ...input._period.status } }
+            : {}),
+          ...(input._period?.breakdown &&
+          typeof input._period.breakdown === "object"
+            ? {
+                breakdown: Object.fromEntries(
+                  Object.entries(
+                    input._period.breakdown as Record<string, any>,
+                  ).map(([key, value]) => [
+                    key,
+                    value && typeof value === "object" ? { ...value } : value,
+                  ]),
+                ),
+              }
             : {}),
         }
       : undefined;

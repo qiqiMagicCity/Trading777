@@ -65,15 +65,45 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
   const periodStatus = periodHealth?.status ?? "ok";
 
-  type PeriodCardState = "ok" | "missing" | "ignored" | "degraded";
+  const periodMeta = rawMetrics?._period;
+  const periodStatusMap = periodMeta?.status;
+  const periodBreakdown = periodMeta?.breakdown;
+
+  type PeriodCardState =
+    | "ok"
+    | "missing"
+    | "ignored"
+    | "degraded"
+    | "partial";
 
   const periodCardStates = useMemo(() => {
-    const degraded = periodHealth?.degraded;
+    const degraded = periodHealth?.degraded ?? periodMeta?.degraded;
     const map: Record<"M11" | "M12" | "M13", PeriodCardState> = {
       M11: "ok",
       M12: "ok",
       M13: "ok",
     };
+
+    const applyMetaState = (
+      key: "M11" | "M12" | "M13",
+      stateKey: "wtd" | "mtd" | "ytd",
+    ) => {
+      const state = periodStatusMap?.[stateKey];
+      if (!state) return;
+      if (state === "missing") {
+        map[key] = "missing";
+      } else if (state === "degraded") {
+        map[key] = "degraded";
+      } else if (state === "partial") {
+        map[key] = "partial";
+      } else {
+        map[key] = "ok";
+      }
+    };
+
+    applyMetaState("M11", "wtd");
+    applyMetaState("M12", "mtd");
+    applyMetaState("M13", "ytd");
 
     if (periodStatus === "missing") {
       map.M11 = "missing";
@@ -99,14 +129,18 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         map.M12 = "degraded";
         map.M13 = "degraded";
       } else {
-        map.M11 = degraded.wtd ? "degraded" : "ok";
-        map.M12 = degraded.mtd ? "degraded" : "ok";
-        map.M13 = degraded.ytd ? "degraded" : "ok";
+        map.M11 = degraded.wtd ? "degraded" : map.M11;
+        map.M12 = degraded.mtd ? "degraded" : map.M12;
+        map.M13 = degraded.ytd ? "degraded" : map.M13;
       }
+    } else if (degraded) {
+      if (degraded.wtd && map.M11 === "ok") map.M11 = "degraded";
+      if (degraded.mtd && map.M12 === "ok") map.M12 = "degraded";
+      if (degraded.ytd && map.M13 === "ok") map.M13 = "degraded";
     }
 
     return map;
-  }, [periodHealth, periodStatus]);
+  }, [periodHealth, periodMeta, periodStatus, periodStatusMap]);
 
   const periodValues = useMemo(() => {
     const safeNum = (n: unknown) =>
@@ -118,6 +152,12 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       M13: { value: safeNum(metrics?.M13), picked: "metrics.M13" },
     } as const;
   }, [metrics]);
+
+  const windowKeyMap: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
+    M11: "wtd",
+    M12: "mtd",
+    M13: "ytd",
+  };
 
   // 卡片渲染时统一读取 periodValues.*.value，缺失时占位 0
 
@@ -337,17 +377,40 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
-          if (numValue === undefined) {
+          const breakdown = periodBreakdown?.[windowKeyMap[key]];
+
+          if (state === "partial") {
+            const realizedValue =
+              typeof breakdown?.realized === "number"
+                ? breakdown.realized
+                : numValue;
+            if (realizedValue === undefined) {
+              formattedValue = (
+                <span className="text-muted-foreground font-medium">待补充</span>
+              );
+            } else {
+              formattedValue = (
+                <span className="inline-flex items-center gap-2">
+                  <span>{formatCurrency(realizedValue)}</span>
+                  <span className="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    ΔU 待补充
+                  </span>
+                </span>
+              );
+              numericForColor = realizedValue;
+            }
+          } else if (state === "missing") {
+            formattedValue = (
+              <span className="text-amber-600 font-semibold">数据缺失</span>
+            );
+          } else if (numValue === undefined) {
             formattedValue = (
               <span className="text-muted-foreground font-medium">待补充</span>
             );
           } else if (state !== "ok") {
-            formattedValue =
-              state === "missing" ? (
-                <span className="text-amber-600 font-semibold">数据缺失</span>
-              ) : (
-                <span className="text-muted-foreground font-medium">待补充</span>
-              );
+            formattedValue = (
+              <span className="text-muted-foreground font-medium">待补充</span>
+            );
           } else {
             formattedValue = formatCurrency(numValue);
             numericForColor = numValue;
@@ -426,6 +489,14 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     [periodCardStates],
   );
 
+  const issues = periodHealth?.issues ?? [];
+  const partialIssues = issues.filter(
+    (issue) => issue.kind === "BASELINE_DELTA_MISSING",
+  );
+  const blockingIssues = issues.filter(
+    (issue) => issue.kind !== "BASELINE_DELTA_MISSING",
+  );
+
   const hasMissingOrIgnored =
     periodStatus === "missing" || periodStatus === "ignored";
   const shouldShowMissingSummary =
@@ -433,7 +504,8 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const shouldShowPeriodSummary =
     shouldShowMissingSummary ||
     degradedKeys.length > 0 ||
-    (periodHealth?.issues?.length ?? 0) > 0;
+    issues.length > 0 ||
+    periodStatus === "partial";
 
   const summaryMessages = useMemo(() => {
     const messages: string[] = [];
@@ -466,7 +538,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   if (periodStatus === "ignored") {
     summaryIntroParts.push("存在缺失数据已被忽略");
   }
-  if ((periodHealth?.issues?.length ?? 0) > 0) {
+  if (
+    blockingIssues.length > 0 &&
+    (periodStatus === "missing" || periodStatus === "degraded")
+  ) {
     summaryIntroParts.push("检测到其它关键数据缺失");
   }
   const periodLabelMap: Record<"M11" | "M12" | "M13", string> = {
@@ -478,6 +553,17 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     summaryIntroParts.push(
       `指标退化：${degradedKeys.map((key) => periodLabelMap[key]).join("、")}`,
     );
+  }
+  const partialWindows = (Object.entries(periodStatusMap ?? {})
+    .filter(([, state]) => state === "partial")
+    .map(([window]) => window) as Array<"wtd" | "mtd" | "ytd">).map(
+    (windowKey) =>
+      windowKey === "wtd" ? "WTD" : windowKey === "mtd" ? "MTD" : "YTD",
+  );
+  if (partialWindows.length > 0) {
+    summaryIntroParts.push(`ΔU 待补充：${partialWindows.join("、")}`);
+  } else if (periodStatus === "partial" || partialIssues.length > 0) {
+    summaryIntroParts.push("ΔU 待补充");
   }
 
   return (
@@ -506,7 +592,11 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         )}
         {shouldShowPeriodSummary && (
           <div
-            className="w-full max-w-3xl rounded-md border border-amber-200 bg-amber-100/70 p-3 text-sm text-amber-900"
+            className={
+              periodStatus === "partial"
+                ? "w-full max-w-3xl rounded-md border border-slate-200 bg-slate-100 p-3 text-sm text-slate-700"
+                : "w-full max-w-3xl rounded-md border border-amber-200 bg-amber-100/70 p-3 text-sm text-amber-900"
+            }
             data-testid="period-health-summary"
           >
             <div className="font-medium">
