@@ -431,23 +431,33 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const shouldShowMissingSummary =
     hasMissingOrIgnored && periodHealth?.origin !== "missing-close-banner";
   const shouldShowPeriodSummary =
-    shouldShowMissingSummary || degradedKeys.length > 0;
+    shouldShowMissingSummary ||
+    degradedKeys.length > 0 ||
+    (periodHealth?.issues?.length ?? 0) > 0;
 
   const summaryMessages = useMemo(() => {
-    if (!periodHealth?.summaries?.length) return [] as string[];
-    return periodHealth.summaries.map((summary) => {
-      const details = summary.symbols
-        .map((detail) => {
-          const labels = detail.fallbacks
-            .map((fb) => FALLBACK_LABELS[fb] ?? fb)
-            .filter(Boolean);
-          const suffix = labels.length > 0 ? `（${labels.join("、")}）` : "";
-          return `${detail.symbol}${suffix}`;
-        })
-        .join("、");
-      return `${summary.date}：${details}`;
-    });
-  }, [periodHealth?.summaries]);
+    const messages: string[] = [];
+    if (periodHealth?.summaries?.length) {
+      for (const summary of periodHealth.summaries) {
+        const details = summary.symbols
+          .map((detail) => {
+            const labels = detail.fallbacks
+              .map((fb) => FALLBACK_LABELS[fb] ?? fb)
+              .filter(Boolean);
+            const suffix = labels.length > 0 ? `（${labels.join("、")}）` : "";
+            return `${detail.symbol}${suffix}`;
+          })
+          .join("、");
+        messages.push(`${summary.date}：${details}`);
+      }
+    }
+    if (periodHealth?.issues?.length) {
+      for (const issue of periodHealth.issues) {
+        if (issue?.message) messages.push(issue.message);
+      }
+    }
+    return messages;
+  }, [periodHealth?.issues, periodHealth?.summaries]);
 
   const summaryIntroParts: string[] = [];
   if (periodStatus === "missing") {
@@ -455,6 +465,9 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   }
   if (periodStatus === "ignored") {
     summaryIntroParts.push("存在缺失数据已被忽略");
+  }
+  if ((periodHealth?.issues?.length ?? 0) > 0) {
+    summaryIntroParts.push("检测到其它关键数据缺失");
   }
   const periodLabelMap: Record<"M11" | "M12" | "M13", string> = {
     M11: "WTD",

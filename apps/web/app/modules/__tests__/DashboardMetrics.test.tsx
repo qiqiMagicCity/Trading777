@@ -91,6 +91,31 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
   });
 
+  it("renders issues reported by period health", () => {
+    act(() => {
+      useStore.setState({
+        metrics: baseMetrics as any,
+        periodHealth: {
+          status: "missing",
+          summaries: [],
+          issues: [
+            { kind: "INVALID_RECORD", message: "持仓 TSLA 的数量无效" },
+            { kind: "MISSING_PREV_CLOSE", message: "以下标的缺少昨日收盘价：TSLA" },
+          ],
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    expect(screen.getByTestId("period-health-summary")).toHaveTextContent(
+      "持仓 TSLA 的数量无效",
+    );
+    expect(screen.getByTestId("period-health-summary")).toHaveTextContent(
+      "以下标的缺少昨日收盘价：TSLA",
+    );
+  });
+
   it("shows 待补充 only for degraded periods and lists missing parameters", () => {
     act(() => {
       useStore.setState({
