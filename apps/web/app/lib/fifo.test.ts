@@ -50,4 +50,15 @@ describe('computeFifo', () => {
     expect(second.averageCost).toBe(9);
     expect(second.breakEvenPrice).toBe(8);
   });
+
+  it('computes short position break-even with realized gains', () => {
+    const trades: Trade[] = [
+      { symbol: 'TSLA', price: 50, quantity: -100, date: '2024-01-01', action: 'short' },
+      { symbol: 'TSLA', price: 45, quantity: 50, date: '2024-01-02', action: 'cover' },
+    ];
+    const result = computeFifo(trades);
+    const second = result[1]!;
+    expect(second.quantityAfter).toBe(-50);
+    expect(second.breakEvenPrice).toBe(-55);
+  });
 });

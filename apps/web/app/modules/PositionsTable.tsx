@@ -203,6 +203,21 @@ export function PositionsTable({ positions, trades }: Props) {
 
             const realized = getRealized(pos.symbol);
             const totalPNL = unrealized + realized;
+            const breakEven = pos.breakEvenPrice;
+            const hasBreakEven =
+              typeof breakEven === 'number' && Number.isFinite(breakEven);
+            const breakEvenDisplay = hasBreakEven ? (
+              <span className="flex items-center gap-1">
+                <span>{formatNumber(Math.abs(breakEven))}</span>
+                {breakEven < 0 ? (
+                  <span className="rounded bg-gray-200 px-1 text-xs text-gray-600">
+                    空头
+                  </span>
+                ) : null}
+              </span>
+            ) : (
+              <span className="text-xs text-orange-500">数据不足</span>
+            );
 
             const intradayClass =
               intraday !== undefined ? (intraday > 0 ? 'green' : intraday < 0 ? 'red' : '') : '';
@@ -231,7 +246,7 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{pos.qty}</td>
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{formatNumber(marketValue)}</td>
-                <td>{formatNumber(pos.avgPrice)}</td>
+                <td>{breakEvenDisplay}</td>
                 <td className={intradayClass}>{formatNumber(intraday)}</td>
                 <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
