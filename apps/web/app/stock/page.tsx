@@ -154,7 +154,7 @@ export default function StockPage() {
                 <div className="flex flex-col items-center leading-tight">
                   <span>—</span>
                   <span className="text-xs text-gray-500">
-                    上次保本价 {formatNumber(Math.abs(breakEvenJSticky))}
+                    历史滚动成本：{formatNumber(Math.abs(breakEvenJSticky))}
                   </span>
                 </div>
               ) : (
