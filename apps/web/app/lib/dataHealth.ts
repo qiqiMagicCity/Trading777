@@ -159,17 +159,21 @@ function diagnoseMetrics(
     return;
   }
 
-  const periodLabels: Record<"M11" | "M12" | "M13", string> = {
-    M11: "WTD",
-    M12: "MTD",
-    M13: "YTD",
-  };
-  (Object.keys(periodLabels) as Array<"M11" | "M12" | "M13">).forEach((key) => {
-    const value = (metrics as Record<string, unknown>)[key];
+  const periodEntries: Array<{
+    key: "M11" | "M12" | "M13";
+    label: string;
+    value: unknown;
+  }> = [
+    { key: "M11", label: "WTD", value: metrics.M11 },
+    { key: "M12", label: "MTD", value: metrics.M12 },
+    { key: "M13", label: "YTD", value: metrics.M13 },
+  ];
+
+  periodEntries.forEach(({ label, value }) => {
     if (!isFiniteNumber(value)) {
       pushUnique(issues, {
         kind: "PERIOD_VALUE_MISSING",
-        message: `${periodLabels[key]} 指标缺失或无效，请检查所需快照是否完整。`,
+        message: `${label} 指标缺失或无效，请检查所需快照是否完整。`,
       });
     }
   });
