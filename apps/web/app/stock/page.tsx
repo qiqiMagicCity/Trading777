@@ -173,7 +173,7 @@ export default function StockPage() {
                   <td>{formatNumber(amount)}</td>
                   <td className="text-center">{breakEvenDisplay}</td>
                   <td className={plCls}>{formatNumber(trade.realizedPnl)}</td>
-                  <td>{trade.quantity || 0}</td>
+                  <td>{trade.quantityAfter ?? 0}</td>
                   <td>{formatNumber(trade.averageCost)}</td>
                 </tr>
               );
