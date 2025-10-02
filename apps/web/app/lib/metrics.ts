@@ -1305,23 +1305,45 @@ export function calcTodayFifoPnL(
     string,
     { qty: number; price: number; date: string }[]
   > = {};
+  const todayLongLots: Record<string, { qty: number }[]> = {};
+  const todayShortLots: Record<string, { qty: number }[]> = {};
   seedInitialLots(sortedTrades, longFifo, shortFifo);
   let pnl = 0;
   for (const t of sortedTrades) {
     if (!isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t)) continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
+    const isToday = isTodayNY(date, todayStr);
     if (action === "buy") {
+      if (isToday) {
+        if (!todayLongLots[symbol]) todayLongLots[symbol] = [];
+        todayLongLots[symbol]!.push({ qty: quantity });
+      }
       if (!longFifo[symbol]) longFifo[symbol] = [];
       longFifo[symbol].push({ qty: quantity, price, date });
     } else if (action === "sell") {
+      let intradayQty = 0;
+      if (isToday) {
+        const todayLots = todayLongLots[symbol] || [];
+        let remainToday = quantity;
+        while (remainToday > 0 && todayLots.length > 0) {
+          const lot = todayLots[0]!;
+          const use = Math.min(lot.qty, remainToday);
+          intradayQty += use;
+          lot.qty -= use;
+          remainToday -= use;
+          if (lot.qty <= EPSILON) todayLots.shift();
+        }
+      }
       let remain = quantity;
       const fifo = longFifo[symbol] || [];
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (isTodayNY(date, todayStr) && isTodayNY(lot.date, todayStr)) {
-          pnl += (price - lot.price) * q;
+        if (intradayQty > 0) {
+          const use = Math.min(q, intradayQty);
+          pnl += (price - lot.price) * use;
+          intradayQty -= use;
         }
         lot.qty -= q;
         remain -= q;
@@ -1332,16 +1354,35 @@ export function calcTodayFifoPnL(
         shortFifo[symbol].push({ qty: remain, price, date });
       }
     } else if (action === "short") {
+      if (isToday) {
+        if (!todayShortLots[symbol]) todayShortLots[symbol] = [];
+        todayShortLots[symbol]!.push({ qty: quantity });
+      }
       if (!shortFifo[symbol]) shortFifo[symbol] = [];
       shortFifo[symbol].push({ qty: quantity, price, date });
     } else if (action === "cover") {
+      let intradayQty = 0;
+      if (isToday) {
+        const todayLots = todayShortLots[symbol] || [];
+        let remainToday = quantity;
+        while (remainToday > 0 && todayLots.length > 0) {
+          const lot = todayLots[0]!;
+          const use = Math.min(lot.qty, remainToday);
+          intradayQty += use;
+          lot.qty -= use;
+          remainToday -= use;
+          if (lot.qty <= EPSILON) todayLots.shift();
+        }
+      }
       let remain = quantity;
       const fifo = shortFifo[symbol] || [];
       while (remain > 0 && fifo.length > 0) {
         const lot = fifo[0]!;
         const q = Math.min(lot.qty, remain);
-        if (isTodayNY(date, todayStr) && isTodayNY(lot.date, todayStr)) {
-          pnl += (lot.price - price) * q;
+        if (intradayQty > 0) {
+          const use = Math.min(q, intradayQty);
+          pnl += (lot.price - price) * use;
+          intradayQty -= use;
         }
         lot.qty -= q;
         remain -= q;
