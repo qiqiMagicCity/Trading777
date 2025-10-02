@@ -177,15 +177,12 @@ export default function StockPage() {
                 </span>
               ) : breakEvenJSticky !== undefined ? (
                 <div className="flex flex-col items-center leading-tight">
-                  <span>—</span>
                   <span className={stickyLabelClass}>
                     {stickyLabelPrefix}
                     {formatNumber(Math.abs(breakEvenJSticky))}
                   </span>
                 </div>
-              ) : (
-                <span>—</span>
-              );
+              ) : null;
 
               return (
                 <tr key={idx}>
