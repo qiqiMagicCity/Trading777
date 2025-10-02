@@ -197,18 +197,44 @@ export function PositionsTable({ positions, trades }: Props) {
               typeof pos.breakEvenJSticky === 'number' && Number.isFinite(pos.breakEvenJSticky)
                 ? pos.breakEvenJSticky
                 : undefined;
+            const breakEvenDirection =
+              pos.breakEvenDirection === 'LONG' || pos.breakEvenDirection === 'SHORT'
+                ? pos.breakEvenDirection
+                : undefined;
+            const breakEvenDirectionSticky =
+              pos.breakEvenDirectionSticky === 'LONG' || pos.breakEvenDirectionSticky === 'SHORT'
+                ? pos.breakEvenDirectionSticky
+                : undefined;
+            const renderDirectionTag = (dir?: 'LONG' | 'SHORT') => {
+              if (dir === 'SHORT') {
+                return <span className="text-red-500">（空头）</span>;
+              }
+              if (dir === 'LONG') {
+                return <span className="text-green-500">（多头）</span>;
+              }
+              return null;
+            };
+            const stickyPrefix = breakEvenDirectionSticky === 'SHORT'
+              ? '上次空头保本价 '
+              : breakEvenDirectionSticky === 'LONG'
+                ? '上次多头保本价 '
+                : '上次保本价 ';
+            const stickyClass = breakEvenDirectionSticky === 'SHORT'
+              ? 'text-xs text-red-500'
+              : breakEvenDirectionSticky === 'LONG'
+                ? 'text-xs text-green-500'
+                : 'text-xs text-gray-500';
             const breakEvenDisplay = breakEvenJ !== undefined ? (
               <span>
                 {formatNumber(Math.abs(breakEvenJ))}
-                {breakEvenJ < 0 ? (
-                  <span className="text-red-500">（空头）</span>
-                ) : null}
+                {renderDirectionTag(breakEvenDirection)}
               </span>
             ) : breakEvenJSticky !== undefined ? (
               <div className="flex flex-col items-center leading-tight">
                 <span>—</span>
-                <span className="text-xs text-gray-500">
-                  上次保本价 {formatNumber(Math.abs(breakEvenJSticky))}
+                <span className={stickyClass}>
+                  {stickyPrefix}
+                  {formatNumber(Math.abs(breakEvenJSticky))}
                 </span>
               </div>
             ) : (

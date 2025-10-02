@@ -44,5 +44,9 @@ describe("replayPortfolio break-even propagation", () => {
     expect(position.breakEvenPrice).toBeCloseTo(lastTrade.breakEvenPrice ?? 0, 6);
     expect(position.breakEvenJ).toBeCloseTo(lastTrade.breakEvenJ ?? 0, 6);
     expect(position.breakEvenJSticky).toBeCloseTo(lastTrade.breakEvenJSticky ?? 0, 6);
+    expect(position.breakEvenDirection).toBe(lastTrade.breakEvenDirection ?? null);
+    expect(position.breakEvenDirectionSticky).toBe(
+      lastTrade.breakEvenDirectionSticky ?? null,
+    );
   });
 });

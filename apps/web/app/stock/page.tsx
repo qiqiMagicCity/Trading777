@@ -143,17 +143,44 @@ export default function StockPage() {
                 typeof trade.breakEvenJSticky === 'number' && Number.isFinite(trade.breakEvenJSticky)
                   ? trade.breakEvenJSticky
                   : undefined;
+              const breakEvenDirection =
+                trade.breakEvenDirection === 'LONG' || trade.breakEvenDirection === 'SHORT'
+                  ? trade.breakEvenDirection
+                  : undefined;
+              const breakEvenDirectionSticky =
+                trade.breakEvenDirectionSticky === 'LONG' || trade.breakEvenDirectionSticky === 'SHORT'
+                  ? trade.breakEvenDirectionSticky
+                  : undefined;
+              const renderDirectionTag = (dir?: 'LONG' | 'SHORT') => {
+                if (dir === 'SHORT') {
+                  return <span className="text-red-500">（空头）</span>;
+                }
+                if (dir === 'LONG') {
+                  return <span className="text-green-500">（多头）</span>;
+                }
+                return null;
+              };
+              const stickyLabelPrefix = breakEvenDirectionSticky === 'SHORT'
+                ? '历史空头盈亏平衡点：'
+                : breakEvenDirectionSticky === 'LONG'
+                  ? '历史多头盈亏平衡点：'
+                  : '历史盈亏平衡点：';
+              const stickyLabelClass = breakEvenDirectionSticky === 'SHORT'
+                ? 'text-xs text-red-500'
+                : breakEvenDirectionSticky === 'LONG'
+                  ? 'text-xs text-green-500'
+                  : 'text-xs text-gray-500';
               const breakEvenDisplay = breakEvenJ !== undefined ? (
                 <span>
                   {formatNumber(Math.abs(breakEvenJ))}
-                  {breakEvenJ < 0 ? (
-                    <span className="text-red-500">（空头）</span>
-                  ) : null}
+                  {renderDirectionTag(breakEvenDirection)}
                 </span>
               ) : breakEvenJSticky !== undefined ? (
                 <div className="flex flex-col items-center leading-tight">
-                  <span className="text-xs text-gray-500">
-                    历史滚动成本：{formatNumber(Math.abs(breakEvenJSticky))}
+                  <span>—</span>
+                  <span className={stickyLabelClass}>
+                    {stickyLabelPrefix}
+                    {formatNumber(Math.abs(breakEvenJSticky))}
                   </span>
                 </div>
               ) : (
