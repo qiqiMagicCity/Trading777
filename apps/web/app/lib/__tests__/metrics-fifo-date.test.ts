@@ -20,6 +20,36 @@ describe("FIFO date validation", () => {
     expect(warn).toHaveBeenCalledTimes(2);
   });
 
+  it("recomputes today's intraday loops with global FIFO costs", () => {
+    const trades: EnrichedTrade[] = [
+      {
+        symbol: "AMZN",
+        action: "buy",
+        price: 90,
+        quantity: 330,
+        date: "2024-01-01T15:30:00Z",
+        isInitialPosition: true,
+      } as unknown as EnrichedTrade,
+      {
+        symbol: "AMZN",
+        action: "buy",
+        price: 95,
+        quantity: 170,
+        date: "2024-01-02T09:30:00Z",
+      } as unknown as EnrichedTrade,
+      {
+        symbol: "AMZN",
+        action: "sell",
+        price: 105,
+        quantity: 170,
+        date: "2024-01-02T10:30:00Z",
+      } as unknown as EnrichedTrade,
+    ];
+
+    const pnl = calcTodayFifoPnL(sortTrades(trades), "2024-01-02");
+    expect(pnl).toBeCloseTo((105 - 90) * 170);
+  });
+
   it("skips malformed and future dates for historical FIFO PnL", () => {
     const trades: EnrichedTrade[] = [
       { symbol: "AAPL", action: "buy", price: 90, quantity: 1, date: "2024-01-01T10:00:00Z" } as unknown as EnrichedTrade,
