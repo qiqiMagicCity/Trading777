@@ -126,3 +126,8 @@
 - 新增 `ymdInNY`，改用纽约时区分量拼接日期字符串，替换 `getLatestTradingDayStr`、周/月/年起始函数中的 `toISOString().slice(0, 10)`。
 - 扩展 `getLatestTradingDayStr` 单测覆盖纽约晚间与凌晨场景，确认不会提前到次日且开盘前仍回退上一交易日。
 - 运行 `npm test -- apps/web/app/lib/__tests__/timezone.test.ts`，所有断言通过。
+
+## 2025-10-23
+- 修复 Vercel 构建报错：`computeFifo` 中将 `direction`（仅可能为多/空）与 `'NONE'` 比较，TS 认定类型无交集导致 `next build` 中断。
+- 原因是空头/多头初始化时多余的 `'NONE'` 判定；去除比较后直接沿用方向即可，既符合业务预期也满足类型收窄。
+- 重新执行 `CI=1 npm run build --workspace web`，构建顺利完成，仅剩历史告警，无新增报错。

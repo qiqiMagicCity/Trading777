@@ -74,8 +74,8 @@ export function computeFifo(
       accumulatedTotalCost,
       tradeCount: 0,
       breakEvenJSticky: initialJ,
-      breakEvenJStickyDirection: direction === 'NONE' ? undefined : direction,
-      lastDirection: direction === 'NONE' ? undefined : direction,
+      breakEvenJStickyDirection: direction,
+      lastDirection: direction,
     };
   }
 
