@@ -121,3 +121,8 @@
 - Position/PositionsTable 引入新字段，盈亏平衡列按绝对值 + 空头徽标展示，无实时 J 时回落到“— / 上次保本价 …”。
 - 新增 `breakevenJ.sticky` 与 `PositionsTable.breakevenJ` 单测覆盖 6 大场景及 UI 展示恒等式，自检脚本 `npm run selfcheck:j:sticky` 通过。
 - package.json 增加 `selfcheck:j:sticky` 脚本，后续可一键校验 J 与 UI 自检。
+
+## 2025-10-22
+- 新增 `ymdInNY`，改用纽约时区分量拼接日期字符串，替换 `getLatestTradingDayStr`、周/月/年起始函数中的 `toISOString().slice(0, 10)`。
+- 扩展 `getLatestTradingDayStr` 单测覆盖纽约晚间与凌晨场景，确认不会提前到次日且开盘前仍回退上一交易日。
+- 运行 `npm test -- apps/web/app/lib/__tests__/timezone.test.ts`，所有断言通过。

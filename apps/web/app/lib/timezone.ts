@@ -99,6 +99,20 @@ export const formatNY = (
     typeof dateInput === "object" ? (dateInput as Date) : toNY(dateInput),
   );
 
+/** 将输入时间格式化为纽约时区的 YYYY-MM-DD 字符串 */
+export const ymdInNY = (input: Date | string | number = nowNY()): string => {
+  const date =
+    input instanceof Date
+      ? new Date(input.getTime())
+      : toNY(input);
+
+  const year = date.getFullYear().toString().padStart(4, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const day = date.getDate().toString().padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 /**
  * 获取最新交易日（纽约时区）的日期字符串。
  * 如果当前时间早于 09:30，则回退一天；
@@ -119,7 +133,7 @@ export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   while (d.getDay() === 0 || d.getDay() === 6) {
     d.setDate(d.getDate() - 1);
   }
-  return d.toISOString().slice(0, 10);
+  return ymdInNY(d);
 };
 
 /** 获取指定纽约日期的当日结束时间 */
@@ -135,7 +149,7 @@ export const weekStartNY = (dateInput: string | Date): string => {
   const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day);
   d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  return ymdInNY(d);
 };
 
 /** 获取所在月的月初日期（纽约时区），返回 YYYY-MM-DD */
@@ -143,7 +157,7 @@ export const monthStartNY = (dateInput: string | Date): string => {
   const d = toNY(normalizeDateInput(dateInput));
   d.setDate(1);
   d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  return ymdInNY(d);
 };
 
 /** 获取所在年的年初日期（纽约时区），返回 YYYY-MM-DD */
@@ -151,7 +165,7 @@ export const yearStartNY = (dateInput: string | Date): string => {
   const d = toNY(normalizeDateInput(dateInput));
   d.setMonth(0, 1);
   d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  return ymdInNY(d);
 };
 
 /** 获取纽约时区当周周一零点的 Date 对象 */
@@ -184,6 +198,7 @@ Object.assign(globalThis as Record<string, unknown>, {
   toNY,
   nowNY,
   formatNY,
+  ymdInNY,
   getLatestTradingDayStr,
   endOfDayNY,
 });

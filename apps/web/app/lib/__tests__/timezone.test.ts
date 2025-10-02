@@ -20,8 +20,14 @@ describe("getLatestTradingDayStr", () => {
   });
 
   it("keeps same trading day during late evening", () => {
-    expect(getLatestTradingDayStr(new Date("2024-05-17T20:57:00-04:00"))).toBe(
-      "2024-05-17",
+    expect(getLatestTradingDayStr(new Date("2025-10-01T22:48:00-04:00"))).toBe(
+      "2025-10-01",
+    );
+  });
+
+  it("stays on same calendar day after midnight before open", () => {
+    expect(getLatestTradingDayStr(new Date("2025-10-01T00:05:00-04:00"))).toBe(
+      "2025-09-30",
     );
   });
 
