@@ -100,7 +100,8 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `trading777_backup_${Date.now()}.json`;
+      const timestamp = format(nowNY(), 'yyyy年M月d日H点mm分', { locale: zhCN });
+      a.download = `${timestamp}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

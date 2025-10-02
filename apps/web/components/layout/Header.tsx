@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { format, toZonedTime } from 'date-fns-tz';
+import { format as formatTz, toZonedTime } from 'date-fns-tz';
+import { format as formatDate } from 'date-fns';
+import { zhCN } from 'date-fns/locale/zh-CN';
 import { nowNY } from '@/lib/timezone';
 import { importData, exportData } from '@/lib/services/dataService';
 import { usePathname } from 'next/navigation';
@@ -30,9 +32,9 @@ export function Clocks() {
     );
   }
 
-  const nyTime = format(toZonedTime(time, 'America/New_York'), 'HH:mm:ss');
-  const shTime = format(toZonedTime(time, 'Asia/Shanghai'), 'HH:mm:ss');
-  const hkTime = format(toZonedTime(time, 'Asia/Hong_Kong'), 'HH:mm:ss');
+  const nyTime = formatTz(toZonedTime(time, 'America/New_York'), 'HH:mm:ss');
+  const shTime = formatTz(toZonedTime(time, 'Asia/Shanghai'), 'HH:mm:ss');
+  const hkTime = formatTz(toZonedTime(time, 'Asia/Hong_Kong'), 'HH:mm:ss');
 
   return (
     <div id="clocks" className="clocks">
@@ -46,7 +48,7 @@ export function Clocks() {
 function getNyDate(): string {
   const now = nowNY();
   const nyDate = toZonedTime(now, 'America/New_York');
-  return format(nyDate, 'yyyy-MM-dd');
+  return formatTz(nyDate, 'yyyy-MM-dd');
 }
 
 export function Header() {
@@ -94,7 +96,8 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `trades-export-${nowNY().toISOString().split('T')[0]}.json`;
+      const timestamp = formatDate(nowNY(), 'yyyy年M月d日H点mm分', { locale: zhCN });
+      a.download = `${timestamp}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
