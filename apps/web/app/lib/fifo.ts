@@ -9,13 +9,18 @@ type Position = {
   quantity: number;
 };
 
+type TradeDirection = 'NONE' | 'LONG' | 'SHORT';
+type PositionDirection = Exclude<TradeDirection, 'NONE'>;
+
 type SymbolState = {
   positionList: Position[];
-  direction: 'NONE' | 'LONG' | 'SHORT';
+  direction: TradeDirection;
   accumulatedRealizedPnl: number;
   accumulatedTotalCost: number;
   tradeCount: number;
   breakEvenJSticky?: number;
+  breakEvenJStickyDirection?: PositionDirection;
+  lastDirection?: PositionDirection;
 };
 
 export type EnrichedTrade = Trade & {
@@ -29,6 +34,8 @@ export type EnrichedTrade = Trade & {
   averageCost: number;
   breakEvenJ?: number;
   breakEvenJSticky?: number;
+  breakEvenDirection?: PositionDirection;
+  breakEvenDirectionSticky?: PositionDirection;
   accTotalCost: number;
   accRealizedPnl: number;
   netPosition: number;
@@ -54,10 +61,12 @@ export function computeFifo(
       ? new M(pos.avgPrice).mul(quantity).mul(-1).toNumber()
       : new M(pos.avgPrice).mul(quantity).toNumber();
     const netAbs = quantity;
-    const initialJ =
-      netAbs > EPSILON
-        ? new M(accumulatedTotalCost).div(netAbs).toNumber()
-        : undefined;
+    let initialJ: number | undefined;
+    if (netAbs > EPSILON) {
+      initialJ = direction === 'SHORT'
+        ? new M(accumulatedTotalCost).mul(-1).div(netAbs).toNumber()
+        : new M(accumulatedTotalCost).div(netAbs).toNumber();
+    }
     symbolStateMap[pos.symbol] = {
       positionList: [{ price: pos.avgPrice, quantity }],
       direction,
@@ -65,6 +74,8 @@ export function computeFifo(
       accumulatedTotalCost,
       tradeCount: 0,
       breakEvenJSticky: initialJ,
+      breakEvenJStickyDirection: direction === 'NONE' ? undefined : direction,
+      lastDirection: direction === 'NONE' ? undefined : direction,
     };
   }
 
@@ -90,6 +101,8 @@ export function computeFifo(
       accumulatedTotalCost: 0,
       tradeCount: 0,
       breakEvenJSticky: undefined,
+      breakEvenJStickyDirection: undefined,
+      lastDirection: undefined,
     });
 
     state.tradeCount += 1;
@@ -101,6 +114,7 @@ export function computeFifo(
       if (state.direction === 'NONE' || state.direction === 'LONG') {
         state.positionList.push({ price, quantity });
         state.direction = 'LONG';
+        state.lastDirection = 'LONG';
         state.accumulatedTotalCost = new M(state.accumulatedTotalCost)
           .plus(new M(price).mul(quantity))
           .toNumber();
@@ -127,6 +141,7 @@ export function computeFifo(
         if (remainingQuantity > EPSILON) {
           state.positionList = [{ price, quantity: remainingQuantity }];
           state.direction = 'LONG';
+          state.lastDirection = 'LONG';
           state.accumulatedTotalCost = new M(price)
             .mul(remainingQuantity)
             .toNumber();
@@ -139,6 +154,7 @@ export function computeFifo(
       if (state.direction === 'NONE' || state.direction === 'SHORT') {
         state.positionList.push({ price, quantity });
         state.direction = 'SHORT';
+        state.lastDirection = 'SHORT';
         state.accumulatedTotalCost = new M(state.accumulatedTotalCost)
           .minus(new M(price).mul(quantity))
           .toNumber();
@@ -165,6 +181,7 @@ export function computeFifo(
         if (remainingQuantity > EPSILON) {
           state.positionList = [{ price, quantity: remainingQuantity }];
           state.direction = 'SHORT';
+          state.lastDirection = 'SHORT';
           state.accumulatedTotalCost = new M(price)
             .mul(remainingQuantity)
             .mul(-1)
@@ -191,18 +208,36 @@ export function computeFifo(
     const averageCost = totalQuantity > EPSILON ? avgPrice(costOfPositions, totalQuantity, 4) : 0;
     const netPosition = state.direction === 'SHORT' ? -totalQuantity : totalQuantity;
     const netAbs = Math.abs(netPosition);
-    const currentJ =
-      netAbs > EPSILON
-        ? new M(state.accumulatedTotalCost)
-            .minus(state.accumulatedRealizedPnl)
-            .div(netAbs)
-            .toNumber()
-        : undefined;
-    if (currentJ !== undefined) {
+    let breakEvenDirection: PositionDirection | undefined;
+    let currentJ: number | undefined;
+    if (netAbs > EPSILON) {
+      if (state.direction === 'LONG') {
+        breakEvenDirection = 'LONG';
+        currentJ = new M(state.accumulatedTotalCost)
+          .minus(state.accumulatedRealizedPnl)
+          .div(netAbs)
+          .toNumber();
+      } else if (state.direction === 'SHORT') {
+        breakEvenDirection = 'SHORT';
+        currentJ = new M(state.accumulatedTotalCost)
+          .mul(-1)
+          .plus(state.accumulatedRealizedPnl)
+          .div(netAbs)
+          .toNumber();
+      }
+    }
+    if (currentJ !== undefined && breakEvenDirection) {
       state.breakEvenJSticky = currentJ;
+      state.breakEvenJStickyDirection = breakEvenDirection;
     }
     const breakEvenJ = currentJ;
     const breakEvenJSticky = state.breakEvenJSticky ?? undefined;
+    const breakEvenDirectionSticky =
+      breakEvenJSticky !== undefined
+        ? (currentJ !== undefined && breakEvenDirection)
+          ? breakEvenDirection
+          : state.breakEvenJStickyDirection ?? state.lastDirection
+        : undefined;
     const breakEvenPrice = breakEvenJ ?? 0;
 
     const date = toNY(trade.date);
@@ -220,6 +255,8 @@ export function computeFifo(
       averageCost,
       breakEvenJ,
       breakEvenJSticky,
+      breakEvenDirection,
+      breakEvenDirectionSticky,
       accTotalCost: state.accumulatedTotalCost,
       accRealizedPnl: state.accumulatedRealizedPnl,
       netPosition,

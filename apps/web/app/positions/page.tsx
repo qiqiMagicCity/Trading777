@@ -43,6 +43,8 @@ export default function PositionsPage() {
             breakEvenPrice: t.breakEvenPrice,
             breakEvenJ: t.breakEvenJ ?? null,
             breakEvenJSticky: t.breakEvenJSticky ?? null,
+            breakEvenDirection: t.breakEvenDirection ?? null,
+            breakEvenDirectionSticky: t.breakEvenDirectionSticky ?? null,
             last: 0,
             priceOk: true,
             stale: true,

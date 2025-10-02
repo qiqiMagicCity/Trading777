@@ -33,7 +33,9 @@ export function applyBreakEvenToPositions(
     if (!symbol) {
       pos.breakEvenPrice = null;
       pos.breakEvenJ = null;
+      pos.breakEvenDirection = null;
       pos.breakEvenJSticky = null;
+      pos.breakEvenDirectionSticky = null;
       continue;
     }
 
@@ -41,7 +43,9 @@ export function applyBreakEvenToPositions(
     if (!trades || trades.length === 0) {
       pos.breakEvenPrice = null;
       pos.breakEvenJ = null;
+      pos.breakEvenDirection = null;
       pos.breakEvenJSticky = null;
+      pos.breakEvenDirectionSticky = null;
       continue;
     }
 
@@ -72,10 +76,14 @@ export function applyBreakEvenToPositions(
       pos.breakEvenPrice = matched.breakEvenPrice ?? null;
       pos.breakEvenJ = matched.breakEvenJ ?? null;
       pos.breakEvenJSticky = matched.breakEvenJSticky ?? null;
+      pos.breakEvenDirection = matched.breakEvenDirection ?? null;
+      pos.breakEvenDirectionSticky = matched.breakEvenDirectionSticky ?? null;
     } else {
       pos.breakEvenPrice = null;
       pos.breakEvenJ = null;
+      pos.breakEvenDirection = null;
       pos.breakEvenJSticky = null;
+      pos.breakEvenDirectionSticky = null;
     }
   }
 }

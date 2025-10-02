@@ -56,12 +56,16 @@ export interface Position {
   lastUpdatedAt?: number;
   /** 前一交易日的收盘价，用于计算当日价格变动 */
   prevClose?: number;
-  /** 含历史盈亏的滚动保本价，空头为负值 */
+  /** 含历史盈亏的滚动保本价 */
   breakEvenPrice?: number | null;
-  /** 裸 J：实时滚动保本价，空头为负值 */
+  /** 裸 J：实时滚动保本价 */
   breakEvenJ?: number | null;
   /** Sticky J：净仓归零后保留的上一笔 J */
   breakEvenJSticky?: number | null;
+  /** 当前保本价对应方向 */
+  breakEvenDirection?: 'LONG' | 'SHORT' | null;
+  /** Sticky 保本价对应方向 */
+  breakEvenDirectionSticky?: 'LONG' | 'SHORT' | null;
 }
 
 // New interface for cached prices

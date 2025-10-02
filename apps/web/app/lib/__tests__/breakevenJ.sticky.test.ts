@@ -31,47 +31,64 @@ describe("breakEvenJ sticky behaviours", () => {
 
     const scenarioA = findTrade("LPA", "2024-01-02");
     expect(scenarioA?.breakEvenJ).toBeCloseTo(8, 6);
+    expect(scenarioA?.breakEvenDirection).toBe('LONG');
     expect(scenarioA?.breakEvenJSticky).toBeCloseTo(8, 6);
+    expect(scenarioA?.breakEvenDirectionSticky).toBe('LONG');
     expect(scenarioA?.netPosition).toBeCloseTo(50, 6);
 
     const scenarioB = findTrade("SHP", "2024-01-04");
-    expect(scenarioB?.breakEvenJ).toBeCloseTo(-55, 6);
-    expect(scenarioB?.breakEvenJSticky).toBeCloseTo(-55, 6);
+    expect(scenarioB?.breakEvenJ).toBeCloseTo(55, 6);
+    expect(scenarioB?.breakEvenDirection).toBe('SHORT');
+    expect(scenarioB?.breakEvenJSticky).toBeCloseTo(55, 6);
+    expect(scenarioB?.breakEvenDirectionSticky).toBe('SHORT');
     expect(scenarioB?.netPosition).toBeCloseTo(-50, 6);
 
     const scenarioC = findTrade("CRS", "2024-01-06");
-    expect(scenarioC?.breakEvenJ).toBeCloseTo(-16, 6);
-    expect(scenarioC?.breakEvenJSticky).toBeCloseTo(-16, 6);
+    expect(scenarioC?.breakEvenJ).toBeCloseTo(16, 6);
+    expect(scenarioC?.breakEvenDirection).toBe('SHORT');
+    expect(scenarioC?.breakEvenJSticky).toBeCloseTo(16, 6);
+    expect(scenarioC?.breakEvenDirectionSticky).toBe('SHORT');
     expect(scenarioC?.netPosition).toBeCloseTo(-50, 6);
 
     const scenarioE = findTrade("CRS", "2024-01-07");
     expect(scenarioE?.breakEvenJ).toBeUndefined();
-    expect(scenarioE?.breakEvenJSticky).toBeCloseTo(-16, 6);
+    expect(scenarioE?.breakEvenJSticky).toBeCloseTo(16, 6);
+    expect(scenarioE?.breakEvenDirectionSticky).toBe('SHORT');
     expect(Math.abs(scenarioE?.netPosition || 0)).toBeLessThan(EPS);
 
     const scenarioF = findTrade("CRS", "2024-01-08");
     expect(scenarioF?.breakEvenJ).toBeCloseTo(13.75, 6);
+    expect(scenarioF?.breakEvenDirection).toBe('LONG');
     expect(scenarioF?.breakEvenJSticky).toBeCloseTo(13.75, 6);
+    expect(scenarioF?.breakEvenDirectionSticky).toBe('LONG');
     expect(scenarioF?.netPosition).toBeCloseTo(40, 6);
 
     const scenarioD = findTrade("SRL", "2024-01-10");
     expect(scenarioD?.breakEvenJ).toBeCloseTo(62, 6);
+    expect(scenarioD?.breakEvenDirection).toBe('LONG');
     expect(scenarioD?.breakEvenJSticky).toBeCloseTo(62, 6);
+    expect(scenarioD?.breakEvenDirectionSticky).toBe('LONG');
     expect(scenarioD?.netPosition).toBeCloseTo(50, 6);
 
-    // 恒等式：accTotalCost - accRealizedPnl ≈ breakEvenJ * |netPosition|
+    // 恒等式：
+    // 多头：accTotalCost - accRealizedPnl ≈ breakEvenJ * |netPosition|
+    // 空头：-accTotalCost + accRealizedPnl ≈ breakEvenJ * |netPosition|
     for (const trade of enriched) {
       if (trade.breakEvenJ !== undefined) {
-        const lhs = trade.accTotalCost - trade.accRealizedPnl;
         const rhs = trade.breakEvenJ * Math.abs(trade.netPosition);
-        expect(lhs).toBeCloseTo(rhs, 6);
+        if (trade.breakEvenDirection === 'SHORT') {
+          const lhs = -trade.accTotalCost + trade.accRealizedPnl;
+          expect(lhs).toBeCloseTo(rhs, 6);
+        } else {
+          const lhs = trade.accTotalCost - trade.accRealizedPnl;
+          expect(lhs).toBeCloseTo(rhs, 6);
+        }
       }
     }
 
-    // 空头净仓必须保持 J < 0
     for (const trade of enriched) {
-      if (trade.netPosition < -EPS) {
-        expect(trade.breakEvenJ).toBeLessThan(0);
+      if (trade.breakEvenDirection === 'SHORT') {
+        expect(trade.breakEvenJ).toBeGreaterThanOrEqual(0);
       }
     }
   });

@@ -31,9 +31,11 @@ describe("PositionsTable breakEvenJ display", () => {
         symbol: "SHORT",
         qty: -10,
         avgPrice: 50,
-        breakEvenPrice: -55,
-        breakEvenJ: -55,
-        breakEvenJSticky: -55,
+        breakEvenPrice: 55,
+        breakEvenJ: 55,
+        breakEvenDirection: "SHORT",
+        breakEvenJSticky: 55,
+        breakEvenDirectionSticky: "SHORT",
         last: 50,
         priceOk: true,
       },
@@ -44,6 +46,8 @@ describe("PositionsTable breakEvenJ display", () => {
         breakEvenPrice: 0,
         breakEvenJ: null,
         breakEvenJSticky: 12.34,
+        breakEvenDirection: null,
+        breakEvenDirectionSticky: "LONG",
         last: 0,
         priceOk: true,
       },
@@ -72,7 +76,7 @@ describe("PositionsTable breakEvenJ display", () => {
     const stickyBreakEvenCell = stickyCells[7];
     expect(stickyBreakEvenCell).toHaveClass("text-center");
     expect(within(stickyBreakEvenCell).getByText("—")).toBeInTheDocument();
-    expect(within(stickyRow).getByText(/上次保本价 12\.34/)).toBeInTheDocument();
+    expect(within(stickyRow).getByText(/上次多头保本价 12\.34/)).toBeInTheDocument();
   });
 
   it("renders break-even J for 多头持仓", () => {
@@ -85,7 +89,9 @@ describe("PositionsTable breakEvenJ display", () => {
         avgPrice: 80,
         breakEvenPrice: 90,
         breakEvenJ: 90,
+        breakEvenDirection: "LONG",
         breakEvenJSticky: 90,
+        breakEvenDirectionSticky: "LONG",
         last: 0,
         priceOk: true,
       },
