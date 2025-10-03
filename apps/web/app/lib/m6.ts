@@ -1,4 +1,5 @@
 import { round2 } from "./money";
+import { round4, add4, sub4, mul4 } from "./precision";
 
 export interface M6PositionInput {
   symbol: string;
@@ -93,17 +94,18 @@ export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
       continue;
     }
 
-    const { value: prevClose, usedFallback: usedPrevFallback } = resolvePrice(
+    const { value: prevCloseRaw, usedFallback: usedPrevFallback } = resolvePrice(
       item.prevClose,
       input.fallbackOpen,
       item.symbol,
     );
 
-    const { value: priceNow } = resolvePrice(
+    const { value: priceNowRaw } = resolvePrice(
       item.priceNow,
       input.nowMarkFallback,
       item.symbol,
     );
+    const priceNow = priceNowRaw != null ? round4(priceNowRaw) : null;
     if (priceNow == null) {
       warnings.push({ symbol: item.symbol, reason: "MISSING_MARK" });
       console.warn?.(
@@ -113,7 +115,9 @@ export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
       continue;
     }
 
+    const prevClose = prevCloseRaw != null ? round4(prevCloseRaw) : null;
     const fx = Number.isFinite(item.fx ?? NaN) ? Number(item.fx) : 1;
+    const fxRounded = Number.isFinite(fx) ? round4(fx) : 1;
     let symbolMtm = 0;
 
     const pushLeg = (
@@ -122,29 +126,35 @@ export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
       quantity: number,
       legPnl: number,
     ) => {
+      const roundedBasis = round4(basis);
+      const roundedPnl = round4(legPnl);
       legs.push({
         symbol: item.symbol,
         qty: quantity,
-        prevClose: basis,
+        prevClose: roundedBasis,
         priceNow,
-        fx,
-        mtm: legPnl,
+        fx: fxRounded,
+        mtm: roundedPnl,
         component,
       });
-      symbolMtm += legPnl;
+      symbolMtm = add4(symbolMtm, roundedPnl);
     };
 
     const longQty = Math.max(0, todayLongQty);
     const shortQty = Math.max(0, todayShortQty);
     const longAvgRaw = Number(item.todayLongAvg ?? NaN);
     const shortAvgRaw = Number(item.todayShortAvg ?? NaN);
-    const longAvg = Number.isFinite(longAvgRaw) ? longAvgRaw : NaN;
-    const shortAvg = Number.isFinite(shortAvgRaw) ? shortAvgRaw : NaN;
+    const longAvg = Number.isFinite(longAvgRaw) ? round4(longAvgRaw) : NaN;
+    const shortAvg = Number.isFinite(shortAvgRaw) ? round4(shortAvgRaw) : NaN;
 
     if (longQty > 0) {
       if (Number.isFinite(longAvg)) {
-        const legMtm = (priceNow - Number(longAvg)) * longQty * fx;
-        pushLeg("TODAY_LONG", Number(longAvg), longQty, legMtm);
+        const diff = sub4(priceNow, longAvg);
+        const basePnl = mul4(diff, longQty);
+        const legMtm = mul4(basePnl, fxRounded);
+        if (Number.isFinite(legMtm)) {
+          pushLeg("TODAY_LONG", longAvg, longQty, legMtm);
+        }
       } else {
         warnings.push({
           symbol: item.symbol,
@@ -155,8 +165,12 @@ export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
 
     if (shortQty > 0) {
       if (Number.isFinite(shortAvg)) {
-        const legMtm = (Number(shortAvg) - priceNow) * shortQty * fx;
-        pushLeg("TODAY_SHORT", Number(shortAvg), shortQty, legMtm);
+        const diff = sub4(shortAvg, priceNow);
+        const basePnl = mul4(diff, shortQty);
+        const legMtm = mul4(basePnl, fxRounded);
+        if (Number.isFinite(legMtm)) {
+          pushLeg("TODAY_SHORT", shortAvg, shortQty, legMtm);
+        }
       } else {
         warnings.push({
           symbol: item.symbol,
@@ -187,19 +201,29 @@ export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
           );
         }
         if (overnightSigned > 0) {
-          const legMtm = (priceNow - prevClose) * overnightSigned * fx;
-          pushLeg("OVERNIGHT_LONG", prevClose, overnightSigned, legMtm);
+          const diff = sub4(priceNow, prevClose);
+          const basePnl = mul4(diff, overnightSigned);
+          const legMtm = mul4(basePnl, fxRounded);
+          if (Number.isFinite(legMtm)) {
+            pushLeg("OVERNIGHT_LONG", prevClose, overnightSigned, legMtm);
+          }
         } else {
           const absQty = Math.abs(overnightSigned);
-          const legMtm = (prevClose - priceNow) * absQty * fx;
-          pushLeg("OVERNIGHT_SHORT", prevClose, absQty, legMtm);
+          const diff = sub4(prevClose, priceNow);
+          const basePnl = mul4(diff, absQty);
+          const legMtm = mul4(basePnl, fxRounded);
+          if (Number.isFinite(legMtm)) {
+            pushLeg("OVERNIGHT_SHORT", prevClose, absQty, legMtm);
+          }
         }
       }
     }
 
-    mtm += symbolMtm;
+    symbolMtm = round4(symbolMtm);
+    mtm = add4(mtm, symbolMtm);
   }
 
+  mtm = round4(mtm);
   const total = round2(input.M4 + input.M5_FIFO + mtm);
   return { total, mtm, legs, warnings };
 }
