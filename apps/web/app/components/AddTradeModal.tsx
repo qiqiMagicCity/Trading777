@@ -98,18 +98,16 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const persistSymbolHistory = (nextSymbol: string) => {
     const normalized = normalizeSymbol(nextSymbol);
     if (!normalized) return;
-    setSymbolHistory(prev => {
-      const deduped = [normalized, ...prev.filter(item => item !== normalized)];
-      const limited = deduped.slice(0, SYMBOL_HISTORY_LIMIT);
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(SYMBOL_HISTORY_KEY, JSON.stringify(limited));
-        } catch (error) {
-          logger.warn('[AddTradeModal] 写入股票代码历史失败', error);
-        }
+    const deduped = [normalized, ...symbolHistory.filter(item => item !== normalized)];
+    const limited = deduped.slice(0, SYMBOL_HISTORY_LIMIT);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(SYMBOL_HISTORY_KEY, JSON.stringify(limited));
+      } catch (error) {
+        logger.warn('[AddTradeModal] 写入股票代码历史失败', error);
       }
-      return limited;
-    });
+    }
+    setSymbolHistory(limited);
   };
 
   // ---------- 同步传入的 trade 数据 ----------

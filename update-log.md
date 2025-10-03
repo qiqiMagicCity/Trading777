@@ -3,6 +3,7 @@
 ## 2025-10-30
 - 抽取 `normalizeSymbol` 统一股票代码大写与字符过滤逻辑，避免手动输入与编辑初始值出现不一致的字符。
 - `AddTradeModal` 读取历史列表与提交后写入时复用新 helper，确保本地存储与输入框保持同一规则。
+- 调整 `persistSymbolHistory` 先写入本地存储再更新状态，避免组件卸载后历史未写入。
 
 ## 2024-05-10
 - 抽取 `normalizeToNYMidday` 到 `apps/web/app/lib/time.ts` 并统一返回 `T12:00:00Z`。
