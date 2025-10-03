@@ -6,6 +6,9 @@ import type { Trade } from '@/lib/services/dataService';
 import { nowNY, toNY } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 
+const SYMBOL_HISTORY_KEY = 'tradeSymbolHistory';
+const SYMBOL_HISTORY_LIMIT = 10;
+
 interface Props {
   onClose: () => void;
   onAdded: () => Promise<void> | void;
@@ -57,12 +60,55 @@ const sanitizeDateTimeInput = (raw: string): string => {
 export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const editing = !!trade;
   const [symbol, setSymbol] = useState('');
+  const [symbolHistory, setSymbolHistory] = useState<string[]>([]);
   const [side, setSide] = useState<'BUY' | 'SELL' | 'SHORT' | 'COVER'>('BUY');
   const [qty, setQty] = useState<number>(0);
   const [price, setPrice] = useState<number>(0);
 
   // Get current NY time for default
   const [datetime, setDatetime] = useState(() => toInputDateTime(nowNY()));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = window.localStorage.getItem(SYMBOL_HISTORY_KEY);
+      if (!stored) return;
+      const parsed: unknown = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return;
+      const sanitized: string[] = [];
+      for (const item of parsed) {
+        if (typeof item !== 'string') continue;
+        const normalized = item.toUpperCase().replace(/[^A-Z]/g, '');
+        if (!normalized) continue;
+        if (!sanitized.includes(normalized)) {
+          sanitized.push(normalized);
+        }
+        if (sanitized.length >= SYMBOL_HISTORY_LIMIT) {
+          break;
+        }
+      }
+      setSymbolHistory(sanitized);
+    } catch (error) {
+      logger.warn('[AddTradeModal] 读取股票代码历史失败', error);
+    }
+  }, []);
+
+  const persistSymbolHistory = (nextSymbol: string) => {
+    const normalized = nextSymbol.toUpperCase().replace(/[^A-Z]/g, '');
+    if (!normalized) return;
+    setSymbolHistory(prev => {
+      const deduped = [normalized, ...prev.filter(item => item !== normalized)];
+      const limited = deduped.slice(0, SYMBOL_HISTORY_LIMIT);
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(SYMBOL_HISTORY_KEY, JSON.stringify(limited));
+        } catch (error) {
+          logger.warn('[AddTradeModal] 写入股票代码历史失败', error);
+        }
+      }
+      return limited;
+    });
+  };
 
   // ---------- 同步传入的 trade 数据 ----------
   useEffect(() => {
@@ -123,6 +169,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       logger.debug('[AddTradeModal] 新增交易:', baseTrade);
       await addTrade(baseTrade);
     }
+    persistSymbolHistory(baseTrade.symbol);
     try {
       await onAdded();
     } catch (err) {
@@ -164,7 +211,15 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
             }}
             pattern="[A-Z]*"
             required
+            list={symbolHistory.length > 0 ? 'trade-symbol-history' : undefined}
           />
+          {symbolHistory.length > 0 && (
+            <datalist id="trade-symbol-history">
+              {symbolHistory.map(item => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
+          )}
 
           <label>数量(张)</label>
           <input
