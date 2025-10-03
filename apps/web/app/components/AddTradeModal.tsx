@@ -57,6 +57,8 @@ const sanitizeDateTimeInput = (raw: string): string => {
   return `${datePart}T${normalizeTimePart(timePart)}`;
 };
 
+const normalizeSymbol = (value: string): string => value.toUpperCase().replace(/[^A-Z]/g, '');
+
 export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const editing = !!trade;
   const [symbol, setSymbol] = useState('');
@@ -78,7 +80,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       const sanitized: string[] = [];
       for (const item of parsed) {
         if (typeof item !== 'string') continue;
-        const normalized = item.toUpperCase().replace(/[^A-Z]/g, '');
+        const normalized = normalizeSymbol(item);
         if (!normalized) continue;
         if (!sanitized.includes(normalized)) {
           sanitized.push(normalized);
@@ -94,7 +96,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   }, []);
 
   const persistSymbolHistory = (nextSymbol: string) => {
-    const normalized = nextSymbol.toUpperCase().replace(/[^A-Z]/g, '');
+    const normalized = normalizeSymbol(nextSymbol);
     if (!normalized) return;
     setSymbolHistory(prev => {
       const deduped = [normalized, ...prev.filter(item => item !== normalized)];
@@ -114,7 +116,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   useEffect(() => {
     if (trade) {
       logger.debug('[AddTradeModal] 编辑模式载入:', trade);
-      setSymbol(trade.symbol.toUpperCase());
+      setSymbol(normalizeSymbol(trade.symbol));
       if (!trade.action) {
         console.warn('Editing trade has invalid action, defaulting to BUY.');
       }
@@ -205,9 +207,7 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
           <input
             value={symbol}
             onChange={e => {
-              const upper = e.target.value.toUpperCase();
-              const sanitized = upper.replace(/[^A-Z]/g, '');
-              setSymbol(sanitized);
+              setSymbol(normalizeSymbol(e.target.value));
             }}
             pattern="[A-Z]*"
             required
