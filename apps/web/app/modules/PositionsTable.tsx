@@ -10,7 +10,12 @@ import { useStore } from '@/lib/store';
 import { formatCurrency } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
-import { calculateIntradayValue, getResolvedPrice } from "./positionMetrics";
+import {
+  buildIntradayPnlMap,
+  calculateIntradayValue,
+  getResolvedPrice,
+  type IntradayValueResult,
+} from "./positionMetrics";
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '--';
@@ -30,6 +35,7 @@ interface Props {
 
 export function PositionsTable({ positions, trades }: Props) {
   const metrics = useStore(state => state.metrics);
+  const intradayDataset = useMemo(() => buildIntradayPnlMap(metrics), [metrics]);
 
   const results = useQueries({
     queries: positions.map((pos) => ({
@@ -102,7 +108,8 @@ export function PositionsTable({ positions, trades }: Props) {
       const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
       // 按 (实时价格 - 成本价格) × 数量 计算浮动盈亏
       const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
-      const intraday = calculateIntradayValue(pos, resolvedPrice);
+      const intradayResult = calculateIntradayValue(pos, intradayDataset);
+      const intraday = intradayResult.status === "ok" ? intradayResult.value : undefined;
 
       logger.debug(`${pos.symbol} 市值计算:`, {
         lastPrice: resolvedPrice,
@@ -115,11 +122,13 @@ export function PositionsTable({ positions, trades }: Props) {
         prevClose,
         hasPrevClose,
         intraday,
+        intradayDetail: intradayResult,
+        intradayFromLegs: intradayDataset.values.get(pos.symbol?.trim().toUpperCase() ?? ""),
       });
 
-      return { market: marketValue, unrealized, intraday };
+      return { market: marketValue, unrealized, intraday, intradayResult };
     });
-  }, [positions, results]);
+  }, [positions, results, intradayDataset]);
 
   // 计算总计
   const totals = useMemo(() => {
@@ -127,8 +136,19 @@ export function PositionsTable({ positions, trades }: Props) {
 
     const totalMarketValue = positionSummaries.reduce((sum, item) => sum + item.market, 0);
     const totalUnrealized = positionSummaries.reduce((sum, item) => sum + item.unrealized, 0);
-    const hasIntraday = positionSummaries.some(item => item.intraday !== undefined);
-    const totalIntraday = positionSummaries.reduce((sum, item) => sum + (item.intraday ?? 0), 0);
+    const allIntradayReady = positionSummaries.every(item => item.intradayResult.status === "ok");
+    const totalIntraday = allIntradayReady
+      ? positionSummaries.reduce((sum, item) => sum + (item.intraday ?? 0), 0)
+      : undefined;
+    const intradayIssueSet = new Set<string>();
+    if (!allIntradayReady) {
+      for (const item of positionSummaries) {
+        if (item.intradayResult.status === "missing") {
+          intradayIssueSet.add(item.intradayResult.message);
+        }
+      }
+    }
+    const intradayIssues = Array.from(intradayIssueSet);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
     const totalPnL = totalUnrealized + totalRealized;
 
@@ -136,6 +156,7 @@ export function PositionsTable({ positions, trades }: Props) {
       totalMarketValue,
       totalUnrealized,
       totalIntraday,
+      intradayIssues,
       totalRealized,
       totalPnL
     });
@@ -143,7 +164,8 @@ export function PositionsTable({ positions, trades }: Props) {
     return {
       marketValue: totalMarketValue,
       unrealized: totalUnrealized,
-      intraday: hasIntraday ? totalIntraday : undefined,
+      intraday: totalIntraday,
+      intradayIssues,
       realized: totalRealized,
       total: totalPnL
     };
@@ -162,7 +184,7 @@ export function PositionsTable({ positions, trades }: Props) {
             <th>持仓单价</th>
             <th>持仓金额</th>
             <th>盈亏平衡点</th>
-            <th>当日浮盈亏</th>
+            <th>当日盈亏</th>
             <th>浮动百分比</th>
             <th>标的盈亏</th>
             <th>历史交易次数</th>
@@ -172,6 +194,7 @@ export function PositionsTable({ positions, trades }: Props) {
         <tbody>
           {positions.map((pos, idx) => {
             const result = results[idx];
+            const summary = positionSummaries[idx];
             const resolvedPrice = getResolvedPrice(pos, result?.data?.price);
             const isStale = result?.data?.stale ?? pos.stale;
             const isPending = result?.isFetching ?? false;
@@ -182,8 +205,13 @@ export function PositionsTable({ positions, trades }: Props) {
             const signedMarketValue = resolvedPrice * pos.qty;
             const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
             const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
-            // 当日浮盈亏 = 今日市值 - 昨日市值
-            const intraday = calculateIntradayValue(pos, resolvedPrice);
+            // 当日盈亏：若缺乏拆解则提示待补充
+            const intradayResult: IntradayValueResult = summary?.intradayResult ?? {
+              status: "missing",
+              reason: "missing_legs",
+              message: "缺少 M6 legs 拆解数据，请补充隔夜与当日未平拆解后再查看当日盈亏。",
+            };
+            const intraday = intradayResult.status === "ok" ? intradayResult.value : undefined;
             const unrealizedPercent =
               resolvedPrice && pos.avgPrice ? (resolvedPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
@@ -241,8 +269,13 @@ export function PositionsTable({ positions, trades }: Props) {
               <span>—</span>
             );
 
-            const intradayClass =
-              intraday !== undefined ? (intraday > 0 ? 'green' : intraday < 0 ? 'red' : '') : '';
+            const intradayClass = (() => {
+              if (intradayResult.status === "missing") return "text-yellow-600";
+              if (intraday === undefined) return "";
+              if (intraday > 0) return "green";
+              if (intraday < 0) return "red";
+              return "";
+            })();
             const totalClass = totalPNL > 0 ? 'green' : totalPNL < 0 ? 'red' : '';
             const percentClass = unrealizedPercent !== undefined ? (unrealizedPercent > 0 ? 'green' : unrealizedPercent < 0 ? 'red' : '') : '';
 
@@ -269,7 +302,13 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{formatNumber(marketValue)}</td>
                 <td className="text-center">{breakEvenDisplay}</td>
-                <td className={intradayClass}>{formatNumber(intraday)}</td>
+                <td className={intradayClass}>
+                  {intradayResult.status === "ok" ? (
+                    formatNumber(intraday)
+                  ) : (
+                    <span>{`待补充：${intradayResult.message}`}</span>
+                  )}
+                </td>
                 <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
                 <td>{getTradeCount(pos.symbol)}</td>
@@ -290,10 +329,18 @@ export function PositionsTable({ positions, trades }: Props) {
                     : totals.intraday < 0
                       ? 'red'
                       : ''
-                  : ''
+                  : totals.intradayIssues.length > 0
+                    ? 'text-yellow-600'
+                    : ''
               }
             >
-              <strong>{totals.intraday !== undefined ? formatCurrency(totals.intraday) : '--'}</strong>
+              <strong>
+                {totals.intraday !== undefined
+                  ? formatCurrency(totals.intraday)
+                  : totals.intradayIssues.length > 0
+                    ? `待补充：${totals.intradayIssues.join('；')}`
+                    : '--'}
+              </strong>
             </td>
             <td></td>
             <td className={totals.total > 0 ? 'green' : totals.total < 0 ? 'red' : ''}>

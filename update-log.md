@@ -1,5 +1,16 @@
 # 更新日志
 
+## 2025-10-31
+- 阅读既有日志至 2025-10-29，确认持仓表当日盈亏口径需改进。
+- 基于 M6 legs 新增 `buildIntradayPnlMap`，优先汇总隔夜与当日未平贡献。
+- 复用新映射改写 PositionsTable 当日盈亏计算与日志输出，并将表头改名为“当日盈亏”。
+- 更新 positionMetrics 单测覆盖 M6 legs 汇总与降级路径，运行 `npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts` 通过。
+
+## 2025-11-01
+- 移除当日盈亏旧口径的数值回退，缺数据时直接提示“待补充”并说明缺失的 M6 legs 拆解或代码信息。
+- PositionsTable 列渲染及总计行改为读取拆解结果，缺项时以黄色文本提示补齐数据。
+- 调整 `buildIntradayPnlMap` 返回拆解状态，`calculateIntradayValue` 输出详细缺口原因，并更新相关单测。
+
 ## 2025-10-30
 - 抽取 `normalizeSymbol` 统一股票代码大写与字符过滤逻辑，避免手动输入与编辑初始值出现不一致的字符。
 - `AddTradeModal` 读取历史列表与提交后写入时复用新 helper，确保本地存储与输入框保持同一规则。
@@ -163,3 +174,5 @@
 - `AddTradeModal` 新增本地股票代码历史状态，挂载时从 `localStorage` 读取并去重裁剪。
 - 提交交易后更新股票代码历史，写回 `localStorage` 并保持列表长度上限。
 - 股票代码输入框接入 `datalist` 建议，沿用大写与字符过滤逻辑便于快速选择历史记录。
+- 处理 Vercel 构建报错：`PositionsTable` 汇总当日盈亏提示时直接 `map` 取 `message`，TS 未识别 `filter` 的收窄而报缺少属性。
+- 调整逻辑改用 `Set` 收集缺失提示，循环中基于 `status === "missing"` 时访问 `message`，构建再次通过类型检查。
