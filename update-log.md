@@ -174,3 +174,5 @@
 - `AddTradeModal` 新增本地股票代码历史状态，挂载时从 `localStorage` 读取并去重裁剪。
 - 提交交易后更新股票代码历史，写回 `localStorage` 并保持列表长度上限。
 - 股票代码输入框接入 `datalist` 建议，沿用大写与字符过滤逻辑便于快速选择历史记录。
+- 处理 Vercel 构建报错：`PositionsTable` 汇总当日盈亏提示时直接 `map` 取 `message`，TS 未识别 `filter` 的收窄而报缺少属性。
+- 调整逻辑改用 `Set` 收集缺失提示，循环中基于 `status === "missing"` 时访问 `message`，构建再次通过类型检查。

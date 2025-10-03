@@ -140,15 +140,15 @@ export function PositionsTable({ positions, trades }: Props) {
     const totalIntraday = allIntradayReady
       ? positionSummaries.reduce((sum, item) => sum + (item.intraday ?? 0), 0)
       : undefined;
-    const intradayIssues = allIntradayReady
-      ? []
-      : Array.from(
-          new Set(
-            positionSummaries
-              .filter(item => item.intradayResult.status === "missing")
-              .map(item => item.intradayResult.message),
-          ),
-        );
+    const intradayIssueSet = new Set<string>();
+    if (!allIntradayReady) {
+      for (const item of positionSummaries) {
+        if (item.intradayResult.status === "missing") {
+          intradayIssueSet.add(item.intradayResult.message);
+        }
+      }
+    }
+    const intradayIssues = Array.from(intradayIssueSet);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
     const totalPnL = totalUnrealized + totalRealized;
 
