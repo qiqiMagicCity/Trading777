@@ -17,7 +17,7 @@ export const DATASET_SOURCE_CUSTOM = "custom";
 const LEGACY_DATASET_SOURCE_KEY = "datasetSource";
 const LEGACY_DATASET_HASH_KEY = "datasetHash";
 
-function markDatasetAsCustom(): void {
+export function markDatasetAsCustom(): void {
   try {
     localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
     localStorage.removeItem(DATASET_HASH_KEY);
@@ -180,6 +180,15 @@ export async function getAnyTradeCount(): Promise<number> {
   const db = await getDb();
   const tx = db.transaction(TRADES_STORE_NAME, "readonly");
   const store = tx.objectStore(TRADES_STORE_NAME);
+  const count = await store.count();
+  await tx.done;
+  return count;
+}
+
+export async function getAnyPositionCount(): Promise<number> {
+  const db = await getDb();
+  const tx = db.transaction(POSITIONS_STORE_NAME, "readonly");
+  const store = tx.objectStore(POSITIONS_STORE_NAME);
   const count = await store.count();
   await tx.done;
   return count;
