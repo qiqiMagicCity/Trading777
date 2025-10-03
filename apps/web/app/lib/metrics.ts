@@ -58,6 +58,7 @@ import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
 import { round2 as mRound2 } from "./money";
 import { sumPeriod as sumPeriodBase, type PeriodTotalsOptions } from "./metrics-periods";
+import { round4, add4, sub4, mul4, div4 } from "./precision";
 import type {
   MetricsContract,
   PeriodDegradedMap,
@@ -398,7 +399,7 @@ function _buildTodayLots(
     if (!Number.isFinite(qty) || qty <= EPSILON) continue;
 
     const pxRaw = Number(t.price);
-    const price = Number.isFinite(pxRaw) ? pxRaw : NaN;
+    const price = Number.isFinite(pxRaw) ? round4(pxRaw) : NaN;
 
     if (t.isInitialPosition) {
       const base = getBaseline(sym);
@@ -488,14 +489,28 @@ function _buildTodayLots(
       continue;
     }
 
-    const longCost =
-      longQty > 0
-        ? validLongLots.reduce((acc, lot) => acc + lot.qty * lot.price, 0) / longQty
-        : 0;
-    const shortCost =
-      shortQty > 0
-        ? validShortLots.reduce((acc, lot) => acc + lot.qty * lot.price, 0) / shortQty
-        : 0;
+    let longCostTotal = 0;
+    if (longQty > 0) {
+      for (const lot of validLongLots) {
+        const lotCost = mul4(lot.price, lot.qty);
+        if (Number.isFinite(lotCost)) {
+          longCostTotal = add4(longCostTotal, lotCost);
+        }
+      }
+    }
+
+    let shortCostTotal = 0;
+    if (shortQty > 0) {
+      for (const lot of validShortLots) {
+        const lotCost = mul4(lot.price, lot.qty);
+        if (Number.isFinite(lotCost)) {
+          shortCostTotal = add4(shortCostTotal, lotCost);
+        }
+      }
+    }
+
+    const longCost = longQty > 0 ? div4(longCostTotal, longQty) : 0;
+    const shortCost = shortQty > 0 ? div4(shortCostTotal, shortQty) : 0;
 
     result[sym] = { longQty, longCost, shortQty, shortCost };
   }
@@ -609,6 +624,8 @@ function _calcM6Strict(params: {
     const prevClose = Number(pos?.prevClose);
     const hasMark = Number.isFinite(mark);
     const hasPrev = Number.isFinite(prevClose);
+    const markRounded = hasMark ? round4(mark) : NaN;
+    const prevCloseRounded = hasPrev ? round4(prevClose) : NaN;
 
     // 2.2 当日新开仍未平的净数量（多为正、空为负）
     const todayLongQty = Number(lots.longQty ?? 0);
@@ -631,37 +648,48 @@ function _calcM6Strict(params: {
       basis: number,
       pnl: number,
     ) => {
+      const roundedBasis = round4(basis);
+      const roundedAmount = round4(pnl);
+      const roundedMark = Number.isFinite(markRounded) ? markRounded : NaN;
       legs.push({
         symbol,
         qty,
-        basis,
-        mark,
-        amount: pnl,
+        basis: roundedBasis,
+        mark: roundedMark,
+        amount: roundedAmount,
         component,
       });
       if (component === "mtm_overnight") {
-        mtmOvernight += pnl;
+        mtmOvernight = add4(mtmOvernight, roundedAmount);
       } else {
-        mtmIntradayOpen += pnl;
+        mtmIntradayOpen = add4(mtmIntradayOpen, roundedAmount);
       }
     };
 
     // === 当日新开未平部分 ===
     if (hasMark) {
       if (todayLongOpen > EPSILON) {
-        const basis = Number(lots.longCost ?? NaN);
-        if (Number.isFinite(basis)) {
-          const pnl = (mark - basis) * todayLongOpen;
-          recordLeg("mtm_intraday_open", todayLongOpen, basis, pnl);
+        const basisRaw = Number(lots.longCost ?? NaN);
+        if (Number.isFinite(basisRaw)) {
+          const basis = round4(basisRaw);
+          const diff = sub4(markRounded, basis);
+          const pnl = mul4(diff, todayLongOpen);
+          if (Number.isFinite(pnl)) {
+            recordLeg("mtm_intraday_open", todayLongOpen, basis, pnl);
+          }
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日多头成本，当日新开未平不计入。`);
         }
       }
       if (todayShortOpen > EPSILON) {
-        const basis = Number(lots.shortCost ?? NaN);
-        if (Number.isFinite(basis)) {
-          const pnl = (basis - mark) * todayShortOpen;
-          recordLeg("mtm_intraday_open", todayShortOpen, basis, pnl);
+        const basisRaw = Number(lots.shortCost ?? NaN);
+        if (Number.isFinite(basisRaw)) {
+          const basis = round4(basisRaw);
+          const diff = sub4(basis, markRounded);
+          const pnl = mul4(diff, todayShortOpen);
+          if (Number.isFinite(pnl)) {
+            recordLeg("mtm_intraday_open", todayShortOpen, basis, pnl);
+          }
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日空头成本，当日新开未平不计入。`);
         }
@@ -674,12 +702,18 @@ function _calcM6Strict(params: {
     if (Math.abs(overnightSigned) > 1e-9) {
       if (hasMark && hasPrev) {
         if (overnightSigned > 0) {
-          const pnl = (mark - prevClose) * overnightSigned; // 多头过夜
-          recordLeg("mtm_overnight", overnightSigned, prevClose, pnl);
+          const diff = sub4(markRounded, prevCloseRounded);
+          const pnl = mul4(diff, overnightSigned);
+          if (Number.isFinite(pnl)) {
+            recordLeg("mtm_overnight", overnightSigned, prevCloseRounded, pnl);
+          }
         } else {
           const absQty = Math.abs(overnightSigned);
-          const pnl = (prevClose - mark) * absQty; // 空头过夜
-          recordLeg("mtm_overnight", absQty, prevClose, pnl);
+          const diff = sub4(prevCloseRounded, markRounded);
+          const pnl = mul4(diff, absQty);
+          if (Number.isFinite(pnl)) {
+            recordLeg("mtm_overnight", absQty, prevCloseRounded, pnl);
+          }
         }
       } else {
         const miss: string[] = [];
@@ -705,31 +739,41 @@ function _calcM6Strict(params: {
     const prevClose = Number(p.prevClose);
     const hasMark = Number.isFinite(mark);
     const hasPrev = Number.isFinite(prevClose);
+    const markRounded = hasMark ? round4(mark) : NaN;
+    const prevCloseRounded = hasPrev ? round4(prevClose) : NaN;
 
     if (hasMark && hasPrev) {
       if (currentQty > 0) {
-        const pnl = (mark - prevClose) * currentQty;
-        legs.push({
-          symbol,
-          qty: currentQty,
-          basis: prevClose,
-          mark,
-          amount: pnl,
-          component: "mtm_overnight",
-        });
-        mtmOvernight += pnl;
+        const diff = sub4(markRounded, prevCloseRounded);
+        const pnl = mul4(diff, currentQty);
+        if (Number.isFinite(pnl)) {
+          const amount = round4(pnl);
+          legs.push({
+            symbol,
+            qty: currentQty,
+            basis: prevCloseRounded,
+            mark: markRounded,
+            amount,
+            component: "mtm_overnight",
+          });
+          mtmOvernight = add4(mtmOvernight, amount);
+        }
       } else {
         const absQty = Math.abs(currentQty);
-        const pnl = (prevClose - mark) * absQty;
-        legs.push({
-          symbol,
-          qty: absQty,
-          basis: prevClose,
-          mark,
-          amount: pnl,
-          component: "mtm_overnight",
-        });
-        mtmOvernight += pnl;
+        const diff = sub4(prevCloseRounded, markRounded);
+        const pnl = mul4(diff, absQty);
+        if (Number.isFinite(pnl)) {
+          const amount = round4(pnl);
+          legs.push({
+            symbol,
+            qty: absQty,
+            basis: prevCloseRounded,
+            mark: markRounded,
+            amount,
+            component: "mtm_overnight",
+          });
+          mtmOvernight = add4(mtmOvernight, amount);
+        }
       }
     } else {
       const miss: string[] = [];
@@ -738,6 +782,9 @@ function _calcM6Strict(params: {
       warnings.push(`SafePrice: ${symbol} 缺少${miss.join("与")}，过夜部分按 0 计入。`);
     }
   }
+
+  mtmOvernight = round4(mtmOvernight);
+  mtmIntradayOpen = round4(mtmIntradayOpen);
 
   const realizedTotal = M4 + M5_2;
   if (Math.abs(realizedToday - realizedTotal) > 1e-6) {
