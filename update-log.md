@@ -141,3 +141,11 @@
 - `providers`、`page`、`positions/page` 均改为调用新入口并打印 `[dataset] ready` 日志，生产默认保持空库，开发模式仍支持演示数据。
 - `dataService` 导出 `markDatasetAsCustom`、`getAnyPositionCount`，配合新初始化逻辑补写标记；`ensureBuiltInDatasetLoaded` 保留别名兼容。
 - 重写初始化相关单测（`ensureDatasetReady.test.ts`），覆盖空库 + off/demo、自动补标记、自定义数据分支，并新增 `.env.production` 设置 `NEXT_PUBLIC_SEED_MODE=off`。
+
+## 2025-10-26
+- `computeFifo` 记录多/空各自的 Sticky 保本价，补充 `breakEvenJStickyLong/Short` 字段供前端读取。
+- 个股详情页盈亏平衡点遵循“只展示真实方向”规范：实时显示当前方向，历史场景按多头/空头各渲染一行且保留两位小数，无占位符。
+- 回归 `breakevenJ.sticky` 单测，确认多空 Sticky 追踪与页面展示逻辑协同生效。
+
+## 2025-10-27
+- 调整个股详情页盈亏平衡点历史段落的排版，改用纵向居中对齐，确保多空文案在表格中居中展示以符合设计反馈。

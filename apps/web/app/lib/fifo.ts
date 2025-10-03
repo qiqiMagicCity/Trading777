@@ -21,6 +21,7 @@ type SymbolState = {
   breakEvenJSticky?: number;
   breakEvenJStickyDirection?: PositionDirection;
   lastDirection?: PositionDirection;
+  breakEvenStickyByDirection: Partial<Record<PositionDirection, number>>;
 };
 
 export type EnrichedTrade = Trade & {
@@ -36,6 +37,8 @@ export type EnrichedTrade = Trade & {
   breakEvenJSticky?: number;
   breakEvenDirection?: PositionDirection;
   breakEvenDirectionSticky?: PositionDirection;
+  breakEvenJStickyLong?: number;
+  breakEvenJStickyShort?: number;
   accTotalCost: number;
   accRealizedPnl: number;
   netPosition: number;
@@ -76,6 +79,7 @@ export function computeFifo(
       breakEvenJSticky: initialJ,
       breakEvenJStickyDirection: direction,
       lastDirection: direction,
+      breakEvenStickyByDirection: initialJ !== undefined ? { [direction]: initialJ } : {},
     };
   }
 
@@ -103,6 +107,7 @@ export function computeFifo(
       breakEvenJSticky: undefined,
       breakEvenJStickyDirection: undefined,
       lastDirection: undefined,
+      breakEvenStickyByDirection: {},
     });
 
     state.tradeCount += 1;
@@ -229,6 +234,10 @@ export function computeFifo(
     if (currentJ !== undefined && breakEvenDirection) {
       state.breakEvenJSticky = currentJ;
       state.breakEvenJStickyDirection = breakEvenDirection;
+      state.breakEvenStickyByDirection = {
+        ...state.breakEvenStickyByDirection,
+        [breakEvenDirection]: currentJ,
+      };
     }
     const breakEvenJ = currentJ;
     const breakEvenJSticky = state.breakEvenJSticky ?? undefined;
@@ -238,6 +247,8 @@ export function computeFifo(
           ? breakEvenDirection
           : state.breakEvenJStickyDirection ?? state.lastDirection
         : undefined;
+    const breakEvenJStickyLong = state.breakEvenStickyByDirection.LONG;
+    const breakEvenJStickyShort = state.breakEvenStickyByDirection.SHORT;
     const breakEvenPrice = breakEvenJ ?? 0;
 
     const date = toNY(trade.date);
@@ -257,6 +268,8 @@ export function computeFifo(
       breakEvenJSticky,
       breakEvenDirection,
       breakEvenDirectionSticky,
+      breakEvenJStickyLong,
+      breakEvenJStickyShort,
       accTotalCost: state.accumulatedTotalCost,
       accRealizedPnl: state.accumulatedRealizedPnl,
       netPosition,

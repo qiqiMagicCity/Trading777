@@ -139,17 +139,9 @@ export default function StockPage() {
                 typeof trade.breakEvenJ === 'number' && Number.isFinite(trade.breakEvenJ)
                   ? trade.breakEvenJ
                   : undefined;
-              const breakEvenJSticky =
-                typeof trade.breakEvenJSticky === 'number' && Number.isFinite(trade.breakEvenJSticky)
-                  ? trade.breakEvenJSticky
-                  : undefined;
               const breakEvenDirection =
                 trade.breakEvenDirection === 'LONG' || trade.breakEvenDirection === 'SHORT'
                   ? trade.breakEvenDirection
-                  : undefined;
-              const breakEvenDirectionSticky =
-                trade.breakEvenDirectionSticky === 'LONG' || trade.breakEvenDirectionSticky === 'SHORT'
-                  ? trade.breakEvenDirectionSticky
                   : undefined;
               const renderDirectionTag = (dir?: 'LONG' | 'SHORT') => {
                 if (dir === 'SHORT') {
@@ -160,27 +152,43 @@ export default function StockPage() {
                 }
                 return null;
               };
-              const stickyLabelPrefix = breakEvenDirectionSticky === 'SHORT'
-                ? '历史空头盈亏平衡点：'
-                : breakEvenDirectionSticky === 'LONG'
-                  ? '历史多头盈亏平衡点：'
-                  : '历史盈亏平衡点：';
-              const stickyLabelClass = breakEvenDirectionSticky === 'SHORT'
-                ? 'text-xs text-red-500'
-                : breakEvenDirectionSticky === 'LONG'
-                  ? 'text-xs text-green-500'
-                  : 'text-xs text-gray-500';
+              const historicalLong =
+                typeof trade.breakEvenJStickyLong === 'number' && Number.isFinite(trade.breakEvenJStickyLong)
+                  ? trade.breakEvenJStickyLong
+                  : undefined;
+              const historicalShort =
+                typeof trade.breakEvenJStickyShort === 'number' && Number.isFinite(trade.breakEvenJStickyShort)
+                  ? trade.breakEvenJStickyShort
+                  : undefined;
+              const historicalLines: { key: 'LONG' | 'SHORT'; label: string; value: number }[] = [];
+              if (historicalLong !== undefined) {
+                historicalLines.push({ key: 'LONG', label: '历史多头盈亏平衡点：', value: historicalLong });
+              }
+              if (historicalShort !== undefined) {
+                historicalLines.push({ key: 'SHORT', label: '历史空头盈亏平衡点：', value: historicalShort });
+              }
               const breakEvenDisplay = breakEvenJ !== undefined ? (
                 <span>
                   {formatNumber(Math.abs(breakEvenJ))}
                   {renderDirectionTag(breakEvenDirection)}
                 </span>
-              ) : breakEvenJSticky !== undefined ? (
-                <div className="flex flex-col items-center leading-tight">
-                  <span className={stickyLabelClass}>
-                    {stickyLabelPrefix}
-                    {formatNumber(Math.abs(breakEvenJSticky))}
-                  </span>
+              ) : historicalLines.length > 0 ? (
+                <div className="flex flex-col items-center leading-tight text-center">
+                  {historicalLines.map((line) => (
+                    <span
+                      key={line.key}
+                      className={
+                        line.key === 'SHORT'
+                          ? 'text-xs text-red-500'
+                          : line.key === 'LONG'
+                            ? 'text-xs text-green-500'
+                            : 'text-xs text-gray-500'
+                      }
+                    >
+                      {line.label}
+                      {formatNumber(Math.abs(line.value))}
+                    </span>
+                  ))}
                 </div>
               ) : null;
 
