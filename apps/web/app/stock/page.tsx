@@ -173,7 +173,7 @@ export default function StockPage() {
                   {renderDirectionTag(breakEvenDirection)}
                 </span>
               ) : historicalLines.length > 0 ? (
-                <div className="flex flex-col items-start leading-tight">
+                <div className="flex h-full flex-col items-center justify-center gap-1 text-center leading-tight">
                   {historicalLines.map((line) => (
                     <span
                       key={line.key}
