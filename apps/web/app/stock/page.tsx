@@ -151,38 +151,76 @@ export default function StockPage() {
                 trade.breakEvenDirectionSticky === 'LONG' || trade.breakEvenDirectionSticky === 'SHORT'
                   ? trade.breakEvenDirectionSticky
                   : undefined;
-              const renderDirectionTag = (dir?: 'LONG' | 'SHORT') => {
-                if (dir === 'SHORT') {
-                  return <span className="text-red-500">（空头）</span>;
+              const stickyLong =
+                typeof trade.breakEvenJStickyLong === 'number' && Number.isFinite(trade.breakEvenJStickyLong)
+                  ? Math.abs(trade.breakEvenJStickyLong)
+                  : undefined;
+              const stickyShort =
+                typeof trade.breakEvenJStickyShort === 'number' && Number.isFinite(trade.breakEvenJStickyShort)
+                  ? Math.abs(trade.breakEvenJStickyShort)
+                  : undefined;
+
+              let breakEvenDisplay: JSX.Element | null = null;
+              if (breakEvenJ !== undefined) {
+                const currentLabel = breakEvenDirection === 'SHORT'
+                  ? '当前空头盈亏平衡点：'
+                  : breakEvenDirection === 'LONG'
+                    ? '当前多头盈亏平衡点：'
+                    : '当前盈亏平衡点：';
+                const currentClass = breakEvenDirection === 'SHORT'
+                  ? 'text-xs text-red-500'
+                  : breakEvenDirection === 'LONG'
+                    ? 'text-xs text-green-500'
+                    : 'text-xs text-gray-500';
+                breakEvenDisplay = (
+                  <div className="flex flex-col items-center leading-tight">
+                    <span className={currentClass}>
+                      {currentLabel}
+                      {formatNumber(Math.abs(breakEvenJ))}
+                    </span>
+                  </div>
+                );
+              } else if (breakEvenJSticky !== undefined || stickyLong !== undefined || stickyShort !== undefined) {
+                const historyLines: JSX.Element[] = [];
+                if (stickyLong !== undefined) {
+                  historyLines.push(
+                    <span key="history-long" className="text-xs text-green-500">
+                      历史多头盈亏平衡点：
+                      {formatNumber(stickyLong)}
+                    </span>,
+                  );
                 }
-                if (dir === 'LONG') {
-                  return <span className="text-green-500">（多头）</span>;
+                if (stickyShort !== undefined) {
+                  historyLines.push(
+                    <span key="history-short" className="text-xs text-red-500">
+                      历史空头盈亏平衡点：
+                      {formatNumber(stickyShort)}
+                    </span>,
+                  );
+                } else if (breakEvenDirectionSticky === 'SHORT' && breakEvenJSticky !== undefined) {
+                  historyLines.push(
+                    <span key="history-short" className="text-xs text-red-500">
+                      历史空头盈亏平衡点：
+                      {formatNumber(Math.abs(breakEvenJSticky))}
+                    </span>,
+                  );
                 }
-                return null;
-              };
-              const stickyLabelPrefix = breakEvenDirectionSticky === 'SHORT'
-                ? '历史空头盈亏平衡点：'
-                : breakEvenDirectionSticky === 'LONG'
-                  ? '历史多头盈亏平衡点：'
-                  : '历史盈亏平衡点：';
-              const stickyLabelClass = breakEvenDirectionSticky === 'SHORT'
-                ? 'text-xs text-red-500'
-                : breakEvenDirectionSticky === 'LONG'
-                  ? 'text-xs text-green-500'
-                  : 'text-xs text-gray-500';
-              const breakEvenDisplay = breakEvenJ !== undefined ? (
-                <span>
-                  {formatNumber(Math.abs(breakEvenJ))}
-                  {renderDirectionTag(breakEvenDirection)}
-                </span>
-              ) : breakEvenJSticky !== undefined ? (
-                <div className="flex flex-col items-center leading-tight">
-                  <span className={stickyLabelClass}>
-                    {stickyLabelPrefix}
-                    {formatNumber(Math.abs(breakEvenJSticky))}
-                  </span>
-                </div>
-              ) : null;
+                if (historyLines.length === 0 && breakEvenJSticky !== undefined) {
+                  historyLines.push(
+                    <span key="history-generic" className="text-xs text-gray-500">
+                      历史盈亏平衡点：
+                      {formatNumber(Math.abs(breakEvenJSticky))}
+                    </span>,
+                  );
+                }
+                breakEvenDisplay = historyLines.length > 0
+                  ? (
+                    <div className="flex flex-col items-center leading-tight">
+                      {historyLines}
+                    </div>
+                  )
+                  : null;
+              }
 
               return (
                 <tr key={idx}>

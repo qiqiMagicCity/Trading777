@@ -21,6 +21,8 @@ type SymbolState = {
   breakEvenJSticky?: number;
   breakEvenJStickyDirection?: PositionDirection;
   lastDirection?: PositionDirection;
+  breakEvenJStickyLong?: number;
+  breakEvenJStickyShort?: number;
 };
 
 export type EnrichedTrade = Trade & {
@@ -36,6 +38,8 @@ export type EnrichedTrade = Trade & {
   breakEvenJSticky?: number;
   breakEvenDirection?: PositionDirection;
   breakEvenDirectionSticky?: PositionDirection;
+  breakEvenJStickyLong?: number;
+  breakEvenJStickyShort?: number;
   accTotalCost: number;
   accRealizedPnl: number;
   netPosition: number;
@@ -76,6 +80,8 @@ export function computeFifo(
       breakEvenJSticky: initialJ,
       breakEvenJStickyDirection: direction,
       lastDirection: direction,
+      breakEvenJStickyLong: direction === 'LONG' ? initialJ : undefined,
+      breakEvenJStickyShort: direction === 'SHORT' ? initialJ : undefined,
     };
   }
 
@@ -103,6 +109,8 @@ export function computeFifo(
       breakEvenJSticky: undefined,
       breakEvenJStickyDirection: undefined,
       lastDirection: undefined,
+      breakEvenJStickyLong: undefined,
+      breakEvenJStickyShort: undefined,
     });
 
     state.tradeCount += 1;
@@ -229,6 +237,11 @@ export function computeFifo(
     if (currentJ !== undefined && breakEvenDirection) {
       state.breakEvenJSticky = currentJ;
       state.breakEvenJStickyDirection = breakEvenDirection;
+      if (breakEvenDirection === 'LONG') {
+        state.breakEvenJStickyLong = currentJ;
+      } else if (breakEvenDirection === 'SHORT') {
+        state.breakEvenJStickyShort = currentJ;
+      }
     }
     const breakEvenJ = currentJ;
     const breakEvenJSticky = state.breakEvenJSticky ?? undefined;
@@ -257,6 +270,8 @@ export function computeFifo(
       breakEvenJSticky,
       breakEvenDirection,
       breakEvenDirectionSticky,
+      breakEvenJStickyLong: state.breakEvenJStickyLong,
+      breakEvenJStickyShort: state.breakEvenJStickyShort,
       accTotalCost: state.accumulatedTotalCost,
       accRealizedPnl: state.accumulatedRealizedPnl,
       netPosition,
