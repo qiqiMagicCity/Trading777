@@ -1,5 +1,5 @@
-import "fake-indexeddb/auto";
-import { ensureBuiltInDatasetLoaded } from "@/app/lib/ensureBuiltInDatasetLoaded";
+import 'fake-indexeddb/auto';
+import { ensureDatasetReady } from '@/app/lib/dataset';
 import {
   clearAndImportData,
   importData,
@@ -7,8 +7,10 @@ import {
   closeDb,
   DATASET_SOURCE_KEY,
   DATASET_SOURCE_CUSTOM,
-} from "../services/dataService";
-import { BUILTIN_DATASET } from "@/data/builtin";
+  DATASET_SOURCE_BUILTIN,
+  DATASET_HASH_KEY,
+} from '../services/dataService';
+import { BUILTIN_DATASET } from '@/data/builtin';
 
 type StorageShape = Record<string, string>;
 
@@ -34,13 +36,14 @@ function createMemoryStorage(): Storage {
   } as Storage;
 }
 
-describe("ensureBuiltInDatasetLoaded", () => {
+describe('ensureDatasetReady', () => {
   beforeEach(async () => {
     await indexedDB.deleteDatabase("TradingApp");
     Object.defineProperty(global, "localStorage", {
       value: createMemoryStorage(),
       configurable: true,
     });
+    delete process.env.NEXT_PUBLIC_SEED_MODE;
   });
 
   afterEach(async () => {
@@ -49,7 +52,7 @@ describe("ensureBuiltInDatasetLoaded", () => {
     delete global.localStorage;
   });
 
-  it("keeps custom dataset across bootstrap reload", async () => {
+  it('returns idb and补写 custom 标记当已有数据但未打标', async () => {
     await clearAndImportData(BUILTIN_DATASET as any);
 
     const custom = {
@@ -69,53 +72,47 @@ describe("ensureBuiltInDatasetLoaded", () => {
     await importData(custom as any);
     expect(await getAnyTradeCount()).toBe(8);
 
-    await ensureBuiltInDatasetLoaded();
+    localStorage.removeItem(DATASET_SOURCE_KEY);
+    localStorage.removeItem('datasetSource');
 
+    const status = await ensureDatasetReady();
+
+    expect(status).toBe('idb');
     expect(await getAnyTradeCount()).toBe(8);
     expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_CUSTOM);
   });
 
-  it("does not fetch trades.json when dataset is custom", async () => {
-    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+  it('空库 + off 模式保持 empty', async () => {
+    process.env.NEXT_PUBLIC_SEED_MODE = 'off';
 
-    const originalFetch = (global as any).fetch;
-    if (!originalFetch) {
-      (global as any).fetch = async () => ({ ok: true, json: async () => ({}) });
-    }
+    const status = await ensureDatasetReady();
 
-    const spy = jest.spyOn(global as any, "fetch");
-
-    await ensureBuiltInDatasetLoaded();
-
-    expect(spy).not.toHaveBeenCalledWith(expect.stringMatching(/trades\.json|\/data\/builtin/));
-    expect(spy).not.toHaveBeenCalled();
-
-    spy.mockRestore();
-
-    if (!originalFetch) {
-      delete (global as any).fetch;
-    }
+    expect(status).toBe('empty');
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBeNull();
+    expect(localStorage.getItem(DATASET_HASH_KEY)).toBeNull();
   });
 
-  it("respects legacy datasetSource custom flag", async () => {
-    localStorage.setItem("datasetSource", DATASET_SOURCE_CUSTOM);
+  it('空库 + demo 模式会播种并返回 seeded', async () => {
+    process.env.NEXT_PUBLIC_SEED_MODE = 'demo';
 
-    const originalFetch = (global as any).fetch;
-    if (!originalFetch) {
-      (global as any).fetch = async () => ({ ok: true, json: async () => ({}) });
-    }
+    const status = await ensureDatasetReady();
 
-    const spy = jest.spyOn(global as any, "fetch");
+    expect(status).toBe('seeded');
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_BUILTIN);
+    expect(localStorage.getItem(DATASET_HASH_KEY)).toBeTruthy();
+    expect(await getAnyTradeCount()).toBeGreaterThan(0);
 
-    await ensureBuiltInDatasetLoaded();
+    const second = await ensureDatasetReady();
+    expect(second).toBe('idb');
+  });
 
-    expect(spy).not.toHaveBeenCalled();
-    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBeNull();
+  it('custom 标记时不会覆写本地数据', async () => {
+    localStorage.setItem(DATASET_SOURCE_KEY, DATASET_SOURCE_CUSTOM);
+    process.env.NEXT_PUBLIC_SEED_MODE = 'demo';
 
-    spy.mockRestore();
+    const status = await ensureDatasetReady();
 
-    if (!originalFetch) {
-      delete (global as any).fetch;
-    }
+    expect(status).toBe('empty');
+    expect(localStorage.getItem(DATASET_SOURCE_KEY)).toBe(DATASET_SOURCE_CUSTOM);
   });
 });

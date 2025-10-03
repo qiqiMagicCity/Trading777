@@ -135,3 +135,9 @@
 ## 2025-10-24
 - 调整 `calcTodayFifoPnL` 以复用交易视角的日内配对结果，并改用全局 FIFO 成本重算 M5.2，覆盖“卖出历史持仓但在日内闭环”场景。
 - 新增 AMZN 历史持仓 + 日内闭环单测，验证 M5.2 以 FIFO 成本得到预期收益。
+
+## 2025-10-25
+- 新增 `dataset.ts`，实现 `ensureDatasetReady`/`hasUserData`，根据 `NEXT_PUBLIC_SEED_MODE` 控制播种逻辑，并在发现现有数据时优先返回 IndexedDB。
+- `providers`、`page`、`positions/page` 均改为调用新入口并打印 `[dataset] ready` 日志，生产默认保持空库，开发模式仍支持演示数据。
+- `dataService` 导出 `markDatasetAsCustom`、`getAnyPositionCount`，配合新初始化逻辑补写标记；`ensureBuiltInDatasetLoaded` 保留别名兼容。
+- 重写初始化相关单测（`ensureDatasetReady.test.ts`），覆盖空库 + off/demo、自动补标记、自定义数据分支，并新增 `.env.production` 设置 `NEXT_PUBLIC_SEED_MODE=off`。

@@ -17,8 +17,8 @@ export default function PositionsPage() {
       try {
         setIsLoading(true);
 
-        await import("@/app/lib/ensureBuiltInDatasetLoaded")
-          .then((m) => m.ensureBuiltInDatasetLoaded())
+        await import("@/app/lib/dataset")
+          .then((m) => m.ensureDatasetReady())
           .catch((err) => {
             console.error("Dataset bootstrap failed:", err);
           });
