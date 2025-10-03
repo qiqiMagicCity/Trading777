@@ -91,7 +91,11 @@ function getWeekIdx(dateStr){
       if(totalQty>EPS){
         const sumCost = st.positionList.reduce((s,l)=> s + l.price*l.qty, 0);
         mVal = sumCost / totalQty;
-        jVal = (sumCost - st.accRealized) / totalQty;
+        if (st.direction === 'SHORT') {
+          jVal = (sumCost + st.accRealized) / totalQty;
+        } else {
+          jVal = (sumCost - st.accRealized) / totalQty;
+        }
       }
 
       // enrich trade object
