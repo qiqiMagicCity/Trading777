@@ -1,542 +1,1519 @@
-[
-  {
-    "symbol": "TSDD",
-    "price": 11.04,
-    "quantity": 10000,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 9
-  },
-  {
-    "symbol": "BA",
-    "price": 216.27,
-    "quantity": 350,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 10
-  },
-  {
-    "symbol": "GOOGL",
-    "price": 170.73,
-    "quantity": 400,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 11
-  },
-  {
-    "symbol": "AMD",
-    "price": 151.72,
-    "quantity": 380,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 12
-  },
-  {
-    "symbol": "PYPL",
-    "price": 68.54,
-    "quantity": 555,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 13
-  },
-  {
-    "symbol": "UAL",
-    "price": 103.7,
-    "quantity": 300,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 14
-  },
-  {
-    "symbol": "DIS",
-    "price": 116.83,
-    "quantity": 250,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 15
-  },
-  {
-    "symbol": "NVDL",
-    "price": 84.12,
-    "quantity": 330,
-    "date": "2025-09-22",
-    "action": "buy",
-    "time": "2025-09-22T20:00:00",
-    "id": 16
-  },
-  {
-    "symbol": "DIS",
-    "price": 112.9529,
-    "quantity": 100,
-    "date": "2025-09-23",
-    "action": "buy",
-    "time": "2025-09-23T12:24:44",
-    "id": 17
-  },
-  {
-    "symbol": "NVDL",
-    "price": 86.2611,
-    "quantity": 330,
-    "date": "2025-09-23",
-    "action": "sell",
-    "time": "2025-09-23T12:25:06",
-    "id": 18
-  },
-  {
-    "symbol": "AMD",
-    "price": 159.78,
-    "quantity": 330,
-    "date": "2025-09-23",
-    "action": "sell",
-    "time": "2025-09-23T12:25:32",
-    "id": 19
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.415,
-    "quantity": 700,
-    "date": "2025-09-24",
-    "action": "buy",
-    "time": "2025-09-24T12:26:05",
-    "id": 20
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.42,
-    "quantity": 50,
-    "date": "2025-09-24",
-    "action": "buy",
-    "time": "2025-09-24T12:26:26",
-    "id": 21
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.415,
-    "quantity": 400,
-    "date": "2025-09-24",
-    "action": "buy",
-    "time": "2025-09-24T12:26:46",
-    "id": 22
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.42,
-    "quantity": 850,
-    "date": "2025-09-24",
-    "action": "buy",
-    "time": "2025-09-24T12:27:16",
-    "id": 23
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.523,
-    "quantity": 2000,
-    "date": "2025-09-24",
-    "action": "sell",
-    "time": "2025-09-24T12:28:00",
-    "id": 24
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.7478,
-    "quantity": 2200,
-    "date": "2025-09-24",
-    "action": "buy",
-    "time": "2025-09-24T14:31:40",
-    "id": 25
-  },
-  {
-    "symbol": "TSLL",
-    "price": 20.76,
-    "quantity": 2200,
-    "date": "2025-09-24",
-    "action": "sell",
-    "time": "2025-09-24T14:38:08",
-    "id": 26
-  },
-  {
-    "symbol": "NVD",
-    "price": 9.6699,
-    "quantity": 3800,
-    "date": "2025-09-24",
-    "action": "buy",
-    "time": "2025-09-24T15:07:03",
-    "id": 27
-  },
-  {
-    "symbol": "NVD",
-    "price": 9.69,
-    "quantity": 3800,
-    "date": "2025-09-24",
-    "action": "sell",
-    "time": "2025-09-24T15:16:24",
-    "id": 28
-  },
-  {
-    "symbol": "AMD",
-    "price": 156.925,
-    "quantity": 50,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T09:35:13",
-    "id": 29
-  },
-  {
-    "symbol": "GGLL",
-    "price": 62.7319,
-    "quantity": 500,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T09:38:33",
-    "id": 30
-  },
-  {
-    "symbol": "GGLL",
-    "price": 62.9454,
-    "quantity": 500,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T09:52:04",
-    "id": 31
-  },
-  {
-    "symbol": "UAL",
-    "price": 99.13,
-    "quantity": 150,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T10:01:23",
-    "id": 32
-  },
-  {
-    "symbol": "NVDL",
-    "price": 84.259,
-    "quantity": 400,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T10:09:21",
-    "id": 33
-  },
-  {
-    "symbol": "NVDL",
-    "price": 84.5505,
-    "quantity": 400,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T10:18:13",
-    "id": 34
-  },
-  {
-    "symbol": "AAPL",
-    "price": 254.0199,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T10:27:40",
-    "id": 35
-  },
-  {
-    "symbol": "AAPL",
-    "price": 254.03,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T10:29:55",
-    "id": 36
-  },
-  {
-    "symbol": "IBM",
-    "price": 278.8015,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T10:32:38",
-    "id": 37
-  },
-  {
-    "symbol": "IBM",
-    "price": 280.43,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T10:43:48",
-    "id": 38
-  },
-  {
-    "symbol": "AMZN",
-    "price": 219.8349,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T11:25:08",
-    "id": 39
-  },
-  {
-    "symbol": "AMZN",
-    "price": 220.0919,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T12:26:29",
-    "id": 40
-  },
-  {
-    "symbol": "AMZN",
-    "price": 219.3,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T13:06:22",
-    "id": 41
-  },
-  {
-    "symbol": "AMZN",
-    "price": 219.0324,
-    "quantity": 70,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T13:13:12",
-    "id": 42
-  },
-  {
-    "symbol": "AMZN",
-    "price": 217.22,
-    "quantity": 400,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T14:24:57",
-    "id": 43
-  },
-  {
-    "symbol": "AMZN",
-    "price": 217.0177,
-    "quantity": 400,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T14:28:43",
-    "id": 44
-  },
-  {
-    "symbol": "AMZN",
-    "price": 217.1,
-    "quantity": 400,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T14:38:31",
-    "id": 45
-  },
-  {
-    "symbol": "IBM",
-    "price": 280.24,
-    "quantity": 330,
-    "date": "2025-09-25",
-    "action": "buy",
-    "time": "2025-09-25T14:40:37",
-    "id": 46
-  },
-  {
-    "symbol": "PYPL",
-    "price": 66.7018,
-    "quantity": 555,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T15:32:04",
-    "id": 47
-  },
-  {
-    "symbol": "IBM",
-    "price": 281.1,
-    "quantity": 180,
-    "date": "2025-09-25",
-    "action": "sell",
-    "time": "2025-09-25T15:33:53",
-    "id": 48
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.1866,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T10:41:54",
-    "id": 49
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.3819,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T10:42:14",
-    "id": 50
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.4479,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T10:53:10",
-    "id": 51
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.47,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T11:00:08",
-    "id": 52
-  },
-  {
-    "symbol": "IBM",
-    "price": 285.39,
-    "quantity": 150,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T11:04:07",
-    "id": 53
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.5791,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T11:12:43",
-    "id": 54
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.58,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T11:19:05",
-    "id": 55
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.6894,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T11:26:15",
-    "id": 56
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.7204,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T11:30:28",
-    "id": 57
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.77,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T12:25:47",
-    "id": 58
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.8836,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T12:26:33",
-    "id": 59
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.889,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T12:44:24",
-    "id": 60
-  },
-  {
-    "symbol": "TSLL",
-    "price": 19.925,
-    "quantity": 2000,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T13:00:07",
-    "id": 61
-  },
-  {
-    "symbol": "MSTR",
-    "price": 306.5,
-    "quantity": 330,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T13:28:57",
-    "id": 62
-  },
-  {
-    "symbol": "MSTR",
-    "price": 306.66,
-    "quantity": 330,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T13:31:32",
-    "id": 63
-  },
-  {
-    "symbol": "TSDD",
-    "price": 10.6001,
-    "quantity": 2500,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T13:34:27",
-    "id": 64
-  },
-  {
-    "symbol": "TSLQ",
-    "price": 8.4966,
-    "quantity": 3000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T13:42:19",
-    "id": 65
-  },
-  {
-    "symbol": "TSLQ",
-    "price": 8.3571,
-    "quantity": 1000,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T14:05:31",
-    "id": 66
-  },
-  {
-    "symbol": "TSDD",
-    "price": 10.2607,
-    "quantity": 3500,
-    "date": "2025-09-26",
-    "action": "sell",
-    "time": "2025-09-26T14:29:57",
-    "id": 67
-  },
-  {
-    "symbol": "TSLQ",
-    "price": 8.2499,
-    "quantity": 500,
-    "date": "2025-09-26",
-    "action": "buy",
-    "time": "2025-09-26T14:42:34",
-    "id": 68
-  }
-]
+{
+  "positions": [],
+  "trades": [
+    {
+      "symbol": "TSDD",
+      "price": 11.04,
+      "quantity": 10000,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1024
+    },
+    {
+      "symbol": "BA",
+      "price": 216.27,
+      "quantity": 350,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1025
+    },
+    {
+      "symbol": "GOOGL",
+      "price": 170.73,
+      "quantity": 400,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1026
+    },
+    {
+      "symbol": "AMD",
+      "price": 151.72,
+      "quantity": 380,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1027
+    },
+    {
+      "symbol": "PYPL",
+      "price": 68.54,
+      "quantity": 555,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1028
+    },
+    {
+      "symbol": "UAL",
+      "price": 103.7,
+      "quantity": 300,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1029
+    },
+    {
+      "symbol": "DIS",
+      "price": 116.83,
+      "quantity": 250,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1030
+    },
+    {
+      "symbol": "NVDL",
+      "price": 84.12,
+      "quantity": 330,
+      "date": "2025-09-22",
+      "action": "buy",
+      "time": "2025-09-22T20:00:00",
+      "id": 1031
+    },
+    {
+      "symbol": "DIS",
+      "price": 112.9529,
+      "quantity": 100,
+      "date": "2025-09-23",
+      "action": "buy",
+      "time": "2025-09-23T12:24:44",
+      "id": 1032
+    },
+    {
+      "symbol": "NVDL",
+      "price": 86.2611,
+      "quantity": 330,
+      "date": "2025-09-23",
+      "action": "sell",
+      "time": "2025-09-23T12:25:06",
+      "id": 1033
+    },
+    {
+      "symbol": "AMD",
+      "price": 159.78,
+      "quantity": 330,
+      "date": "2025-09-23",
+      "action": "sell",
+      "time": "2025-09-23T12:25:32",
+      "id": 1034
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.415,
+      "quantity": 700,
+      "date": "2025-09-24",
+      "action": "buy",
+      "time": "2025-09-24T12:26:05",
+      "id": 1035
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.42,
+      "quantity": 50,
+      "date": "2025-09-24",
+      "action": "buy",
+      "time": "2025-09-24T12:26:26",
+      "id": 1036
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.415,
+      "quantity": 400,
+      "date": "2025-09-24",
+      "action": "buy",
+      "time": "2025-09-24T12:26:46",
+      "id": 1037
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.42,
+      "quantity": 850,
+      "date": "2025-09-24",
+      "action": "buy",
+      "time": "2025-09-24T12:27:16",
+      "id": 1038
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.523,
+      "quantity": 2000,
+      "date": "2025-09-24",
+      "action": "sell",
+      "time": "2025-09-24T12:28:00",
+      "id": 1039
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.7478,
+      "quantity": 2200,
+      "date": "2025-09-24",
+      "action": "buy",
+      "time": "2025-09-24T14:31:40",
+      "id": 1040
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.76,
+      "quantity": 2200,
+      "date": "2025-09-24",
+      "action": "sell",
+      "time": "2025-09-24T14:38:08",
+      "id": 1041
+    },
+    {
+      "symbol": "NVD",
+      "price": 9.6699,
+      "quantity": 3800,
+      "date": "2025-09-24",
+      "action": "buy",
+      "time": "2025-09-24T15:07:03",
+      "id": 1042
+    },
+    {
+      "symbol": "NVD",
+      "price": 9.69,
+      "quantity": 3800,
+      "date": "2025-09-24",
+      "action": "sell",
+      "time": "2025-09-24T15:16:24",
+      "id": 1043
+    },
+    {
+      "symbol": "AMD",
+      "price": 156.925,
+      "quantity": 50,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T09:35:13",
+      "id": 1044
+    },
+    {
+      "symbol": "GGLL",
+      "price": 62.7319,
+      "quantity": 500,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T09:38:33",
+      "id": 1045
+    },
+    {
+      "symbol": "GGLL",
+      "price": 62.9454,
+      "quantity": 500,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T09:52:04",
+      "id": 1046
+    },
+    {
+      "symbol": "UAL",
+      "price": 99.13,
+      "quantity": 150,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T10:01:23",
+      "id": 1047
+    },
+    {
+      "symbol": "NVDL",
+      "price": 84.259,
+      "quantity": 400,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T10:09:21",
+      "id": 1048
+    },
+    {
+      "symbol": "NVDL",
+      "price": 84.5505,
+      "quantity": 400,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T10:18:13",
+      "id": 1049
+    },
+    {
+      "symbol": "AAPL",
+      "price": 254.0199,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T10:27:40",
+      "id": 1050
+    },
+    {
+      "symbol": "AAPL",
+      "price": 254.03,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T10:29:55",
+      "id": 1051
+    },
+    {
+      "symbol": "IBM",
+      "price": 278.8015,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T10:32:38",
+      "id": 1052
+    },
+    {
+      "symbol": "IBM",
+      "price": 280.43,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T10:43:48",
+      "id": 1053
+    },
+    {
+      "symbol": "AMZN",
+      "price": 219.8349,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T11:25:08",
+      "id": 1054
+    },
+    {
+      "symbol": "AMZN",
+      "price": 220.0919,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T12:26:29",
+      "id": 1055
+    },
+    {
+      "symbol": "AMZN",
+      "price": 219.3,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T13:06:22",
+      "id": 1056
+    },
+    {
+      "symbol": "AMZN",
+      "price": 219.0324,
+      "quantity": 70,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T13:13:12",
+      "id": 1057
+    },
+    {
+      "symbol": "AMZN",
+      "price": 217.22,
+      "quantity": 400,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T14:24:57",
+      "id": 1058
+    },
+    {
+      "symbol": "AMZN",
+      "price": 217.0177,
+      "quantity": 400,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T14:28:43",
+      "id": 1059
+    },
+    {
+      "symbol": "AMZN",
+      "price": 217.1,
+      "quantity": 400,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T14:38:31",
+      "id": 1060
+    },
+    {
+      "symbol": "IBM",
+      "price": 280.24,
+      "quantity": 330,
+      "date": "2025-09-25",
+      "action": "buy",
+      "time": "2025-09-25T14:40:37",
+      "id": 1061
+    },
+    {
+      "symbol": "PYPL",
+      "price": 66.7018,
+      "quantity": 555,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T15:32:04",
+      "id": 1062
+    },
+    {
+      "symbol": "IBM",
+      "price": 281.1,
+      "quantity": 180,
+      "date": "2025-09-25",
+      "action": "sell",
+      "time": "2025-09-25T15:33:53",
+      "id": 1063
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.1866,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T10:41:54",
+      "id": 1064
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.3819,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T10:42:14",
+      "id": 1065
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.4479,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T10:53:10",
+      "id": 1066
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.47,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T11:00:08",
+      "id": 1067
+    },
+    {
+      "symbol": "IBM",
+      "price": 285.39,
+      "quantity": 150,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T11:04:07",
+      "id": 1068
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.5791,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T11:12:43",
+      "id": 1069
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.58,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T11:19:05",
+      "id": 1070
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.6894,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T11:26:15",
+      "id": 1071
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.7204,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T11:30:28",
+      "id": 1072
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.77,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T12:25:47",
+      "id": 1073
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.8836,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T12:26:33",
+      "id": 1074
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.889,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T12:44:24",
+      "id": 1075
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.925,
+      "quantity": 2000,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T13:00:07",
+      "id": 1076
+    },
+    {
+      "symbol": "MSTR",
+      "price": 306.5,
+      "quantity": 330,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T13:28:57",
+      "id": 1077
+    },
+    {
+      "symbol": "MSTR",
+      "price": 306.66,
+      "quantity": 330,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T13:31:32",
+      "id": 1078
+    },
+    {
+      "symbol": "TSDD",
+      "price": 10.6001,
+      "quantity": 2500,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T13:34:27",
+      "id": 1079
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.4966,
+      "quantity": 3000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T13:42:19",
+      "id": 1080
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.3571,
+      "quantity": 1000,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T14:05:31",
+      "id": 1081
+    },
+    {
+      "symbol": "TSDD",
+      "price": 10.2607,
+      "quantity": 3500,
+      "date": "2025-09-26",
+      "action": "sell",
+      "time": "2025-09-26T14:29:57",
+      "id": 1082
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.2499,
+      "quantity": 500,
+      "date": "2025-09-26",
+      "action": "buy",
+      "time": "2025-09-26T14:42:34",
+      "id": 1083
+    },
+    {
+      "symbol": "MSTR",
+      "price": 313.73,
+      "quantity": 300,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:42:58",
+      "id": 1084
+    },
+    {
+      "symbol": "MSTR",
+      "price": 319.3972,
+      "quantity": 300,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T14:51:52",
+      "id": 1085
+    },
+    {
+      "symbol": "NKE",
+      "price": 69.1,
+      "quantity": 377,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:54:11",
+      "id": 1086
+    },
+    {
+      "symbol": "GGLL",
+      "price": 65.05,
+      "quantity": 777,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:55:08",
+      "id": 1087
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.1024,
+      "quantity": 777,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T14:55:25",
+      "id": 1088
+    },
+    {
+      "symbol": "NKE",
+      "price": 69.2816,
+      "quantity": 377,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T14:56:18",
+      "id": 1089
+    },
+    {
+      "symbol": "AMZN",
+      "price": 221.73,
+      "quantity": 330,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:56:43",
+      "id": 1090
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.485,
+      "quantity": 555,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:57:02",
+      "id": 1091
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.2,
+      "quantity": 555,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T14:57:30",
+      "id": 1092
+    },
+    {
+      "symbol": "NKE",
+      "price": 70,
+      "quantity": 777,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:57:59",
+      "id": 1093
+    },
+    {
+      "symbol": "TSLA",
+      "price": 439,
+      "quantity": 180,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:58:12",
+      "id": 1094
+    },
+    {
+      "symbol": "UAL",
+      "price": 95.6816,
+      "quantity": 150,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:58:44",
+      "id": 1095
+    },
+    {
+      "symbol": "TSLA",
+      "price": 439.5094,
+      "quantity": 180,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T15:04:25",
+      "id": 1096
+    },
+    {
+      "symbol": "TSDD",
+      "price": 10.08,
+      "quantity": 2000,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T15:04:54",
+      "id": 1097
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.2329,
+      "quantity": 4500,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T15:05:16",
+      "id": 1098
+    },
+    {
+      "symbol": "TSDD",
+      "price": 10.26,
+      "quantity": 6000,
+      "date": "2025-09-30",
+      "action": "sell",
+      "time": "2025-09-30T15:14:00",
+      "id": 1099
+    },
+    {
+      "symbol": "TSDD",
+      "price": 10.1887,
+      "quantity": 5000,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T15:16:16",
+      "id": 1100
+    },
+    {
+      "symbol": "NKE",
+      "price": 69.27,
+      "quantity": 333,
+      "date": "2025-09-30",
+      "action": "buy",
+      "time": "2025-09-30T14:11:39",
+      "id": 1101
+    },
+    {
+      "symbol": "NKE",
+      "price": 72.8701,
+      "quantity": 1110,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:12:22",
+      "id": 1102
+    },
+    {
+      "symbol": "TSLL",
+      "price": 21.47,
+      "quantity": 2328.831,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:12:55",
+      "id": 1103
+    },
+    {
+      "symbol": "TSDD",
+      "price": 9.9902,
+      "quantity": 2000,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:14:06",
+      "id": 1104
+    },
+    {
+      "symbol": "TSDD",
+      "price": 9.975,
+      "quantity": 600,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:16:08",
+      "id": 1105
+    },
+    {
+      "symbol": "TSDD",
+      "price": 9.9758,
+      "quantity": 800,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:17:10",
+      "id": 1106
+    },
+    {
+      "symbol": "TSDD",
+      "price": 9.975,
+      "quantity": 600,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:17:35",
+      "id": 1107
+    },
+    {
+      "symbol": "TSLL",
+      "price": 21.5301,
+      "quantity": 2328.831,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:17:59",
+      "id": 1108
+    },
+    {
+      "symbol": "TSLL",
+      "price": 21.56,
+      "quantity": 2344.17641,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:19:17",
+      "id": 1109
+    },
+    {
+      "symbol": "TSLL",
+      "price": 21.6101,
+      "quantity": 2344.17641,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:20:53",
+      "id": 1110
+    },
+    {
+      "symbol": "TSDD",
+      "price": 9.5299,
+      "quantity": 1000,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:22:32",
+      "id": 1111
+    },
+    {
+      "symbol": "TSLA",
+      "price": 457.2715,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:23:11",
+      "id": 1112
+    },
+    {
+      "symbol": "TSLA",
+      "price": 457.91,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:23:46",
+      "id": 1113
+    },
+    {
+      "symbol": "TSLA",
+      "price": 458.0647,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:24:13",
+      "id": 1114
+    },
+    {
+      "symbol": "TSLA",
+      "price": 458.5344,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:24:33",
+      "id": 1115
+    },
+    {
+      "symbol": "TSLA",
+      "price": 458.9999,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:25:41",
+      "id": 1116
+    },
+    {
+      "symbol": "TSLA",
+      "price": 459.7907,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:26:11",
+      "id": 1117
+    },
+    {
+      "symbol": "TSLA",
+      "price": 458.9449,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T11:26:34",
+      "id": 1118
+    },
+    {
+      "symbol": "TSLA",
+      "price": 458.1058,
+      "quantity": 250,
+      "date": "2025-10-01",
+      "action": "sell",
+      "time": "2025-10-01T11:26:59",
+      "id": 1119
+    },
+    {
+      "symbol": "INTC",
+      "price": 35.42,
+      "quantity": -1377,
+      "date": "2025-10-01",
+      "action": "short",
+      "time": "2025-10-01T11:27:32",
+      "id": 1120
+    },
+    {
+      "symbol": "INTC",
+      "price": 35.5809,
+      "quantity": -500,
+      "date": "2025-10-01",
+      "action": "short",
+      "time": "2025-10-01T11:27:59",
+      "id": 1121
+    },
+    {
+      "symbol": "INTC",
+      "price": 35.2287,
+      "quantity": 1877,
+      "date": "2025-10-01",
+      "action": "cover",
+      "time": "2025-10-01T11:28:16",
+      "id": 1122
+    },
+    {
+      "symbol": "INTC",
+      "price": 35.2604,
+      "quantity": -1577,
+      "date": "2025-10-01",
+      "action": "short",
+      "time": "2025-10-01T11:28:41",
+      "id": 1123
+    },
+    {
+      "symbol": "INTC",
+      "price": 35.4213,
+      "quantity": -500,
+      "date": "2025-10-01",
+      "action": "short",
+      "time": "2025-10-01T11:29:05",
+      "id": 1124
+    },
+    {
+      "symbol": "TSDD",
+      "price": 9.3487,
+      "quantity": 1000,
+      "date": "2025-10-01",
+      "action": "buy",
+      "time": "2025-10-01T16:29:23",
+      "id": 1125
+    },
+    {
+      "symbol": "INTC",
+      "price": 35.81,
+      "quantity": -500,
+      "date": "2025-10-02",
+      "action": "short",
+      "time": "2025-10-02T09:53:09",
+      "id": 1126
+    },
+    {
+      "symbol": "AMZN",
+      "price": 219.8434,
+      "quantity": 170,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T10:09:03",
+      "id": 1127
+    },
+    {
+      "symbol": "AMZN",
+      "price": 220.115,
+      "quantity": 170,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T10:47:46",
+      "id": 1128
+    },
+    {
+      "symbol": "INTC",
+      "price": 36.2411,
+      "quantity": -500,
+      "date": "2025-10-02",
+      "action": "short",
+      "time": "2025-10-02T11:00:57",
+      "id": 1129
+    },
+    {
+      "symbol": "INTC",
+      "price": 36.7879,
+      "quantity": 2000,
+      "date": "2025-10-02",
+      "action": "cover",
+      "time": "2025-10-02T11:40:39",
+      "id": 1130
+    },
+    {
+      "symbol": "INTW",
+      "price": 46.9476,
+      "quantity": 1000,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T11:43:13",
+      "id": 1131
+    },
+    {
+      "symbol": "INTC",
+      "price": 36.6786,
+      "quantity": 1000,
+      "date": "2025-10-02",
+      "action": "cover",
+      "time": "2025-10-02T11:50:00",
+      "id": 1132
+    },
+    {
+      "symbol": "INTW",
+      "price": 46.96,
+      "quantity": 1000,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T12:13:22",
+      "id": 1133
+    },
+    {
+      "symbol": "INTC",
+      "price": 36.902,
+      "quantity": -1000,
+      "date": "2025-10-02",
+      "action": "short",
+      "time": "2025-10-02T12:13:37",
+      "id": 1134
+    },
+    {
+      "symbol": "INTC",
+      "price": 36.8085,
+      "quantity": 1070,
+      "date": "2025-10-02",
+      "action": "cover",
+      "time": "2025-10-02T12:13:53",
+      "id": 1135
+    },
+    {
+      "symbol": "PYPL",
+      "price": 67.6972,
+      "quantity": 1000,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T12:24:44",
+      "id": 1136
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.3681,
+      "quantity": 500,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T13:15:04",
+      "id": 1137
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.4842,
+      "quantity": 500,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T13:29:25",
+      "id": 1138
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.4246,
+      "quantity": 555,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T13:37:41",
+      "id": 1139
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.6339,
+      "quantity": 555,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T14:04:09",
+      "id": 1140
+    },
+    {
+      "symbol": "TSLA",
+      "price": 442.5899,
+      "quantity": 200,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T14:12:37",
+      "id": 1141
+    },
+    {
+      "symbol": "TSLA",
+      "price": 442.6,
+      "quantity": 200,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T14:16:29",
+      "id": 1142
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.068,
+      "quantity": 2500,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T14:21:56",
+      "id": 1143
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.1321,
+      "quantity": 2500,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T14:28:21",
+      "id": 1144
+    },
+    {
+      "symbol": "TSLA",
+      "price": 443.0026,
+      "quantity": 200,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T15:02:13",
+      "id": 1145
+    },
+    {
+      "symbol": "TSLA",
+      "price": 443.41,
+      "quantity": 200,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T15:06:48",
+      "id": 1146
+    },
+    {
+      "symbol": "TSLA",
+      "price": 442.7102,
+      "quantity": 230,
+      "date": "2025-10-02",
+      "action": "buy",
+      "time": "2025-10-02T15:21:54",
+      "id": 1147
+    },
+    {
+      "symbol": "TSLA",
+      "price": 442.947,
+      "quantity": 230,
+      "date": "2025-10-02",
+      "action": "sell",
+      "time": "2025-10-02T15:25:30",
+      "id": 1148
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.0906,
+      "quantity": 777,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T10:42:33",
+      "id": 1149
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.45,
+      "quantity": 300,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T11:04:51",
+      "id": 1150
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.4401,
+      "quantity": 477,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T11:09:08",
+      "id": 1151
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.515,
+      "quantity": 2000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T11:10:16",
+      "id": 1152
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.6616,
+      "quantity": 2000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T11:13:46",
+      "id": 1153
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.4767,
+      "quantity": 3500,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T11:28:16",
+      "id": 1154
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.5404,
+      "quantity": 3500,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T11:41:13",
+      "id": 1155
+    },
+    {
+      "symbol": "MSTR",
+      "price": 354.4368,
+      "quantity": 200,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T11:55:12",
+      "id": 1156
+    },
+    {
+      "symbol": "MSTR",
+      "price": 354.6,
+      "quantity": 200,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T12:00:39",
+      "id": 1157
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.5081,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T12:28:51",
+      "id": 1158
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.265,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T12:50:04",
+      "id": 1159
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.189,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T12:55:44",
+      "id": 1160
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.01,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T13:00:19",
+      "id": 1161
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.8099,
+      "quantity": 4000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T13:02:32",
+      "id": 1162
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.8412,
+      "quantity": 4000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T13:05:06",
+      "id": 1163
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.8999,
+      "quantity": 777,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T13:08:46",
+      "id": 1164
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.1301,
+      "quantity": 777,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T13:15:24",
+      "id": 1165
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.1659,
+      "quantity": 777,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T13:23:19",
+      "id": 1166
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.3253,
+      "quantity": 777,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T13:34:12",
+      "id": 1167
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.997,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T13:36:43",
+      "id": 1168
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.7706,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T13:43:47",
+      "id": 1169
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.6888,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T13:48:19",
+      "id": 1170
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.505,
+      "quantity": 2500,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T13:52:57",
+      "id": 1171
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.52,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T13:56:07",
+      "id": 1172
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.6602,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:01:03",
+      "id": 1173
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.9172,
+      "quantity": 3800,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T14:05:04",
+      "id": 1174
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.9423,
+      "quantity": 3800,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:09:15",
+      "id": 1175
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.67,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T14:11:29",
+      "id": 1176
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.7217,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:14:37",
+      "id": 1177
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.885,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T14:17:41",
+      "id": 1178
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.9319,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:19:41",
+      "id": 1179
+    },
+    {
+      "symbol": "TSLL",
+      "price": 18.9954,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T14:25:22",
+      "id": 1180
+    },
+    {
+      "symbol": "TSDD",
+      "price": 10.8909,
+      "quantity": 3500,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:28:13",
+      "id": 1181
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.0918,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:30:50",
+      "id": 1182
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.7968,
+      "quantity": 3800,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T14:32:50",
+      "id": 1183
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.8123,
+      "quantity": 3800,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T14:51:51",
+      "id": 1184
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.1978,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T15:07:51",
+      "id": 1185
+    },
+    {
+      "symbol": "TSLL",
+      "price": 19.4322,
+      "quantity": 3000,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T15:17:12",
+      "id": 1186
+    },
+    {
+      "symbol": "TSLQ",
+      "price": 8.6297,
+      "quantity": 2000,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T15:23:16",
+      "id": 1187
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.7793,
+      "quantity": 555,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T15:32:32",
+      "id": 1188
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.0701,
+      "quantity": 555,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T15:43:50",
+      "id": 1189
+    },
+    {
+      "symbol": "GGLL",
+      "price": 63.955,
+      "quantity": 555,
+      "date": "2025-10-03",
+      "action": "buy",
+      "time": "2025-10-03T15:46:11",
+      "id": 1190
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64,
+      "quantity": 555,
+      "date": "2025-10-03",
+      "action": "sell",
+      "time": "2025-10-03T15:49:27",
+      "id": 1191
+    }
+  ],
+  "equityCurve": [],
+  "generated": "2025-10-04T20:03:40.200Z"
+}
