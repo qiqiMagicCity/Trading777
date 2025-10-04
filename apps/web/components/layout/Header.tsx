@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { format as formatTz, toZonedTime } from 'date-fns-tz';
-import { format as formatDate } from 'date-fns';
-import { zhCN } from 'date-fns/locale/zh-CN';
 import { nowNY } from '@/lib/timezone';
 import { importData, exportData } from '@/lib/services/dataService';
 import { usePathname } from 'next/navigation';
@@ -96,8 +94,7 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const timestamp = formatDate(nowNY(), 'yyyy年M月d日H点mm分', { locale: zhCN });
-      a.download = `${timestamp}.json`;
+      a.download = 'trades.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
