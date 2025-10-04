@@ -1,5 +1,10 @@
 # 更新日志
 
+## 2025-11-03
+- `getLatestTradingDayStr` 改为以纽约日历日作为交易日标记，仅在周末回退至最近工作日，避免盘前误判上一交易日。
+- 更新 `tradingDay` 相关 helper 及单测，盘前/盘后均归属当日交易日，周末仍回退上一个工作日。
+- 调整 `timezone.test.ts`、`tradingDay.test.ts` 与 `metrics` 类型注释，同步描述与断言新交易日口径。
+
 ## 2025-11-02
 - 新增 `precision.ts`，提供银行家舍入的 `round4/add4/sub4/mul4` 等辅助函数，所有当日盈亏计算步骤统一按四位精度逐步舍入。
 - 重写 `_calcM6Strict` 与 `calcM6Detailed` 的两桶法逻辑：过夜桶与当日新开桶在差价、乘数与汇总环节均使用四位银行家舍入，并在缺价/缺均价时跳过计算、保留诊断。

@@ -81,7 +81,7 @@ export interface MetricsContract {
 /**
  * 概览接口（直接对应后端 summary 对象）。
  * - M6 等字段沿用后端命名，不在前端重命名/复算；
- * - tradingDateStr 表示当前交易日（09:30 ET 切换）。
+ * - tradingDateStr 表示当前交易日（按纽约日历日划分）。
  */
 export interface SummaryMetrics {
   M1?: number;

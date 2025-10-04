@@ -7,9 +7,9 @@ import {
 } from "../timezone";
 
 describe("getLatestTradingDayStr", () => {
-  it("returns previous Friday before market open on Monday", () => {
+  it("keeps Monday pre-market on the same trading day", () => {
     expect(getLatestTradingDayStr(new Date("2024-05-06T08:00:00-04:00"))).toBe(
-      "2024-05-03",
+      "2024-05-06",
     );
   });
 
@@ -27,7 +27,7 @@ describe("getLatestTradingDayStr", () => {
 
   it("stays on same calendar day after midnight before open", () => {
     expect(getLatestTradingDayStr(new Date("2025-10-01T00:05:00-04:00"))).toBe(
-      "2025-09-30",
+      "2025-10-01",
     );
   });
 
@@ -40,13 +40,13 @@ describe("getLatestTradingDayStr", () => {
 
 describe("DST transitions", () => {
   it("handles daylight saving time start", () => {
-    const monday = toNY("2024-03-11T08:00:00");
-    expect(getLatestTradingDayStr(monday)).toBe("2024-03-08");
+    const monday = new Date("2024-03-11T08:00:00-04:00");
+    expect(getLatestTradingDayStr(monday)).toBe("2024-03-11");
   });
 
   it("handles daylight saving time end", () => {
-    const monday = toNY("2024-11-04T08:00:00");
-    expect(getLatestTradingDayStr(monday)).toBe("2024-11-01");
+    const monday = new Date("2024-11-04T08:00:00-05:00");
+    expect(getLatestTradingDayStr(monday)).toBe("2024-11-04");
   });
 });
 

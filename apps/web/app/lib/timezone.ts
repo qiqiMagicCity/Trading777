@@ -115,8 +115,7 @@ export const ymdInNY = (input: Date | string | number = nowNY()): string => {
 
 /**
  * 获取最新交易日（纽约时区）的日期字符串。
- * 如果当前时间早于 09:30，则回退一天；
- * 若结果落在周末，则继续回退直到周五。
+ * 以纽约本地日历日为交易日标记，仅在遇到周末时回退到最近的工作日。
  * 返回格式为 YYYY-MM-DD。
  */
 export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
@@ -127,9 +126,6 @@ export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   if (freeze) return freeze as string;
 
   const d = toNY(base);
-  if (d.getHours() < 9 || (d.getHours() === 9 && d.getMinutes() < 30)) {
-    d.setDate(d.getDate() - 1);
-  }
   while (d.getDay() === 0 || d.getDay() === 6) {
     d.setDate(d.getDate() - 1);
   }
