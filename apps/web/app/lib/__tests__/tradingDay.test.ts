@@ -5,9 +5,9 @@ function etDate(y: number, m: number, d: number, h: number, mi: number = 0, s: n
 }
 
 describe('getTradingDateYMD', () => {
-  test('09:15 ET 仍归属上一交易日', () => {
+  test('盘前 09:15 ET 仍归属当日', () => {
     const d = etDate(2025, 9, 26, 9, 15);
-    expect(ymdStr(getTradingDateYMD(d))).toBe('2025-09-25');
+    expect(ymdStr(getTradingDateYMD(d))).toBe('2025-09-26');
   });
 
   test('09:31 ET 归属当日', () => {

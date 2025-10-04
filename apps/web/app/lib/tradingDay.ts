@@ -20,12 +20,6 @@ function ymdOf(d: Date): YMD {
   return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() };
 }
 
-function at0930ET(d: Date): Date {
-  const t = new Date(d.getTime());
-  t.setHours(9, 30, 0, 0);
-  return t;
-}
-
 function isWeekend(d: Date): boolean {
   const w = d.getDay();
   return w === 0 || w === 6;
@@ -48,10 +42,6 @@ function prevBusinessDayET(from: Date): Date {
 export function getTradingDateYMD(now?: Date | string | number): YMD {
   const nowET = toET(now);
   if (isWeekend(nowET)) {
-    return ymdOf(prevBusinessDayET(nowET));
-  }
-  const cut = at0930ET(nowET);
-  if (nowET.getTime() < cut.getTime()) {
     return ymdOf(prevBusinessDayET(nowET));
   }
   return ymdOf(nowET);
