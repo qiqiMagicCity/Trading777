@@ -1,16 +1,15 @@
 import type { EnrichedTrade } from "@/lib/fifo";
-import { toNY } from "@/lib/timezone";
+import { nyDateStrSafe } from "./time";
 
 function isTodayNY(dateStr: string | undefined, todayStr: string): boolean {
   if (!dateStr) return false;
-  const d1 =
-    dateStr.length === 10 ? toNY(`${dateStr}T12:00:00Z`) : toNY(dateStr);
-  const d2 = toNY(`${todayStr}T12:00:00Z`);
-  return (
-    !isNaN(d1.getTime()) &&
-    !isNaN(d2.getTime()) &&
-    d1.toISOString().slice(0, 10) === d2.toISOString().slice(0, 10)
-  );
+  try {
+    const day = nyDateStrSafe(dateStr);
+    const today = nyDateStrSafe(`${todayStr}T12:00:00Z`);
+    return day === today;
+  } catch {
+    return false;
+  }
 }
 
 /**

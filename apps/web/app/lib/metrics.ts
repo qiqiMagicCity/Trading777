@@ -834,16 +834,16 @@ function isTodayNY(
   todayStr: string,
 ): boolean {
   if (dateInput === undefined || dateInput === null) return false;
-  const d1 =
-    typeof dateInput === "string" && dateInput.length === 10
-      ? toNY(`${dateInput}T12:00:00Z`)
-      : toNY(dateInput);
-  const d2 = toNY(`${todayStr}T12:00:00Z`);
-  return (
-    !isNaN(d1.getTime()) &&
-    !isNaN(d2.getTime()) &&
-    d1.toISOString().slice(0, 10) === d2.toISOString().slice(0, 10)
-  );
+  try {
+    const day = nyDayStr(dateInput);
+    const today = nyDayStr(`${todayStr}T12:00:00Z`);
+    return day === today;
+  } catch (error) {
+    if (DEBUG) {
+      logger.debug("isTodayNY_error", { dateInput, error });
+    }
+    return false;
+  }
 }
 
 function isOnOrBeforeNY(
@@ -1767,7 +1767,7 @@ export function calcMetricsInternal(
     if (!parsed) continue;
     if (parsed.getTime() > evalEnd.getTime()) continue;
 
-    const day = parsed.toISOString().slice(0, 10);
+    const day = nyDayStr(parsed);
 
     const normalizedDateValue = normalizeDateLikeValue(trade.date);
     const normalizedTimeValue = normalizeDateLikeValue(

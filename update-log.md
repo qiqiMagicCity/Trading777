@@ -1,5 +1,9 @@
 # 更新日志
 
+## 2025-11-04
+- calcMetricsInternal / calcTodayTradePnL 的纽约当日判定统一改用 `nyDayStr`/`nyDateStrSafe`，不再通过 `toISOString()` 取 UTC 日期，修复隔夜仓被误归类为“今日新开”的问题。
+- 新增 `metrics-overnight-short-classification.test.ts`，覆盖 2025-01-14 20:30 -05:00 卖空的隔夜留仓，确认次日归入过夜浮盈且日内盈亏为 0。
+
 ## 2025-11-03
 - `getLatestTradingDayStr` 改为以纽约日历日作为交易日标记，仅在周末回退至最近工作日，避免盘前误判上一交易日。
 - 更新 `tradingDay` 相关 helper 及单测，盘前/盘后均归属当日交易日，周末仍回退上一个工作日。
