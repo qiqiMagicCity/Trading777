@@ -31,7 +31,13 @@ export function buildIntradayPnlMap(metrics: Metrics | null | undefined): Intrad
 
   for (const leg of legs) {
     if (!leg || typeof leg.symbol !== "string") continue;
-    if (leg.component !== "mtm_overnight" && leg.component !== "mtm_intraday_open") continue;
+    if (
+      leg.component !== "realized_today" &&
+      leg.component !== "mtm_overnight" &&
+      leg.component !== "mtm_intraday_open"
+    ) {
+      continue;
+    }
 
     const amount = Number(leg.amount);
     if (!Number.isFinite(amount)) continue;

@@ -8,8 +8,13 @@ import {
   normalizeMetrics,
   isDebug,
   getLastWtdMtdYtdExplain,
+  STALE_BASELINE_BDAYS,
 } from "@/app/lib/metrics";
-import type { MetricsContract } from "@/app/lib/types/metrics";
+import type {
+  MetricsContract,
+  PeriodBaselineMeta,
+  PeriodDegradationReason,
+} from "@/app/lib/types/metrics";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MissingCloseFallback } from "@/app/lib/dailyResults";
 
@@ -17,6 +22,60 @@ const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
   MARK_PRICE: "使用最新价兜底",
   PREVIOUS_CLOSE: "沿用上一日价格",
   AVERAGE_COST: "使用均价兜底",
+};
+
+const DEGRADE_REASON_LABELS: Record<PeriodDegradationReason, string> = {
+  DEGEN_NO_BASELINE: "缺基线",
+  DEGEN_STALE_BASELINE: "基线过旧",
+  DEGEN_WINDOW_EMPTY: "窗口空",
+};
+
+function composeDegradeTooltip(
+  label: string,
+  reason?: PeriodDegradationReason,
+  baselineMeta?: PeriodBaselineMeta,
+): string {
+  const lines: string[] = [];
+  const reasonLine = reason ? `${label}（${reason}）` : label;
+  lines.push(`退化原因：${reasonLine}`);
+
+  if (baselineMeta?.baselineYmd) {
+    lines.push(`基线日期：${baselineMeta.baselineYmd}`);
+  }
+
+  const distance =
+    baselineMeta &&
+    typeof baselineMeta.distanceBusinessDays === "number" &&
+    Number.isFinite(baselineMeta.distanceBusinessDays)
+      ? baselineMeta.distanceBusinessDays
+      : undefined;
+
+  const threshold =
+    baselineMeta &&
+    typeof baselineMeta.thresholdBusinessDays === "number" &&
+    Number.isFinite(baselineMeta.thresholdBusinessDays)
+      ? baselineMeta.thresholdBusinessDays
+      : undefined;
+
+  if (distance !== undefined) {
+    if (reason === "DEGEN_STALE_BASELINE") {
+      const displayThreshold = threshold ?? STALE_BASELINE_BDAYS;
+      lines.push(`距评估日 ${distance} 个交易日（阈值 ${displayThreshold}）`);
+    } else {
+      lines.push(`距评估日 ${distance} 个交易日`);
+    }
+  } else if (reason === "DEGEN_STALE_BASELINE") {
+    const displayThreshold = threshold ?? STALE_BASELINE_BDAYS;
+    lines.push(`基线已超过阈值 ${displayThreshold} 个交易日`);
+  }
+
+  return lines.join("\n");
+}
+
+const WINDOW_KEY_MAP: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
+  M11: "wtd",
+  M12: "mtd",
+  M13: "ytd",
 };
 
 /**
@@ -38,7 +97,7 @@ function MetricCard({
   colorClass,
   dataTestId,
 }: {
-  title: string;
+  title: ReactNode;
   value: ReactNode;
   colorClass?: string;
   dataTestId?: string;
@@ -152,12 +211,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       M13: { value: safeNum(metrics?.M13), picked: "metrics.M13" },
     } as const;
   }, [metrics]);
-
-  const windowKeyMap: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
-    M11: "wtd",
-    M12: "mtd",
-    M13: "ytd",
-  };
 
   // 卡片渲染时统一读取 periodValues.*.value，缺失时占位 0
 
@@ -306,6 +359,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   // 格式化指标值并确定颜色
   const formattedMetrics = useMemo(() => {
     if (!metrics) return [];
+    const diagnostics = rawMetrics?._period?.diagnostics;
     return order.map((key) => {
       const value =
         key === "M11"
@@ -325,6 +379,8 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           : key === "M13"
           ? "metric-ytd"
           : undefined;
+      const baseTitle = metricNames[key] ?? key;
+      let titleNode: ReactNode = baseTitle;
 
       // 根据不同指标类型格式化值
       if (key === "M5") {
@@ -377,7 +433,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
-          const breakdown = periodBreakdown?.[windowKeyMap[key]];
+          const breakdown = periodBreakdown?.[WINDOW_KEY_MAP[key]];
 
           if (state === "partial") {
             const realizedValue =
@@ -452,15 +508,60 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         }
       }
 
+      if (key === "M11" || key === "M12" || key === "M13") {
+        const windowKey = WINDOW_KEY_MAP[key];
+        const diag = diagnostics?.[windowKey];
+        if (periodCardStates[key] === "degraded" && diag?.degraded) {
+          const reasonLabel = diag.reason
+            ? DEGRADE_REASON_LABELS[diag.reason] ?? "指标退化"
+            : "指标退化";
+          const tooltip = composeDegradeTooltip(
+            reasonLabel,
+            diag.reason,
+            diag.baselineMeta,
+          );
+          titleNode = (
+            <span className="inline-flex items-center gap-2">
+              <span>{baseTitle}</span>
+              <span
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700"
+                data-testid={`period-degrade-hint-${key.toLowerCase()}`}
+              >
+                <span className="rounded bg-amber-100 px-1.5 py-0.5">
+                  {reasonLabel}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:ring-offset-amber-100 dark:focus:ring-offset-slate-900"
+                  title={tooltip}
+                  aria-label={`${baseTitle}退化原因：${reasonLabel}`}
+                  data-testid={`period-degrade-tooltip-${key.toLowerCase()}`}
+                >
+                  ?
+                </button>
+              </span>
+            </span>
+          );
+        }
+      }
+
       return {
         key,
-        title: metricNames[key],
+        title: titleNode,
         value: formattedValue,
         colorClass,
         dataTestId,
       };
     });
-  }, [metrics, metricNames, order, periodCardStates, periodValues]);
+  }, [
+    metrics,
+    metricNames,
+    order,
+    periodCardStates,
+    periodValues,
+    periodBreakdown,
+    rawMetrics?._period?.diagnostics,
+  ]);
 
   const rows = useMemo(
     () => [

@@ -31,6 +31,7 @@ export type PeriodDegradationReason =
 export interface PeriodBaselineMeta {
   baselineYmd?: string;
   distanceBusinessDays?: number;
+  thresholdBusinessDays?: number;
 }
 
 export interface PeriodWindowDiagnostics {
