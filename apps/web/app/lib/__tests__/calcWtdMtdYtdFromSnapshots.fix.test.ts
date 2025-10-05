@@ -4,55 +4,62 @@ import type { DailyResult } from "../types";
 
 describe("calcWtdMtdYtdFromSnapshots simple aggregation", () => {
   const sampleDaily: DailyResult[] = [
-    { date: "2025-09-22", realized: 5, unrealized: 10, unrealizedDelta: 10 },
-    { date: "2025-09-23", realized: -2, unrealized: 25, unrealizedDelta: 15 },
-    { date: "2025-09-24", realized: 4, unrealized: 55, unrealizedDelta: 30 },
-    { date: "2025-09-25", realized: 3, unrealized: 80, unrealizedDelta: 25 },
+    { date: "2024-12-31", realized: 0, unrealized: 10 },
+    { date: "2025-08-29", realized: 0, unrealized: 40 },
+    { date: "2025-09-19", realized: 0, unrealized: 50 },
+    { date: "2025-09-22", realized: 5, unrealized: 60 },
+    { date: "2025-09-23", realized: -2, unrealized: 75 },
+    { date: "2025-09-24", realized: 4, unrealized: 105 },
+    { date: "2025-09-25", realized: 3, unrealized: 130 },
   ];
 
   it("accumulates WTD/MTD/YTD by summing daily PnL", () => {
     const res = calcWtdMtdYtdFromSnapshots(sampleDaily, "2025-09-25");
-    // Daily PnL = realized + unrealizedDelta
-    // 09-22: 15, 09-23: 13, 09-24: 34, 09-25: 28
     expect(res.wtd).toBe(90);
-    expect(res.mtd).toBe(90);
-    expect(res.ytd).toBe(90);
+    expect(res.mtd).toBe(100);
+    expect(res.ytd).toBe(130);
+    expect(res.wtd).not.toBe(res.mtd);
+    expect(res.mtd).not.toBe(res.ytd);
     expect(res.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
   });
 
   it("fills missing days with zero when computing sums", () => {
     const sparse: DailyResult[] = [
-      { date: "2025-09-22", realized: 5, unrealized: 10, unrealizedDelta: 10 },
-      { date: "2025-09-25", realized: 3, unrealized: 80, unrealizedDelta: 25 },
+      { date: "2024-12-31", realized: 0, unrealized: 10 },
+      { date: "2025-08-29", realized: 0, unrealized: 40 },
+      { date: "2025-09-19", realized: 0, unrealized: 50 },
+      { date: "2025-09-22", realized: 5, unrealized: 60 },
+      { date: "2025-09-25", realized: 3, unrealized: 130 },
     ];
     const res = calcWtdMtdYtdFromSnapshots(sparse, "2025-09-25");
-    // 09-23 and 09-24 contribute 0 realized,但 ΔU 由端点差额决定
     expect(res.wtd).toBe(88);
-    expect(res.mtd).toBe(88);
-    expect(res.ytd).toBe(88);
+    expect(res.mtd).toBe(98);
+    expect(res.ytd).toBe(128);
   });
 
   it("uses the last record of each day when duplicates exist", () => {
     const duplicate: DailyResult[] = [
-      { date: "2025-09-24", realized: 1, unrealized: 40, unrealizedDelta: 10 },
-      { date: "2025-09-24", realized: 2, unrealized: 45, unrealizedDelta: 15 },
-      { date: "2025-09-24", realized: 3, unrealized: 55, unrealizedDelta: 30 },
-      { date: "2025-09-25", realized: 4, unrealized: 80, unrealizedDelta: 25 },
+      { date: "2024-12-31", realized: 0, unrealized: 10 },
+      { date: "2025-08-29", realized: 0, unrealized: 40 },
+      { date: "2025-09-19", realized: 0, unrealized: 50 },
+      { date: "2025-09-24", realized: 1, unrealized: 90 },
+      { date: "2025-09-24", realized: 2, unrealized: 95 },
+      { date: "2025-09-24", realized: 3, unrealized: 105 },
+      { date: "2025-09-25", realized: 4, unrealized: 130 },
     ];
     const res = calcWtdMtdYtdFromSnapshots(duplicate, "2025-09-25");
-    // latest 09-24 snapshot => realized 3、unrealized=55
-    expect(res.wtd).toBe(3 + 4 + (80 - 0));
+    expect(res.wtd).toBe(3 + 4 + (130 - 50));
   });
 
   it("treats the first trading week as Jan 1 to first Sunday", () => {
     const rows: DailyResult[] = [
-      { date: "2025-01-01", realized: 2, unrealized: 10, unrealizedDelta: 10 },
-      { date: "2025-01-02", realized: 1, unrealized: 11, unrealizedDelta: 1 },
-      { date: "2025-01-05", realized: -1, unrealized: 9, unrealizedDelta: -2 },
+      { date: "2024-12-31", realized: 0, unrealized: 5 },
+      { date: "2025-01-01", realized: 2, unrealized: 15 },
+      { date: "2025-01-02", realized: 1, unrealized: 16 },
+      { date: "2025-01-05", realized: -1, unrealized: 14 },
     ];
     const res = calcWtdMtdYtdFromSnapshots(rows, "2025-01-02");
-    // WTD should include Jan 1 because week starts at Jan 1 for the first week
-    expect(res.wtd).toBe(12 + 2);
+    expect(res.wtd).toBe(3 + (16 - 5));
     expect(res.mtd).toBe(res.wtd);
     expect(res.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
   });

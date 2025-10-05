@@ -67,9 +67,14 @@ import type {
   PeriodWindowKey,
   PeriodWindowStatus,
   PeriodBaselineMode,
+  PeriodBaselineMeta,
+  PeriodWindowDiagnostics,
+  PeriodDegradationReason,
 } from "./types/metrics";
 
 const EPSILON = 1e-6;
+
+export const STALE_BASELINE_BDAYS = 5;
 
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
@@ -904,6 +909,7 @@ export interface WindowTotalsResult {
   firstActiveDate: string;
   breakdown: Record<PeriodWindowKey, PeriodWindowBreakdown>;
   status: Record<PeriodWindowKey, PeriodWindowStatus>;
+  diagnostics: Record<PeriodWindowKey, PeriodWindowDiagnostics>;
 }
 
 function normalizeDailyRowsForWindow(
@@ -1017,16 +1023,43 @@ function findRowBefore(
   return undefined;
 }
 
-function prevTradingDay(day: string): string {
+function nextTradingDay(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return day;
   do {
-    d.setUTCDate(d.getUTCDate() - 1);
+    d.setUTCDate(d.getUTCDate() + 1);
   } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+function countTradingDaysBetween(
+  startDay: string,
+  endDay: string,
+): number | undefined {
+  if (!startDay || !endDay) return undefined;
+  if (startDay >= endDay) return 0;
+  const start = new Date(`${startDay}T00:00:00Z`);
+  const end = new Date(`${endDay}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return undefined;
+  let cursor = startDay;
+  let count = 0;
+  let guard = 0;
+  const LIMIT = 4096;
+  while (cursor < endDay && guard < LIMIT) {
+    const next = nextTradingDay(cursor);
+    if (next === cursor) break;
+    guard += 1;
+    if (next >= endDay) {
+      if (next === endDay) count += 1;
+      break;
+    }
+    count += 1;
+    cursor = next;
+  }
+  return count;
 }
 
 function firstMondayOfYear(yearStart: string): string {
@@ -1077,75 +1110,98 @@ function deriveWindowTotals(
 
   const computeWindow = (windowStart: string) => {
     const realized = sumRealizedBetween(rows, windowStart, evalDay);
-    const baselineRow = findRowBefore(rows, windowStart);
-    const expectedBaseline = prevTradingDay(windowStart);
+    const baselineCandidate = findRowBefore(rows, windowStart);
+    const baselineRow =
+      baselineCandidate && baselineCandidate.day >= firstActive
+        ? baselineCandidate
+        : undefined;
 
-    let baseline = 0;
-    let degraded = false;
-    let baselineMode: PeriodBaselineMode = "zero";
-    let baselineDate: string | undefined;
+    const baselineDistance = baselineCandidate
+      ? countTradingDaysBetween(baselineCandidate.day, windowStart)
+      : undefined;
+
+    const baselineMeta: PeriodBaselineMeta | undefined = baselineCandidate
+      ? {
+          baselineYmd: baselineCandidate.day,
+          ...(typeof baselineDistance === "number"
+            ? { distanceBusinessDays: baselineDistance }
+            : {}),
+        }
+      : undefined;
+
+    let baselineMode: PeriodBaselineMode = "missing";
+    let baselineDate: string | undefined = baselineCandidate?.day;
     let missingBaselineSymbols: string[] | undefined;
+    let baselineValue: number | undefined;
+    let degradeReason: PeriodDegradationReason | undefined;
 
-    if (baselineRow && baselineRow.day >= firstActive) {
+    if (!baselineRow) {
+      degradeReason = "DEGEN_NO_BASELINE";
+    } else {
       baselineDate = baselineRow.day;
       if (Array.isArray(baselineRow.missingBaselineSymbols)) {
         missingBaselineSymbols = baselineRow.missingBaselineSymbols;
       }
       const resolved = baselineRow.resolvedUnrealized;
       if (typeof resolved === "number" && Number.isFinite(resolved)) {
-        baseline = resolved;
+        baselineValue = resolved;
         baselineMode = "priced";
       } else {
         baselineMode = "partial";
       }
-    } else if (expectedBaseline >= firstActive) {
-      baselineDate = baselineRow?.day ?? expectedBaseline;
-      baselineMode = "missing";
-    } else {
-      baselineDate = expectedBaseline;
+
+      if (
+        typeof baselineDistance === "number" &&
+        baselineDistance > STALE_BASELINE_BDAYS
+      ) {
+        degradeReason = "DEGEN_STALE_BASELINE";
+        baselineMode = "missing";
+      }
     }
 
-    let endValue = 0;
-    const resolvedEnd = endRow?.resolvedUnrealized;
+    const hasWindowRows = rows.some(
+      (row) => row.day >= windowStart && row.day <= evalDay,
+    );
+
     let missingEndValue = false;
+    let endValue: number | undefined;
+    const resolvedEnd = endRow?.resolvedUnrealized;
     if (typeof resolvedEnd === "number" && Number.isFinite(resolvedEnd)) {
       endValue = resolvedEnd;
     } else {
       missingEndValue = true;
     }
 
-    let unrealizedDelta: number | undefined;
-    if (!missingEndValue) {
-      if (baselineMode === "priced" || baselineMode === "zero") {
-        unrealizedDelta = endValue - baseline;
-      } else if (baselineMode === "missing") {
-        unrealizedDelta = endValue - baseline;
-      }
+    if (!hasWindowRows && !degradeReason) {
+      degradeReason = "DEGEN_WINDOW_EMPTY";
     }
 
-    if (baselineMode === "missing") {
-      degraded = true;
+    if (missingEndValue && !degradeReason) {
+      degradeReason = "DEGEN_WINDOW_EMPTY";
     }
-    if (missingEndValue) {
-      degraded = true;
+
+    let unrealizedDelta: number | undefined;
+    if (!missingEndValue && baselineMode === "priced" && typeof baselineValue === "number") {
+      unrealizedDelta = endValue! - baselineValue;
     }
+
+    const degraded = Boolean(degradeReason) || missingEndValue;
 
     let total = realized;
     if (typeof unrealizedDelta === "number") {
       total += unrealizedDelta;
     }
+    if (degraded) {
+      total = Number.NaN;
+    }
 
     let status: PeriodWindowStatus = "ok";
-    if (baselineMode === "zero") {
-      status = "ok_zero";
-    } else if (baselineMode === "partial") {
+    if (baselineMode === "partial") {
       status = "partial";
-    }
-
-    if (baselineMode === "missing") {
+    } else if (baselineMode === "missing" && !degraded) {
       status = "missing";
     }
-    if (missingEndValue) {
+    if (degraded) {
       status = "degraded";
     }
 
@@ -1161,7 +1217,7 @@ function deriveWindowTotals(
         : {}),
     };
 
-    return { total, degraded, status, breakdown };
+    return { total, degraded, status, breakdown, reason: degradeReason, baselineMeta };
   };
 
   const weekStart = weekStartForEvalDay(evalDay);
@@ -1191,6 +1247,26 @@ function deriveWindowTotals(
       wtd: week.status,
       mtd: month.status,
       ytd: year.status,
+    },
+    diagnostics: {
+      wtd: {
+        status: week.status,
+        degraded: week.degraded,
+        ...(week.reason ? { reason: week.reason } : {}),
+        ...(week.baselineMeta ? { baselineMeta: week.baselineMeta } : {}),
+      },
+      mtd: {
+        status: month.status,
+        degraded: month.degraded,
+        ...(month.reason ? { reason: month.reason } : {}),
+        ...(month.baselineMeta ? { baselineMeta: month.baselineMeta } : {}),
+      },
+      ytd: {
+        status: year.status,
+        degraded: year.degraded,
+        ...(year.reason ? { reason: year.reason } : {}),
+        ...(year.baselineMeta ? { baselineMeta: year.baselineMeta } : {}),
+      },
     },
   };
 }
@@ -1297,6 +1373,7 @@ export function explainWtdMtdYtdFromSnapshots(
       month: totals.status.mtd,
       year: totals.status.ytd,
     },
+    diagnostics: totals.diagnostics,
   };
 }
 
@@ -1943,6 +2020,7 @@ export function calcMetricsInternal(
     breakdown: periodBreakdown,
     status: periodStatus,
     firstActiveDate: resolvedFirstActiveDate,
+    diagnostics: periodDiagnostics,
   } = periodSnapshot;
   if (DEBUG) {
     try {
@@ -2010,6 +2088,7 @@ export function calcMetricsInternal(
       ...(resolvedFirstActiveDate
         ? { firstActiveDate: resolvedFirstActiveDate }
         : {}),
+      ...(periodDiagnostics ? { diagnostics: periodDiagnostics } : {}),
     };
   }
 
@@ -2216,6 +2295,19 @@ export function normalizeMetrics(input: any): MetricsContract {
                 breakdown: Object.fromEntries(
                   Object.entries(
                     input._period.breakdown as Record<string, any>,
+                  ).map(([key, value]) => [
+                    key,
+                    value && typeof value === "object" ? { ...value } : value,
+                  ]),
+                ),
+              }
+            : {}),
+          ...(input._period?.diagnostics &&
+          typeof input._period.diagnostics === "object"
+            ? {
+                diagnostics: Object.fromEntries(
+                  Object.entries(
+                    input._period.diagnostics as Record<string, any>,
                   ).map(([key, value]) => [
                     key,
                     value && typeof value === "object" ? { ...value } : value,
