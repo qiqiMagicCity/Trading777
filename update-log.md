@@ -1,10 +1,5 @@
 # 更新日志
 
-## 2025-11-05
-- 全面替换日历截日逻辑，所有日期字符串改用 `ymdInNY` 并移除 `toISOString().slice(0, 10)`，修复纽约晚间成交被推进到次日的问题。
-- 调整 `generateDailyResults`、`runAll`、`AddTradeModal`、`Header` 与前端 IndexedDB 工具，确保 20:00–23:59 ET 成交与导出日期统一按纽约本地日。
-- 新增与扩展单测覆盖 20:30 ET 交易、00:00/23:59 边界及夏令时切换日，验证 WTD 周窗口与 ymdInNY 行为稳定。
-
 ## 2025-11-04
 - calcMetricsInternal / calcTodayTradePnL 的纽约当日判定统一改用 `nyDayStr`/`nyDateStrSafe`，不再通过 `toISOString()` 取 UTC 日期，修复隔夜仓被误归类为“今日新开”的问题。
 - 新增 `metrics-overnight-short-classification.test.ts`，覆盖 2025-01-14 20:30 -05:00 卖空的隔夜留仓，确认次日归入过夜浮盈且日内盈亏为 0。
