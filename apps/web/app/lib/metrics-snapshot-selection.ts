@@ -119,11 +119,20 @@ export function selectLatestSnapshotsByNyDay<T extends { date?: unknown }>(
     const rawDate = (snapshot as { date?: unknown }).date;
     if (!rawDate) return;
 
-    const nyDay = nyDateStrSafe(rawDate);
+    const acceptableRawDate =
+      typeof rawDate === "string" ||
+      typeof rawDate === "number" ||
+      rawDate instanceof Date
+        ? rawDate
+        : undefined;
+
+    if (!acceptableRawDate) return;
+
+    const nyDay = nyDateStrSafe(acceptableRawDate);
     if (!nyDay || nyDay === "Invalid Date") return;
     if (maxNyDay && nyDay > maxNyDay) return;
 
-    const originalMillis = toMillis(rawDate);
+    const originalMillis = toMillis(acceptableRawDate);
     if (!Number.isFinite(originalMillis)) return;
 
     const updatedMillisCandidates = [

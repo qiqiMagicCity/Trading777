@@ -206,3 +206,4 @@
 - 随机乱序/跨午夜/DST 稳定性测试上线。
 - 两入口共用 helper，消除输入顺序依赖。
 - 修复构建报错：`infoScore` 在对象分支使用 `reduce` 时返回值被推断为 `unknown`，Next.js 构建阶段抛出 “Type 'unknown' is not assignable to type 'number'”；改用显式循环累加字段信息量，保持评分纯数值且类型稳定。
+- 修复构建报错：`selectLatestSnapshotsByNyDay` 直接把 `unknown` 类型的 `date` 透传给 `nyDateStrSafe`，导致 Next.js 构建期类型检查失败；增加类型守卫，仅接受 `string | number | Date`，并保持原有时间判定逻辑。
