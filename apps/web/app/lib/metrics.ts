@@ -195,6 +195,7 @@ export interface Metrics {
     status?: Record<"wtd" | "mtd" | "ytd", PeriodWindowStatus>;
     breakdown?: Record<"wtd" | "mtd" | "ytd", PeriodWindowBreakdown>;
     firstActiveDate?: string;
+    diagnostics?: Record<"wtd" | "mtd" | "ytd", PeriodWindowDiagnostics>;
   };
   M7: {
     B: number;

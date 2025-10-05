@@ -231,10 +231,18 @@ describe("DashboardMetrics period cards", () => {
     ];
 
     const period = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
-
     act(() => {
       useStore.setState({
-        metrics: { M11: period.wtd as any, M12: period.mtd as any, M13: period.ytd as any },
+        metrics: {
+          M11: period.wtd as any,
+          M12: period.mtd as any,
+          M13: period.ytd as any,
+          _period: {
+            degraded: period.degraded,
+            status: period.status,
+            diagnostics: period.diagnostics,
+          },
+        } as any,
         periodHealth: {
           status: "degraded",
           summaries: [],
@@ -245,8 +253,123 @@ describe("DashboardMetrics period cards", () => {
 
     render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
 
-    expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
+    const wtdCard = screen.getByTestId("metric-wtd");
+    expect(wtdCard).not.toHaveTextContent("待补充");
+    expect(wtdCard.textContent || "").toMatch(/31\.?00/);
     expect(screen.getByTestId("metric-mtd")).toHaveTextContent("待补充");
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
   });
+
+  it.each([
+    [
+      "M11",
+      "DEGEN_NO_BASELINE",
+      "缺基线",
+      { baselineYmd: "2025-09-20", distanceBusinessDays: 4 },
+    ],
+    [
+      "M12",
+      "DEGEN_STALE_BASELINE",
+      "基线过旧",
+      {
+        baselineYmd: "2025-08-31",
+        distanceBusinessDays: 15,
+        thresholdBusinessDays: 5,
+      },
+    ],
+    [
+      "M13",
+      "DEGEN_WINDOW_EMPTY",
+      "窗口空",
+      { distanceBusinessDays: 0 },
+    ],
+  ] as const)(
+    "renders degrade tooltip for %s", (metricKey, reason, label, baselineMeta) => {
+      const degradedState = {
+        wtd: metricKey === "M11",
+        mtd: metricKey === "M12",
+        ytd: metricKey === "M13",
+      } as const;
+
+      act(() => {
+        useStore.setState({
+          metrics: {
+            ...baseMetrics,
+            _period: {
+              degraded: degradedState,
+              status: {
+                wtd: degradedState.wtd ? "degraded" : "ok",
+                mtd: degradedState.mtd ? "degraded" : "ok",
+                ytd: degradedState.ytd ? "degraded" : "ok",
+              },
+              diagnostics: {
+                wtd: {
+                  status: degradedState.wtd ? "degraded" : "ok",
+                  degraded: degradedState.wtd,
+                  ...(degradedState.wtd
+                    ? { reason, baselineMeta }
+                    : {}),
+                },
+                mtd: {
+                  status: degradedState.mtd ? "degraded" : "ok",
+                  degraded: degradedState.mtd,
+                  ...(degradedState.mtd
+                    ? { reason, baselineMeta }
+                    : {}),
+                },
+                ytd: {
+                  status: degradedState.ytd ? "degraded" : "ok",
+                  degraded: degradedState.ytd,
+                  ...(degradedState.ytd
+                    ? { reason, baselineMeta }
+                    : {}),
+                },
+              },
+            },
+          } as any,
+          periodHealth: {
+            status: "degraded",
+            summaries: [],
+            degraded: degradedState,
+          },
+        });
+      });
+
+      render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+      const hintId = `period-degrade-hint-${metricKey.toLowerCase()}`;
+      const tooltipId = `period-degrade-tooltip-${metricKey.toLowerCase()}`;
+      const hint = screen.getByTestId(hintId);
+      expect(hint).toHaveTextContent(label);
+
+      const tooltipButton = screen.getByTestId(tooltipId);
+      const tooltip = tooltipButton.getAttribute("title");
+      expect(tooltip).toBeTruthy();
+      expect(tooltip).toContain(label);
+      if (baselineMeta.baselineYmd) {
+        expect(tooltip).toContain(`基线日期：${baselineMeta.baselineYmd}`);
+      }
+      if (typeof baselineMeta.distanceBusinessDays === "number") {
+        const distanceText = `距评估日 ${baselineMeta.distanceBusinessDays} 个交易日`;
+        if (reason === "DEGEN_STALE_BASELINE") {
+          expect(tooltip).toContain(`${distanceText}（阈值 5）`);
+        } else {
+          expect(tooltip).toContain(distanceText);
+        }
+      }
+      const expectedBase =
+        metricKey === "M11" ? "WTD" : metricKey === "M12" ? "MTD" : "YTD";
+      expect(tooltipButton).toHaveAttribute(
+        "aria-label",
+        `${expectedBase}退化原因：${label}`,
+      );
+
+      const others = ["m11", "m12", "m13"].filter(
+        (key) => key !== metricKey.toLowerCase(),
+      );
+      for (const other of others) {
+        expect(screen.queryByTestId(`period-degrade-hint-${other}`)).toBeNull();
+      }
+    },
+  );
 });
