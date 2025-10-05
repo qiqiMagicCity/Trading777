@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2025-11-06
+- WTD/MTD/YTD 聚合新增基线退化守护单测：覆盖 B1（无基线退化）、B2 阈值边界、B3 合规基线、多快照去重与周末评估日，同时校验退化原因码与 baselineMeta；阈值常量 `STALE_BASELINE_BDAYS` 在测试中显式引用，确保回归时不出现魔法数字。
+- 回归 `metrics-normalize-period-metadata`，确认新增的 `degradation` 元信息在标准化流程中被深拷贝保留，避免诊断结构被截断。
+
+## 2025-11-05
+- `deriveWindowTotals` 启用唯一基线规则：仅使用窗口起点前最近快照，并在缺基线或超出 `STALE_BASELINE_BDAYS=5` 交易日时退化为 `DEGEN_NO_BASELINE`/`DEGEN_STALE_BASELINE`；返回结构扩展 `degradation`，透出原因码与 `baselineMeta`（基线日期、交易日距离）。
+- 聚合评估日彻底解耦最新交易日回退逻辑，统一使用调用方传入的纽约评估日过滤快照；退化后数值改为 `NaN`，消除 WTD/MTD/YTD 同值粘连，并将元数据透传至 `_period` 供前端诊断。
+
+
 ## 2025-11-04
 - calcMetricsInternal / calcTodayTradePnL 的纽约当日判定统一改用 `nyDayStr`/`nyDateStrSafe`，不再通过 `toISOString()` 取 UTC 日期，修复隔夜仓被误归类为“今日新开”的问题。
 - 新增 `metrics-overnight-short-classification.test.ts`，覆盖 2025-01-14 20:30 -05:00 卖空的隔夜留仓，确认次日归入过夜浮盈且日内盈亏为 0。

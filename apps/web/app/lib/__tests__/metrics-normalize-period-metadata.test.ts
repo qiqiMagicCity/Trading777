@@ -6,6 +6,13 @@ describe("normalizeMetrics period metadata", () => {
       M11: Number.NaN,
       _period: {
         degraded: { wtd: true, mtd: false, ytd: true },
+        degradation: {
+          wtd: {
+            reason: "DEGEN_NO_BASELINE",
+            baselineMeta: { baselineYmd: "2025-09-20" },
+          },
+          mtd: null,
+        },
         summaries: [
           { window: "WTD", reason: "MISSING_BASELINE" },
           { window: "YTD", reason: "STALE_BASELINE" },
@@ -25,11 +32,13 @@ describe("normalizeMetrics period metadata", () => {
 
     expect("M11" in result).toBe(false);
     expect(result._period?.degraded).toEqual(input._period.degraded);
+    expect(result._period?.degradation).toEqual(input._period.degradation);
     expect(result._period?.summaries).toEqual(input._period.summaries);
     expect(result._period?.status).toEqual(input._period.status);
     expect(result._period?.breakdown).toEqual(input._period.breakdown);
     expect(result._period).not.toBe(input._period);
     expect(result._period?.degraded).not.toBe(input._period.degraded);
+    expect(result._period?.degradation).not.toBe(input._period.degradation);
     expect(result._period?.status).not.toBe(input._period.status);
     expect(result._period?.breakdown).not.toBe(input._period.breakdown);
   });

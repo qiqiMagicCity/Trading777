@@ -24,6 +24,21 @@ export type PeriodWindowStatus =
   | "missing"
   | "degraded";
 
+export type PeriodWindowDegradationReason =
+  | "DEGEN_NO_BASELINE"
+  | "DEGEN_STALE_BASELINE"
+  | "DEGEN_WINDOW_EMPTY";
+
+export interface PeriodWindowDegradationBaselineMeta {
+  baselineYmd?: string;
+  distanceBusinessDays?: number;
+}
+
+export interface PeriodWindowDegradation {
+  reason: PeriodWindowDegradationReason;
+  baselineMeta?: PeriodWindowDegradationBaselineMeta;
+}
+
 export interface PeriodWindowBreakdown {
   realized: number;
   unrealizedDelta?: number;
@@ -46,6 +61,7 @@ export interface MetricsContract {
   _period?: {
     degraded: PeriodDegradedMap;
     status?: Record<PeriodWindowKey, PeriodWindowStatus>;
+    degradation?: Record<PeriodWindowKey, PeriodWindowDegradation | null>;
     breakdown?: Record<PeriodWindowKey, PeriodWindowBreakdown>;
     firstActiveDate?: string;
   };
