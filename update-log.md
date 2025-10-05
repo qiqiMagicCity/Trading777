@@ -195,3 +195,4 @@
 ## 2025-10-30
 - Step 2-A：WTD/MTD/YTD 聚合改为唯一基线，缺失或超过阈值的基线直接退化并返回 `DEGEN_*` 原因码，同时透出基线日期与交易日距离；评估日完全按调用方传入的纽约日处理，彻底移除内部回退逻辑。
 - Step 2-B：新增无基线、基线距阈值边界、周末评估与去重等单测，显式引用退化阈值常量并校验 `diagnostics.reason/baselineMeta`，确保三项聚合不再粘连。
+- 修复 Vercel 构建报错：`calcWtdMtdYtdFromSnapshots` 返回状态仍保留零基线 `ok_zero` 分支，TS 判断 `baselineMode` 不可能等于 "zero" 导致 `next build` 中断；移除已废弃的状态分支后重新执行 `CI=1 npm run build --workspace=web`，构建顺利完成，仅保留既有 ESLint 告警。

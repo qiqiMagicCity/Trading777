@@ -2077,7 +2077,7 @@ export function calcMetricsInternal(
     degraded?.wtd || degraded?.mtd || degraded?.ytd,
   );
   const hasNonOkStatus = Object.values(periodStatus ?? {}).some(
-    (state) => state && state !== "ok" && state !== "ok_zero",
+    (state) => state && state !== "ok",
   );
 
   if (hasDegradedFlag || hasNonOkStatus) {

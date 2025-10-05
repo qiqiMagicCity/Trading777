@@ -15,11 +15,10 @@ export interface PeriodDegradedMap {
 
 export type PeriodWindowKey = "wtd" | "mtd" | "ytd";
 
-export type PeriodBaselineMode = "priced" | "zero" | "partial" | "missing";
+export type PeriodBaselineMode = "priced" | "partial" | "missing";
 
 export type PeriodWindowStatus =
   | "ok"
-  | "ok_zero"
   | "partial"
   | "missing"
   | "degraded";
