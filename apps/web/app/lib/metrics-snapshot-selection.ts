@@ -32,10 +32,15 @@ function infoScore(value: unknown): number {
     return value.reduce((sum, item) => sum + infoScore(item), 0);
   }
 
-  return Object.values(value as Record<string, unknown>).reduce((sum, val) => {
+  const record = value as Record<string, unknown>;
+  let total = 0;
+  for (const val of Object.values(record)) {
     const child = infoScore(val);
-    return child > 0 ? sum + 1 + child : sum;
-  }, 0);
+    if (child > 0) {
+      total += 1 + child;
+    }
+  }
+  return total;
 }
 
 function stableSerialize(value: unknown): string {
