@@ -1,5 +1,9 @@
 # 更新日志
 
+## 2025-11-05
+- 修复同日快照信息量评分返回字符串的问题，确保并列裁决严格基于数值信息量。
+- 清理 `metrics-periods.ts` 中未使用的正午归一导入，避免后续回退误用。
+
 ## 2025-11-04
 - calcMetricsInternal / calcTodayTradePnL 的纽约当日判定统一改用 `nyDayStr`/`nyDateStrSafe`，不再通过 `toISOString()` 取 UTC 日期，修复隔夜仓被误归类为“今日新开”的问题。
 - 新增 `metrics-overnight-short-classification.test.ts`，覆盖 2025-01-14 20:30 -05:00 卖空的隔夜留仓，确认次日归入过夜浮盈且日内盈亏为 0。
@@ -196,3 +200,8 @@
 - Step 2-A：WTD/MTD/YTD 聚合改为唯一基线，缺失或超过阈值的基线直接退化并返回 `DEGEN_*` 原因码，同时透出基线日期与交易日距离；评估日完全按调用方传入的纽约日处理，彻底移除内部回退逻辑。
 - Step 2-B：新增无基线、基线距阈值边界、周末评估与去重等单测，显式引用退化阈值常量并校验 `diagnostics.reason/baselineMeta`，确保三项聚合不再粘连。
 - 修复 Vercel 构建报错：`calcWtdMtdYtdFromSnapshots` 返回状态仍保留零基线 `ok_zero` 分支，TS 判断 `baselineMode` 不可能等于 "zero" 导致 `next build` 中断；移除已废弃的状态分支后重新执行 `CI=1 npm run build --workspace=web`，构建顺利完成，仅保留既有 ESLint 告警。
+
+## 2025-10-31
+- 统一同日去重/排序逻辑（NY 日）。
+- 随机乱序/跨午夜/DST 稳定性测试上线。
+- 两入口共用 helper，消除输入顺序依赖。

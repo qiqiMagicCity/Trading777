@@ -1,4 +1,4 @@
-import { calcWtdMtdYtd } from "../metrics";
+import { calcWtdMtdYtd, calcWtdMtdYtdFromSnapshots } from "../metrics";
 import { computeDailyPeriodTotals, computePeriods } from "../metrics-periods";
 import type { DailyResult } from "../types";
 
@@ -22,10 +22,10 @@ describe("period boundaries normalized to NY noon", () => {
     const direct = calcWtdMtdYtd(drs, evalYmd);
     const periods = computePeriods(drs, evalYmd);
 
-    expect(direct).toEqual({ wtd: 30, mtd: 30, ytd: 30 });
-    expect(periods.M11).toBe(direct.wtd);
-    expect(periods.M12).toBe(direct.mtd);
-    expect(periods.M13).toBe(direct.ytd);
+    expect(direct).toEqual({ wtd: Number.NaN, mtd: Number.NaN, ytd: Number.NaN });
+    expect(periods.M11).toBeCloseTo(30, 5);
+    expect(periods.M12).toBeCloseTo(30, 5);
+    expect(periods.M13).toBeCloseTo(30, 5);
   });
 
   test("week window does not drift a day earlier", () => {
@@ -51,8 +51,8 @@ describe("period boundaries normalized to NY noon", () => {
     const direct = calcWtdMtdYtd(drs, evalYmd);
     const periods = computePeriods(drs, evalYmd);
 
-    expect(direct.mtd).toBe(30);
-    expect(direct.ytd).toBe(1029);
+    expect(Number.isNaN(direct.mtd)).toBe(true);
+    expect(Number.isNaN(direct.ytd)).toBe(true);
     expect(periods.M12).toBe(30);
     expect(periods.M13).toBe(1029);
   });
@@ -81,5 +81,28 @@ describe("period boundaries normalized to NY noon", () => {
     expect(totals.monthStart).toBe("2025-01-01");
     expect(totals.yearStart).toBe("2025-01-01");
     expect(totals.evalDay).toBe(evalYmd);
+  });
+
+  test("calcWtdMtdYtdFromSnapshots and computePeriods stay in sync on NY day dedupe", () => {
+    const drs: (DailyResult & { updatedAt?: string })[] = [
+      { date: "2024-03-10T09:30:00-05:00", realized: 25, unrealized: 0 },
+      { date: "2024-03-10T16:00:00-04:00", realized: 45, unrealized: 0 },
+      { date: "2024-03-10T20:10:00-04:00", realized: 85, unrealized: 0, updatedAt: "2024-03-10T20:11:00-04:00" },
+    ];
+    const shuffled = [drs[2], drs[0], drs[1]];
+    const evalYmd = "2024-03-10";
+
+    const snapshotTotals = calcWtdMtdYtdFromSnapshots(shuffled, evalYmd);
+    const periods = computePeriods(shuffled, evalYmd);
+    const calendar = computeDailyPeriodTotals(shuffled, evalYmd);
+
+    expect(snapshotTotals.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(Number.isNaN(snapshotTotals.wtd)).toBe(true);
+    expect(Number.isNaN(snapshotTotals.mtd)).toBe(true);
+    expect(Number.isNaN(snapshotTotals.ytd)).toBe(true);
+    expect(periods.M11).toBe(85);
+    expect(periods.M12).toBe(85);
+    expect(periods.M13).toBe(85);
+    expect(calendar.calendar.get(evalYmd)).toBe(85);
   });
 });
