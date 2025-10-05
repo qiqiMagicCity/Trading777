@@ -67,9 +67,12 @@ import type {
   PeriodWindowKey,
   PeriodWindowStatus,
   PeriodBaselineMode,
+  PeriodWindowDegradation,
 } from "./types/metrics";
 
 const EPSILON = 1e-6;
+
+export const STALE_BASELINE_BDAYS = 5;
 
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
@@ -901,6 +904,7 @@ export interface WindowTotalsResult {
   mtd: number;
   ytd: number;
   degraded: PeriodDegradedMap;
+  degradation: Record<PeriodWindowKey, PeriodWindowDegradation | null>;
   firstActiveDate: string;
   breakdown: Record<PeriodWindowKey, PeriodWindowBreakdown>;
   status: Record<PeriodWindowKey, PeriodWindowStatus>;
@@ -1029,6 +1033,41 @@ function prevTradingDay(day: string): string {
   return `${y}-${m}-${dd}`;
 }
 
+function isBusinessDay(day: string): boolean {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  const dow = d.getUTCDay();
+  return dow !== 0 && dow !== 6;
+}
+
+function nextTradingDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  do {
+    d.setUTCDate(d.getUTCDate() + 1);
+  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function countBusinessDaysGap(startDay: string, endDay: string): number {
+  if (!startDay || !endDay || startDay >= endDay) return 0;
+  let cursor = startDay;
+  let count = 0;
+  for (let i = 0; i < 4096 && cursor < endDay; i += 1) {
+    const next = nextTradingDay(cursor);
+    if (next <= cursor) break;
+    cursor = next;
+    if (cursor > endDay) break;
+    if (isBusinessDay(cursor)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 function firstMondayOfYear(yearStart: string): string {
   const jan1 = toNY(`${yearStart}T12:00:00Z`);
   const offset = (8 - jan1.getDay()) % 7;
@@ -1077,57 +1116,85 @@ function deriveWindowTotals(
 
   const computeWindow = (windowStart: string) => {
     const realized = sumRealizedBetween(rows, windowStart, evalDay);
-    const baselineRow = findRowBefore(rows, windowStart);
-    const expectedBaseline = prevTradingDay(windowStart);
+    const baselineCandidate = findRowBefore(rows, windowStart);
+    const hasWindowRows = rows.some(
+      (row) => row.day >= windowStart && row.day <= evalDay,
+    );
 
-    let baseline = 0;
-    let degraded = false;
-    let baselineMode: PeriodBaselineMode = "zero";
-    let baselineDate: string | undefined;
+    const baselineRow =
+      baselineCandidate && baselineCandidate.day >= firstActive
+        ? baselineCandidate
+        : undefined;
+
+    let baselineMode: PeriodBaselineMode = "missing";
+    let baselineDate: string | undefined =
+      baselineRow?.day ?? baselineCandidate?.day;
     let missingBaselineSymbols: string[] | undefined;
+    let baselineValue: number | undefined;
 
-    if (baselineRow && baselineRow.day >= firstActive) {
-      baselineDate = baselineRow.day;
+    if (baselineRow) {
       if (Array.isArray(baselineRow.missingBaselineSymbols)) {
         missingBaselineSymbols = baselineRow.missingBaselineSymbols;
       }
       const resolved = baselineRow.resolvedUnrealized;
       if (typeof resolved === "number" && Number.isFinite(resolved)) {
-        baseline = resolved;
         baselineMode = "priced";
+        baselineValue = resolved;
       } else {
         baselineMode = "partial";
       }
-    } else if (expectedBaseline >= firstActive) {
-      baselineDate = baselineRow?.day ?? expectedBaseline;
-      baselineMode = "missing";
-    } else {
-      baselineDate = expectedBaseline;
     }
 
-    let endValue = 0;
     const resolvedEnd = endRow?.resolvedUnrealized;
-    let missingEndValue = false;
+    let missingEndValue = true;
+    let endValue = 0;
     if (typeof resolvedEnd === "number" && Number.isFinite(resolvedEnd)) {
       endValue = resolvedEnd;
-    } else {
-      missingEndValue = true;
+      missingEndValue = false;
     }
 
-    let unrealizedDelta: number | undefined;
-    if (!missingEndValue) {
-      if (baselineMode === "priced" || baselineMode === "zero") {
-        unrealizedDelta = endValue - baseline;
-      } else if (baselineMode === "missing") {
-        unrealizedDelta = endValue - baseline;
+    let degradation: PeriodWindowDegradation | null = null;
+
+    if (!hasWindowRows) {
+      degradation = { reason: "DEGEN_WINDOW_EMPTY" };
+    } else if (!baselineRow) {
+      const distance = baselineCandidate?.day
+        ? countBusinessDaysGap(baselineCandidate.day, windowStart)
+        : undefined;
+      degradation = {
+        reason: "DEGEN_NO_BASELINE",
+        ...(baselineCandidate?.day
+          ? {
+              baselineMeta: {
+                baselineYmd: baselineCandidate.day,
+                ...(typeof distance === "number"
+                  ? { distanceBusinessDays: distance }
+                  : {}),
+              },
+            }
+          : {}),
+      };
+      baselineMode = "missing";
+    } else {
+      const distance = countBusinessDaysGap(baselineRow.day, windowStart);
+      if (distance > STALE_BASELINE_BDAYS) {
+        degradation = {
+          reason: "DEGEN_STALE_BASELINE",
+          baselineMeta: {
+            baselineYmd: baselineRow.day,
+            distanceBusinessDays: distance,
+          },
+        };
       }
     }
 
-    if (baselineMode === "missing") {
-      degraded = true;
-    }
-    if (missingEndValue) {
-      degraded = true;
+    let unrealizedDelta: number | undefined;
+    if (
+      !missingEndValue &&
+      baselineMode === "priced" &&
+      typeof baselineValue === "number"
+    ) {
+      unrealizedDelta = endValue - baselineValue;
     }
 
     let total = realized;
@@ -1135,18 +1202,22 @@ function deriveWindowTotals(
       total += unrealizedDelta;
     }
 
+    const degraded = Boolean(degradation) || missingEndValue;
     let status: PeriodWindowStatus = "ok";
-    if (baselineMode === "zero") {
-      status = "ok_zero";
-    } else if (baselineMode === "partial") {
+    if (baselineMode === "partial") {
       status = "partial";
+    } else if (baselineMode === "missing") {
+      status = "missing";
+    } else if (baselineMode === "zero") {
+      status = "ok_zero";
     }
 
-    if (baselineMode === "missing") {
-      status = "missing";
-    }
-    if (missingEndValue) {
+    if (degraded) {
       status = "degraded";
+    }
+
+    if (degradation) {
+      total = Number.NaN;
     }
 
     const breakdown: PeriodWindowBreakdown = {
@@ -1161,7 +1232,7 @@ function deriveWindowTotals(
         : {}),
     };
 
-    return { total, degraded, status, breakdown };
+    return { total, degraded, status, breakdown, degradation };
   };
 
   const weekStart = weekStartForEvalDay(evalDay);
@@ -1180,6 +1251,11 @@ function deriveWindowTotals(
       wtd: week.degraded,
       mtd: month.degraded,
       ytd: year.degraded,
+    },
+    degradation: {
+      wtd: week.degradation,
+      mtd: month.degradation,
+      ytd: year.degradation,
     },
     firstActiveDate: firstActive,
     breakdown: {
@@ -1296,6 +1372,11 @@ export function explainWtdMtdYtdFromSnapshots(
       week: totals.status.wtd,
       month: totals.status.mtd,
       year: totals.status.ytd,
+    },
+    degradation: {
+      week: totals.degradation.wtd,
+      month: totals.degradation.mtd,
+      year: totals.degradation.ytd,
     },
   };
 }
@@ -1940,6 +2021,7 @@ export function calcMetricsInternal(
     mtd,
     ytd,
     degraded,
+    degradation: periodDegradation,
     breakdown: periodBreakdown,
     status: periodStatus,
     firstActiveDate: resolvedFirstActiveDate,
@@ -2005,6 +2087,7 @@ export function calcMetricsInternal(
   if (hasDegradedFlag || hasNonOkStatus) {
     metrics._period = {
       degraded,
+      ...(periodDegradation ? { degradation: periodDegradation } : {}),
       ...(periodStatus ? { status: periodStatus } : {}),
       ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
       ...(resolvedFirstActiveDate
@@ -2209,6 +2292,31 @@ export function normalizeMetrics(input: any): MetricsContract {
             : {}),
           ...(input._period?.status && typeof input._period.status === "object"
             ? { status: { ...input._period.status } }
+            : {}),
+          ...(input._period?.degradation &&
+          typeof input._period.degradation === "object"
+            ? {
+                degradation: Object.fromEntries(
+                  Object.entries(
+                    input._period.degradation as Record<string, any>,
+                  ).map(([key, value]) => {
+                    if (!value || typeof value !== "object") {
+                      return [key, value];
+                    }
+                    const baselineMeta =
+                      value.baselineMeta && typeof value.baselineMeta === "object"
+                        ? { ...value.baselineMeta }
+                        : value.baselineMeta;
+                    return [
+                      key,
+                      {
+                        ...value,
+                        ...(baselineMeta ? { baselineMeta } : {}),
+                      },
+                    ];
+                  }),
+                ),
+              }
             : {}),
           ...(input._period?.breakdown &&
           typeof input._period.breakdown === "object"
