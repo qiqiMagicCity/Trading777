@@ -1,4 +1,5 @@
 import { sumPeriod } from "@/lib/metrics";
+import { ymdInNY } from "../timezone";
 import type { DailyResult } from "@/lib/types";
 
 function generateDaily(count: number): DailyResult[] {
@@ -9,7 +10,7 @@ function generateDaily(count: number): DailyResult[] {
     const d = new Date(start.getTime() + i * 24 * 3600 * 1000);
     unrealized += i % 2 === 0 ? 1 : -1;
     res.push({
-      date: d.toISOString().slice(0, 10),
+      date: ymdInNY(d),
       realized: i % 5 === 0 ? 2 : -1,
       unrealized,
     });

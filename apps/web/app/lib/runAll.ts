@@ -3,7 +3,14 @@ import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
 import { computePeriods } from "./metrics-periods";
 import { generateDailyResults } from "./dailyResults";
-import { nyDateStr, nyDateStrSafe, startOfMonthNY, startOfWeekNY, startOfYearNY } from "./time";
+import {
+  nyDateStr,
+  nyDateStrSafe,
+  startOfMonthNY,
+  startOfWeekNY,
+  startOfYearNY,
+  toNY,
+} from "./time";
 import type { DailyResult } from "./types";
 import { resolveTradingDateStr } from "./tradingDay";
 import {
@@ -134,13 +141,13 @@ function computeBaselineDate(rawTrades: RawTrade[], fallbackISO: string): string
     }
   }
   if (!Number.isFinite(minTime)) {
-    const fallback = new Date(`${fallbackISO}T00:00:00Z`);
-    fallback.setUTCDate(fallback.getUTCDate() - 1);
-    return fallback.toISOString().slice(0, 10);
+    const fallback = toNY(`${fallbackISO}T00:00:00Z`);
+    fallback.setDate(fallback.getDate() - 1);
+    return nyDateStr(fallback);
   }
-  const base = new Date(minTime);
-  base.setUTCDate(base.getUTCDate() - 1);
-  return base.toISOString().slice(0, 10);
+  const base = toNY(minTime);
+  base.setDate(base.getDate() - 1);
+  return nyDateStr(base);
 }
 
 function fifoPreview(lots: Lot[], qty: number): ConsumeRow[] {

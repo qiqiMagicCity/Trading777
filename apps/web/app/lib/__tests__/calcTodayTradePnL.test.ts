@@ -12,6 +12,27 @@ describe("calcTodayTradePnL sorting", () => {
     expect(pnl).toBe(0);
   });
 
+  it("treats late-evening New York trades as same-day", () => {
+    const trades: EnrichedTrade[] = [
+      {
+        symbol: "T",
+        action: "buy",
+        price: 100,
+        quantity: 1,
+        date: "2024-05-08T09:45:00-04:00",
+      } as unknown as EnrichedTrade,
+      {
+        symbol: "T",
+        action: "sell",
+        price: 110,
+        quantity: 1,
+        date: "2024-05-08T20:30:00-04:00",
+      } as unknown as EnrichedTrade,
+    ];
+    const pnl = calcTodayTradePnL(sortTrades(trades), "2024-05-08");
+    expect(pnl).toBe(10);
+  });
+
   it("ignores malformed dates without throwing", () => {
     const trades: EnrichedTrade[] = [
       { symbol: "T", action: "sell", price: 110, quantity: 1, date: "bad-date" } as unknown as EnrichedTrade,
