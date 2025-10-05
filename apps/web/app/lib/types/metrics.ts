@@ -15,14 +15,30 @@ export interface PeriodDegradedMap {
 
 export type PeriodWindowKey = "wtd" | "mtd" | "ytd";
 
-export type PeriodBaselineMode = "priced" | "zero" | "partial" | "missing";
+export type PeriodBaselineMode = "priced" | "partial" | "missing";
 
 export type PeriodWindowStatus =
   | "ok"
-  | "ok_zero"
   | "partial"
   | "missing"
   | "degraded";
+
+export type PeriodDegradationReason =
+  | "DEGEN_NO_BASELINE"
+  | "DEGEN_STALE_BASELINE"
+  | "DEGEN_WINDOW_EMPTY";
+
+export interface PeriodBaselineMeta {
+  baselineYmd?: string;
+  distanceBusinessDays?: number;
+}
+
+export interface PeriodWindowDiagnostics {
+  status: PeriodWindowStatus;
+  degraded: boolean;
+  reason?: PeriodDegradationReason;
+  baselineMeta?: PeriodBaselineMeta;
+}
 
 export interface PeriodWindowBreakdown {
   realized: number;
@@ -48,6 +64,7 @@ export interface MetricsContract {
     status?: Record<PeriodWindowKey, PeriodWindowStatus>;
     breakdown?: Record<PeriodWindowKey, PeriodWindowBreakdown>;
     firstActiveDate?: string;
+    diagnostics?: Record<PeriodWindowKey, PeriodWindowDiagnostics>;
   };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
   aux?: {
