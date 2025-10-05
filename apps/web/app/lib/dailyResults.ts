@@ -2,7 +2,7 @@ import type { EnrichedTrade } from "@/lib/fifo";
 import { MoneyDecimal as M, round2 } from "@/lib/money";
 import type { Position } from "@/lib/services/dataService";
 import sortTrades from "@/lib/sortTrades";
-import { nowNY, toNY } from "@/lib/timezone";
+import { nowNY, toNY, ymdInNY } from "@/lib/timezone";
 import type { DailyResult } from "@/lib/types";
 
 const EPSILON = 1e-6;
@@ -36,7 +36,7 @@ function toDateStr(value: string | Date | number | undefined): string | null {
   if (value === undefined || value === null) return null;
   const date = toNY(value);
   if (isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+  return ymdInNY(date);
 }
 
 export function normalizeClosePriceMap(input: ClosePriceMap | Record<string, any> | undefined): ClosePriceMap {
@@ -139,7 +139,7 @@ export function generateDailyResults({
   const treatRealtimeAsClose = (() => {
     if (freezeDate) return false;
     const now = nowNY();
-    const nowDateStr = now.toISOString().slice(0, 10);
+    const nowDateStr = ymdInNY(now);
     if (nowDateStr !== evalDateStr) return false;
     const minutes = now.getHours() * 60 + now.getMinutes();
     return minutes >= 9 * 60 + 30 && minutes < 16 * 60;

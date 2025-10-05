@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { nowNY } from '@/lib/timezone';
+import { nowNY, ymdInNY } from '@/lib/timezone';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale/zh-CN';
 import { importData, exportData, importClosePrices, getAllPrices } from '@/lib/services/dataService';
@@ -154,7 +154,7 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `close_prices_${nowNY().toISOString().slice(0, 10)}.json`;
+      a.download = `close_prices_${ymdInNY()}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
