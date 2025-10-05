@@ -4,6 +4,7 @@ import {
   weekStartNY,
   yearStartNY,
   toNY,
+  ymdInNY,
 } from "../timezone";
 
 describe("getLatestTradingDayStr", () => {
@@ -55,11 +56,35 @@ describe("start-of-period formatting", () => {
     expect(weekStartNY("2024-05-06")).toBe("2024-05-06");
   });
 
+  it("keeps week start consistent for late-evening trades", () => {
+    expect(weekStartNY(new Date("2024-05-08T20:30:00-04:00"))).toBe(
+      "2024-05-06",
+    );
+  });
+
   it("keeps month start on same day for YYYY-MM-DD input", () => {
     expect(monthStartNY("2024-05-06")).toBe("2024-05-01");
   });
 
   it("keeps year start on same day for YYYY-MM-DD input", () => {
     expect(yearStartNY("2024-05-06")).toBe("2024-01-01");
+  });
+});
+
+describe("ymdInNY boundaries", () => {
+  it("returns same date for 23:59:59 ET", () => {
+    expect(ymdInNY("2024-05-06T23:59:59-04:00")).toBe("2024-05-06");
+  });
+
+  it("returns same date for 00:00:00 ET", () => {
+    expect(ymdInNY("2024-05-06T00:00:00-04:00")).toBe("2024-05-06");
+  });
+
+  it("handles DST spring forward", () => {
+    expect(ymdInNY("2024-03-10T02:30:00-04:00")).toBe("2024-03-10");
+  });
+
+  it("handles DST fall back", () => {
+    expect(ymdInNY("2024-11-03T01:30:00-05:00")).toBe("2024-11-03");
   });
 });
