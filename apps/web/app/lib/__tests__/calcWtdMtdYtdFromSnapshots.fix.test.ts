@@ -1,5 +1,5 @@
 import { calcWtdMtdYtdFromSnapshots, explainWtdMtdYtdFromSnapshots } from "../metrics";
-import { computePeriods } from "../metrics-periods";
+import { computeDailyPeriodTotals, computePeriods } from "../metrics-periods";
 import type { DailyResult } from "../types";
 
 describe("calcWtdMtdYtdFromSnapshots simple aggregation", () => {
@@ -83,4 +83,64 @@ describe("calcWtdMtdYtdFromSnapshots simple aggregation", () => {
     expect(periods.M12).toBe(snapshot.mtd);
     expect(periods.M13).toBe(snapshot.ytd);
   });
+});
+
+describe("NY day snapshot dedupe stability", () => {
+  const base: (DailyResult & { updatedAt?: string })[] = [
+    {
+      date: "2024-05-10T09:30:00-04:00",
+      realized: 100,
+      unrealized: 0,
+      updatedAt: "2024-05-10T09:31:00-04:00",
+    },
+    {
+      date: "2024-05-10T16:00:00-04:00",
+      realized: 200,
+      unrealized: 0,
+      updatedAt: "2024-05-10T16:01:00-04:00",
+    },
+    {
+      date: "2024-05-10T20:10:00-04:00",
+      realized: 300,
+      unrealized: 0,
+      updatedAt: "2024-05-10T20:11:00-04:00",
+    },
+  ];
+
+  function mulberry32(seed: number) {
+    return function random() {
+      let t = (seed += 0x6d2b79f5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffleWithSeed<T>(input: readonly T[], seed: number): T[] {
+    const result = [...input];
+    const random = mulberry32(seed);
+    for (let i = result.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
+  for (let round = 0; round < 10; round += 1) {
+    it(`prefers the true latest snapshot regardless of shuffle #${round + 1}`, () => {
+      const dataset = shuffleWithSeed(base, round + 1);
+      const totals = calcWtdMtdYtdFromSnapshots(dataset, "2024-05-10");
+      const periods = computePeriods(dataset, "2024-05-10");
+      const calendar = computeDailyPeriodTotals(dataset, "2024-05-10");
+
+      expect(totals.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+      expect(Number.isNaN(totals.wtd)).toBe(true);
+      expect(Number.isNaN(totals.mtd)).toBe(true);
+      expect(Number.isNaN(totals.ytd)).toBe(true);
+      expect(periods.M11).toBe(300);
+      expect(periods.M12).toBe(300);
+      expect(periods.M13).toBe(300);
+      expect(calendar.calendar.get("2024-05-10")).toBe(300);
+    });
+  }
 });

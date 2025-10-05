@@ -13,6 +13,7 @@ import {
   endOfDayNY,
 } from "@/lib/timezone";
 import { nyDateStr, startOfDayNY, startOfWeekNY } from "./time";
+import { selectLatestSnapshotsByNyDay } from "./metrics-snapshot-selection";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
@@ -916,25 +917,16 @@ function normalizeDailyRowsForWindow(
   daily: DailyResult[] = [],
   endISO: string,
 ): NormalizedDailyForWindow[] {
-  const dedup = new Map<
-    string,
-    { row: NormalizedDailyForWindow; ts: number; order: number }
-  >();
+  const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
-  (daily || []).forEach((entry, idx) => {
-    if (!entry?.date) return;
-    const day = nyDayStr(entry.date);
-    if (!day || day > endISO) return;
-
-    const tsRaw = new Date(normalizeToNyDay(entry.date)).getTime();
-    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-    const realized = Number(entry.realized ?? 0);
+  return latest.map(({ snapshot, nyDay }) => {
+    const realized = Number((snapshot as any)?.realized ?? 0);
     const row: NormalizedDailyForWindow = {
-      day,
+      day: nyDay,
       realized: Number.isFinite(realized) ? realized : 0,
     };
 
-    const missingSymbolsSource = (entry as any)?.missingBaselineSymbols;
+    const missingSymbolsSource = (snapshot as any)?.missingBaselineSymbols;
     if (Array.isArray(missingSymbolsSource)) {
       const normalizedSymbols = missingSymbolsSource
         .map((symbol: unknown) =>
@@ -946,32 +938,22 @@ function normalizeDailyRowsForWindow(
       }
     }
 
-    if (typeof entry.unrealized === "number" && Number.isFinite(entry.unrealized)) {
-      row.unrealized = entry.unrealized;
+    if (
+      typeof (snapshot as any)?.unrealized === "number" &&
+      Number.isFinite((snapshot as any)?.unrealized)
+    ) {
+      row.unrealized = (snapshot as any).unrealized;
     }
 
     if (
-      typeof entry.unrealizedDelta === "number" &&
-      Number.isFinite(entry.unrealizedDelta)
+      typeof (snapshot as any)?.unrealizedDelta === "number" &&
+      Number.isFinite((snapshot as any)?.unrealizedDelta)
     ) {
-      row.unrealizedDelta = entry.unrealizedDelta;
+      row.unrealizedDelta = (snapshot as any).unrealizedDelta;
     }
 
-    const prev = dedup.get(day);
-    if (!prev || ts > prev.ts || (ts === prev.ts && idx > prev.order)) {
-      dedup.set(day, { row, ts, order: idx });
-    }
+    return row;
   });
-
-  return Array.from(dedup.values())
-    .sort((a, b) => {
-      if (a.row.day < b.row.day) return -1;
-      if (a.row.day > b.row.day) return 1;
-      if (a.ts < b.ts) return -1;
-      if (a.ts > b.ts) return 1;
-      return a.order - b.order;
-    })
-    .map(({ row }) => row);
 }
 
 function resolveUnrealizedForWindow(

@@ -1,15 +1,14 @@
 import {
-  normalizeToNYMidday,
   nyDateStr,
   nyDateStrSafe,
   startOfWeekNY,
   startOfMonthNY,
   startOfYearNY,
   startOfDayNY,
-  normalizeToNyDay,
   toNY,
 } from './time';
 import type { DailyResult } from './types';
+import { selectLatestSnapshotsByNyDay } from './metrics-snapshot-selection';
 
 function addDaysYmd(ymd: string, n: number): string {
   const d = new Date(`${ymd}T00:00:00`);
@@ -46,54 +45,31 @@ type NormalizedDaily = {
 };
 
 function normalizeDailyRows(daily: Daily[], endISO: string): NormalizedDaily[] {
-  const dedup = new Map<
-    string,
-    { row: NormalizedDaily; ts: number; order: number }
-  >();
+  const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
-  (daily || []).forEach((entry, idx) => {
-    if (!entry?.date) return;
-    const day =
-      typeof entry.date === 'string'
-        ? nyDateStrSafe(entry.date)
-        : nyDateStr(entry.date);
-    if (!day || day > endISO) return;
-
-    const tsRaw = new Date(normalizeToNyDay(entry.date)).getTime();
-    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-
-    const realized = Number(entry.realized ?? 0);
+  return latest.map(({ snapshot, nyDay }) => {
+    const realized = Number((snapshot as any)?.realized ?? 0);
     const row: NormalizedDaily = {
-      day,
+      day: nyDay,
       realized: Number.isFinite(realized) ? realized : 0,
     };
 
-    if (typeof entry.unrealized === 'number' && Number.isFinite(entry.unrealized)) {
-      row.unrealized = entry.unrealized;
+    if (
+      typeof (snapshot as any)?.unrealized === 'number' &&
+      Number.isFinite((snapshot as any)?.unrealized)
+    ) {
+      row.unrealized = (snapshot as any).unrealized;
     }
 
     if (
-      typeof entry.unrealizedDelta === 'number' &&
-      Number.isFinite(entry.unrealizedDelta)
+      typeof (snapshot as any)?.unrealizedDelta === 'number' &&
+      Number.isFinite((snapshot as any)?.unrealizedDelta)
     ) {
-      row.unrealizedDelta = entry.unrealizedDelta;
+      row.unrealizedDelta = (snapshot as any).unrealizedDelta;
     }
 
-    const prev = dedup.get(day);
-    if (!prev || ts > prev.ts || (ts === prev.ts && idx > prev.order)) {
-      dedup.set(day, { row, ts, order: idx });
-    }
+    return row;
   });
-
-  return Array.from(dedup.values())
-    .sort((a, b) => {
-      if (a.row.day < b.row.day) return -1;
-      if (a.row.day > b.row.day) return 1;
-      if (a.ts < b.ts) return -1;
-      if (a.ts > b.ts) return 1;
-      return a.order - b.order;
-    })
-    .map(({ row }) => row);
 }
 
 function buildDailyPnlMap(
