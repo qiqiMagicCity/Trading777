@@ -3,7 +3,6 @@ import {
   monthStartNY,
   weekStartNY,
   yearStartNY,
-  toNY,
   ymdInNY,
 } from "../timezone";
 
@@ -88,6 +87,7 @@ describe("ymdInNY boundaries", () => {
     expect(ymdInNY("2024-11-03T01:30:00-05:00")).toBe("2024-11-03");
   });
 
+  // 合并保留的新增用例（UTC 输入的纽约映射）
   it("maps late evening trades back to the same New York day", () => {
     expect(ymdInNY("2025-01-15T01:30:00Z")).toBe("2025-01-14");
   });
