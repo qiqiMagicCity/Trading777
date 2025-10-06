@@ -1,3 +1,5 @@
+// ⚠️ 警示：严禁在此文件外将 `DailyResultInput` 形态直接传给 `calcMetricsInternal`
+//       runAllCore 会在第一时间归一化字符串/空值，确保后续调用始终是纯数值。
 import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
@@ -309,6 +311,8 @@ type NormalizedDailyRow = {
   sourceDate?: string;
 };
 
+type NumericDailyResult = DailyResult & { parseErrors?: SnapshotFieldParseError[] };
+
 export function normalizeDailyRows(
   daily: MinimalDailyResult[] | undefined,
   evalISO: string,
@@ -389,10 +393,9 @@ export function normalizeDailyRows(
 }
 
 function needsSyntheticDailyResults(
-  daily: MinimalDailyResult[] | undefined,
+  rows: NormalizedDailyRow[],
   evalISO: string,
 ): boolean {
-  const rows = normalizeDailyRows(daily, evalISO);
   if (rows.length === 0) {
     return true;
   }
@@ -418,6 +421,11 @@ function needsSyntheticDailyResults(
   return false;
 }
 
+/**
+ * runAllCore 接受 MinimalDailyResult 输入形态（可包含字符串/空值），
+ * 但在函数开头即通过 normalizeDailyRows 归一化为纯数值 DailyResult[]，
+ * 后续 calcMetrics / computePeriods 全程只处理数值形态快照。
+ */
 function runAllCore(
   _date: string,
   initialPositions: InitialPosition[],
@@ -495,7 +503,31 @@ function runAllCore(
   const providedDaily = Array.isArray(input.dailyResults)
     ? (input.dailyResults as MinimalDailyResult[])
     : [];
-  const shouldRebuildDaily = needsSyntheticDailyResults(providedDaily, evalISO);
+  const normalizedDailyRows = normalizeDailyRows(providedDaily, evalISO);
+
+  const shouldRebuildDaily = needsSyntheticDailyResults(normalizedDailyRows, evalISO);
+
+  const normalizedDailyResults: NumericDailyResult[] = normalizedDailyRows.map((row) => {
+    const baseDate = row.sourceDate ?? `${row.day}T12:00:00Z`;
+    const normalized: NumericDailyResult = {
+      date: baseDate,
+      realized: Number.isFinite(row.realized) ? row.realized : 0,
+      unrealized:
+        typeof row.unrealized === "number" && Number.isFinite(row.unrealized)
+          ? row.unrealized
+          : 0,
+      ...(typeof row.unrealizedDelta === "number" && Number.isFinite(row.unrealizedDelta)
+        ? { unrealizedDelta: row.unrealizedDelta }
+        : {}),
+    };
+
+    if (row.parseErrors?.length) {
+      normalized.parseErrors = row.parseErrors.map((err) => ({ ...err }));
+    }
+
+    return normalized;
+  });
+
   const effectiveDailyResults: DailyResult[] = shouldRebuildDaily
     ? generateDailyResults({
         trades: enriched,
@@ -503,7 +535,7 @@ function runAllCore(
         closePrices,
         evalDate: evalISO,
       })
-    : (providedDaily as DailyResult[]);
+    : normalizedDailyResults;
 
   if (shouldRebuildDaily) {
     console.warn(
@@ -515,6 +547,7 @@ function runAllCore(
   try {
     metrics = calcMetrics(enriched, positions, effectiveDailyResults, {
       tradingDateStr: evalISO,
+      periodEvalYmd: evalISO,
     });
   } finally {
     if (prevFreeze === undefined) {
@@ -526,19 +559,8 @@ function runAllCore(
 
   // ---- 周/月/年周期指标与 M9（历史已实现累计）----
   const periods = computePeriods(effectiveDailyResults, evalISO);
-  const {
-    wtd: _legacyWtd,
-    mtd: _legacyMtd,
-    ytd: _legacyYtd,
-    M11: _legacyM11,
-    M12: _legacyM12,
-    M13: _legacyM13,
-    ...periodsRest
-  } = periods as ReturnType<typeof computePeriods> & {
-    wtd?: number;
-    mtd?: number;
-    ytd?: number;
-  };
+  const { M11: _computedM11, M12: _computedM12, M13: _computedM13, ...periodsRest } =
+    periods as ReturnType<typeof computePeriods>;
   const periodM9 = (periodsRest as { M9?: number }).M9 ?? metrics.M9;
   // ---- 用新的日内拆分算法计算 M4/M5，并重算 M6 ----
   bySym = {};
@@ -622,7 +644,7 @@ function runAllCore(
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
-  const periodHealth = metrics._period?.degraded;
+  const periodMeta = metrics._period;
 
   const result = {
     ...periodsRest,
@@ -641,9 +663,7 @@ function runAllCore(
     M11: metrics.M11,
     M12: metrics.M12,
     M13: metrics.M13,
-    ...(periodHealth
-      ? { _period: { degraded: { ...periodHealth } } }
-      : {}),
+    ...(periodMeta ? { _period: periodMeta } : {}),
     aux: {
       breakdown,
       m6PriceChange: priceChange_r,

@@ -446,6 +446,7 @@ export default function DashboardPage() {
         // 计算指标并存入全局状态（M6 = M4 + M5.2 + 当日MTM）
         const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
           tradingDateStr: evalDateStr,
+          periodEvalYmd: evalDateStr,
         });
         const metrics = normalizeMetrics(rawMetrics);
         issuesRef.current = collectPeriodHealthIssues({
@@ -597,6 +598,7 @@ export default function DashboardPage() {
 
     const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
       tradingDateStr: evalDateStr,
+      periodEvalYmd: evalDateStr,
     });
     const metrics = normalizeMetrics(rawMetrics);
     issuesRef.current = collectPeriodHealthIssues({
@@ -691,6 +693,7 @@ export default function DashboardPage() {
 
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
         tradingDateStr: evalDateStr,
+        periodEvalYmd: evalDateStr,
       });
       const metrics = normalizeMetrics(rawMetrics);
       issuesRef.current = collectPeriodHealthIssues({

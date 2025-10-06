@@ -18,6 +18,7 @@ describe(
       ];
       const res = calcMetricsInternal([] as any, [] as any, daily, {
         tradingDateStr: "2025-09-24",
+        periodEvalYmd: "2025-09-24",
       });
       expect(Number(res.M11.toFixed(2))).toBe(20.0);
       expect(Number(res.M12.toFixed(2))).toBe(20.0);
@@ -34,7 +35,7 @@ describe(
         [] as any,
         [] as any,
         daily as unknown as DailyResult[],
-        { tradingDateStr: "2025-09-24" },
+        { tradingDateStr: "2025-09-24", periodEvalYmd: "2025-09-24" },
       );
 
       expect(Number(res.M11.toFixed(2))).toBe(20.0);
@@ -52,7 +53,7 @@ describe(
         [] as any,
         [] as any,
         daily as unknown as DailyResult[],
-        { tradingDateStr: "2025-09-24" },
+        { tradingDateStr: "2025-09-24", periodEvalYmd: "2025-09-24" },
       );
 
       expect(res._period?.diagnostics?.wtd?.reason).toBe("DEGEN_PARSE_FAILED");

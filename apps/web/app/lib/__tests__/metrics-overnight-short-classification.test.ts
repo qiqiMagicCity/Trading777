@@ -29,6 +29,7 @@ describe("overnight short trades stay in overnight bucket", () => {
 
     const metrics = calcMetricsInternal(trades, positions, [], {
       tradingDateStr: "2025-01-15",
+      periodEvalYmd: "2025-01-15",
     });
 
     expect(metrics.M5.trade).toBe(0);
