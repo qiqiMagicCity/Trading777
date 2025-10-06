@@ -355,13 +355,10 @@ export function generateDailyResults({
       if (byDate && Number.isFinite(byDate[date])) {
         price = Number(byDate[date]);
       }
-      if (price === undefined && date === evalDateStr) {
+      if (price === undefined && date === evalDateStr && treatRealtimeAsClose) {
         const final = finalPriceMap.get(symbol);
         if (final !== undefined && Number.isFinite(final)) {
           price = final;
-          if (!treatRealtimeAsClose) {
-            reportMissing(symbol, date, "MARK_PRICE");
-          }
         }
       }
       if (price === undefined) {
