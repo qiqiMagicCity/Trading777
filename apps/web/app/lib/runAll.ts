@@ -35,20 +35,6 @@ import {
   type SnapshotNumericField,
 } from "./snapshotNumber";
 
-// 统一解析 public 文件路径
-function resolvePublicFile(relName: string): string | null {
-  const candidates = [
-    path.join(process.cwd(), "apps/web/public", relName),
-    path.join(process.cwd(), "public", relName),
-  ];
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p)) return p;
-    } catch {}
-  }
-  return null;
-}
-
 async function readJsonSafe<T>(relName: string, fallback: T): Promise<T> {
   return readPublicJson(relName, fallback);
 }
@@ -87,17 +73,25 @@ export function getReplayDays(
   return Array.from(set).sort();
 }
 
-export async function runAll(...args: any[]) {
-  if (args.length === 1 && typeof args[0] === "object" && Array.isArray((args[0] as any).symbols)) {
+export async function runAll(...args: unknown[]) {
+  if (
+    args.length === 1 &&
+    args[0] &&
+    typeof args[0] === "object" &&
+    Array.isArray((args[0] as { symbols?: unknown }).symbols)
+  ) {
     const { from } = args[0] as { symbols: string[]; from: string; to: string };
     const trades = assertSchema(await readJsonSafe("trades.json", [] as RawTrade[]), Trades) as RawTrade[];
     const positions = assertSchema(await readJsonSafe("positions.json", [] as InitialPosition[]), Positions);
-    const pricesMap = await readJsonSafe("prices.json", {} as any);
+    const pricesMap = await readJsonSafe("prices.json", {} as Record<string, unknown>);
     const prices = normalizeClosePriceMap(assertSchema(pricesMap, PriceMap));
-    const daily = assertSchema(await readJsonSafe("dailyResult.json", [] as any[]), DailyResults);
+    const daily = assertSchema(
+      await readJsonSafe("dailyResult.json", [] as MinimalDailyResult[]),
+      DailyResults,
+    );
     return runAllCore(from, positions, trades, prices, { dailyResults: daily }, { evalDate: from });
   }
-  return runAllCore.apply(null, args as any);
+  return runAllCore(...(args as Parameters<typeof runAllCore>));
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -561,6 +555,9 @@ function runAllCore(
   const periods = computePeriods(effectiveDailyResults, evalISO);
   const { M11: _computedM11, M12: _computedM12, M13: _computedM13, ...periodsRest } =
     periods as ReturnType<typeof computePeriods>;
+  void _computedM11;
+  void _computedM12;
+  void _computedM13;
   const periodM9 = (periodsRest as { M9?: number }).M9 ?? metrics.M9;
   // ---- 用新的日内拆分算法计算 M4/M5，并重算 M6 ----
   bySym = {};

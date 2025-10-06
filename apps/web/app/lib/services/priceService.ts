@@ -4,7 +4,7 @@ import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
-import { isBrowser, safeLocalStorage, lsGet, lsSet } from '../env';
+import { safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
 import { nyDateStr, toNY, NY_TZ } from '../time';
 import { getTradingDateStr } from '../tradingDay';
@@ -225,7 +225,7 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
     if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
       return cached.price;
     }
-  } catch (_err) {
+  } catch {
     // 忽略 localStorage 访问或 JSON 解析错误
   }
 
@@ -239,7 +239,7 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
       const price = first.last;
       try {
         cacheSet(cacheKey, JSON.stringify({ price, ts: Date.now() }));
-      } catch (_err) {
+      } catch {
         // 忽略写入 localStorage 的错误
       }
       return price;
@@ -262,7 +262,7 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
     if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
       return cached.price;
     }
-  } catch (_err) {
+  } catch {
     // 忽略 localStorage 访问或 JSON 解析错误
   }
 
@@ -276,7 +276,7 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
       const price = first.close;
       try {
         cacheSet(cacheKey, JSON.stringify({ price, ts: Date.now() }));
-      } catch (_err) {
+      } catch {
         // 忽略写入 localStorage 的错误
       }
       await putPrice({ symbol, date, close: price, source: 'tiingo' });
@@ -546,7 +546,7 @@ export async function fetchDailyClose(
           if (typeof rt === 'number' && rt > 0) {
             return await recordOfficialClose(rt, 'close_rt');
           }
-        } catch (_) {
+        } catch {
           // 获取不到就继续走后备逻辑
         }
       }

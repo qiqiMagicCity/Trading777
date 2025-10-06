@@ -1,1 +1,13 @@
-{"extends": ["next/core-web-vitals"]}
+{
+  "extends": ["next/core-web-vitals"],
+  "overrides": [
+    {
+      "files": ["**/__tests__/**/*.{ts,tsx}"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/explicit-module-boundary-types": "off",
+        "react/prop-types": "off"
+      }
+    }
+  ]
+}

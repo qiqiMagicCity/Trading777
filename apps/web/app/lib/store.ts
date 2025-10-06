@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import type { Metrics } from './metrics';
+import type { MetricsContract } from './types/metrics';
 import type { PeriodHealth } from './types/health';
 
 interface StoreState {
-  metrics: Metrics | null;
-  setMetrics: (metrics: Metrics | null) => void;
+  metrics: MetricsContract | null;
+  setMetrics: (metrics: MetricsContract | null) => void;
   periodHealth: PeriodHealth | null;
   setPeriodHealth: (health: PeriodHealth | null) => void;
 }

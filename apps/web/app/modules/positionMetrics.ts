@@ -1,4 +1,4 @@
-import type { Metrics } from "@/lib/metrics";
+import type { MetricsContract } from "@/app/lib/types/metrics";
 import type { Position } from "@/lib/services/dataService";
 
 function normalizeSymbol(value: string | undefined | null): string {
@@ -21,7 +21,9 @@ export type IntradayPnlDataset = {
   hasLegsData: boolean;
 };
 
-export function buildIntradayPnlMap(metrics: Metrics | null | undefined): IntradayPnlDataset {
+export function buildIntradayPnlMap(
+  metrics: MetricsContract | null | undefined,
+): IntradayPnlDataset {
   const map = new Map<string, number>();
   const legs = metrics?.aux?.m6Legs;
 
