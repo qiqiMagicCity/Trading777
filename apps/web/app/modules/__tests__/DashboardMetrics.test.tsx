@@ -367,9 +367,66 @@ describe("DashboardMetrics period cards", () => {
       const others = ["m11", "m12", "m13"].filter(
         (key) => key !== metricKey.toLowerCase(),
       );
-      for (const other of others) {
-        expect(screen.queryByTestId(`period-degrade-hint-${other}`)).toBeNull();
-      }
-    },
+  for (const other of others) {
+    expect(screen.queryByTestId(`period-degrade-hint-${other}`)).toBeNull();
+  }
+},
   );
+
+  it("renders parse failure diagnostics with tooltip summary", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          ...baseMetrics,
+          _period: {
+            degraded: { wtd: true, mtd: false, ytd: false },
+            status: { wtd: "degraded", mtd: "ok", ytd: "ok" },
+            diagnostics: {
+              wtd: {
+                status: "degraded",
+                degraded: true,
+                reason: "DEGEN_PARSE_FAILED",
+                parseErrors: [
+                  {
+                    field: "realized",
+                    value: "1,200",
+                    code: "PARSE_NUM_FAILED",
+                    reason: "INVALID_FORMAT",
+                    day: "2025-09-24",
+                  },
+                  {
+                    field: "unrealized",
+                    value: " ",
+                    code: "PARSE_NUM_FAILED",
+                    reason: "EMPTY",
+                    day: "2025-09-24",
+                  },
+                ],
+              },
+              mtd: { status: "ok", degraded: false },
+              ytd: { status: "ok", degraded: false },
+            },
+          },
+        } as any,
+        periodHealth: {
+          status: "degraded",
+          summaries: [],
+          degraded: { wtd: true, mtd: false, ytd: false },
+        },
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    const hint = screen.getByTestId("period-degrade-hint-m11");
+    expect(hint).toHaveTextContent("解析失败");
+    const tooltip = screen
+      .getByTestId("period-degrade-tooltip-m11")
+      .getAttribute("title");
+    expect(tooltip).toBeTruthy();
+    expect(tooltip).toContain("解析失败");
+    expect(tooltip).toContain("realized");
+    expect(tooltip).toContain("unrealized");
+    expect(tooltip).toContain("1,200");
+  });
 });

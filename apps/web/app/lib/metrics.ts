@@ -14,6 +14,11 @@ import {
 } from "@/lib/timezone";
 import { nyDateStr, startOfDayNY, startOfWeekNY } from "./time";
 import { selectLatestSnapshotsByNyDay } from "./metrics-snapshot-selection";
+import {
+  parseSnapshotNumber,
+  type SnapshotFieldParseError,
+  type SnapshotNumericField,
+} from "./snapshotNumber";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
@@ -53,7 +58,7 @@ function nyTodayStr(): string {
 }
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import { sortTrades } from "./sortTrades";
-import type { DailyResult } from "./types";
+import type { DailyResult, DailyResultInput } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
@@ -901,6 +906,8 @@ type NormalizedDailyForWindow = {
   unrealizedDelta?: number;
   resolvedUnrealized?: number;
   missingBaselineSymbols?: string[];
+  parseErrors?: SnapshotFieldParseError[];
+  sameDayDuplicateCount?: number;
 };
 
 export interface WindowTotalsResult {
@@ -915,17 +922,39 @@ export interface WindowTotalsResult {
 }
 
 function normalizeDailyRowsForWindow(
-  daily: DailyResult[] = [],
+  daily: DailyResultInput[] = [],
   endISO: string,
 ): NormalizedDailyForWindow[] {
   const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
-  return latest.map(({ snapshot, nyDay }) => {
-    const realized = Number((snapshot as any)?.realized ?? 0);
+  return latest.map(({ snapshot, nyDay, duplicates }) => {
+    const parseErrors: SnapshotFieldParseError[] = [];
+
+    const parseField = (
+      field: SnapshotNumericField,
+      value: unknown,
+      { optional = false }: { optional?: boolean } = {},
+    ): number | undefined => {
+      if (optional && (value === null || value === undefined)) {
+        return undefined;
+      }
+      const parsed = parseSnapshotNumber(value);
+      if (parsed.ok) {
+        return parsed.value;
+      }
+      parseErrors.push({ ...parsed.error, field, day: nyDay });
+      return undefined;
+    };
+
+    const realizedValue = parseField("realized", (snapshot as any)?.realized);
     const row: NormalizedDailyForWindow = {
       day: nyDay,
-      realized: Number.isFinite(realized) ? realized : 0,
+      realized: realizedValue ?? 0,
     };
+
+    if (typeof duplicates === "number" && duplicates > 0) {
+      row.sameDayDuplicateCount = duplicates;
+    }
 
     const missingSymbolsSource = (snapshot as any)?.missingBaselineSymbols;
     if (Array.isArray(missingSymbolsSource)) {
@@ -939,18 +968,22 @@ function normalizeDailyRowsForWindow(
       }
     }
 
-    if (
-      typeof (snapshot as any)?.unrealized === "number" &&
-      Number.isFinite((snapshot as any)?.unrealized)
-    ) {
-      row.unrealized = (snapshot as any).unrealized;
+    const unrealizedValue = parseField("unrealized", (snapshot as any)?.unrealized);
+    if (typeof unrealizedValue === "number") {
+      row.unrealized = unrealizedValue;
     }
 
-    if (
-      typeof (snapshot as any)?.unrealizedDelta === "number" &&
-      Number.isFinite((snapshot as any)?.unrealizedDelta)
-    ) {
-      row.unrealizedDelta = (snapshot as any).unrealizedDelta;
+    const unrealizedDeltaValue = parseField(
+      "unrealizedDelta",
+      (snapshot as any)?.unrealizedDelta,
+      { optional: true },
+    );
+    if (typeof unrealizedDeltaValue === "number") {
+      row.unrealizedDelta = unrealizedDeltaValue;
+    }
+
+    if (parseErrors.length > 0) {
+      row.parseErrors = parseErrors;
     }
 
     return row;
@@ -1065,14 +1098,18 @@ function sumRealizedBetween(
   rows: NormalizedDailyForWindow[],
   start: string,
   end: string,
-): number {
+): { total: number; hasParseFailure: boolean } {
   let total = 0;
+  let hasParseFailure = false;
   for (const row of rows) {
     if (row.day < start) continue;
     if (row.day > end) break;
+    if (row.parseErrors?.some((err) => err.field === "realized")) {
+      hasParseFailure = true;
+    }
     total += row.realized;
   }
-  return total;
+  return { total, hasParseFailure };
 }
 
 type WindowTotalsOptions = PeriodTotalsOptions & { firstActiveDate?: string };
@@ -1092,9 +1129,12 @@ function deriveWindowTotals(
   const firstActive = firstActiveCandidate || evalDay;
 
   const computeWindow = (windowStart: string) => {
-    const realized = sumRealizedBetween(rows, windowStart, evalDay);
+    const {
+      total: realized,
+      hasParseFailure: realizedParseFailure,
+    } = sumRealizedBetween(rows, windowStart, evalDay);
     const baselineCandidate = findRowBefore(rows, windowStart);
-    const baselineRow =
+    let baselineRow =
       baselineCandidate && baselineCandidate.day >= firstActive
         ? baselineCandidate
         : undefined;
@@ -1117,9 +1157,45 @@ function deriveWindowTotals(
     let missingBaselineSymbols: string[] | undefined;
     let baselineValue: number | undefined;
     let degradeReason: PeriodDegradationReason | undefined;
+    const windowParseErrors: SnapshotFieldParseError[] = [];
+    let sameDayDuplicates = 0;
+
+    for (const row of rows) {
+      if (row.day < windowStart || row.day > evalDay) continue;
+      if (row.parseErrors?.length) {
+        windowParseErrors.push(
+          ...row.parseErrors.map((err) => ({ ...err })),
+        );
+      }
+      if (row.sameDayDuplicateCount) {
+        sameDayDuplicates += row.sameDayDuplicateCount;
+      }
+    }
 
     if (!baselineRow) {
-      degradeReason = "DEGEN_NO_BASELINE";
+      const fallbackRow = rows.find(
+        (row) => row.day === windowStart,
+      )
+        ?? rows.find((row) => row.day >= windowStart);
+      if (fallbackRow && windowStart <= firstActive) {
+        baselineRow = fallbackRow;
+        baselineDate = fallbackRow.day;
+        if (Array.isArray(fallbackRow.missingBaselineSymbols)) {
+          missingBaselineSymbols = fallbackRow.missingBaselineSymbols;
+        }
+        const resolvedSameDay = fallbackRow.resolvedUnrealized;
+        if (
+          typeof resolvedSameDay === "number" &&
+          Number.isFinite(resolvedSameDay)
+        ) {
+          baselineValue = resolvedSameDay;
+          baselineMode = "priced";
+        } else {
+          baselineMode = "partial";
+        }
+      } else {
+        degradeReason = "DEGEN_NO_BASELINE";
+      }
     } else {
       baselineDate = baselineRow.day;
       if (Array.isArray(baselineRow.missingBaselineSymbols)) {
@@ -1140,6 +1216,20 @@ function deriveWindowTotals(
         degradeReason = "DEGEN_STALE_BASELINE";
         baselineMode = "missing";
       }
+
+      if (baselineRow.parseErrors?.length) {
+        windowParseErrors.push(
+          ...baselineRow.parseErrors.map((err) => ({ ...err })),
+        );
+      }
+    }
+
+    if (
+      baselineRow?.sameDayDuplicateCount &&
+      baselineRow.sameDayDuplicateCount > 0 &&
+      baselineRow.day < windowStart
+    ) {
+      sameDayDuplicates += baselineRow.sameDayDuplicateCount;
     }
 
     const hasWindowRows = rows.some(
@@ -1161,6 +1251,13 @@ function deriveWindowTotals(
 
     if (missingEndValue && !degradeReason) {
       degradeReason = "DEGEN_WINDOW_EMPTY";
+    }
+
+    const hasParseFailure =
+      realizedParseFailure || windowParseErrors.length > 0;
+
+    if (hasParseFailure) {
+      degradeReason = "DEGEN_PARSE_FAILED";
     }
 
     let unrealizedDelta: number | undefined;
@@ -1200,7 +1297,16 @@ function deriveWindowTotals(
         : {}),
     };
 
-    return { total, degraded, status, breakdown, reason: degradeReason, baselineMeta };
+    return {
+      total,
+      degraded,
+      status,
+      breakdown,
+      reason: degradeReason,
+      baselineMeta,
+      parseErrors: windowParseErrors,
+      sameDayDuplicates,
+    };
   };
 
   const weekStart = weekStartForEvalDay(evalDay);
@@ -1237,24 +1343,42 @@ function deriveWindowTotals(
         degraded: week.degraded,
         ...(week.reason ? { reason: week.reason } : {}),
         ...(week.baselineMeta ? { baselineMeta: week.baselineMeta } : {}),
+        ...(week.parseErrors.length
+          ? { parseErrors: week.parseErrors }
+          : {}),
+        ...(week.sameDayDuplicates
+          ? { sameDayDuplicates: week.sameDayDuplicates }
+          : {}),
       },
       mtd: {
         status: month.status,
         degraded: month.degraded,
         ...(month.reason ? { reason: month.reason } : {}),
         ...(month.baselineMeta ? { baselineMeta: month.baselineMeta } : {}),
+        ...(month.parseErrors.length
+          ? { parseErrors: month.parseErrors }
+          : {}),
+        ...(month.sameDayDuplicates
+          ? { sameDayDuplicates: month.sameDayDuplicates }
+          : {}),
       },
       ytd: {
         status: year.status,
         degraded: year.degraded,
         ...(year.reason ? { reason: year.reason } : {}),
         ...(year.baselineMeta ? { baselineMeta: year.baselineMeta } : {}),
+        ...(year.parseErrors.length
+          ? { parseErrors: year.parseErrors }
+          : {}),
+        ...(year.sameDayDuplicates
+          ? { sameDayDuplicates: year.sameDayDuplicates }
+          : {}),
       },
     },
   };
 }
 
-export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
+export function calcWtdMtdYtd(daily: DailyResultInput[], evalDateStr: string) {
   const evalDay = nyDayStr(evalDateStr);
   const rows = normalizeDailyRowsForWindow(daily, evalDay);
   const firstActive = rows[0]?.day;
@@ -1271,7 +1395,7 @@ export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
 }
 
 export function calcWtdMtdYtdFromSnapshots(
-  daily: DailyResult[] = [],
+  daily: DailyResultInput[] = [],
   evalDayStr: string,
   options: WindowTotalsOptions = {},
 ): WindowTotalsResult {
@@ -1295,7 +1419,7 @@ export function calcWtdMtdYtdFromSnapshots(
 }
 
 export function explainWtdMtdYtdFromSnapshots(
-  daily: DailyResult[] = [],
+  daily: DailyResultInput[] = [],
   evalDayStr: string,
   options: WindowTotalsOptions = {},
 ) {

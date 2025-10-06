@@ -23,10 +23,15 @@ export type PeriodWindowStatus =
   | "missing"
   | "degraded";
 
+import type { SnapshotFieldParseError } from "../snapshotNumber";
+
 export type PeriodDegradationReason =
   | "DEGEN_NO_BASELINE"
   | "DEGEN_STALE_BASELINE"
-  | "DEGEN_WINDOW_EMPTY";
+  | "DEGEN_WINDOW_EMPTY"
+  | "DEGEN_PARSE_FAILED";
+
+export type PeriodParseError = SnapshotFieldParseError;
 
 export interface PeriodBaselineMeta {
   baselineYmd?: string;
@@ -39,6 +44,8 @@ export interface PeriodWindowDiagnostics {
   degraded: boolean;
   reason?: PeriodDegradationReason;
   baselineMeta?: PeriodBaselineMeta;
+  parseErrors?: PeriodParseError[];
+  sameDayDuplicates?: number;
 }
 
 export interface PeriodWindowBreakdown {

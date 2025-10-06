@@ -32,7 +32,11 @@ describe("NY day normalization", () => {
     ];
 
     const totals = calcWtdMtdYtdFromSnapshots(daily, "2025-09-23");
-    expect(totals.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(totals.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
+    expect(totals.wtd).toBe(120);
+    expect(totals.mtd).toBe(120);
+    expect(totals.ytd).toBe(120);
+    expect(totals.diagnostics.wtd.reason).toBeUndefined();
 
     const explain = explainWtdMtdYtdFromSnapshots(daily, "2025-09-23");
     const dayRow = explain.calendar.find((row) => row.day === "2025-09-23");
@@ -42,9 +46,9 @@ describe("NY day normalization", () => {
       tradingDateStr: "2025-09-23",
     });
 
-    expect(Number.isNaN(metrics.M11)).toBe(true);
-    expect(Number.isNaN(metrics.M12)).toBe(true);
-    expect(Number.isNaN(metrics.M13)).toBe(true);
+    expect(metrics.M11).toBe(120);
+    expect(metrics.M12).toBe(120);
+    expect(metrics.M13).toBe(120);
   });
 
   it("counts midnight ISO snapshots on the correct New York day", () => {
@@ -54,7 +58,11 @@ describe("NY day normalization", () => {
     ];
 
     const totals = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
-    expect(totals.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(totals.degraded).toEqual({ wtd: false, mtd: false, ytd: false });
+    expect(totals.wtd).toBe(150);
+    expect(totals.mtd).toBe(150);
+    expect(totals.ytd).toBe(150);
+    expect(totals.diagnostics.wtd.reason).toBeUndefined();
 
     const explain = explainWtdMtdYtdFromSnapshots(daily, "2025-09-24");
     const target = explain.calendar.find((row) => row.day === "2025-09-24");

@@ -73,6 +73,31 @@ describe("runAll aligns M11/M12/M13 with snapshot-based WTD/MTD/YTD", () => {
     expect(result._period).toBeUndefined();
   });
 
+  it("surfaces parse failures from imported daily snapshots", async () => {
+    const evalDate = "2025-09-24";
+    const dailyResults = [
+      { date: "2025-09-23", realized: "10", unrealized: "100", unrealizedDelta: "5" },
+      { date: "2025-09-24", realized: "oops", unrealized: "105", unrealizedDelta: "5" },
+    ];
+
+    const result = await runAll(
+      evalDate,
+      [],
+      [] as RawTrade[],
+      {},
+      { dailyResults: dailyResults as unknown as DailyResult[] },
+      { evalDate },
+    );
+
+    expect(result._period?.diagnostics?.wtd?.reason).toBe("DEGEN_PARSE_FAILED");
+    expect(result._period?.diagnostics?.wtd?.parseErrors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "realized", value: "oops" }),
+      ]),
+    );
+    expect(result._period?.degraded?.wtd).toBe(true);
+  });
+
   it("preserves degraded flags from calcMetrics", async () => {
     const evalDate = "2025-10-03";
     const dailyResults: DailyResult[] = [

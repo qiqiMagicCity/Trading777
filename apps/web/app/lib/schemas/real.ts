@@ -21,12 +21,22 @@ export const Position = z.object({
   avgPrice: z.number().finite(),
 });
 
-export const DailyResult = z.object({
-  date: z.string(),
-  realized: z.number().finite(),
-  unrealized: z.number().finite(),
-  stale: z.boolean().optional(),
-}).passthrough();
+const numericLike = z.union([
+  z.number().finite(),
+  z.string(),
+  z.null(),
+  z.undefined(),
+]);
+
+export const DailyResult = z
+  .object({
+    date: z.string(),
+    realized: numericLike,
+    unrealized: numericLike,
+    unrealizedDelta: numericLike.optional(),
+    stale: z.boolean().optional(),
+  })
+  .passthrough();
 
 export const Trades = z.array(Trade);
 export const Prices = z.array(Price);
