@@ -1953,14 +1953,21 @@ export function calcMetricsInternal(
 
   const providedEvalDay = resolveNyDay(options.periodEvalYmd);
   const providedUiTradeDay = resolveNyDay(options.tradingDateStr);
-  const freezeEvalDay = resolveNyDay(
-    (typeof process !== "undefined" &&
-      process.env.NEXT_PUBLIC_FREEZE_DATE) ||
-      (typeof window !== "undefined" &&
-        (window as unknown as Record<string, unknown>)
-          .NEXT_PUBLIC_FREEZE_DATE) ||
-      undefined,
-  );
+  const freezeEnvValue =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_FREEZE_DATE
+      : undefined;
+  const freezeWindowValue =
+    typeof window !== "undefined"
+      ? (window as unknown as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE
+      : undefined;
+  const freezeCandidate =
+    typeof freezeEnvValue === "string"
+      ? freezeEnvValue
+      : typeof freezeWindowValue === "string"
+        ? freezeWindowValue
+        : undefined;
+  const freezeEvalDay = resolveNyDay(freezeCandidate);
   const periodEvalStr = providedEvalDay ?? freezeEvalDay ?? nyTodayStr();
   const evalAnchorNY = toNY(`${periodEvalStr}T12:00:00Z`);
   const uiTradeDayYmd =

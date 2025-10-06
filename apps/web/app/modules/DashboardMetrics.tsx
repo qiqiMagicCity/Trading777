@@ -212,11 +212,25 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     const intradayParseErrors = Array.isArray(intradayDiagnostics?.parseErrors)
       ? intradayDiagnostics.parseErrors.filter(isPeriodParseErrorLike)
       : [];
+    const rawMetricsRecord = isRecord(rawMetrics)
+      ? (rawMetrics as Record<string, unknown>)
+      : null;
+    let rawTradingDate: string | undefined;
+    if (
+      rawMetricsRecord &&
+      typeof rawMetricsRecord.tradingDateStr === "string"
+    ) {
+      rawTradingDate = rawMetricsRecord.tradingDateStr as string;
+    } else {
+      rawTradingDate = undefined;
+    }
+    const diagnosticsTradeDay =
+      intradayDiagnostics &&
+      typeof intradayDiagnostics.uiTradeDayYmd === "string"
+        ? intradayDiagnostics.uiTradeDayYmd
+        : undefined;
     const tradingDay: string | undefined =
-      intradayDiagnostics?.uiTradeDayYmd ??
-      (typeof rawMetrics?.tradingDateStr === "string"
-        ? rawMetrics.tradingDateStr
-        : undefined);
+      diagnosticsTradeDay ?? rawTradingDate;
 
     const componentFieldMap = {
       realizedToday: "realized_today",

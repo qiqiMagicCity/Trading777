@@ -254,3 +254,5 @@
 - `.eslintrc.json` 与 `apps/web/eslint.config.js` 新增 `__tests__`、`app/lib` 目录豁免规则，逐项移除 `any`、`unused`、`prefer-const` 等历史噪音，`Header` / `page.tsx` / `runAll.ts` / `priceService.ts` 等核心文件补足类型守卫与 Hook 依赖。
 - CI `build-main.yml` 串联 `npm run check:calcmetrics-daily`，`package.json` 补充 `test:periods-core`、`test:m6-ui` 快捷脚本，守护脚本与核心回归纳入日常执行清单。
 - 测试：`npm run lint`、`npm run check:calcmetrics-daily`、`npm run test:periods-core`、`npm run test:m6-ui`、`npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`、`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。
+- 修复 Vercel 构建报错：`resolveNyDay` 接收 `(typeof window !== "undefined" && window.NEXT_PUBLIC_FREEZE_DATE)` 时被推断为 `{}`，Next.js 构建类型检查失败（期望 `string | undefined`）。改为分别读取 `process.env` 与 `window` 的候选值，并通过 `typeof === "string"` 收窄后再传入 `resolveNyDay`，重跑 `npm run build` 通过。
+- 修复 Vercel 构建报错：Dashboard M6 卡片读取 `tradingDateStr` 时直接访问 `MetricsContract` 上不存在的字段，TS 推断 `{} | undefined` 导致 `next build` 中断。改用 `isRecord` 收窄原始对象并对 `intradayDiagnostics.uiTradeDayYmd` / `rawMetrics.tradingDateStr` 做字符串判定后再回退，`npm run build --workspace=web` 通过。
