@@ -46,6 +46,11 @@ export interface PeriodWindowDiagnostics {
   baselineMeta?: PeriodBaselineMeta;
   parseErrors?: PeriodParseError[];
   sameDayDuplicates?: number;
+  uiTradeDayYmd?: string;
+  periodEvalYmd?: string;
+  filteredRowsCount?: number;
+  lastSnapshotYmd?: string;
+  windowStartYmd?: string;
 }
 
 export interface PeriodWindowBreakdown {

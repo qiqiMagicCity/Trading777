@@ -1,5 +1,11 @@
 # 更新日志
 
+## 2025-11-09
+- Step 5：`calcMetricsInternal` 建立唯一 `periodEvalYmd` 来源（入参优先，其次 `nyTodayStr()`），UI 冻结日独立维护并禁止再以 `getLatestTradingDayStr` 回退周期窗口；交易、日度快照过滤统一按纽约日并包含评估日当日。
+- 修复回归：移除 `periodEvalYmd` 对 `tradingDateStr` 的隐式回退，所有调用方（含 `runAll`、Dashboard 页面与相关单测）改为显式传入评估日，确保周/月/年聚合恒以真实评估日为锚。
+- `calcWtdMtdYtdFromSnapshots` / `deriveWindowTotals` 透出 `uiTradeDayYmd`、`periodEvalYmd`、`filteredRowsCount`、`lastSnapshotYmd`、`windowStartYmd` 等诊断字段，`calcMetricsInternal` 在 UI 日≠评估日且纳入新快照时追加 `PERIOD_EVAL_DAY_INCLUDED` 调试日志。
+- 新增 `metrics-evalday-decoupling.freeze-vs-eval.test.ts`、`metrics-evalday-decoupling.after-hours.test.ts`、`metrics-evalday-decoupling.holiday-dst.test.ts` 三组回归用例，验证周末冻结、盘后、节假日 & DST 场景下 WTD/MTD/YTD 均按真实评估日累计。
+
 ## 2025-11-08
 - 抽取 `parseSnapshotNumber` 统一解析日度快照的数值字段，支持数字字符串输入并在非法格式时返回 `PARSE_NUM_FAILED` 诊断。
 - `runAll.normalizeDailyRows`、`metrics.ts`、`metrics-periods.ts` 全量复用新解析器，删除 `typeof === "number"` 兜底并在解析失败时透出 `DEGEN_PARSE_FAILED` 退化。
@@ -93,6 +99,10 @@
 - 检视 `runAll`、`page.tsx` 与 store 使用 `_period.degraded` 的逻辑，确认仍按退化状态渲染提示。
 
 ## 2025-10-06
+- Step 5 收尾：runAllCore 统一归一化日度快照
+  - runAllCore 入口对 MinimalDailyResult 执行 normalizeDailyRows，记录归一化前后行数并在内部仅保留纯数值 DailyResult[]。
+  - 含字符串数值的日度快照通过 runAll → calcMetrics 链路与纯数字版产出一致，并补充千分位字符串触发 DEGEN_PARSE_FAILED 的端到端单测。
+  - 新增静态守护脚本 `check-calcmetrics-daily`，阻止在 apps/web/app/lib 中重新引入 `as DailyResult(Input)` 的断言路径。
 - 移除 `normalizeMetrics` 对 WTD/MTD/YTD 旧别名的回退，仅保留显式 `M11/M12/M13` 选值。
 - 更新周期别名单测，确保旧别名输入不会带出 `M11/M12/M13`，并维持显式字段优先级。
 - 补充 `DashboardMetrics` 26030.56 退化场景回归测试，确认 UI 通过“待补充”路径提示用户。

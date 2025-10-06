@@ -61,7 +61,13 @@ function normalizeDailyRows(daily: Daily[], endISO: string): NormalizedDaily[] {
   const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
   return latest.map(({ snapshot, nyDay }) => {
-    const parseErrors: SnapshotFieldParseError[] = [];
+    const inheritedErrors = Array.isArray((snapshot as any)?.parseErrors)
+      ? ((snapshot as any).parseErrors as SnapshotFieldParseError[])
+          .filter((err) => err && typeof err === "object")
+          .map((err) => ({ ...err, day: err.day ?? nyDay }))
+      : [];
+
+    const parseErrors: SnapshotFieldParseError[] = [...inheritedErrors];
 
     const parseField = (
       field: SnapshotNumericField,

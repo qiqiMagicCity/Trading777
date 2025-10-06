@@ -44,6 +44,7 @@ describe("NY day normalization", () => {
 
     const metrics = calcMetricsInternal([] as any, [] as any, daily, {
       tradingDateStr: "2025-09-23",
+      periodEvalYmd: "2025-09-23",
     });
 
     expect(metrics.M11).toBe(120);

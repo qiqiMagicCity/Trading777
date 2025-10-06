@@ -124,6 +124,7 @@ describe("calcM6Detailed pure scenarios", () => {
 
     const metrics = calcMetrics(trades as any, positions as any, [], {
       tradingDateStr: "2024-09-24",
+      periodEvalYmd: "2024-09-24",
     });
 
     const expectedM4 = (120 - 90) * 100; // close overnight long 100@90
@@ -186,6 +187,7 @@ describe("calcM6Detailed pure scenarios", () => {
 
     const metrics = calcMetrics(trades as any, positions as any, [], {
       tradingDateStr: "2024-09-24",
+      periodEvalYmd: "2024-09-24",
     });
 
     const expectedM4 = (200 - 180) * 80; // close overnight short 80@200

@@ -84,6 +84,7 @@ export const STALE_BASELINE_BDAYS = 5;
 
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
+  periodEvalYmd?: string;
 }
 
 /** 从后端读取汇总（直读 summary.M6 与 tradingDateStr） */
@@ -928,7 +929,13 @@ function normalizeDailyRowsForWindow(
   const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
   return latest.map(({ snapshot, nyDay, duplicates }) => {
-    const parseErrors: SnapshotFieldParseError[] = [];
+    const inheritedErrors = Array.isArray((snapshot as any)?.parseErrors)
+      ? ((snapshot as any).parseErrors as SnapshotFieldParseError[])
+          .filter((err) => err && typeof err === "object")
+          .map((err) => ({ ...err, day: err.day ?? nyDay }))
+      : [];
+
+    const parseErrors: SnapshotFieldParseError[] = [...inheritedErrors];
 
     const parseField = (
       field: SnapshotNumericField,
@@ -1112,7 +1119,10 @@ function sumRealizedBetween(
   return { total, hasParseFailure };
 }
 
-type WindowTotalsOptions = PeriodTotalsOptions & { firstActiveDate?: string };
+type WindowTotalsOptions = PeriodTotalsOptions & {
+  firstActiveDate?: string;
+  uiTradeDayYmd?: string;
+};
 
 function deriveWindowTotals(
   rowsInput: NormalizedDailyForWindow[],
@@ -1121,6 +1131,20 @@ function deriveWindowTotals(
 ): WindowTotalsResult {
   const rows = resolveUnrealizedForWindow(rowsInput);
   const endRow = findRowOnOrBefore(rows, evalDay);
+  const uiTradeDayYmd = (() => {
+    const raw = options.uiTradeDayYmd;
+    if (!raw) return evalDay;
+    try {
+      return nyDayStr(raw);
+    } catch {
+      return evalDay;
+    }
+  })();
+  const filteredRowsCount = rows.reduce(
+    (count, row) => (row.day <= evalDay ? count + 1 : count),
+    0,
+  );
+  const lastSnapshotYmd = endRow?.day;
   const firstActiveCandidate = (() => {
     const raw = options.firstActiveDate?.trim();
     if (raw) return nyDayStr(raw);
@@ -1317,6 +1341,27 @@ function deriveWindowTotals(
   const month = computeWindow(monthStart);
   const year = computeWindow(yearStart);
 
+  const buildDiagnostics = (
+    window: ReturnType<typeof computeWindow>,
+    windowStart: string,
+  ): PeriodWindowDiagnostics => ({
+    status: window.status,
+    degraded: window.degraded,
+    ...(window.reason ? { reason: window.reason } : {}),
+    ...(window.baselineMeta ? { baselineMeta: window.baselineMeta } : {}),
+    ...(window.parseErrors.length
+      ? { parseErrors: window.parseErrors }
+      : {}),
+    ...(window.sameDayDuplicates
+      ? { sameDayDuplicates: window.sameDayDuplicates }
+      : {}),
+    uiTradeDayYmd,
+    periodEvalYmd: evalDay,
+    filteredRowsCount,
+    ...(lastSnapshotYmd ? { lastSnapshotYmd } : {}),
+    windowStartYmd: windowStart,
+  });
+
   return {
     wtd: week.total,
     mtd: month.total,
@@ -1338,42 +1383,9 @@ function deriveWindowTotals(
       ytd: year.status,
     },
     diagnostics: {
-      wtd: {
-        status: week.status,
-        degraded: week.degraded,
-        ...(week.reason ? { reason: week.reason } : {}),
-        ...(week.baselineMeta ? { baselineMeta: week.baselineMeta } : {}),
-        ...(week.parseErrors.length
-          ? { parseErrors: week.parseErrors }
-          : {}),
-        ...(week.sameDayDuplicates
-          ? { sameDayDuplicates: week.sameDayDuplicates }
-          : {}),
-      },
-      mtd: {
-        status: month.status,
-        degraded: month.degraded,
-        ...(month.reason ? { reason: month.reason } : {}),
-        ...(month.baselineMeta ? { baselineMeta: month.baselineMeta } : {}),
-        ...(month.parseErrors.length
-          ? { parseErrors: month.parseErrors }
-          : {}),
-        ...(month.sameDayDuplicates
-          ? { sameDayDuplicates: month.sameDayDuplicates }
-          : {}),
-      },
-      ytd: {
-        status: year.status,
-        degraded: year.degraded,
-        ...(year.reason ? { reason: year.reason } : {}),
-        ...(year.baselineMeta ? { baselineMeta: year.baselineMeta } : {}),
-        ...(year.parseErrors.length
-          ? { parseErrors: year.parseErrors }
-          : {}),
-        ...(year.sameDayDuplicates
-          ? { sameDayDuplicates: year.sameDayDuplicates }
-          : {}),
-      },
+      wtd: buildDiagnostics(week, weekStart),
+      mtd: buildDiagnostics(month, monthStart),
+      ytd: buildDiagnostics(year, yearStart),
     },
   };
 }
@@ -1401,7 +1413,9 @@ export function calcWtdMtdYtdFromSnapshots(
 ): WindowTotalsResult {
   const evalDay = nyDayStr(evalDayStr);
   const rows = normalizeDailyRowsForWindow(daily, evalDay);
-  const totals = deriveWindowTotals(rows, evalDay, options);
+  const totals = deriveWindowTotals(rows, evalDay, {
+    ...options,
+  });
 
   try {
     if (typeof window !== "undefined") {
@@ -1921,25 +1935,29 @@ export function calcMetricsInternal(
       sample: trades.slice(0, 3),
     });
 
-  // 基于原始交易记录（保留重复项）计算统计
-  const rawTradingDate =
-    typeof options.tradingDateStr === "string"
-      ? options.tradingDateStr.trim()
-      : undefined;
-  const providedTradingDate =
-    rawTradingDate && /^\d{4}-\d{2}-\d{2}$/.test(rawTradingDate)
-      ? rawTradingDate
-      : undefined;
-  const inputTodayStr = providedTradingDate;
-  const snapEvalDayStr = nyDayStr(inputTodayStr ?? nyTodayStr());
-  const evalDateNY = providedTradingDate
-    ? toNY(`${providedTradingDate}T12:00:00Z`)
-    : nowNY();
+  // 注意：评估日必须使用显式 periodEvalYmd（入参优先，其次 nyTodayStr）。
+  // UI 展示日可继续调用 getLatestTradingDayStr，但严禁用其回退 periodEvalYmd。
+  const resolveNyDay = (input?: string) => {
+    if (typeof input !== "string") return undefined;
+    const trimmed = input.trim();
+    if (!trimmed) return undefined;
+    try {
+      return nyDayStr(trimmed);
+    } catch (error) {
+      if (DEBUG) {
+        logger.debug("PERIOD_EVAL_RESOLVE_FAIL", { input, error });
+      }
+      return undefined;
+    }
+  };
 
-  const initialTodayStr =
-    providedTradingDate ?? getLatestTradingDayStr(evalDateNY);
-  const periodEvalStr = providedTradingDate ?? initialTodayStr;
-  const evalEnd = endOfDayNY(toNY(`${initialTodayStr}T12:00:00Z`));
+  const providedEvalDay = resolveNyDay(options.periodEvalYmd);
+  const providedUiTradeDay = resolveNyDay(options.tradingDateStr);
+  const periodEvalStr = providedEvalDay ?? nyTodayStr();
+  const evalAnchorNY = toNY(`${periodEvalStr}T12:00:00Z`);
+  const uiTradeDayYmd =
+    providedUiTradeDay ?? getLatestTradingDayStr(evalAnchorNY);
+  const evalEnd = endOfDayNY(evalAnchorNY);
 
   const safeTrades: EnrichedTrade[] = [];
   const tradeEntries: Array<{ trade: EnrichedTrade; date: Date; day: string }> =
@@ -1977,7 +1995,7 @@ export function calcMetricsInternal(
     }
   }
 
-  const todayStr = initialTodayStr;
+  const todayStr = periodEvalStr;
 
   const todayTrades = tradeEntries
     .filter((entry) => entry.day === todayStr)
@@ -2117,7 +2135,7 @@ export function calcMetricsInternal(
   const periodSnapshot = calcWtdMtdYtdFromSnapshots(
     historicalDailyResults,
     periodEvalStr,
-    { firstActiveDate },
+    { firstActiveDate, uiTradeDayYmd },
   );
   const {
     wtd,
@@ -2129,6 +2147,29 @@ export function calcMetricsInternal(
     firstActiveDate: resolvedFirstActiveDate,
     diagnostics: periodDiagnostics,
   } = periodSnapshot;
+
+  const diagnosticSnapshots = periodDiagnostics ?? {};
+  const lastSnapshotYmd =
+    diagnosticSnapshots.wtd?.lastSnapshotYmd ??
+    diagnosticSnapshots.mtd?.lastSnapshotYmd ??
+    diagnosticSnapshots.ytd?.lastSnapshotYmd;
+  const filteredRowsCount =
+    diagnosticSnapshots.wtd?.filteredRowsCount ??
+    diagnosticSnapshots.mtd?.filteredRowsCount ??
+    diagnosticSnapshots.ytd?.filteredRowsCount;
+
+  if (
+    uiTradeDayYmd &&
+    uiTradeDayYmd !== periodEvalStr &&
+    lastSnapshotYmd === periodEvalStr
+  ) {
+    logger.debug("PERIOD_EVAL_DAY_INCLUDED", {
+      uiTradeDayYmd,
+      periodEvalYmd: periodEvalStr,
+      lastSnapshotYmd,
+      filteredRowsCount,
+    });
+  }
   if (DEBUG) {
     try {
       checkPeriodDebug(historicalDailyResults ?? dailyResults, periodEvalStr);
@@ -2180,24 +2221,15 @@ export function calcMetricsInternal(
     },
   };
 
-  const hasDegradedFlag = Boolean(
-    degraded?.wtd || degraded?.mtd || degraded?.ytd,
-  );
-  const hasNonOkStatus = Object.values(periodStatus ?? {}).some(
-    (state) => state && state !== "ok",
-  );
-
-  if (hasDegradedFlag || hasNonOkStatus) {
-    metrics._period = {
-      degraded,
-      ...(periodStatus ? { status: periodStatus } : {}),
-      ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
-      ...(resolvedFirstActiveDate
-        ? { firstActiveDate: resolvedFirstActiveDate }
-        : {}),
-      ...(periodDiagnostics ? { diagnostics: periodDiagnostics } : {}),
-    };
-  }
+  metrics._period = {
+    degraded,
+    ...(periodStatus ? { status: periodStatus } : {}),
+    ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
+    ...(resolvedFirstActiveDate
+      ? { firstActiveDate: resolvedFirstActiveDate }
+      : {}),
+    ...(periodDiagnostics ? { diagnostics: periodDiagnostics } : {}),
+  };
 
   assertM6(metrics);
 

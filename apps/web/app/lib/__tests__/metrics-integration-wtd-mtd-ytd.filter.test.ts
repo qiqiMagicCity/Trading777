@@ -14,7 +14,10 @@ describe("WTD/MTD/YTD 应包含当天记录（无论 r.date 是否带时区）",
       { date: "2025-09-22", realized: 100, unrealized: 0, unrealizedDelta: 0 },
       { date: "2025-09-26T16:00:00-04:00", realized: 30, unrealized: 10, unrealizedDelta: 10 },
     ];
-    const m = calcMetrics([], [], daily, { tradingDateStr: "2025-09-26" });
+    const m = calcMetrics([], [], daily, {
+      tradingDateStr: "2025-09-26",
+      periodEvalYmd: "2025-09-26",
+    });
     expect(m.M11).toBe(140);
     expect(m.M12).toBeGreaterThanOrEqual(140);
     expect(m.M13).toBeGreaterThanOrEqual(140);
@@ -45,6 +48,7 @@ describe("WTD/MTD/YTD 应包含当天记录（无论 r.date 是否带时区）",
 
     const metrics = calcMetrics(trades as any, [], daily, {
       tradingDateStr: "2024-10-05",
+      periodEvalYmd: "2024-10-05",
     });
 
     const expected = calcWtdMtdYtdFromSnapshots(daily, "2024-10-05");
