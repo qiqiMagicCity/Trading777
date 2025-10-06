@@ -207,13 +207,18 @@ function MissingCloseBanner({
 function PendingCloseNotice({
   info,
   closeWindow,
+  dismissed,
+  onIgnore,
 }: {
   info: PendingCloseEntry | null;
   closeWindow: CloseWindowDiagnostics | null;
+  dismissed: boolean;
+  onIgnore: () => void;
 }) {
   if (!closeWindow) return null;
   if (!closeWindow.isTradingDay) return null;
   if (closeWindow.requireOfficialClose) return null;
+  if (dismissed) return null;
 
   const deadline = closeWindow.windowEndTs
     ? formatNY(closeWindow.windowEndTs, {
@@ -243,9 +248,27 @@ function PendingCloseNotice({
         width: '90%',
       }}
     >
-      <h4 style={{ margin: 0, fontSize: '1rem', color: '#bfdbfe' }}>
-        今日尚未收盘，估值暂沿用上一交易日收盘价
-      </h4>
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          gap: 12,
+          justifyContent: 'space-between',
+          marginBottom: 8,
+        }}
+      >
+        <h4 style={{ margin: 0, fontSize: '1rem', color: '#bfdbfe' }}>
+          今日尚未收盘，估值暂沿用上一交易日收盘价
+        </h4>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          onClick={onIgnore}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          忽略
+        </button>
+      </div>
       <p style={{ margin: '8px 0 0', color: '#e0f2fe', lineHeight: 1.6 }}>
         官方收盘价窗口
         {deadline ? `预计在 ${deadline}` : '尚未结束'}
@@ -273,6 +296,7 @@ export default function DashboardPage() {
   const [missingDismissed, setMissingDismissed] = useState(false);
   const [pendingCloseInfo, setPendingCloseInfo] = useState<PendingCloseEntry | null>(null);
   const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
+  const [pendingNoticeDismissed, setPendingNoticeDismissed] = useState(false);
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
   const periodMetaRef = useRef<MetricsContract["_period"] | undefined>(
@@ -361,8 +385,14 @@ export default function DashboardPage() {
     periodMetaRef.current = undefined;
     setMissingCloseSummaries([]);
     setMissingDismissed(false);
+    setPendingNoticeDismissed(false);
     setPeriodHealth(null);
-  }, [setMissingCloseSummaries, setMissingDismissed, setPeriodHealth]);
+  }, [
+    setMissingCloseSummaries,
+    setMissingDismissed,
+    setPendingNoticeDismissed,
+    setPeriodHealth,
+  ]);
 
   const updateMissingCloseState = useCallback(
     (summaries: MissingCloseSummary[]) => {
@@ -394,11 +424,16 @@ export default function DashboardPage() {
     syncPeriodHealth();
   };
 
+  const handleIgnorePendingNotice = useCallback(() => {
+    setPendingNoticeDismissed(true);
+  }, [setPendingNoticeDismissed]);
+
   useEffect(() => {
     async function loadData() {
       try {
         setIsLoading(true);
         setPendingCloseInfo(null);
+        setPendingNoticeDismissed(false);
         setCloseWindowInfo(null);
 
         await import('@/app/lib/dataset')
@@ -509,6 +544,7 @@ export default function DashboardPage() {
           (entry) => entry.date === evalDateStr,
         ) ?? null;
         setPendingCloseInfo(pendingEntry);
+        setPendingNoticeDismissed(false);
         setDailyResultsCache(dailyResults);
 
         const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -538,6 +574,7 @@ export default function DashboardPage() {
         clearPeriodHealthState();
         setCloseWindowInfo(null);
         setPendingCloseInfo(null);
+        setPendingNoticeDismissed(false);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       } finally {
         setIsLoading(false);
@@ -674,6 +711,7 @@ export default function DashboardPage() {
       (entry) => entry.date === evalDateStr,
     ) ?? null;
     setPendingCloseInfo(pendingEntry);
+    setPendingNoticeDismissed(false);
     setDailyResultsCache(dailyResults);
 
     const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -774,6 +812,7 @@ export default function DashboardPage() {
         (entry) => entry.date === evalDateStr,
       ) ?? null;
       setPendingCloseInfo(pendingEntry);
+      setPendingNoticeDismissed(false);
       setDailyResultsCache(dailyResults);
 
       const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -834,7 +873,12 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PendingCloseNotice info={pendingCloseInfo} closeWindow={closeWindowInfo} />
+      <PendingCloseNotice
+        info={pendingCloseInfo}
+        closeWindow={closeWindowInfo}
+        dismissed={pendingNoticeDismissed}
+        onIgnore={handleIgnorePendingNotice}
+      />
       {missingCloseSummaries.length > 0 && !missingDismissed && (
         <MissingCloseBanner
           summaries={missingCloseSummaries}
