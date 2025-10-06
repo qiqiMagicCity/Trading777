@@ -9,6 +9,8 @@ import { NoPriceError } from '../priceService';
 import { nyDateStr, toNY, NY_TZ } from '../time';
 import { getTradingDateStr } from '../tradingDay';
 import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
+import { migrateClosePriceMap } from '@/lib/closePriceMigration';
+import { evaluateCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -356,8 +358,8 @@ function shouldUseRealtimeClose(
 ): boolean {
   const closeMoment = toNyDateTime(targetDate, 16, 0);
   if (Number.isNaN(closeMoment.getTime())) return false;
-  const graceRaw = Number(process.env.CLOSE_GRACE_MIN ?? '0');
-  const graceMs = Number.isFinite(graceRaw) && graceRaw > 0 ? graceRaw * 60_000 : 0;
+  const graceMin = resolveCloseGraceMinutes();
+  const graceMs = graceMin > 0 ? graceMin * 60_000 : 0;
   if (nowNY.getTime() < closeMoment.getTime() + graceMs) return false;
   const diffMin = (nowNY.getTime() - closeMoment.getTime()) / 60_000;
   if (windowMinutes > 0 && diffMin <= windowMinutes) return true;
@@ -387,6 +389,10 @@ async function getPrevCloseWithin(
       console.warn('[priceService] 读取 close_prices.json 失败', err);
       map = undefined;
     }
+  }
+
+  if (map) {
+    map = migrateClosePriceMap(map).map;
   }
 
   for (let offset = 1; offset <= maxLookback; offset += 1) {
@@ -476,6 +482,10 @@ export async function fetchDailyClose(
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
+    if (closeMap) {
+      closeMap = migrateClosePriceMap(closeMap).map;
+    }
+
     const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
@@ -512,9 +522,14 @@ export async function fetchDailyClose(
     const latestTradingDate = getTradingDateStr(Date.now());
     const isToday = normalizedDate === todayNY;
     const isLatestTradingDay = normalizedDate === latestTradingDate;
+    const nowNY = toNY(Date.now());
+    const requirement = evaluateCloseRequirement(normalizedDate, nowNY);
+    const fallbackClose = options?.fallbackClose;
+    const fallbackSource = options?.fallbackSource ?? 'close_fallback';
+
+    let dailyPrice: { price: number; source: CachedPrice['source'] } | null = null;
 
     if (isToday || isLatestTradingDay) {
-      const nowNY = toNY(Date.now());
 
       // === 保留 PR 侧：使用扩展窗口/次日开盘前窗口 ===
       const windowMinutes = resolveRtCloseWindow();
@@ -550,38 +565,23 @@ export async function fetchDailyClose(
           // 获取不到就继续走后备逻辑
         }
       }
-
-      // 3) 仍在收盘后窗口，接受调用方 fallback 作为官方收盘价
-      const fallbackClose = options?.fallbackClose;
-      const afterOfficialClose = (() => {
-        const closeMoment = toNyDateTime(normalizedDate, 16, 0);
-        return !Number.isNaN(closeMoment.getTime()) && nowNY.getTime() >= closeMoment.getTime();
-      })();
-
-      if (
-        afterOfficialClose &&
-        isLatestTradingDay &&
-        typeof fallbackClose === 'number' &&
-        Number.isFinite(fallbackClose) &&
-        fallbackClose > 0
-      ) {
-        return await recordOfficialClose(
-          fallbackClose,
-          options.fallbackSource ?? 'close_fallback',
-        );
-      }
-
-      // 4) 最后再尝试日线 API
-      const dailyPrice = await tryDailyApis();
-      if (dailyPrice && dailyPrice.price > 0) {
-        return await recordOfficialClose(dailyPrice.price, dailyPrice.source);
-      }
+      dailyPrice = await tryDailyApis();
     } else {
       // 历史日，直接请求日线 API
-      const historicalDaily = await tryDailyApis();
-      if (historicalDaily && historicalDaily.price > 0) {
-        return await recordOfficialClose(historicalDaily.price, historicalDaily.source);
-      }
+      dailyPrice = await tryDailyApis();
+    }
+
+    if (dailyPrice && dailyPrice.price > 0) {
+      return await recordOfficialClose(dailyPrice.price, dailyPrice.source);
+    }
+
+    if (
+      requirement.requireOfficialClose &&
+      typeof fallbackClose === 'number' &&
+      Number.isFinite(fallbackClose) &&
+      fallbackClose > 0
+    ) {
+      return await recordOfficialClose(fallbackClose, fallbackSource);
     }
 
     // 日线与实时均失败，做回退

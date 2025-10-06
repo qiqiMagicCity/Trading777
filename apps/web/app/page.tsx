@@ -21,13 +21,15 @@ import { collectPeriodHealthIssues } from '@/app/lib/dataHealth';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { logger } from '@/lib/logger';
-import { getLatestTradingDayStr } from '@/lib/timezone';
+import { formatNY, getLatestTradingDayStr } from '@/lib/timezone';
 import {
   generateDailyResults,
   mergeClosePriceMaps,
   normalizeClosePriceMap,
   closePricesFromRows,
   type DailyResultsDiagnostics,
+  type PendingCloseEntry,
+  type CloseWindowDiagnostics,
   type MissingCloseFallback,
 } from '@/lib/dailyResults';
 import { summarizeMissingCloses } from '@/app/lib/missingClose';
@@ -37,6 +39,7 @@ import type {
   PeriodHealthStatus,
 } from '@/app/lib/types/health';
 import type { MetricsContract } from '@/app/lib/types/metrics';
+import { evaluateCloseRequirement } from '@/lib/marketHours';
 
 function resolvePrevClose(
   symbol: string,
@@ -105,6 +108,8 @@ function buildCloseFallbacks(positions: Position[]): CloseFallbackMap {
 
 async function ensureDailyCloses(symbols: string[], targetDate: string, fallbackCloses?: CloseFallbackMap) {
   if (!symbols.length || !targetDate) return;
+  const requirement = evaluateCloseRequirement(targetDate);
+  if (!requirement.requireOfficialClose) return;
   const unique = Array.from(new Set(symbols.map(sym => sym.trim().toUpperCase()).filter(Boolean)));
   if (!unique.length) return;
   await Promise.all(
@@ -199,6 +204,60 @@ function MissingCloseBanner({
   );
 }
 
+function PendingCloseNotice({
+  info,
+  closeWindow,
+}: {
+  info: PendingCloseEntry | null;
+  closeWindow: CloseWindowDiagnostics | null;
+}) {
+  if (!closeWindow) return null;
+  if (!closeWindow.isTradingDay) return null;
+  if (closeWindow.requireOfficialClose) return null;
+
+  const deadline = closeWindow.windowEndTs
+    ? formatNY(closeWindow.windowEndTs, {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      })
+    : null;
+  const grace = closeWindow.graceMinutes;
+  const fallbackSegments = (info?.details ?? []).map((detail) => {
+    const labels = detail.fallbacks
+      .map((fallback) => FALLBACK_LABELS[fallback] ?? '')
+      .filter(Boolean);
+    return `${detail.symbol}${labels.length ? `（${labels.join('、')}）` : ''}`;
+  });
+
+  return (
+    <div
+      style={{
+        background: 'rgba(59,130,246,0.12)',
+        border: '1px solid rgba(59,130,246,0.4)',
+        borderRadius: 8,
+        color: '#dbeafe',
+        margin: '16px auto 0',
+        maxWidth: 'var(--page-max)',
+        padding: '14px 16px',
+        width: '90%',
+      }}
+    >
+      <h4 style={{ margin: 0, fontSize: '1rem', color: '#bfdbfe' }}>
+        今日尚未收盘，估值暂沿用上一交易日收盘价
+      </h4>
+      <p style={{ margin: '8px 0 0', color: '#e0f2fe', lineHeight: 1.6 }}>
+        官方收盘价窗口
+        {deadline ? `预计在 ${deadline}` : '尚未结束'}
+        {Number.isFinite(grace) && grace > 0 ? `（含宽限 ${grace} 分钟）` : ''}。
+        {fallbackSegments.length > 0
+          ? ` 当前兜底标的：${fallbackSegments.join('、')}。`
+          : ' 稍后将自动补录官方收盘价。'}
+      </p>
+    </div>
+  );
+}
+
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 export default function DashboardPage() {
@@ -212,6 +271,8 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false);
   const [missingCloseSummaries, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
   const [missingDismissed, setMissingDismissed] = useState(false);
+  const [pendingCloseInfo, setPendingCloseInfo] = useState<PendingCloseEntry | null>(null);
+  const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
   const periodMetaRef = useRef<MetricsContract["_period"] | undefined>(
@@ -337,6 +398,8 @@ export default function DashboardPage() {
     async function loadData() {
       try {
         setIsLoading(true);
+        setPendingCloseInfo(null);
+        setCloseWindowInfo(null);
 
         await import('@/app/lib/dataset')
           .then(m => m.ensureDatasetReady())
@@ -441,6 +504,11 @@ export default function DashboardPage() {
           closePrices: mergedClosePrices,
           evalDate: evalDateStr,
         }, diagnostics);
+        setCloseWindowInfo(diagnostics.closeWindow ?? null);
+        const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+          (entry) => entry.date === evalDateStr,
+        ) ?? null;
+        setPendingCloseInfo(pendingEntry);
         setDailyResultsCache(dailyResults);
 
         const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -468,6 +536,8 @@ export default function DashboardPage() {
       } catch (e) {
         console.error(e);
         clearPeriodHealthState();
+        setCloseWindowInfo(null);
+        setPendingCloseInfo(null);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       } finally {
         setIsLoading(false);
@@ -599,6 +669,11 @@ export default function DashboardPage() {
       },
       diagnostics,
     );
+    setCloseWindowInfo(diagnostics.closeWindow ?? null);
+    const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+      (entry) => entry.date === evalDateStr,
+    ) ?? null;
+    setPendingCloseInfo(pendingEntry);
     setDailyResultsCache(dailyResults);
 
     const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -694,6 +769,11 @@ export default function DashboardPage() {
         },
         diagnostics,
       );
+      setCloseWindowInfo(diagnostics.closeWindow ?? null);
+      const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+        (entry) => entry.date === evalDateStr,
+      ) ?? null;
+      setPendingCloseInfo(pendingEntry);
       setDailyResultsCache(dailyResults);
 
       const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -754,6 +834,7 @@ export default function DashboardPage() {
 
   return (
     <div>
+      <PendingCloseNotice info={pendingCloseInfo} closeWindow={closeWindowInfo} />
       {missingCloseSummaries.length > 0 && !missingDismissed && (
         <MissingCloseBanner
           summaries={missingCloseSummaries}

@@ -1,6 +1,17 @@
 # 更新日志
 
 ## 2025-11-10
+- Step 7：收盘价缺失策略重构
+  - 新增 `marketHours.ts` 统一判断交易日、收盘窗口与宽限期，Dashboard 侧在 `ensureDailyCloses` 前判定是否已过宽限再发起补录。
+  - `generateDailyResults` 扩展 `DailyResultsDiagnostics`，区分 `pendingCloses` 与 `missingCloses`，并透出 `closeWindow`（含宽限分钟、窗口截止与 `missingClose` 标记）。
+  - Dashboard 顶部新增信息条展示“今日尚未收盘”提示，盘前/盘中/周末沿用上一交易日收盘价且不再出现“均价兜底”告警。
+  - 引入 `closePriceMigration` 处理 close_prices 的 UTC→纽约日键迁移与冲突合并，写入 `close.ny_migrated_v1` 防止重复迁移。
+  - 新增 `close-missing-policy.weekend-skip/preopen-info/postclose-grace-missing.test.ts` 及 `close-keys.ny-migration.test.ts`，并更新 `dailyResults-diagnostics.test.ts` 覆盖新诊断字段。
+  - 修正 `fetchDailyClose` 对历史交易日的宽限判定：日线 API 无结果时，如 `evaluateCloseRequirement` 判定需官方收盘价，则接受调用方 fallback 并落盘，恢复“API 不可用时仍能补写官方收盘价”场景。
+  - `close-missing-policy.postclose-grace-missing.test.ts` 引入 `resolveCloseGraceMinutes()` 断言默认宽限为 0 分钟并允许运营设定覆盖。
+  - 运行 `npm test -- apps/web/app/lib/__tests__/close-missing-policy.weekend-skip.test.ts --runInBand` 等 7 条指令与 `npm test -- apps/web/app/lib/__tests__/priceService.safe.test.ts --runInBand` 全部通过。
+
+## 2025-11-10
 - Step 6：Dashboard “当日盈亏”卡片接入 `_m6` 拆解 Tooltip，展示 realized_today / mtm_overnight / mtm_intraday_open 分项，默认首行提示纽约日口径及 20:00–23:59 ET 仍计入当日。
 - Tooltip 触发按钮新增可聚焦问讯样式（含 aria-label），健康状态下沿用灰色圆点，存在警示/解析失败时切换为琥珀底色并附带退化/告警/解析摘要。
 - 解析 `_m6` 原始字段时复用 `parseSnapshotNumber` 去除负零，并聚合 diagnostics.parseErrors + warnings，Tooltip 尾部统一输出 ⚠️ 提示，若缺乏当日快照则退化为“待补充 + 无当日快照”。
