@@ -207,11 +207,16 @@ function MissingCloseBanner({
 function PendingCloseNotice({
   info,
   closeWindow,
+  onDismiss,
+  dismissed,
 }: {
   info: PendingCloseEntry | null;
   closeWindow: CloseWindowDiagnostics | null;
+  onDismiss?: () => void;
+  dismissed?: boolean;
 }) {
   if (!closeWindow) return null;
+  if (dismissed) return null;
   if (!closeWindow.isTradingDay) return null;
   if (closeWindow.requireOfficialClose) return null;
 
@@ -243,17 +248,45 @@ function PendingCloseNotice({
         width: '90%',
       }}
     >
-      <h4 style={{ margin: 0, fontSize: '1rem', color: '#bfdbfe' }}>
-        今日尚未收盘，估值暂沿用上一交易日收盘价
-      </h4>
-      <p style={{ margin: '8px 0 0', color: '#e0f2fe', lineHeight: 1.6 }}>
-        官方收盘价窗口
-        {deadline ? `预计在 ${deadline}` : '尚未结束'}
-        {Number.isFinite(grace) && grace > 0 ? `（含宽限 ${grace} 分钟）` : ''}。
-        {fallbackSegments.length > 0
-          ? ` 当前兜底标的：${fallbackSegments.join('、')}。`
-          : ' 稍后将自动补录官方收盘价。'}
-      </p>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <h4 style={{ margin: 0, fontSize: '1rem', color: '#bfdbfe' }}>
+            今日尚未收盘，估值暂沿用上一交易日收盘价
+          </h4>
+          <p style={{ margin: '8px 0 0', color: '#e0f2fe', lineHeight: 1.6 }}>
+            官方收盘价窗口
+            {deadline ? `预计在 ${deadline}` : '尚未结束'}
+            {Number.isFinite(grace) && grace > 0 ? `（含宽限 ${grace} 分钟）` : ''}。
+            {fallbackSegments.length > 0
+              ? ` 当前兜底标的：${fallbackSegments.join('、')}。`
+              : ' 稍后将自动补录官方收盘价。'}
+          </p>
+        </div>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(191,219,254,0.4)',
+              borderRadius: 6,
+              color: '#bfdbfe',
+              cursor: 'pointer',
+              flexShrink: 0,
+              fontSize: '0.875rem',
+              padding: '4px 10px',
+            }}
+          >
+            忽略
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -273,6 +306,7 @@ export default function DashboardPage() {
   const [missingDismissed, setMissingDismissed] = useState(false);
   const [pendingCloseInfo, setPendingCloseInfo] = useState<PendingCloseEntry | null>(null);
   const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
+  const [pendingNoticeDismissed, setPendingNoticeDismissed] = useState(false);
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
   const periodMetaRef = useRef<MetricsContract["_period"] | undefined>(
@@ -774,6 +808,7 @@ export default function DashboardPage() {
         (entry) => entry.date === evalDateStr,
       ) ?? null;
       setPendingCloseInfo(pendingEntry);
+      setPendingNoticeDismissed(false);
       setDailyResultsCache(dailyResults);
 
       const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -834,7 +869,12 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PendingCloseNotice info={pendingCloseInfo} closeWindow={closeWindowInfo} />
+      <PendingCloseNotice
+        info={pendingCloseInfo}
+        closeWindow={closeWindowInfo}
+        dismissed={pendingNoticeDismissed}
+        onDismiss={() => setPendingNoticeDismissed(true)}
+      />
       {missingCloseSummaries.length > 0 && !missingDismissed && (
         <MissingCloseBanner
           summaries={missingCloseSummaries}
