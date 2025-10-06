@@ -34,7 +34,7 @@ describe("close missing policy - preopen info", () => {
       } as EnrichedTrade,
     ];
 
-    generateDailyResults(
+    const results = generateDailyResults(
       {
         trades,
         positions,
@@ -49,6 +49,10 @@ describe("close missing policy - preopen info", () => {
     expect(pending).toBeDefined();
     expect(pending?.details).toContainEqual({
       symbol: "AMZN",
+      fallbacks: ["PREVIOUS_CLOSE"],
+    });
+    expect(pending?.details).not.toContainEqual({
+      symbol: "AMZN",
       fallbacks: ["MARK_PRICE"],
     });
     expect(diagnostics.closeWindow).toMatchObject({
@@ -57,5 +61,14 @@ describe("close missing policy - preopen info", () => {
       requireOfficialClose: false,
       missingClose: false,
     });
+
+    const latest = results.find((row) => row.date === "2025-10-06");
+    expect(latest).toBeDefined();
+    expect(latest?.unrealized).toBe(100);
+    expect(latest?.unrealizedDelta).toBe(0);
+
+    const priorClose = results.find((row) => row.date === "2025-10-03");
+    expect(priorClose).toBeDefined();
+    expect(priorClose?.unrealized).toBe(100);
   });
 });

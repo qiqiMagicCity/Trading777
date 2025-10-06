@@ -79,11 +79,7 @@ describe("generateDailyResults diagnostics", () => {
       fallback: "MARK_PRICE",
     });
     const pending = diagnostics.pendingCloses?.find((entry) => entry.date === evalDate);
-    expect(pending).toBeDefined();
-    expect(pending?.details).toContainEqual({
-      symbol: "AMD",
-      fallbacks: ["MARK_PRICE"],
-    });
+    expect(pending).toBeUndefined();
     expect(diagnostics.closeWindow).toMatchObject({
       date: evalDate,
       isTradingDay: true,
@@ -92,7 +88,7 @@ describe("generateDailyResults diagnostics", () => {
     });
   });
 
-  it("records MARK_PRICE fallback after market close", () => {
+  it("records PREVIOUS_CLOSE fallback after market close", () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2025-09-26T22:00:00Z")); // 18:00 NY time
 
@@ -114,6 +110,11 @@ describe("generateDailyResults diagnostics", () => {
       fallback: "AVERAGE_COST",
     });
     expect(diagnostics.missingCloses).toContainEqual({
+      symbol: "AMD",
+      date: "2025-09-26",
+      fallback: "PREVIOUS_CLOSE",
+    });
+    expect(diagnostics.missingCloses).not.toContainEqual({
       symbol: "AMD",
       date: "2025-09-26",
       fallback: "MARK_PRICE",
