@@ -11,7 +11,7 @@ import {
   startOfYearNY,
   toNY,
 } from "./time";
-import type { DailyResult } from "./types";
+import type { DailyResult, DailyResultInput } from "./types";
 import { resolveTradingDateStr } from "./tradingDay";
 import {
   assertM6Equality,
@@ -27,6 +27,11 @@ import path from "path";
 import { readPublicJson } from "./io/readPublicJson";
 import { assertSchema } from "./schemas/assertSchema";
 import { Trades, Positions, PriceMap, DailyResults } from "./schemas/real";
+import {
+  parseSnapshotNumber,
+  type SnapshotFieldParseError,
+  type SnapshotNumericField,
+} from "./snapshotNumber";
 
 // 统一解析 public 文件路径
 function resolvePublicFile(relName: string): string | null {
@@ -289,9 +294,10 @@ function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPric
  */
 type MinimalDailyResult = {
   date?: string;
-  realized?: number;
+  realized?: number | string | null;
   unrealized?: number | string | null;
   unrealizedDelta?: number | string | null;
+  realized_today?: number | string | null;
 };
 
 type NormalizedDailyRow = {
@@ -299,6 +305,8 @@ type NormalizedDailyRow = {
   realized: number;
   unrealized?: number;
   unrealizedDelta?: number;
+  parseErrors?: SnapshotFieldParseError[];
+  sourceDate?: string;
 };
 
 export function normalizeDailyRows(
@@ -322,32 +330,47 @@ export function normalizeDailyRows(
 
     const tsRaw = new Date(entry.date).getTime();
     const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-    const realized = Number(entry.realized ?? 0);
+    const parseErrors: SnapshotFieldParseError[] = [];
+
+    const parseField = (
+      field: SnapshotNumericField,
+      value: unknown,
+      { optional = false }: { optional?: boolean } = {},
+    ): number | undefined => {
+      if (optional && (value === null || value === undefined)) {
+        return undefined;
+      }
+      const parsed = parseSnapshotNumber(value);
+      if (parsed.ok) {
+        return parsed.value;
+      }
+      parseErrors.push({ ...parsed.error, field, day });
+      return undefined;
+    };
+
+    const realizedValue = parseField("realized", entry.realized);
     const normalized: NormalizedDailyRow = {
       day,
-      realized: Number.isFinite(realized) ? realized : 0,
+      realized: realizedValue ?? 0,
+      sourceDate: entry.date,
     };
-    const unrealizedSource = entry.unrealized;
-    if (unrealizedSource !== null && unrealizedSource !== undefined) {
-      if (typeof unrealizedSource === "number") {
-        if (Number.isFinite(unrealizedSource)) {
-          normalized.unrealized = unrealizedSource;
-        }
-      } else if (typeof unrealizedSource === "string") {
-        const trimmed = unrealizedSource.trim();
-        if (trimmed !== "") {
-          const unrealizedValue = Number(trimmed);
-          if (Number.isFinite(unrealizedValue)) {
-            normalized.unrealized = unrealizedValue;
-          }
-        }
-      }
+
+    const unrealizedValue = parseField("unrealized", entry.unrealized);
+    if (typeof unrealizedValue === "number") {
+      normalized.unrealized = unrealizedValue;
     }
-    if (
-      typeof entry.unrealizedDelta === "number" &&
-      Number.isFinite(entry.unrealizedDelta)
-    ) {
-      normalized.unrealizedDelta = entry.unrealizedDelta;
+
+    const unrealizedDeltaValue = parseField(
+      "unrealizedDelta",
+      entry.unrealizedDelta,
+      { optional: true },
+    );
+    if (typeof unrealizedDeltaValue === "number") {
+      normalized.unrealizedDelta = unrealizedDeltaValue;
+    }
+
+    if (parseErrors.length > 0) {
+      normalized.parseErrors = parseErrors;
     }
 
     const prev = dedup.get(day);

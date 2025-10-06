@@ -23,5 +23,45 @@ describe(
       expect(Number(res.M12.toFixed(2))).toBe(20.0);
       expect(Number(res.M13.toFixed(2))).toBe(20.0);
     });
+
+    it("accepts numeric strings without degrading period totals", () => {
+      const daily = [
+        { date: "2025-09-22T21:00:00Z", realized: "100", unrealized: "50" },
+        { date: "2025-09-23T21:00:00Z", realized: "-30", unrealized: "20" },
+        { date: "2025-09-24T21:00:00Z", realized: "0", unrealized: "0" },
+      ];
+      const res = calcMetricsInternal(
+        [] as any,
+        [] as any,
+        daily as unknown as DailyResult[],
+        { tradingDateStr: "2025-09-24" },
+      );
+
+      expect(Number(res.M11.toFixed(2))).toBe(20.0);
+      expect(Number(res.M12.toFixed(2))).toBe(20.0);
+      expect(Number(res.M13.toFixed(2))).toBe(20.0);
+      expect(res._period?.diagnostics?.wtd?.parseErrors).toBeUndefined();
+    });
+
+    it("propagates parse failures as degraded diagnostics", () => {
+      const daily = [
+        { date: "2025-09-23T21:00:00Z", realized: "10", unrealized: "100" },
+        { date: "2025-09-24T21:00:00Z", realized: "$99", unrealized: "105" },
+      ];
+      const res = calcMetricsInternal(
+        [] as any,
+        [] as any,
+        daily as unknown as DailyResult[],
+        { tradingDateStr: "2025-09-24" },
+      );
+
+      expect(res._period?.diagnostics?.wtd?.reason).toBe("DEGEN_PARSE_FAILED");
+      expect(res._period?.diagnostics?.wtd?.parseErrors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: "realized", value: "$99" }),
+        ]),
+      );
+      expect(res._period?.degraded?.wtd).toBe(true);
+    });
   },
 );

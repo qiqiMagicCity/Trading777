@@ -1,5 +1,11 @@
 # 更新日志
 
+## 2025-11-08
+- 抽取 `parseSnapshotNumber` 统一解析日度快照的数值字段，支持数字字符串输入并在非法格式时返回 `PARSE_NUM_FAILED` 诊断。
+- `runAll.normalizeDailyRows`、`metrics.ts`、`metrics-periods.ts` 全量复用新解析器，删除 `typeof === "number"` 兜底并在解析失败时透出 `DEGEN_PARSE_FAILED` 退化。
+- `calcWtdMtdYtdFromSnapshots`、`computePeriods`、`DashboardMetrics` 将解析失败汇总到 diagnostics.parseErrors，前端 tooltip 展示字段与示例原值。
+- 补充字符串数值、非法格式、负零与入口一致性的单元测试，更新 `DailyResult` 联合类型以覆盖字符串输入。
+
 ## 2025-11-06
 - 当日盈亏映射新增纳入 `realized_today`，`PositionsTable` 读取合并结果，单测覆盖部分平仓/纯未实现/纯已实现三类场景。
 - Dashboard 周/月/年卡片在退化时展示中文退化原因徽标与基线提示 tooltip，补充 UI 单测验证缺基线、基线过旧、窗口为空三种原因。
@@ -217,3 +223,4 @@
 - 两入口共用 helper，消除输入顺序依赖。
 - 修复构建报错：`infoScore` 在对象分支使用 `reduce` 时返回值被推断为 `unknown`，Next.js 构建阶段抛出 “Type 'unknown' is not assignable to type 'number'”；改用显式循环累加字段信息量，保持评分纯数值且类型稳定。
 - 修复构建报错：`selectLatestSnapshotsByNyDay` 直接把 `unknown` 类型的 `date` 透传给 `nyDateStrSafe`，导致 Next.js 构建期类型检查失败；增加类型守卫，仅接受 `string | number | Date`，并保持原有时间判定逻辑。
+- Step 4：同日重复快照默认选最新且不再退化，`diagnostics.sameDayDuplicates` 记录重复计数，覆盖基线重复/同毫秒并列/含解析失败等单测，确保仅 DEGEN_NO_BASELINE、DEGEN_STALE_BASELINE、DEGEN_PARSE_FAILED、DEGEN_WINDOW_EMPTY 会触发退化。

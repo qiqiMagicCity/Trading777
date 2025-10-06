@@ -5,12 +5,14 @@ export interface NySnapshotSelection<T> {
   nyDay: string;
   originalMillis: number;
   snapshot: T;
+  duplicates?: number;
 }
 
 interface SelectionCandidate<T> extends NySnapshotSelection<T> {
   updatedMillis: number;
   infoScore: number;
   serialized: string;
+  seen: number;
 }
 
 function toMillis(input: unknown): number {
@@ -152,13 +154,20 @@ export function selectLatestSnapshotsByNyDay<T extends { date?: unknown }>(
       updatedMillis,
       infoScore: infoScore(snapshot),
       serialized: stableSerialize(snapshot),
+      seen: 1,
     };
 
     const current = map.get(nyDay);
+    if (!current) {
+      map.set(nyDay, candidate);
+      return;
+    }
+
+    const nextSeen = current.seen + 1;
+    candidate.seen = nextSeen;
     const decision = compareCandidates(current, candidate);
     if (decision.replace) {
       if (
-        current &&
         candidate.originalMillis === current.originalMillis &&
         decision.reason !== "originalMillis" &&
         decision.reason !== "initial"
@@ -171,6 +180,8 @@ export function selectLatestSnapshotsByNyDay<T extends { date?: unknown }>(
         });
       }
       map.set(nyDay, candidate);
+    } else {
+      current.seen = nextSeen;
     }
   });
 
@@ -182,10 +193,11 @@ export function selectLatestSnapshotsByNyDay<T extends { date?: unknown }>(
       if (a.originalMillis > b.originalMillis) return 1;
       return 0;
     })
-    .map(({ nyDay, originalMillis, snapshot }) => ({
+    .map(({ nyDay, originalMillis, snapshot, seen }) => ({
       nyDay,
       originalMillis,
       snapshot,
+      duplicates: seen > 1 ? seen - 1 : undefined,
     }));
 }
 

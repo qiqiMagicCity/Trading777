@@ -14,6 +14,7 @@ import type {
   MetricsContract,
   PeriodBaselineMeta,
   PeriodDegradationReason,
+  PeriodParseError,
 } from "@/app/lib/types/metrics";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MissingCloseFallback } from "@/app/lib/dailyResults";
@@ -28,12 +29,14 @@ const DEGRADE_REASON_LABELS: Record<PeriodDegradationReason, string> = {
   DEGEN_NO_BASELINE: "缺基线",
   DEGEN_STALE_BASELINE: "基线过旧",
   DEGEN_WINDOW_EMPTY: "窗口空",
+  DEGEN_PARSE_FAILED: "解析失败",
 };
 
 function composeDegradeTooltip(
   label: string,
   reason?: PeriodDegradationReason,
   baselineMeta?: PeriodBaselineMeta,
+  parseErrors?: PeriodParseError[],
 ): string {
   const lines: string[] = [];
   const reasonLine = reason ? `${label}（${reason}）` : label;
@@ -67,6 +70,38 @@ function composeDegradeTooltip(
   } else if (reason === "DEGEN_STALE_BASELINE") {
     const displayThreshold = threshold ?? STALE_BASELINE_BDAYS;
     lines.push(`基线已超过阈值 ${displayThreshold} 个交易日`);
+  }
+
+  if (parseErrors && parseErrors.length > 0) {
+    const grouped = new Map<string, { count: number; samples: string[] }>();
+    for (const err of parseErrors) {
+      const key = err.field;
+      const bucket = grouped.get(key) ?? { count: 0, samples: [] };
+      bucket.count += 1;
+      if (bucket.samples.length < 2) {
+        const rawValue =
+          err.trimmed !== undefined
+            ? err.trimmed
+            : err.value === null
+            ? "null"
+            : err.value === undefined
+            ? "undefined"
+            : typeof err.value === "object"
+            ? JSON.stringify(err.value)
+            : String(err.value);
+        const sample = rawValue === "" ? "(空字符串)" : rawValue;
+        bucket.samples.push(`${err.day}→${sample}`);
+      }
+      grouped.set(key, bucket);
+    }
+
+    if (grouped.size > 0) {
+      const summary = Array.from(grouped.entries()).map(([field, info]) => {
+        const samples = info.samples.join("，");
+        return `${field}：${info.count} 条${samples ? `（示例 ${samples}）` : ""}`;
+      });
+      lines.push(`解析失败：${summary.join("；")}`);
+    }
   }
 
   return lines.join("\n");
@@ -519,6 +554,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             reasonLabel,
             diag.reason,
             diag.baselineMeta,
+            diag.parseErrors,
           );
           titleNode = (
             <span className="inline-flex items-center gap-2">
