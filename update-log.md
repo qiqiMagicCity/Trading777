@@ -1,5 +1,8 @@
 # 更新日志
 
+## 2025-11-11
+- 更正【持仓列表-当日盈亏】口径：新增两桶法专用 `buildIntradayFloatingPnlMap`，前端改读浮动盈亏并更新列标题为“当日浮动盈亏”，排除今日已实现贡献，补充分项断言确保部分平仓、翻向与纯过夜场景均按四位精度返回。
+
 ## 2025-11-10
 - Step 7：收盘价缺失策略重构
   - 新增 `marketHours.ts` 统一判断交易日、收盘窗口与宽限期，Dashboard 侧在 `ensureDailyCloses` 前判定是否已过宽限再发起补录。
@@ -267,3 +270,10 @@
 - 测试：`npm run lint`、`npm run check:calcmetrics-daily`、`npm run test:periods-core`、`npm run test:m6-ui`、`npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`、`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。
 - 修复 Vercel 构建报错：`resolveNyDay` 接收 `(typeof window !== "undefined" && window.NEXT_PUBLIC_FREEZE_DATE)` 时被推断为 `{}`，Next.js 构建类型检查失败（期望 `string | undefined`）。改为分别读取 `process.env` 与 `window` 的候选值，并通过 `typeof === "string"` 收窄后再传入 `resolveNyDay`，重跑 `npm run build` 通过。
 - 修复 Vercel 构建报错：Dashboard M6 卡片读取 `tradingDateStr` 时直接访问 `MetricsContract` 上不存在的字段，TS 推断 `{} | undefined` 导致 `next build` 中断。改用 `isRecord` 收窄原始对象并对 `intradayDiagnostics.uiTradeDayYmd` / `rawMetrics.tradingDateStr` 做字符串判定后再回退，`npm run build --workspace=web` 通过。
+
+## 2025-11-03
+- `positionMetrics.ts` 新增 `buildIntradayFloatingBreakdown`，输出过夜/当日新开两桶的银行家舍入结果、乘数、昨今净仓与均价，统一从 legs 汇总并在合成后只乘一次乘数；`buildIntradayFloatingPnlMap` 改读新拆解保持 UI 金额一致。
+- `PositionsTable` 引入浮动拆解调试映射，列标题提示乘数只在两桶求和后应用，单元格 tooltip 展示过夜桶/当日新开桶公式、乘数、昨今净仓等细节。
+- `positionMetrics.test.ts` 增补“乘数=100 只乘一次”与“日内配对后剩余 15 股”场景，验证浮动口径与 VWAP/乘数逻辑稳定；原有断言同步适配新拆解入口。
+- 测试：`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。
+- 再补口径守护：新增银行家舍入卡点、净仓归零与缺昨收三条单测锁定浮动盈亏边界；tooltip 追加“缺昨收时过夜桶=0；当日已实现请见‘今日已实现’。” 提示，首日场景与净仓归零提示一致。
