@@ -224,3 +224,4 @@
 - 修复构建报错：`infoScore` 在对象分支使用 `reduce` 时返回值被推断为 `unknown`，Next.js 构建阶段抛出 “Type 'unknown' is not assignable to type 'number'”；改用显式循环累加字段信息量，保持评分纯数值且类型稳定。
 - 修复构建报错：`selectLatestSnapshotsByNyDay` 直接把 `unknown` 类型的 `date` 透传给 `nyDateStrSafe`，导致 Next.js 构建期类型检查失败；增加类型守卫，仅接受 `string | number | Date`，并保持原有时间判定逻辑。
 - Step 4：同日重复快照默认选最新且不再退化，`diagnostics.sameDayDuplicates` 记录重复计数，覆盖基线重复/同毫秒并列/含解析失败等单测，确保仅 DEGEN_NO_BASELINE、DEGEN_STALE_BASELINE、DEGEN_PARSE_FAILED、DEGEN_WINDOW_EMPTY 会触发退化。
+- 修复 Vercel 构建报错：`runAllCore` 的 `dailyResults` 入参仍限定为纯 `number` 字段，无法接收通过 Zod 校验后的 `string|null` 数值字符串，Next.js 构建阶段类型检查失败；改为接受 `MinimalDailyResult[]` 并移除未使用的 `DailyResultInput` 引用，保持统一解析链路类型一致。同批构建中 `scripts/verify-real.ts` 也沿用旧的 `DailySnap` 数值类型，改用 `DailyResultInput` 以兼容字符串数值快照。

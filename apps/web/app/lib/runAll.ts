@@ -11,7 +11,7 @@ import {
   startOfYearNY,
   toNY,
 } from "./time";
-import type { DailyResult, DailyResultInput } from "./types";
+import type { DailyResult } from "./types";
 import { resolveTradingDateStr } from "./tradingDay";
 import {
   assertM6Equality,
@@ -423,7 +423,7 @@ function runAllCore(
   initialPositions: InitialPosition[],
   rawTrades: RawTrade[],
   closePrices: ClosePriceMap,
-  input: { dailyResults?: { date: string; realized: number; unrealized: number }[] } = {},
+  input: { dailyResults?: MinimalDailyResult[] } = {},
   opts: { evalDate?: Date | string } = {},
 ) {
   // ---- 评估日统一 ----
