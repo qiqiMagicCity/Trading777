@@ -47,7 +47,7 @@ npm run backtest -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD
 ## 校验（重要）
 - 本地：`npm run verify:real -w web -- --from=YYYY-MM-DD --to=YYYY-MM-DD`
 - CI：在 GitHub Actions 里触发 **verify-real** 工作流，选填 from/to。
-- 通过标准：对每个交易日，realized == (M4.total + M5.fifo)，unrealized == M3，且 M6 等式成立。报告输出到 `data/real/verify-report.md`。
+- 通过标准：对每个交易日，realized == (M4 + M5.fifo)，unrealized == M3，且 M6 等式成立。报告输出到 `data/real/verify-report.md`。
 
 ## 环境变量
 

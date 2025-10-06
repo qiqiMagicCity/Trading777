@@ -277,3 +277,22 @@
 - `positionMetrics.test.ts` 增补“乘数=100 只乘一次”与“日内配对后剩余 15 股”场景，验证浮动口径与 VWAP/乘数逻辑稳定；原有断言同步适配新拆解入口。
 - 测试：`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。
 - 再补口径守护：新增银行家舍入卡点、净仓归零与缺昨收三条单测锁定浮动盈亏边界；tooltip 追加“缺昨收时过夜桶=0；当日已实现请见‘今日已实现’。” 提示，首日场景与净仓归零提示一致。
+
+## 2025-10-06 M4 自检与单测
+- 新增 selfcheckM4，覆盖时区判定、混合配对拆分、读源一致性与四舍五入时机。
+- 新增五组合成用例与前台读源一致性校验。
+- 新增脚本 `npm run selfcheck:m4`。
+
+## 2025-10-07 M4 纽约日口径与混合腿拆分修复
+- runAll 统一使用纽约交易日判定，腿级明细补充 `from`、`lotDateStr`、`fillId` 与 `pnl_raw`，并按“先合计后 round2”计算 M4/M5；同时透出 `aux.realized.today_intraday/today_total`。
+- 修复混合配对未拆分与今日腿误入 M4 的问题，确保同一 fill 同时生成历史腿与今日腿；M6 今日已实现改为 `M4 + M5_2`，与 UI 聚合保持一致。
+- 自检回归套件升级为八条强断言，新增跨日 23:00 场景与混合 fill 拆腿检查；保留 `npm run selfcheck:m4` 并新增 `npm run test:m4:fix` 统一触发。
+## 2025-10-06 M4 前台对齐与调试视图
+- 聚合层统一读取 runAll 覆盖后的 result.M4。
+- PositionsTable 增加“历史平仓(M4)”明细并仅走聚合层数据。
+- 新增 /debug/m4 调试页，展示 aux.breakdown.m4 腿级明细，并校验 sum(pnl_raw)≈result.M4。
+- 新增 UI 测试脚本 `npm run test:m4:ui`，保障读源与合计恒等式不回退。
+## 2025-10-08 M4 边界加固
+- 新增 `m4.edgecases` 回归套件，覆盖拆股复权、现金分红、乘数一次、纽约盘后跨日、混配拆腿与今日已实现恒等式。
+- 自检增强：若发现腿未明确标记 `from='history'`，将结合 NY 交易日判断并直接报错，附带 fillId/lotDateStr 定位。
+- 新脚本 `npm run test:m4:edge` 纳入 CI，要求全部场景通过。

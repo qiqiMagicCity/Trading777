@@ -11,7 +11,12 @@ function assertByBreakdown(res: any, dailyResults: Array<{ realized: number }> =
   if (!res?.aux?.breakdown) {
     throw new Error("Missing breakdown rows on result. Ensure runAll returns 'aux.breakdown'.");
   }
-  const rows = res.aux.breakdown as Array<any>;
+  const bucket = res.aux.breakdown as any;
+  const rows: Array<any> = Array.isArray(bucket?.all)
+    ? bucket.all
+    : Array.isArray(bucket)
+    ? bucket
+    : [];
   const pnlOf = (r: any) => {
     const qty = r.qty ?? 0;
     if (r.action === 'SELL') {
@@ -32,7 +37,7 @@ function assertByBreakdown(res: any, dailyResults: Array<{ realized: number }> =
   const m9FromRows = prevRealized;
 
   // 兼容新的 metrics 结构（M5: { behavior, fifo }；M4: { total }；M6: { total }；M9 可能是 number 或对象）
-  const m4 = res?.M4?.total ?? res?.M4 ?? 0;
+  const m4 = res?.M4 ?? res?.M4?.total ?? 0;
   const m52 = res?.M5?.fifo ?? res?.M5_2 ?? 0;
   const m9  = res?.M9?.total ?? res?.M9 ?? (m4 + m52);
 

@@ -12,6 +12,7 @@ import {
   startOfWeekNY,
   startOfYearNY,
   toNY,
+  isSameTradingDayNY,
 } from "./time";
 import type { DailyResult } from "./types";
 import { resolveTradingDateStr } from "./tradingDay";
@@ -22,7 +23,7 @@ import {
   assertNoNegativeLots,
   snapshotArtifacts,
 } from "./monitor";
-import { realizedPnLLong, realizedPnLShort } from "./money";
+import { MoneyDecimal as Decimal, round2 } from "./money";
 import { buildEnrichedTrades, replayPortfolio } from "./tradeReplay";
 import fs from "fs";
 import path from "path";
@@ -94,7 +95,6 @@ export async function runAll(...args: unknown[]) {
   return runAllCore(...(args as Parameters<typeof runAllCore>));
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 export type RawTrade = {
@@ -124,8 +124,57 @@ export function normalizeClosePriceMap(input: any): ClosePriceMap {
 }
 
 // --- M5/M4 计算核心工具 ---
-type Lot = { qty: number; cost: number; isToday: boolean; openPrice: number; time: string };
-type ConsumeRow = { qty: number; cost: number; isToday: boolean; openPrice: number; time: string };
+type Lot = {
+  qty: number;
+  cost: number;
+  isToday: boolean;
+  openPrice: number;
+  time: string;
+  lotDateStr: string;
+  from: "history" | "today";
+};
+type ConsumeRow = {
+  qty: number;
+  cost: number;
+  isToday: boolean;
+  openPrice: number;
+  time: string;
+  lotDateStr: string;
+  from: "history" | "today";
+};
+
+type BreakdownLeg = {
+  symbol: string;
+  time: string;
+  action: "SELL" | "COVER";
+  into: "M4" | "M5.1" | "M5.2";
+  qty: number;
+  openPrice?: number;
+  fifoCost?: number;
+  closePrice: number;
+  lotTag: "T" | "H";
+  lotDateStr: string;
+  from: "history" | "today";
+  isToday: boolean;
+  pnl_raw: number;
+  pnl: number;
+  fillId: string;
+};
+
+type BreakdownBuckets = {
+  all: BreakdownLeg[];
+  m4: BreakdownLeg[];
+  m5_1: BreakdownLeg[];
+  m5_2: BreakdownLeg[];
+};
+
+function realizedPnLLongRaw(closePrice: number, costPrice: number, qty: number): number {
+  return new Decimal(closePrice).minus(costPrice).mul(qty).toNumber();
+}
+
+function realizedPnLShortRaw(costPrice: number, coverPrice: number, qty: number): number {
+  return new Decimal(costPrice).minus(coverPrice).mul(qty).toNumber();
+}
 type SymState = {
   longLots: Lot[]; // BUY 队列（含历史 + 当日）
   shortLots: Lot[]; // SHORT 队列（含历史 + 当日）
@@ -158,7 +207,15 @@ function fifoPreview(lots: Lot[], qty: number): ConsumeRow[] {
     if (need <= 0) break;
     const take = Math.min(need, lot.qty);
     if (take > 0)
-      rows.push({ qty: take, cost: lot.cost, isToday: lot.isToday, openPrice: lot.openPrice, time: lot.time });
+      rows.push({
+        qty: take,
+        cost: lot.cost,
+        isToday: lot.isToday,
+        openPrice: lot.openPrice,
+        time: lot.time,
+        lotDateStr: lot.lotDateStr,
+        from: lot.from,
+      });
     need -= take;
   }
   return rows;
@@ -198,7 +255,15 @@ function behConsume(stack: Lot[], qty: number): ConsumeRow[] {
     const lot = stack[i]!;
     const take = Math.min(need, lot.qty);
     if (take > 0) {
-      rows.push({ qty: take, cost: lot.cost, isToday: true, openPrice: lot.openPrice, time: lot.time });
+      rows.push({
+        qty: take,
+        cost: lot.cost,
+        isToday: true,
+        openPrice: lot.openPrice,
+        time: lot.time,
+        lotDateStr: lot.lotDateStr,
+        from: lot.from,
+      });
       lot.qty -= take;
       need -= take;
     }
@@ -227,54 +292,171 @@ function getSym(sym: string): SymState {
   return bySym[sym] ?? (bySym[sym] = { longLots: [], shortLots: [], behLong: [], behShort: [] });
 }
 
-let breakdown: any[] = [];
-let M4_total = 0,
-  M51 = 0,
-  M52 = 0;
+const breakdownBuckets: BreakdownBuckets = {
+  all: [],
+  m4: [],
+  m5_1: [],
+  m5_2: [],
+};
+let M4_raw = 0;
+let M5_1_raw = 0;
+let M5_2_raw = 0;
 
-function postM4_Long(qty: number, sellPrice: number, cost: number, sym: string, time: string) {
-  const pnl = realizedPnLLong(sellPrice, cost, qty);
-  M4_total += pnl;
-  breakdown.push({ symbol: sym, time, action: 'SELL', into: 'M4', qty, closePrice: sellPrice, fifoCost: cost, lotTag: 'H' });
+const breakdownBucketKey = {
+  M4: "m4",
+  "M5.1": "m5_1",
+  "M5.2": "m5_2",
+} as const;
+
+function recordLeg(into: BreakdownLeg["into"], leg: Omit<BreakdownLeg, "into">) {
+  const full: BreakdownLeg = { ...leg, into };
+  breakdownBuckets.all.push(full);
+  const bucket = breakdownBucketKey[into];
+  breakdownBuckets[bucket].push(full);
+  return full;
 }
 
-function postM4_Short(qty: number, coverPrice: number, cost: number, sym: string, time: string) {
-  const pnl = realizedPnLShort(cost, coverPrice, qty);
-  M4_total += pnl;
-  breakdown.push({ symbol: sym, time, action: 'COVER', into: 'M4', qty, closePrice: coverPrice, fifoCost: cost, lotTag: 'H' });
+function postM4_Long(row: ConsumeRow, sellPrice: number, sym: string, time: string, fillId: string) {
+  const pnlRaw = realizedPnLLongRaw(sellPrice, row.cost, row.qty);
+  M4_raw += pnlRaw;
+  recordLeg("M4", {
+    symbol: sym,
+    time,
+    action: "SELL",
+    qty: row.qty,
+    closePrice: sellPrice,
+    fifoCost: row.cost,
+    lotTag: "H",
+    lotDateStr: row.lotDateStr,
+    from: "history",
+    isToday: row.isToday,
+    pnl_raw: pnlRaw,
+    pnl: round2(pnlRaw),
+    fillId,
+  });
 }
 
-function postM5_Long(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], sellPrice: number, sym: string, time: string) {
+function postM4_Short(row: ConsumeRow, coverPrice: number, sym: string, time: string, fillId: string) {
+  const pnlRaw = realizedPnLShortRaw(row.cost, coverPrice, row.qty);
+  M4_raw += pnlRaw;
+  recordLeg("M4", {
+    symbol: sym,
+    time,
+    action: "COVER",
+    qty: row.qty,
+    closePrice: coverPrice,
+    fifoCost: row.cost,
+    lotTag: "H",
+    lotDateStr: row.lotDateStr,
+    from: "history",
+    isToday: row.isToday,
+    pnl_raw: pnlRaw,
+    pnl: round2(pnlRaw),
+    fillId,
+  });
+}
+
+function postM5_Long(
+  todayLots: ConsumeRow[],
+  fifoRows: ConsumeRow[],
+  sellPrice: number,
+  sym: string,
+  time: string,
+  fillId: string,
+) {
   for (const r of todayLots) {
-    const pnl = realizedPnLLong(sellPrice, r.openPrice, r.qty);
-    M51 += pnl;
-    breakdown.push({ symbol: sym, time, action: 'SELL', into: 'M5.1', qty: r.qty, closePrice: sellPrice, openPrice: r.openPrice, lotTag: 'T' });
+    const pnlRaw = realizedPnLLongRaw(sellPrice, r.openPrice, r.qty);
+    M5_1_raw += pnlRaw;
+    recordLeg("M5.1", {
+      symbol: sym,
+      time,
+      action: "SELL",
+      qty: r.qty,
+      closePrice: sellPrice,
+      openPrice: r.openPrice,
+      lotTag: "T",
+      lotDateStr: r.lotDateStr,
+      from: "today",
+      isToday: true,
+      pnl_raw: pnlRaw,
+      pnl: round2(pnlRaw),
+      fillId,
+    });
   }
   const fifoToday = takeQty(
     fifoRows.filter((x) => x.isToday),
     todayLots.reduce((s, x) => s + x.qty, 0),
   );
   for (const r of fifoToday) {
-    const pnl = realizedPnLLong(sellPrice, r.cost, r.qty);
-    M52 += pnl;
-    breakdown.push({ symbol: sym, time, action: 'SELL', into: 'M5.2', qty: r.qty, closePrice: sellPrice, fifoCost: r.cost, lotTag: 'T' });
+    const pnlRaw = realizedPnLLongRaw(sellPrice, r.cost, r.qty);
+    M5_2_raw += pnlRaw;
+    recordLeg("M5.2", {
+      symbol: sym,
+      time,
+      action: "SELL",
+      qty: r.qty,
+      closePrice: sellPrice,
+      fifoCost: r.cost,
+      lotTag: "T",
+      lotDateStr: r.lotDateStr,
+      from: "today",
+      isToday: true,
+      pnl_raw: pnlRaw,
+      pnl: round2(pnlRaw),
+      fillId,
+    });
   }
 }
 
-function postM5_Short(todayLots: ConsumeRow[], fifoRows: ConsumeRow[], coverPrice: number, sym: string, time: string) {
+function postM5_Short(
+  todayLots: ConsumeRow[],
+  fifoRows: ConsumeRow[],
+  coverPrice: number,
+  sym: string,
+  time: string,
+  fillId: string,
+) {
   for (const r of todayLots) {
-    const pnl = realizedPnLShort(r.openPrice, coverPrice, r.qty);
-    M51 += pnl;
-    breakdown.push({ symbol: sym, time, action: 'COVER', into: 'M5.1', qty: r.qty, closePrice: coverPrice, openPrice: r.openPrice, lotTag: 'T' });
+    const pnlRaw = realizedPnLShortRaw(r.openPrice, coverPrice, r.qty);
+    M5_1_raw += pnlRaw;
+    recordLeg("M5.1", {
+      symbol: sym,
+      time,
+      action: "COVER",
+      qty: r.qty,
+      closePrice: coverPrice,
+      openPrice: r.openPrice,
+      lotTag: "T",
+      lotDateStr: r.lotDateStr,
+      from: "today",
+      isToday: true,
+      pnl_raw: pnlRaw,
+      pnl: round2(pnlRaw),
+      fillId,
+    });
   }
   const fifoToday = takeQty(
     fifoRows.filter((x) => x.isToday),
     todayLots.reduce((s, x) => s + x.qty, 0),
   );
   for (const r of fifoToday) {
-    const pnl = realizedPnLShort(r.cost, coverPrice, r.qty);
-    M52 += pnl;
-    breakdown.push({ symbol: sym, time, action: 'COVER', into: 'M5.2', qty: r.qty, closePrice: coverPrice, fifoCost: r.cost, lotTag: 'T' });
+    const pnlRaw = realizedPnLShortRaw(r.cost, coverPrice, r.qty);
+    M5_2_raw += pnlRaw;
+    recordLeg("M5.2", {
+      symbol: sym,
+      time,
+      action: "COVER",
+      qty: r.qty,
+      closePrice: coverPrice,
+      fifoCost: r.cost,
+      lotTag: "T",
+      lotDateStr: r.lotDateStr,
+      from: "today",
+      isToday: true,
+      pnl_raw: pnlRaw,
+      pnl: round2(pnlRaw),
+      fillId,
+    });
   }
 }
 
@@ -561,77 +743,137 @@ function runAllCore(
   const periodM9 = (periodsRest as { M9?: number }).M9 ?? metrics.M9;
   // ---- 用新的日内拆分算法计算 M4/M5，并重算 M6 ----
   bySym = {};
-  breakdown = [];
-  M4_total = 0;
-  M51 = 0;
-  M52 = 0;
+  breakdownBuckets.all.length = 0;
+  breakdownBuckets.m4.length = 0;
+  breakdownBuckets.m5_1.length = 0;
+  breakdownBuckets.m5_2.length = 0;
+  M4_raw = 0;
+  M5_1_raw = 0;
+  M5_2_raw = 0;
 
   for (const p of baselinePositions) {
     const st = getSym(p.symbol);
     if (p.qty > 0) {
-      st.longLots.push({ qty: p.qty, cost: p.avgPrice, isToday: false, openPrice: p.avgPrice, time: evalISO });
+      st.longLots.push({
+        qty: p.qty,
+        cost: p.avgPrice,
+        isToday: false,
+        openPrice: p.avgPrice,
+        time: `${baselineDate}T00:00:00Z`,
+        lotDateStr: baselineDate,
+        from: "history",
+      });
     } else if (p.qty < 0) {
-      st.shortLots.push({ qty: -p.qty, cost: p.avgPrice, isToday: false, openPrice: p.avgPrice, time: evalISO });
+      st.shortLots.push({
+        qty: -p.qty,
+        cost: p.avgPrice,
+        isToday: false,
+        openPrice: p.avgPrice,
+        time: `${baselineDate}T00:00:00Z`,
+        lotDateStr: baselineDate,
+        from: "history",
+      });
     }
   }
 
   const sortedTrades = [...rawTrades].sort((a, b) => a.date.localeCompare(b.date));
+  let fillSeq = 0;
   for (const t of sortedTrades) {
     const st = getSym(t.symbol);
-    const today = nyDateStrSafe(t.date) === evalISO;
+    const today = isSameTradingDayNY(t.date, evalISO);
+    const lotDateStr = nyDateStrSafe(t.date);
+    const from: "history" | "today" = today ? "today" : "history";
+    const fillId = `${++fillSeq}:${t.symbol}|${t.date}|${t.side}`;
     if (t.side === 'BUY') {
-      st.longLots.push({ qty: t.qty, cost: t.price, isToday: today, openPrice: t.price, time: t.date });
-      if (today) st.behLong.push({ qty: t.qty, cost: t.price, isToday: true, openPrice: t.price, time: t.date });
+      st.longLots.push({
+        qty: t.qty,
+        cost: t.price,
+        isToday: today,
+        openPrice: t.price,
+        time: t.date,
+        lotDateStr,
+        from,
+      });
+      if (today)
+        st.behLong.push({
+          qty: t.qty,
+          cost: t.price,
+          isToday: true,
+          openPrice: t.price,
+          time: t.date,
+          lotDateStr,
+          from: "today",
+        });
     } else if (t.side === 'SHORT') {
-      st.shortLots.push({ qty: t.qty, cost: t.price, isToday: today, openPrice: t.price, time: t.date });
-      if (today) st.behShort.push({ qty: t.qty, cost: t.price, isToday: true, openPrice: t.price, time: t.date });
+      st.shortLots.push({
+        qty: t.qty,
+        cost: t.price,
+        isToday: today,
+        openPrice: t.price,
+        time: t.date,
+        lotDateStr,
+        from,
+      });
+      if (today)
+        st.behShort.push({
+          qty: t.qty,
+          cost: t.price,
+          isToday: true,
+          openPrice: t.price,
+          time: t.date,
+          lotDateStr,
+          from: "today",
+        });
     } else if (t.side === 'SELL') {
       const preview = fifoPreview(st.longLots, t.qty);
-      const previewTodayQty = preview.reduce((s, x) => (x.isToday ? s + x.qty : s), 0);
+      const previewTodayQty = preview.reduce((s, x) => (x.from === "today" ? s + x.qty : s), 0);
       const behAvailable = behAvail(st.behLong);
       const todayClosed = Math.min(previewTodayQty, behAvailable);
       if (process.env.MONITOR === '1') {
         console.log('[runAll SELL]', { previewTodayQty, behAvail: behAvailable, todayClosed });
       }
-      for (const r of preview.filter((r) => !r.isToday)) {
-        postM4_Long(r.qty, t.price, r.cost, t.symbol, t.date);
+      for (const r of preview.filter((r) => r.from === "history")) {
+        postM4_Long(r, t.price, t.symbol, t.date, fillId);
       }
       fifoApply(st.longLots, preview);
       const todayLots = behConsume(st.behLong, todayClosed);
-      postM5_Long(todayLots, preview, t.price, t.symbol, t.date);
+      postM5_Long(todayLots, preview, t.price, t.symbol, t.date, fillId);
     } else if (t.side === 'COVER') {
       const preview = fifoPreview(st.shortLots, t.qty);
-      const previewTodayQty = preview.reduce((s, x) => (x.isToday ? s + x.qty : s), 0);
+      const previewTodayQty = preview.reduce((s, x) => (x.from === "today" ? s + x.qty : s), 0);
       const behAvailable = behAvail(st.behShort);
       const todayClosed = Math.min(previewTodayQty, behAvailable);
       if (process.env.MONITOR === '1') {
         console.log('[runAll COVER]', { previewTodayQty, behAvail: behAvailable, todayClosed });
       }
-      for (const r of preview.filter((r) => !r.isToday)) {
-        postM4_Short(r.qty, t.price, r.cost, t.symbol, t.date);
+      for (const r of preview.filter((r) => r.from === "history")) {
+        postM4_Short(r, t.price, t.symbol, t.date, fillId);
       }
       fifoApply(st.shortLots, preview);
       const todayLots = behConsume(st.behShort, todayClosed);
-      postM5_Short(todayLots, preview, t.price, t.symbol, t.date);
+      postM5_Short(todayLots, preview, t.price, t.symbol, t.date, fillId);
     }
   }
 
-  const M4_override = M4_total;
-  const M5_1_override = M51;
-  const M5_2_override = M52;
+  const M4_override = M4_raw;
+  const M5_1_override = M5_1_raw;
+  const M5_2_override = M5_2_raw;
   const M4_r = round2(M4_override);
   const M5_1_r = round2(M5_1_override);
   const M5_2_r = round2(M5_2_override);
   const M3_r = round2(metrics.M3);
   const priceChangeRaw = metrics.aux?.m6PriceChange ?? 0;
+  const todayRealizedTotalRaw = M4_override + M5_2_override;
+  const todayRealizedTotal = round2(todayRealizedTotalRaw);
+  const realizedIntradayToday = M5_2_r;
   const priceChange_r = round2(priceChangeRaw);
   const prevRealized_r = M4_r;
-  const M6_override = prevRealized_r + priceChange_r + M5_2_r;
-  const realizedFallback = prevRealized_r + M5_2_r;
-  const mtmOvernightRaw = metrics._m6?.mtmOvernight ?? priceChange_r;
+  const M6_raw = todayRealizedTotalRaw + priceChangeRaw;
+  const M6_r = round2(M6_raw);
+  const mtmOvernightRaw = metrics._m6?.mtmOvernight ?? priceChangeRaw;
   const mtmIntradayRaw = metrics._m6?.mtmIntradayOpen ?? 0;
   const m6Details = {
-    realizedToday: round2(metrics._m6?.realizedToday ?? realizedFallback),
+    realizedToday: todayRealizedTotal,
     mtmOvernight: round2(mtmOvernightRaw),
     mtmIntradayOpen: round2(mtmIntradayRaw),
     warnings: Array.isArray(metrics._m6?.warnings)
@@ -643,6 +885,13 @@ function runAllCore(
 
   const periodMeta = metrics._period;
 
+  const breakdown = {
+    all: breakdownBuckets.all,
+    m4: breakdownBuckets.m4,
+    m5_1: breakdownBuckets.m5_1,
+    m5_2: breakdownBuckets.m5_2,
+  };
+
   const result = {
     ...periodsRest,
     M1: round2(metrics.M1),
@@ -651,7 +900,7 @@ function runAllCore(
     M4: M4_r,
     M5_1: M5_1_r,
     M5_2: M5_2_r,
-    M6: round2(M6_override),
+    M6: M6_r,
     _m6: m6Details,
     M7: metrics.M7,
     M8: metrics.M8,
@@ -663,9 +912,14 @@ function runAllCore(
     ...(periodMeta ? { _period: periodMeta } : {}),
     aux: {
       breakdown,
+      breakdown,
       m6PriceChange: priceChange_r,
       m6PrevRealizedTotal: prevRealized_r,
       m6FifoToday: M5_2_r,
+      realized: {
+        today_intraday: realizedIntradayToday,
+        today_total: todayRealizedTotal,
+      },
       m6Legs: metrics.aux?.m6Legs ?? [],
       m6Excluded: metrics.aux?.m6Excluded ?? [],
       missingPrevCloseSymbols: metrics.aux?.missingPrevCloseSymbols ?? [],

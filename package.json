@@ -19,7 +19,11 @@
     "check:types": "tsc -p apps/web/tsconfig.json --noEmit",
     "ci": "npm run check:calcmetrics-daily && npm run check:types -w web && npm run test -w web && npm run build -w web",
     "guard": "npm run ci",
-    "selfcheck:j:sticky": "jest apps/web/app/lib/__tests__/breakevenJ.sticky.test.ts apps/web/app/modules/__tests__/PositionsTable.breakevenJ.test.tsx"
+    "selfcheck:j:sticky": "jest apps/web/app/lib/__tests__/breakevenJ.sticky.test.ts apps/web/app/modules/__tests__/PositionsTable.breakevenJ.test.tsx",
+    "selfcheck:m4": "jest apps/web/app/lib/__tests__/m4.selfcheck.test.ts --runInBand",
+    "test:m4:fix": "jest apps/web/app/lib/__tests__/m4.selfcheck.test.ts --runInBand",
+    "test:m4:ui": "jest apps/web/app/modules/__tests__/m4.ui.align.test.tsx --runInBand",
+    "test:m4:edge": "jest apps/web/app/lib/__tests__/m4.edgecases.test.ts --runInBand"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

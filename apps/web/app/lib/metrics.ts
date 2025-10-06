@@ -2316,7 +2316,9 @@ export function normalizeMetrics(input: any): MetricsContract {
   const M1 = Number(input?.M1 ?? 0);
   const M2 = Number(input?.M2 ?? 0);
   const M3 = Number(input?.M3 ?? 0);
-  const M4 = { total: pickTotal(input?.M4) };
+  const M4 = Number.isFinite(Number(input?.M4))
+    ? Number(input?.M4)
+    : pickTotal(input?.M4);
   const M5 = {
     behavior: Number(
       input?.M5?.behavior ?? input?.M5?.trade ?? input?.M5_1 ?? 0,
@@ -2332,12 +2334,21 @@ export function normalizeMetrics(input: any): MetricsContract {
   const prevRealized = input?.aux?.m6PrevRealizedTotal;
   const fifoToday = input?.aux?.m6FifoToday;
   const rawRealizedToday = Number(input?._m6?.realizedToday);
+  const rawRealizedTotalAux = Number(input?.aux?.realized?.today_total);
+  const rawRealizedIntradayAux = Number(input?.aux?.realized?.today_intraday);
   const rawMtmOvernight = Number(input?._m6?.mtmOvernight);
   const rawMtmIntraday = Number(input?._m6?.mtmIntradayOpen);
-  const realizedToday = Number.isFinite(rawRealizedToday)
+  const realizedToday = Number.isFinite(rawRealizedTotalAux)
+    ? rawRealizedTotalAux
+    : Number.isFinite(rawRealizedToday)
     ? rawRealizedToday
     : Number.isFinite(prevRealized) && Number.isFinite(fifoToday)
     ? Number(prevRealized) + Number(fifoToday)
+    : 0;
+  const realizedIntraday = Number.isFinite(rawRealizedIntradayAux)
+    ? rawRealizedIntradayAux
+    : Number.isFinite(fifoToday)
+    ? Number(fifoToday)
     : 0;
   const mtmOvernight = Number.isFinite(rawMtmOvernight)
     ? rawMtmOvernight
@@ -2417,8 +2428,38 @@ export function normalizeMetrics(input: any): MetricsContract {
         (s: unknown): s is string => typeof s === "string",
       )
     : [];
+  const rawBreakdown = input?.aux?.breakdown;
+  const breakdown = rawBreakdown
+    ? Array.isArray(rawBreakdown)
+      ? {
+          all: rawBreakdown.map((row) => ({ ...(row ?? {}) })),
+          m4: rawBreakdown
+            .filter((row: any) => row?.into === "M4")
+            .map((row: any) => ({ ...(row ?? {}) })),
+          m5_1: rawBreakdown
+            .filter((row: any) => row?.into === "M5.1")
+            .map((row: any) => ({ ...(row ?? {}) })),
+          m5_2: rawBreakdown
+            .filter((row: any) => row?.into === "M5.2")
+            .map((row: any) => ({ ...(row ?? {}) })),
+        }
+      : {
+          all: Array.isArray((rawBreakdown as any).all)
+            ? (rawBreakdown as any).all.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+          m4: Array.isArray((rawBreakdown as any).m4)
+            ? (rawBreakdown as any).m4.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+          m5_1: Array.isArray((rawBreakdown as any).m5_1)
+            ? (rawBreakdown as any).m5_1.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+          m5_2: Array.isArray((rawBreakdown as any).m5_2)
+            ? (rawBreakdown as any).m5_2.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+        }
+    : undefined;
   const aux = {
-    breakdown: input?.aux?.breakdown ?? [],
+    breakdown,
     m6PriceChange: priceChange,
     m6PrevRealizedTotal:
       typeof prevRealized === "number" && Number.isFinite(prevRealized)
@@ -2427,6 +2468,13 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6FifoToday:
       typeof fifoToday === "number" && Number.isFinite(fifoToday)
         ? fifoToday
+        : undefined,
+    realized:
+      Number.isFinite(realizedToday) || Number.isFinite(realizedIntraday)
+        ? {
+            today_intraday: realizedIntraday,
+            today_total: realizedToday,
+          }
         : undefined,
     m6Legs,
     m6Excluded,
@@ -2525,5 +2573,5 @@ export function normalizeMetrics(input: any): MetricsContract {
 // 兼容监控的扁平投影（监控/脚本可能用到）
 export function projectToM6(input: any) {
   const m = normalizeMetrics(input);
-  return { M3: m.M3, M4: m.M4.total, M5_2: m.M5.fifo, M6: m.M6.total };
+  return { M3: m.M3, M4: m.M4, M5_2: m.M5.fifo, M6: m.M6.total };
 }
