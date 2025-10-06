@@ -1,4 +1,5 @@
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import { marketOpenTimeNY, previousTradingDay } from "./marketHours";
 
 /**
  * timezone.ts – Helpers to ensure the site consistently uses New York (America/New_York) time,
@@ -129,7 +130,15 @@ export const getLatestTradingDayStr = (base: Date = nowNY()): string => {
   while (d.getDay() === 0 || d.getDay() === 6) {
     d.setDate(d.getDate() - 1);
   }
-  return ymdInNY(d);
+  const ymd = ymdInNY(d);
+  const open = marketOpenTimeNY(ymd);
+  if (!Number.isNaN(open.getTime()) && d.getTime() < open.getTime()) {
+    const previous = previousTradingDay(ymd);
+    if (previous) {
+      return previous;
+    }
+  }
+  return ymd;
 };
 
 /** 获取指定纽约日期的当日结束时间 */
