@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
-import { nowNY, toNY, ymdInNY } from '@/lib/timezone';
+import { toNY, ymdInNY } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 
 type Side = 'BUY' | 'SELL' | 'SHORT' | 'COVER';

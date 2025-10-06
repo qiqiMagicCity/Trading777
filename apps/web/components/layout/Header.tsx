@@ -4,8 +4,29 @@ import { useEffect, useState } from 'react';
 import { format as formatTz, toZonedTime } from 'date-fns-tz';
 import { nowNY } from '@/lib/timezone';
 import { importData, exportData } from '@/lib/services/dataService';
+import type { RawTrade, Trade, Position } from '@/lib/services/dataService';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+
+type DatasetImportPayload = {
+  trades: Array<RawTrade | Trade>;
+  positions: Array<Partial<Position> & Record<string, unknown>>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function isDatasetPayloadCandidate(value: unknown): value is {
+  trades: unknown[];
+  positions: unknown[];
+} {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.trades) &&
+    Array.isArray(value.positions)
+  );
+}
 
 // Match the original clocks div in the HTML
 export function Clocks() {
@@ -61,28 +82,31 @@ export function Header() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
-    input.onchange = async (e) => {
-      const target = e.target as HTMLInputElement;
+    input.addEventListener('change', async (event) => {
+      const target = event.target as HTMLInputElement;
       const file = target.files?.[0];
       if (!file) return;
 
       try {
         const text = await file.text();
-        const data = JSON.parse(text);
-
-        // Basic validation
-        if (!data.trades || !data.positions) {
+        const parsed = JSON.parse(text) as unknown;
+        if (!isDatasetPayloadCandidate(parsed)) {
           throw new Error('Invalid JSON format. "trades" and "positions" arrays are required.');
         }
 
-        await importData(data as any);
+        const payload: DatasetImportPayload = {
+          trades: parsed.trades as DatasetImportPayload['trades'],
+          positions: parsed.positions as DatasetImportPayload['positions'],
+        };
+
+        await importData(payload);
         alert('导入成功! 页面将刷新。');
         window.location.reload();
       } catch (err) {
         console.error(err);
         alert(`导入失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-    };
+    });
     input.click();
   };
 

@@ -1,5 +1,12 @@
 # 更新日志
 
+## 2025-11-10
+- Step 6：Dashboard “当日盈亏”卡片接入 `_m6` 拆解 Tooltip，展示 realized_today / mtm_overnight / mtm_intraday_open 分项，默认首行提示纽约日口径及 20:00–23:59 ET 仍计入当日。
+- Tooltip 触发按钮新增可聚焦问讯样式（含 aria-label），健康状态下沿用灰色圆点，存在警示/解析失败时切换为琥珀底色并附带退化/告警/解析摘要。
+- 解析 `_m6` 原始字段时复用 `parseSnapshotNumber` 去除负零，并聚合 diagnostics.parseErrors + warnings，Tooltip 尾部统一输出 ⚠️ 提示，若缺乏当日快照则退化为“待补充 + 无当日快照”。
+- DashboardMetrics 单测扩充 5 个场景（仅 MTM、空头回补、全零、缺快照、解析失败），断言合计恒等式、Tooltip 文案与按钮无障碍属性；沿用 `within` 精准定位卡片。
+- 运行 `npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`、`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand` 全部通过。
+
 ## 2025-11-09
 - Step 5：`calcMetricsInternal` 建立唯一 `periodEvalYmd` 来源（入参优先，其次 `nyTodayStr()`），UI 冻结日独立维护并禁止再以 `getLatestTradingDayStr` 回退周期窗口；交易、日度快照过滤统一按纽约日并包含评估日当日。
 - 修复回归：移除 `periodEvalYmd` 对 `tradingDateStr` 的隐式回退，所有调用方（含 `runAll`、Dashboard 页面与相关单测）改为显式传入评估日，确保周/月/年聚合恒以真实评估日为锚。
@@ -235,3 +242,15 @@
 - 修复构建报错：`selectLatestSnapshotsByNyDay` 直接把 `unknown` 类型的 `date` 透传给 `nyDateStrSafe`，导致 Next.js 构建期类型检查失败；增加类型守卫，仅接受 `string | number | Date`，并保持原有时间判定逻辑。
 - Step 4：同日重复快照默认选最新且不再退化，`diagnostics.sameDayDuplicates` 记录重复计数，覆盖基线重复/同毫秒并列/含解析失败等单测，确保仅 DEGEN_NO_BASELINE、DEGEN_STALE_BASELINE、DEGEN_PARSE_FAILED、DEGEN_WINDOW_EMPTY 会触发退化。
 - 修复 Vercel 构建报错：`runAllCore` 的 `dailyResults` 入参仍限定为纯 `number` 字段，无法接收通过 Zod 校验后的 `string|null` 数值字符串，Next.js 构建阶段类型检查失败；改为接受 `MinimalDailyResult[]` 并移除未使用的 `DailyResultInput` 引用，保持统一解析链路类型一致。同批构建中 `scripts/verify-real.ts` 也沿用旧的 `DailySnap` 数值类型，改用 `DailyResultInput` 以兼容字符串数值快照。
+
+## 2025-11-01
+- Step 6 收口：`DashboardMetrics` 消除 `if (!metrics) return` 条件 Hook，统一以 `metricsReady` 控制渲染，保持 Hook 顺序恒定并保留加载占位样式。
+- `turbo.json` 注册 PRICE_STRICT、READ_PUBLIC_MODE 等环境变量；`env.ts` / `readPublicJson.ts` 补充 catch 注释避免 `no-empty`，`timezone.ts` 注释去除不规则空格。
+- `package.json` 的 lint 指令改为 `npx --yes turbo run lint`，确保仓库级别 lint 复用 Turbo pipeline。
+- 测试：`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`、`npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`；构建：`npm run build`；Lint：`npm run lint`（仍存在历史 `no-explicit-any` 警告，但未再触发 react-hooks/no-empty/no-irregular-whitespace 相关报错）。
+
+## 2025-11-02
+- Step 6 降噪：`calcMetricsInternal` 在未指定 `periodEvalYmd` 时尊重 `NEXT_PUBLIC_FREEZE_DATE`，确保冻结评估日的 M7 交易计数与当日盈亏拆解一致；同步保留 UI 交易日选择器的纽约截日逻辑。
+- `.eslintrc.json` 与 `apps/web/eslint.config.js` 新增 `__tests__`、`app/lib` 目录豁免规则，逐项移除 `any`、`unused`、`prefer-const` 等历史噪音，`Header` / `page.tsx` / `runAll.ts` / `priceService.ts` 等核心文件补足类型守卫与 Hook 依赖。
+- CI `build-main.yml` 串联 `npm run check:calcmetrics-daily`，`package.json` 补充 `test:periods-core`、`test:m6-ui` 快捷脚本，守护脚本与核心回归纳入日常执行清单。
+- 测试：`npm run lint`、`npm run check:calcmetrics-daily`、`npm run test:periods-core`、`npm run test:m6-ui`、`npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`、`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。

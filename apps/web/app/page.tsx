@@ -66,9 +66,9 @@ function attachPrevClose(
   for (const pos of positions) {
     const prevClose = resolvePrevClose(pos.symbol, evalDate, closePrices);
     if (prevClose !== undefined) {
-      (pos as any).prevClose = prevClose;
+      pos.prevClose = prevClose;
     } else {
-      delete (pos as any).prevClose;
+      delete pos.prevClose;
     }
   }
 }
@@ -94,9 +94,9 @@ function buildCloseFallbacks(positions: Position[]): CloseFallbackMap {
   for (const pos of positions) {
     const symbol = pos.symbol?.trim().toUpperCase();
     if (!symbol) continue;
-    const price = Number((pos as any).last);
+    const price = Number(pos.last);
     if (!Number.isFinite(price) || price <= 0) continue;
-    if ((pos as any).priceOk === false) continue;
+    if (pos.priceOk === false) continue;
     if (fallbackMap[symbol] !== undefined) continue;
     fallbackMap[symbol] = price;
   }
@@ -303,26 +303,29 @@ export default function DashboardPage() {
     setPeriodHealth(null);
   }, [setMissingCloseSummaries, setMissingDismissed, setPeriodHealth]);
 
-  const updateMissingCloseState = (summaries: MissingCloseSummary[]) => {
-    const prev = summaryRef.current;
-    if (summaries.length === 0) {
-      summaryRef.current = [];
-      setMissingCloseSummaries([]);
-      if (prev.length > 0) {
+  const updateMissingCloseState = useCallback(
+    (summaries: MissingCloseSummary[]) => {
+      const prev = summaryRef.current;
+      if (summaries.length === 0) {
+        summaryRef.current = [];
+        setMissingCloseSummaries([]);
+        if (prev.length > 0) {
+          setMissingDismissed(false);
+        }
+        syncPeriodHealth();
+        return;
+      }
+
+      if (missingDismissed && !areSummariesEqual(prev, summaries)) {
         setMissingDismissed(false);
       }
+
+      summaryRef.current = summaries.slice();
+      setMissingCloseSummaries(summaries);
       syncPeriodHealth();
-      return;
-    }
-
-    if (missingDismissed && !areSummariesEqual(prev, summaries)) {
-      setMissingDismissed(false);
-    }
-
-    summaryRef.current = summaries.slice();
-    setMissingCloseSummaries(summaries);
-    syncPeriodHealth();
-  };
+    },
+    [missingDismissed, setMissingCloseSummaries, setMissingDismissed, syncPeriodHealth],
+  );
 
   const handleIgnoreMissing = () => {
     if (summaryRef.current.length === 0) return;
@@ -352,10 +355,10 @@ export default function DashboardPage() {
         for (const pos of posList) {
           const cached = getCachedRealtimeQuote(pos.symbol);
           if (cached?.price !== undefined) {
-            (pos as any).last = cached.price;
-            (pos as any).priceOk = true;
-            (pos as any).stale = true;
-            (pos as any).lastUpdatedAt = cached.updatedAt;
+            pos.last = cached.price;
+            pos.priceOk = true;
+            pos.stale = true;
+            pos.lastUpdatedAt = cached.updatedAt;
           }
 
           try {
@@ -369,31 +372,31 @@ export default function DashboardPage() {
             }
 
             if (result && typeof result.price === 'number' && result.price !== 1) {
-              (pos as any).last = result.price;
-              (pos as any).priceOk = result.priceOk !== false;
-              (pos as any).stale = Boolean(result.stale);
-              (pos as any).lastUpdatedAt = result.updatedAt ?? Date.now();
-            } else if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-              (pos as any).priceOk = true;
-              (pos as any).stale = true;
+              pos.last = result.price;
+              pos.priceOk = result.priceOk !== false;
+              pos.stale = Boolean(result.stale);
+              pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+            } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+              pos.priceOk = true;
+              pos.stale = true;
             } else {
-              (pos as any).last = NaN;
-              (pos as any).priceOk = false;
-              (pos as any).stale = true;
+              pos.last = NaN;
+              pos.priceOk = false;
+              pos.stale = true;
             }
-          } catch (e) {
-            if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-              (pos as any).priceOk = true;
-              (pos as any).stale = true;
+          } catch {
+            if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+              pos.priceOk = true;
+              pos.stale = true;
             } else {
-              (pos as any).last = NaN;
-              (pos as any).priceOk = false;
-              (pos as any).stale = true;
+              pos.last = NaN;
+              pos.priceOk = false;
+              pos.stale = true;
             }
           }
         }
 
-        if (posList.some(p => !(p as any).priceOk)) {
+        if (posList.some(p => p.priceOk === false)) {
           if (freezeDate) {
             setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
           } else {
@@ -454,10 +457,10 @@ export default function DashboardPage() {
           dailyResults,
           trades: dbTrades,
           positions: posList,
-          metrics: (metrics as MetricsContract | null),
+          metrics,
         });
         syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-        setMetrics(metrics as any);
+        setMetrics(metrics);
 
         setTrades(dbTrades);
         setPositions(posList);
@@ -472,7 +475,12 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, []);
+  }, [
+    clearPeriodHealthState,
+    setMetrics,
+    syncPeriodHealth,
+    updateMissingCloseState,
+  ]);
 
   // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
@@ -501,10 +509,10 @@ export default function DashboardPage() {
     for (const pos of posList) {
       const cached = getCachedRealtimeQuote(pos.symbol);
       if (cached?.price !== undefined) {
-        (pos as any).last = cached.price;
-        (pos as any).priceOk = true;
-        (pos as any).stale = true;
-        (pos as any).lastUpdatedAt = cached.updatedAt;
+        pos.last = cached.price;
+        pos.priceOk = true;
+        pos.stale = true;
+        pos.lastUpdatedAt = cached.updatedAt;
       }
 
       try {
@@ -517,31 +525,31 @@ export default function DashboardPage() {
           }
         }
         if (result && typeof result.price === 'number' && result.price !== 1) {
-          (pos as any).last = result.price;
-          (pos as any).priceOk = result.priceOk !== false;
-          (pos as any).stale = Boolean(result.stale);
-          (pos as any).lastUpdatedAt = result.updatedAt ?? Date.now();
-        } else if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-          (pos as any).priceOk = true;
-          (pos as any).stale = true;
+          pos.last = result.price;
+          pos.priceOk = result.priceOk !== false;
+          pos.stale = Boolean(result.stale);
+          pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+        } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+          pos.priceOk = true;
+          pos.stale = true;
         } else {
-          (pos as any).last = NaN;
-          (pos as any).priceOk = false;
-          (pos as any).stale = true;
+          pos.last = NaN;
+          pos.priceOk = false;
+          pos.stale = true;
         }
-      } catch (e) {
-        if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-          (pos as any).priceOk = true;
-          (pos as any).stale = true;
+      } catch {
+        if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+          pos.priceOk = true;
+          pos.stale = true;
         } else {
-          (pos as any).last = NaN;
-          (pos as any).priceOk = false;
-          (pos as any).stale = true;
+          pos.last = NaN;
+          pos.priceOk = false;
+          pos.stale = true;
         }
       }
     }
 
-    if (posList.some(p => !(p as any).priceOk)) {
+    if (posList.some(p => p.priceOk === false)) {
       clearPeriodHealthState();
       throw new Error(
         freezeDate
@@ -606,10 +614,10 @@ export default function DashboardPage() {
       dailyResults,
       trades: tradesSnapshot,
       positions: posList,
-      metrics: (metrics as MetricsContract | null),
+      metrics,
     });
     syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-    setMetrics(metrics as any);
+    setMetrics(metrics);
 
     setTrades(tradesSnapshot);
     setPositions(posList);
@@ -626,23 +634,23 @@ export default function DashboardPage() {
         positions.map(existing => [existing.symbol?.trim().toUpperCase(), existing] as const),
       );
       const posList: Position[] = replay.positions.map(pos => {
-        const clone = { ...pos } as Position;
+        const clone: Position = { ...pos };
         const cached = getCachedRealtimeQuote(pos.symbol);
         if (cached?.price !== undefined) {
-          (clone as any).last = cached.price;
-          (clone as any).priceOk = true;
-          (clone as any).stale = true;
-          (clone as any).lastUpdatedAt = cached.updatedAt;
+          clone.last = cached.price;
+          clone.priceOk = true;
+          clone.stale = true;
+          clone.lastUpdatedAt = cached.updatedAt;
         } else {
           const prev = prevBySymbol.get(pos.symbol?.trim().toUpperCase());
           if (prev) {
-            (clone as any).last = (prev as any).last;
-            (clone as any).priceOk = (prev as any).priceOk;
-            (clone as any).lastUpdatedAt = (prev as any).lastUpdatedAt;
-            (clone as any).stale = true;
+            clone.last = prev.last;
+            clone.priceOk = prev.priceOk;
+            clone.lastUpdatedAt = prev.lastUpdatedAt;
+            clone.stale = true;
           } else {
-            (clone as any).priceOk = false;
-            (clone as any).stale = true;
+            clone.priceOk = false;
+            clone.stale = true;
           }
         }
         return clone;
@@ -701,10 +709,10 @@ export default function DashboardPage() {
         dailyResults,
         trades: dbTrades,
         positions: posList,
-        metrics: (metrics as MetricsContract | null),
+        metrics,
       });
       syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-      setMetrics(metrics as any);
+      setMetrics(metrics);
 
       setTrades(dbTrades);
       setPositions(posList);

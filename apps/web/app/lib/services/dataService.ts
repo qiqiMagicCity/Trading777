@@ -368,8 +368,8 @@ function normalizePositionsForStore(
     if (avgPrice === undefined || !Number.isFinite(avgPrice)) continue;
     const lastPrice = coerceNumber(raw.last);
     const prevClose =
-      coerceNumber((raw as any).prevClose) ??
-      coerceNumber((raw as any).previousClose);
+      coerceNumber(raw.prevClose) ??
+      coerceNumber(raw.previousClose as unknown);
     const absQty = Math.abs(qty);
     const isShort = qty < 0;
     const symbol = toUpperSafe(raw.symbol);

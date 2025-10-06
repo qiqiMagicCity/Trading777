@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import React from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import { DashboardMetrics } from "../DashboardMetrics";
@@ -231,6 +231,7 @@ describe("DashboardMetrics period cards", () => {
     ];
 
     const period = calcWtdMtdYtdFromSnapshots(daily, "2024-09-25");
+    const degradeFlags = { wtd: false, mtd: true, ytd: true } as const;
     act(() => {
       useStore.setState({
         metrics: {
@@ -238,7 +239,7 @@ describe("DashboardMetrics period cards", () => {
           M12: period.mtd as any,
           M13: period.ytd as any,
           _period: {
-            degraded: period.degraded,
+            degraded: degradeFlags,
             status: period.status,
             diagnostics: period.diagnostics,
           },
@@ -246,7 +247,7 @@ describe("DashboardMetrics period cards", () => {
         periodHealth: {
           status: "degraded",
           summaries: [],
-          degraded: period.degraded,
+          degraded: degradeFlags,
         },
       });
     });
@@ -428,5 +429,168 @@ describe("DashboardMetrics period cards", () => {
     expect(tooltip).toContain("realized");
     expect(tooltip).toContain("unrealized");
     expect(tooltip).toContain("1,200");
+  });
+});
+
+describe("DashboardMetrics intraday breakdown", () => {
+  afterEach(() => {
+    act(() => {
+      useStore.setState({ metrics: null, periodHealth: null });
+    });
+  });
+
+  it("renders tooltip with NY-day breakdown and sums MTM components", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          M6: { total: 90.12 },
+          _m6: {
+            realizedToday: 0,
+            mtmOvernight: 45.12,
+            mtmIntradayOpen: 45,
+            warnings: [],
+          },
+        } as any,
+        periodHealth: null,
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    const card = screen.getByTestId("metric-m6");
+    expect(within(card).getByText(/90\.12/)).toBeInTheDocument();
+
+    const trigger = within(card).getByRole("button", {
+      name: "当日盈亏拆解（纽约日口径）",
+    });
+    const tooltip = trigger.getAttribute("title") || "";
+    expect(tooltip).toContain("纽约日口径（America/New_York），20:00–23:59 ET 仍计入当日。");
+    expect(tooltip).toContain("已实现盈亏（realized_today）：$0.00");
+    expect(tooltip).toContain("隔夜 MTM（mtm_overnight）：$45.12");
+    expect(tooltip).toContain("日内 MTM（mtm_intraday_open）：$45.00");
+    expect(tooltip).toContain("合计：$90.12");
+  });
+
+  it("shows realized-only short-cover scenario with negative totals", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          M6: { total: -270.12 },
+          _m6: {
+            realizedToday: -270.12,
+            mtmOvernight: 0,
+            mtmIntradayOpen: 0,
+            warnings: [],
+          },
+        } as any,
+        periodHealth: null,
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    const card = screen.getByTestId("metric-m6");
+    expect(within(card).getByText(/-\$270\.12/)).toBeInTheDocument();
+
+    const trigger = within(card).getByRole("button", {
+      name: "当日盈亏拆解（纽约日口径）",
+    });
+    const tooltip = trigger.getAttribute("title") || "";
+    expect(tooltip).toContain("已实现盈亏（realized_today）：-$270.12");
+    expect(tooltip).toContain("隔夜 MTM（mtm_overnight）：$0.00");
+    expect(tooltip).toContain("日内 MTM（mtm_intraday_open）：$0.00");
+  });
+
+  it("keeps zero totals when intraday legs exist but sum to zero", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          M6: { total: 0 },
+          _m6: {
+            realizedToday: 0,
+            mtmOvernight: 0,
+            mtmIntradayOpen: 0,
+            warnings: [],
+          },
+        } as any,
+        periodHealth: null,
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    const card = screen.getByTestId("metric-m6");
+    expect(within(card).getByText("$0.00")).toBeInTheDocument();
+
+    const trigger = within(card).getByRole("button", {
+      name: "当日盈亏拆解（纽约日口径）",
+    });
+    expect(trigger).toHaveAttribute("title", expect.stringContaining("合计：$0.00"));
+  });
+
+  it("falls back to 待补充 when no intraday snapshot is present", () => {
+    act(() => {
+      useStore.setState({ metrics: {} as any, periodHealth: null });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    const card = screen.getByTestId("metric-m6");
+    expect(card).toHaveTextContent("待补充");
+    const trigger = within(card).getByRole("button", {
+      name: "当日盈亏拆解（纽约日口径）",
+    });
+    expect(trigger).toHaveAttribute("title", expect.stringContaining("无当日快照"));
+  });
+
+  it("surfaces parse failures and warnings inside tooltip", () => {
+    act(() => {
+      useStore.setState({
+        metrics: {
+          tradingDateStr: "2025-05-01",
+          M6: { total: 0 },
+          _m6: {
+            realizedToday: "1,200",
+            mtmOvernight: 0,
+            mtmIntradayOpen: 0,
+            warnings: ["SafePrice: TSLA 缺少当日均价，已按 0 计入。"],
+          },
+          _period: {
+            diagnostics: {
+              intraday: {
+                reason: "DEGEN_PARSE_FAILED",
+                parseErrors: [
+                  {
+                    code: "PARSE_NUM_FAILED",
+                    reason: "INVALID_FORMAT",
+                    value: "1,200",
+                    trimmed: "1,200",
+                    field: "realized_today",
+                    day: "2025-05-01",
+                  },
+                ],
+              },
+            },
+          },
+        } as any,
+        periodHealth: null,
+      });
+    });
+
+    render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
+
+    const card = screen.getByTestId("metric-m6");
+    expect(within(card).getByText("$0.00")).toBeInTheDocument();
+
+    const trigger = within(card).getByRole("button", {
+      name: "当日盈亏拆解（纽约日口径）",
+    });
+    const tooltip = trigger.getAttribute("title") || "";
+    expect(tooltip).toContain("退化原因：解析失败（DEGEN_PARSE_FAILED）");
+    expect(tooltip).toContain("⚠️ SafePrice: TSLA 缺少当日均价，已按 0 计入。");
+    expect(tooltip).toContain(
+      "解析失败：realized_today：1 条（示例 2025-05-01→1,200）",
+    );
+    expect(trigger.className).toContain("bg-amber-100");
   });
 });

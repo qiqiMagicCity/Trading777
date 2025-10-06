@@ -1953,7 +1953,15 @@ export function calcMetricsInternal(
 
   const providedEvalDay = resolveNyDay(options.periodEvalYmd);
   const providedUiTradeDay = resolveNyDay(options.tradingDateStr);
-  const periodEvalStr = providedEvalDay ?? nyTodayStr();
+  const freezeEvalDay = resolveNyDay(
+    (typeof process !== "undefined" &&
+      process.env.NEXT_PUBLIC_FREEZE_DATE) ||
+      (typeof window !== "undefined" &&
+        (window as unknown as Record<string, unknown>)
+          .NEXT_PUBLIC_FREEZE_DATE) ||
+      undefined,
+  );
+  const periodEvalStr = providedEvalDay ?? freezeEvalDay ?? nyTodayStr();
   const evalAnchorNY = toNY(`${periodEvalStr}T12:00:00Z`);
   const uiTradeDayYmd =
     providedUiTradeDay ?? getLatestTradingDayStr(evalAnchorNY);
@@ -2287,7 +2295,7 @@ export function normalizeMetrics(input: any): MetricsContract {
     const win = Number(value?.win ?? value?.W ?? 0);
     const loss = Number(value?.loss ?? value?.L ?? 0);
     const flat = Number(value?.flat ?? value?.F ?? 0);
-    let rateRaw = value?.rate ?? value?.winRate ?? value?.winRatePct;
+    const rateRaw = value?.rate ?? value?.winRate ?? value?.winRatePct;
     let rate = Number(rateRaw);
     if (!Number.isFinite(rate)) {
       const denom = win + loss;

@@ -54,12 +54,17 @@ function toSymbolFirstMap(raw: unknown): ClosePriceMap {
   return result;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
-    const symbol = normaliseSymbol((payload as any)?.symbol);
-    const date = normaliseDate((payload as any)?.date);
-    const close = normalisePrice((payload as any)?.close);
+    const body = isRecord(payload) ? payload : {};
+    const symbol = normaliseSymbol(body.symbol);
+    const date = normaliseDate(body.date);
+    const close = normalisePrice(body.close);
 
     if (!symbol || !date || close === null) {
       return new Response(JSON.stringify({ error: 'symbol,date,close required' }), { status: 400 });
@@ -69,7 +74,7 @@ export async function POST(req: NextRequest) {
     try {
       const txt = await fs.readFile(FILE_PATH, 'utf8');
       data = toSymbolFirstMap(JSON.parse(txt || '{}'));
-    } catch (_err) {
+    } catch {
       data = {};
     }
 

@@ -1,7 +1,7 @@
 import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 /**
- * timezone.ts – Helpers to ensure the site consistently uses New York (America/New_York) time,
+ * timezone.ts – Helpers to ensure the site consistently uses New York (America/New_York) time,
  * regardless of server or browser locale.
  *
  * 统一处理纽约时区（America/New_York）工具函数：
