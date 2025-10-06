@@ -201,7 +201,9 @@ export async function selfcheckM4(...args: RunAllArgs): Promise<M4SelfcheckRepor
       entry.legs.filter((leg) => leg.into === "M4").length > 0 &&
       entry.legs.filter((leg) => leg.into?.startsWith("M5")).length > 0;
     if (historyQty > 0 && tradeQty - historyQty > 1e-6 && todayQty <= 1e-6 && !mixed) {
-      const [symbol, time] = key.split("|");
+      const [symbolRaw, timeRaw] = key.split("|");
+      const symbol = symbolRaw ?? "?";
+      const time = timeRaw ?? "?";
       issues.push({
         symbol,
         reason: "MIXED_MATCH_NOT_SPLIT",

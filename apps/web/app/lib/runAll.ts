@@ -912,7 +912,6 @@ function runAllCore(
     ...(periodMeta ? { _period: periodMeta } : {}),
     aux: {
       breakdown,
-      breakdown,
       m6PriceChange: priceChange_r,
       m6PrevRealizedTotal: prevRealized_r,
       m6FifoToday: M5_2_r,
