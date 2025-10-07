@@ -1,26 +1,21 @@
-// 无基线 → 首日 ΔU = 0
 import { calcWtdMtdYtdFromSnapshots } from "../../lib/metrics";
 
-const d = (date: string, realized: number, unrealized: number) => ({
-  date,
-  realized,
-  unrealized,
-});
-
-describe("WTD/MTD/YTD: no baseline snapshot → first-day ΔU=0", () => {
-  it("WTD uses only in-window change when no prior snapshot", () => {
-    // Mon/Tue/Wed，仅窗口内三天；无周日前的任何快照
+describe("WTD/MTD/YTD: 缺少基线时直接退化", () => {
+  it("returns degraded status and reason when only eval-day snapshot exists", () => {
     const daily = [
-      d("2025-09-22T21:00:00Z", 3, 8),
-      d("2025-09-23T21:00:00Z", 2, 12),
-      d("2025-09-24T21:00:00Z", 0, 15),
+      { date: "2025-09-24", realized: 5, unrealized: 40 },
     ];
-    const r = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
-    expect(Number(r.wtd.toFixed(2))).toBe(20.0);
-    expect(Number(r.mtd.toFixed(2))).toBe(20.0);
-    expect(Number(r.ytd.toFixed(2))).toBe(20.0);
-    expect(r.status.wtd).toBe("ok_zero");
-    expect(r.status.mtd).toBe("ok_zero");
-    expect(r.status.ytd).toBe("ok_zero");
+    const result = calcWtdMtdYtdFromSnapshots(daily, "2025-09-24");
+
+    expect(Number.isNaN(result.wtd)).toBe(true);
+    expect(Number.isNaN(result.mtd)).toBe(true);
+    expect(Number.isNaN(result.ytd)).toBe(true);
+    expect(result.degraded).toEqual({ wtd: true, mtd: true, ytd: true });
+    expect(result.status).toEqual({ wtd: "degraded", mtd: "degraded", ytd: "degraded" });
+    expect(result.diagnostics.wtd.reason).toBe("DEGEN_NO_BASELINE");
+    expect(result.diagnostics.mtd.reason).toBe("DEGEN_NO_BASELINE");
+    expect(result.diagnostics.ytd.reason).toBe("DEGEN_NO_BASELINE");
+    expect(result.breakdown.wtd.baselineMode).toBe("missing");
+    expect(result.diagnostics.wtd.baselineMeta).toBeUndefined();
   });
 });

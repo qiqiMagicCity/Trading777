@@ -2,6 +2,7 @@ import { calcMetrics } from "../metrics";
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import * as timezone from "@/lib/timezone";
+import { previousTradingDay } from "@/lib/marketHours";
 
 describe("M4 pre-open behavior", () => {
   afterEach(() => {
@@ -48,7 +49,60 @@ describe("M4 pre-open behavior", () => {
 
     const positions: Position[] = [];
 
-    const metrics = calcMetrics(trades, positions, []);
+    const tradeDay = timezone.getLatestTradingDayStr();
+    const metrics = calcMetrics(trades, positions, [], {
+      tradingDateStr: tradeDay,
+      periodEvalYmd: tradeDay,
+    });
+
+    expect(metrics.M4).toBe(200);
+  });
+
+  it("should surface Friday results on Monday before the market opens", () => {
+    jest
+      .spyOn(timezone, "nowNY")
+      .mockReturnValue(new Date("2025-09-29T08:15:00-04:00"));
+
+    const trades: EnrichedTrade[] = [
+      {
+        id: 1,
+        symbol: "AAPL",
+        action: "buy",
+        price: 10,
+        quantity: 100,
+        date: "2025-09-25T10:00:00-04:00",
+        weekday: 4,
+        tradeCount: 1,
+        amount: 1000,
+        breakEvenPrice: 10,
+        realizedPnl: 0,
+        quantityAfter: 100,
+        averageCost: 10,
+      },
+      {
+        id: 2,
+        symbol: "AAPL",
+        action: "sell",
+        price: 12,
+        quantity: 100,
+        date: "2025-09-26T15:59:00-04:00",
+        weekday: 5,
+        tradeCount: 2,
+        amount: 1200,
+        breakEvenPrice: 10,
+        realizedPnl: 200,
+        quantityAfter: 0,
+        averageCost: 10,
+      },
+    ];
+
+    const positions: Position[] = [];
+
+    const tradeDay = timezone.getLatestTradingDayStr();
+    const metrics = calcMetrics(trades, positions, [], {
+      tradingDateStr: tradeDay,
+      periodEvalYmd: tradeDay,
+    });
 
     expect(metrics.M4).toBe(200);
   });
@@ -97,7 +151,11 @@ describe("M4 pre-open behavior", () => {
 
       const positions: Position[] = [];
 
-      const metrics = calcMetrics(trades, positions, []);
+      const tradeDay = previousTradingDay(timezone.getLatestTradingDayStr());
+      const metrics = calcMetrics(trades, positions, [], {
+        tradingDateStr: tradeDay,
+        periodEvalYmd: tradeDay,
+      });
 
       expect(metrics.M4).toBe(200);
     } finally {

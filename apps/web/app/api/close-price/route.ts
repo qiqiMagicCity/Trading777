@@ -1,8 +1,9 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
 const FILE_PATH = path.join(process.cwd(), 'apps/web/public/close_prices.json');
+const DAILY_RESULTS_PATH = path.join(process.cwd(), 'apps/web/public/dailyResult.json');
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type ClosePriceMap = Record<string, Record<string, number>>;
@@ -54,12 +55,42 @@ function toSymbolFirstMap(raw: unknown): ClosePriceMap {
   return result;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+async function readJson<T>(filePath: string, fallback: T): Promise<T> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(raw || 'null') ?? fallback;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return fallback;
+    }
+    throw err;
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const kind = (searchParams.get('kind') ?? '').toLowerCase();
+
+  if (kind === 'dailyresults') {
+    const payload = await readJson(DAILY_RESULTS_PATH, [] as unknown[]);
+    return NextResponse.json(payload);
+  }
+
+  const payload = await readJson(FILE_PATH, {} as Record<string, unknown>);
+  return NextResponse.json(payload);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json();
-    const symbol = normaliseSymbol((payload as any)?.symbol);
-    const date = normaliseDate((payload as any)?.date);
-    const close = normalisePrice((payload as any)?.close);
+    const body = isRecord(payload) ? payload : {};
+    const symbol = normaliseSymbol(body.symbol);
+    const date = normaliseDate(body.date);
+    const close = normalisePrice(body.close);
 
     if (!symbol || !date || close === null) {
       return new Response(JSON.stringify({ error: 'symbol,date,close required' }), { status: 400 });
@@ -69,7 +100,7 @@ export async function POST(req: NextRequest) {
     try {
       const txt = await fs.readFile(FILE_PATH, 'utf8');
       data = toSymbolFirstMap(JSON.parse(txt || '{}'));
-    } catch (_err) {
+    } catch {
       data = {};
     }
 

@@ -15,7 +15,7 @@ describe("replay days generation", () => {
     for (const d of days) {
       const res = await runAll(d, positions, trades, prices, { dailyResults: daily }, { evalDate: d });
       const m = normalizeMetrics(res);
-      const totalRealized = m.M4.total + m.M5.fifo;
+      const totalRealized = m.M4 + m.M5.fifo;
       const prevReal = daily.reduce((s: number, r: any) => s + r.realized, 0);
       const realized = Math.round((totalRealized - prevReal) * 100) / 100;
       const unrealized = Math.round(m.M3 * 100) / 100;
@@ -39,7 +39,7 @@ describe("replay days generation", () => {
       const relevantTrades = trades.filter(t => t.date <= d);
       const res = await runAll(d, positions, relevantTrades, prices, { dailyResults: daily }, { evalDate: d });
       const m = normalizeMetrics(res);
-      const totalRealized = m.M4.total + m.M5.fifo;
+      const totalRealized = m.M4 + m.M5.fifo;
       const prevReal = daily.reduce((s: number, r: any) => s + r.realized, 0);
       const realized = Math.round((totalRealized - prevReal) * 100) / 100;
       const unrealized = Math.round(m.M3 * 100) / 100;

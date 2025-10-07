@@ -4,6 +4,7 @@ import type { DailyResult } from "@/lib/types";
 describe("calcWtdMtdYtd", () => {
   it("sums realized and end-of-window unrealized across days", () => {
     const daily: DailyResult[] = [
+      { date: "2023-12-29", realized: 0, unrealized: 0 },
       { date: "2024-01-01", realized: 100, unrealized: 50, unrealizedDelta: 50 },
       { date: "2024-01-02", realized: 0, unrealized: -20, unrealizedDelta: -70 },
       { date: "2024-01-03", realized: 10, unrealized: 30, unrealizedDelta: 50 },
@@ -14,6 +15,7 @@ describe("calcWtdMtdYtd", () => {
 
   it("handles timezone-aware daily result timestamps", () => {
     const daily: DailyResult[] = [
+      { date: "2023-12-29", realized: 0, unrealized: 0 },
       {
         date: "2024-01-01T23:59:59-05:00",
         realized: 40,

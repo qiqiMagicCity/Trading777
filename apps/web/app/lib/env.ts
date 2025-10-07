@@ -14,7 +14,11 @@ export function lsGet(key: string): string | null {
 export function lsSet(key: string, val: string): void {
   const ls = safeLocalStorage();
   if (!ls) return;
-  try { ls.setItem(key, val); } catch {}
+  try {
+    ls.setItem(key, val);
+  } catch {
+    // 忽略 Safari 私密模式或容量不足导致的写入异常
+  }
 }
 
 export const ENV = {

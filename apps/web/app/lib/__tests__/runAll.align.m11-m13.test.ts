@@ -32,7 +32,8 @@ describe("runAll aligns M11/M12/M13 with snapshot-based WTD/MTD/YTD", () => {
     expect(result.M11).toBe(basePeriods.M11);
     expect(result.M12).toBe(basePeriods.M12);
     expect(result.M13).toBe(basePeriods.M13);
-    expect(result._period).toBeUndefined();
+    expect(result._period?.diagnostics?.wtd?.periodEvalYmd).toBe(evalDate);
+    expect(result._period?.diagnostics?.wtd?.uiTradeDayYmd).toBe(evalDate);
   });
 
   it("propagates snapshot totals when computePeriods is modified", async () => {
@@ -70,7 +71,32 @@ describe("runAll aligns M11/M12/M13 with snapshot-based WTD/MTD/YTD", () => {
     expect(result.M11).toBe(snapshot.wtd);
     expect(result.M12).toBe(snapshot.mtd);
     expect(result.M13).toBe(snapshot.ytd);
-    expect(result._period).toBeUndefined();
+    expect(result._period?.diagnostics?.wtd?.periodEvalYmd).toBe(evalDate);
+  });
+
+  it("surfaces parse failures from imported daily snapshots", async () => {
+    const evalDate = "2025-09-24";
+    const dailyResults = [
+      { date: "2025-09-23", realized: "10", unrealized: "100", unrealizedDelta: "5" },
+      { date: "2025-09-24", realized: "oops", unrealized: "105", unrealizedDelta: "5" },
+    ];
+
+    const result = await runAll(
+      evalDate,
+      [],
+      [] as RawTrade[],
+      {},
+      { dailyResults: dailyResults as unknown as DailyResult[] },
+      { evalDate },
+    );
+
+    expect(result._period?.diagnostics?.wtd?.reason).toBe("DEGEN_PARSE_FAILED");
+    expect(result._period?.diagnostics?.wtd?.parseErrors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "realized", value: "oops" }),
+      ]),
+    );
+    expect(result._period?.degraded?.wtd).toBe(true);
   });
 
   it("preserves degraded flags from calcMetrics", async () => {
@@ -79,8 +105,11 @@ describe("runAll aligns M11/M12/M13 with snapshot-based WTD/MTD/YTD", () => {
       { date: evalDate, realized: 8, unrealized: 12, unrealizedDelta: 12 },
     ];
 
-    const metrics = calcMetrics([], [], dailyResults, { tradingDateStr: evalDate });
-    expect(metrics._period).toBeUndefined();
+    const metrics = calcMetrics([], [], dailyResults, {
+      tradingDateStr: evalDate,
+      periodEvalYmd: evalDate,
+    });
+    expect(metrics._period).toBeDefined();
 
     const result = await runAll(
       evalDate,

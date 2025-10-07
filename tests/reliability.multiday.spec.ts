@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { runAll } from '../apps/web/app/lib/runAll';
+import { getLatestTradingDayStr } from '../apps/web/app/lib/timezone';
 import { computePeriods } from '../apps/web/app/lib/metrics-periods';
 
 describe('reliability multi-day baseline', () => {
@@ -44,13 +45,55 @@ describe('reliability multi-day baseline', () => {
     expect(res.M12).toBeCloseTo(8952.5, 2);
     expect(res.M13).toBeCloseTo(9552.5, 2);
 
-    const nflxRows = res.aux.breakdown.filter(
+    const bucket = res.aux.breakdown as any;
+    const breakdownRows = Array.isArray(bucket?.all) ? bucket.all : bucket ?? [];
+    const nflxRows = breakdownRows.filter(
       (r: any) => r.symbol === 'NFLX' && r.time.includes('09:40'),
     );
     const hasM4 = nflxRows.some((r: any) => r.into === 'M4' && r.qty === 100);
     const hasM52 = nflxRows.some((r: any) => r.into === 'M5.2' && r.qty === 20);
     expect(hasM4).toBe(true);
     expect(hasM52).toBe(true);
+  });
+
+  it('keeps Friday data when evaluating before Monday open', async () => {
+    const mondayPreOpen = new Date('2025-09-29T08:15:00-04:00');
+    const tradingDay = getLatestTradingDayStr(mondayPreOpen);
+    expect(tradingDay).toBe('2025-09-26');
+
+    const trades = [
+      {
+        date: '2025-09-25T10:00:00-04:00',
+        side: 'BUY' as const,
+        symbol: 'AAPL',
+        qty: 100,
+        price: 10,
+      },
+      {
+        date: '2025-09-26T15:59:00-04:00',
+        side: 'SELL' as const,
+        symbol: 'AAPL',
+        qty: 100,
+        price: 12,
+      },
+    ];
+    const close = {
+      AAPL: {
+        '2025-09-25': 10,
+        '2025-09-26': 12,
+      },
+    };
+
+    const res = await runAll(
+      tradingDay,
+      [],
+      trades,
+      close,
+      { dailyResults: [] },
+      { evalDate: mondayPreOpen },
+    );
+
+    expect(res.M4).toBeCloseTo(200, 6);
   });
 
   it('ignores future-dated daily results for M9 while preserving other period windows', () => {

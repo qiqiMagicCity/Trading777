@@ -1,10 +1,36 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { nowNY } from '@/lib/timezone';
+import { nowNY, ymdInNY } from '@/lib/timezone';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale/zh-CN';
-import { importData, exportData, importClosePrices, getAllPrices } from '@/lib/services/dataService';
+import {
+  importData,
+  exportData,
+  importClosePrices,
+  getAllPrices,
+} from '@/lib/services/dataService';
+import type { RawTrade, Trade, Position } from '@/lib/services/dataService';
+
+type DatasetImportPayload = {
+  trades: Array<RawTrade | Trade>;
+  positions: Array<Partial<Position> & Record<string, unknown>>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function isDatasetPayloadCandidate(value: unknown): value is {
+  trades: unknown[];
+  positions: unknown[];
+} {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.trades) &&
+    Array.isArray(value.positions)
+  );
+}
 
 export function Header() {
   const [now, setNow] = useState(nowNY());
@@ -65,25 +91,31 @@ export function Header() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
-    input.onchange = async (e) => {
-      const target = e.target as HTMLInputElement;
+    input.addEventListener('change', async (event) => {
+      const target = event.target as HTMLInputElement;
       const file = target.files?.[0];
       if (!file) return;
 
       try {
         const text = await file.text();
-        const data = JSON.parse(text);
-        if (!data.trades || !data.positions) {
+        const parsed = JSON.parse(text) as unknown;
+        if (!isDatasetPayloadCandidate(parsed)) {
           throw new Error('Invalid JSON format. "trades" and "positions" arrays are required.');
         }
-        await importData(data as any);
+
+        const payload: DatasetImportPayload = {
+          trades: parsed.trades as DatasetImportPayload['trades'],
+          positions: parsed.positions as DatasetImportPayload['positions'],
+        };
+
+        await importData(payload);
         alert('导入成功! 页面将刷新。');
         window.location.reload();
       } catch (err) {
         console.error(err);
         alert(`导入失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-    };
+    });
     input.click();
   };
 
@@ -116,13 +148,13 @@ export function Header() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
-    input.onchange = async (e) => {
-      const target = e.target as HTMLInputElement;
+    input.addEventListener('change', async (event) => {
+      const target = event.target as HTMLInputElement;
       const file = target.files?.[0];
       if (!file) return;
       try {
         const text = await file.text();
-        const json = JSON.parse(text);
+        const json = JSON.parse(text) as unknown;
         if (!json || typeof json !== 'object' || Array.isArray(json)) {
           throw new Error('文件格式不正确，需为嵌套对象格式');
         }
@@ -132,7 +164,7 @@ export function Header() {
         console.error(err);
         alert(`导入失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-    };
+    });
     input.click();
   };
 
@@ -154,7 +186,7 @@ export function Header() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `close_prices_${nowNY().toISOString().slice(0, 10)}.json`;
+      a.download = `close_prices_${ymdInNY()}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

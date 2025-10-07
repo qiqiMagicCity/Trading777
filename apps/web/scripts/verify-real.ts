@@ -6,12 +6,13 @@ import { runAll } from "@/app/lib/runAll";
 import { normalizeMetrics } from "@/app/lib/metrics";
 import { assertSchema } from "@/app/lib/schemas/assertSchema";
 import { Trades, Prices, Positions, DailyResults } from "@/app/lib/schemas/real";
+import type { DailyResultInput } from "@/app/lib/types";
 
 type AnyRec = Record<string, any>;
 
 // 从新/旧结构中抽取对比口径
 function pickTotals(metrics: AnyRec) {
-  const M4 = Number(metrics?.M4?.total ?? metrics?.M4 ?? 0);
+  const M4 = Number(metrics?.M4 ?? metrics?.M4?.total ?? 0);
   const M5_1 = Number(metrics?.M5?.behavior ?? metrics?.M5_1 ?? 0);
   const M5_2 = Number(metrics?.M5?.fifo ?? metrics?.M5_2 ?? 0);
   const realized = Number(metrics?.realized ?? (M4 + M5_2));
@@ -85,7 +86,10 @@ function loadRealPositions(): { symbol: string; qty: number; avgPrice: number }[
   return assertSchema(arr, Positions);
 }
 
-type DailySnap = { date: string; realized: number; unrealized: number; M6?: number; [k:string]: any };
+type DailySnap = ({ date: string } & Omit<Partial<DailyResultInput>, "date"> & {
+  M6?: number;
+  [k: string]: any;
+});
 function loadDailyResult(): DailySnap[] {
   const base = path.resolve(process.cwd(), "data/real");
   const text = readTextIfExists(path.join(base, "dailyResult.json"));

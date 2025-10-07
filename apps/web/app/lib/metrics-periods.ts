@@ -1,15 +1,11 @@
+import { nyDateStr, nyDateStrSafe, startOfWeekNY, toNY } from './time';
+import type { DailyResultInput } from './types';
+import { selectLatestSnapshotsByNyDay } from './metrics-snapshot-selection';
 import {
-  normalizeToNYMidday,
-  nyDateStr,
-  nyDateStrSafe,
-  startOfWeekNY,
-  startOfMonthNY,
-  startOfYearNY,
-  startOfDayNY,
-  normalizeToNyDay,
-  toNY,
-} from './time';
-import type { DailyResult } from './types';
+  parseSnapshotNumber,
+  type SnapshotFieldParseError,
+  type SnapshotNumericField,
+} from './snapshotNumber';
 
 function addDaysYmd(ymd: string, n: number): string {
   const d = new Date(`${ymd}T00:00:00`);
@@ -21,12 +17,13 @@ function addDaysYmd(ymd: string, n: number): string {
 }
 
 export type Daily = Pick<
-  DailyResult,
+  DailyResultInput,
   'date' | 'realized' | 'unrealized' | 'unrealizedDelta'
 >;
 
 export function sumM9(daily: Daily[], endISO?: string): number {
-  return (daily || []).reduce((s, d) => {
+  let hasParseFailure = false;
+  const total = (daily || []).reduce((s, d) => {
     if (endISO && d?.date) {
       const dt = new Date(d.date);
       if (Number.isFinite(dt.valueOf())) {
@@ -34,8 +31,14 @@ export function sumM9(daily: Daily[], endISO?: string): number {
         if (day > endISO) return s;
       }
     }
-    return s + (d?.realized ?? 0);
+    const parsed = parseSnapshotNumber(d?.realized);
+    if (!parsed.ok) {
+      hasParseFailure = true;
+      return s;
+    }
+    return s + parsed.value;
   }, 0);
+  return hasParseFailure ? Number.NaN : total;
 }
 
 type NormalizedDaily = {
@@ -43,70 +46,80 @@ type NormalizedDaily = {
   realized: number;
   unrealized?: number;
   unrealizedDelta?: number;
+  parseErrors?: SnapshotFieldParseError[];
 };
 
 function normalizeDailyRows(daily: Daily[], endISO: string): NormalizedDaily[] {
-  const dedup = new Map<
-    string,
-    { row: NormalizedDaily; ts: number; order: number }
-  >();
+  const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
-  (daily || []).forEach((entry, idx) => {
-    if (!entry?.date) return;
-    const day =
-      typeof entry.date === 'string'
-        ? nyDateStrSafe(entry.date)
-        : nyDateStr(entry.date);
-    if (!day || day > endISO) return;
+  return latest.map(({ snapshot, nyDay }) => {
+    const inheritedErrors = Array.isArray((snapshot as any)?.parseErrors)
+      ? ((snapshot as any).parseErrors as SnapshotFieldParseError[])
+          .filter((err) => err && typeof err === "object")
+          .map((err) => ({ ...err, day: err.day ?? nyDay }))
+      : [];
 
-    const tsRaw = new Date(normalizeToNyDay(entry.date)).getTime();
-    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
+    const parseErrors: SnapshotFieldParseError[] = [...inheritedErrors];
 
-    const realized = Number(entry.realized ?? 0);
-    const row: NormalizedDaily = {
-      day,
-      realized: Number.isFinite(realized) ? realized : 0,
+    const parseField = (
+      field: SnapshotNumericField,
+      value: unknown,
+      { optional = false }: { optional?: boolean } = {},
+    ): number | undefined => {
+      if (optional && (value === null || value === undefined)) {
+        return undefined;
+      }
+      const parsed = parseSnapshotNumber(value);
+      if (parsed.ok) {
+        return parsed.value;
+      }
+      parseErrors.push({ ...parsed.error, field, day: nyDay });
+      return undefined;
     };
 
-    if (typeof entry.unrealized === 'number' && Number.isFinite(entry.unrealized)) {
-      row.unrealized = entry.unrealized;
+    const realizedValue = parseField('realized', (snapshot as any)?.realized);
+    const row: NormalizedDaily = {
+      day: nyDay,
+      realized: realizedValue ?? 0,
+    };
+
+    const unrealizedValue = parseField('unrealized', (snapshot as any)?.unrealized);
+    if (typeof unrealizedValue === 'number') {
+      row.unrealized = unrealizedValue;
     }
 
-    if (
-      typeof entry.unrealizedDelta === 'number' &&
-      Number.isFinite(entry.unrealizedDelta)
-    ) {
-      row.unrealizedDelta = entry.unrealizedDelta;
+    const unrealizedDeltaValue = parseField(
+      'unrealizedDelta',
+      (snapshot as any)?.unrealizedDelta,
+      { optional: true },
+    );
+    if (typeof unrealizedDeltaValue === 'number') {
+      row.unrealizedDelta = unrealizedDeltaValue;
     }
 
-    const prev = dedup.get(day);
-    if (!prev || ts > prev.ts || (ts === prev.ts && idx > prev.order)) {
-      dedup.set(day, { row, ts, order: idx });
+    if (parseErrors.length > 0) {
+      row.parseErrors = parseErrors;
     }
+
+    return row;
   });
-
-  return Array.from(dedup.values())
-    .sort((a, b) => {
-      if (a.row.day < b.row.day) return -1;
-      if (a.row.day > b.row.day) return 1;
-      if (a.ts < b.ts) return -1;
-      if (a.ts > b.ts) return 1;
-      return a.order - b.order;
-    })
-    .map(({ row }) => row);
 }
 
 function buildDailyPnlMap(
   daily: Daily[],
   rangeStart: string,
   rangeEnd: string,
-): Map<string, number> {
+): { map: Map<string, number>; hasParseFailure: boolean } {
   const normalized = normalizeDailyRows(daily, rangeEnd);
   const map = new Map<string, number>();
   let prevUnrealized: number | undefined;
+  let hasParseFailure = false;
 
   for (const row of normalized) {
     const { day, realized, unrealized, unrealizedDelta } = row;
+    if (row.parseErrors?.length) {
+      hasParseFailure = true;
+    }
     let delta = 0;
 
     if (typeof unrealizedDelta === 'number') {
@@ -116,6 +129,12 @@ function buildDailyPnlMap(
       typeof prevUnrealized === 'number'
     ) {
       delta = unrealized - prevUnrealized;
+    } else if (
+      row.parseErrors?.some((err) =>
+        err.field === 'unrealized' || err.field === 'unrealizedDelta'
+      )
+    ) {
+      hasParseFailure = true;
     }
 
     if (day >= rangeStart && day <= rangeEnd) {
@@ -132,7 +151,7 @@ function buildDailyPnlMap(
     }
   }
 
-  return map;
+  return { map, hasParseFailure };
 }
 
 function sumRange(map: Map<string, number>, startISO: string, endISO: string): number {
@@ -153,7 +172,10 @@ export function sumPeriod(daily: Daily[], startISO: string, endISO: string): num
     return 0;
   }
 
-  const map = buildDailyPnlMap(daily, rangeStart, rangeEnd);
+  const { map, hasParseFailure } = buildDailyPnlMap(daily, rangeStart, rangeEnd);
+  if (hasParseFailure) {
+    return Number.NaN;
+  }
   return sumRange(map, rangeStart, rangeEnd);
 }
 
@@ -211,7 +233,11 @@ export function computeDailyPeriodTotals(
   const yearStart = `${evalDay.slice(0, 4)}-01-01`;
   const yearEnd = `${evalDay.slice(0, 4)}-12-31`;
 
-  const baseMap = buildDailyPnlMap(daily, yearStart, yearEnd);
+  const { map: baseMap, hasParseFailure } = buildDailyPnlMap(
+    daily,
+    yearStart,
+    yearEnd,
+  );
   const calendar = fillCalendar(baseMap, yearStart, yearEnd);
 
   const weekStart = weekStartForEval(evalDay);
@@ -219,9 +245,15 @@ export function computeDailyPeriodTotals(
   const yearEndForYtd =
     options.ytdMode === 'toDate' ? evalDay : yearEnd;
 
-  const wtd = sumRange(calendar, weekStart, evalDay);
-  const mtd = sumRange(calendar, monthStart, evalDay);
-  const ytd = sumRange(calendar, yearStart, yearEndForYtd);
+  const wtd = hasParseFailure
+    ? Number.NaN
+    : sumRange(calendar, weekStart, evalDay);
+  const mtd = hasParseFailure
+    ? Number.NaN
+    : sumRange(calendar, monthStart, evalDay);
+  const ytd = hasParseFailure
+    ? Number.NaN
+    : sumRange(calendar, yearStart, yearEndForYtd);
 
   return {
     calendar,

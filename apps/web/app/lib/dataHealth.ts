@@ -2,7 +2,7 @@ import { explainWtdMtdYtdFromSnapshots } from "@/app/lib/metrics";
 import type { DailyResult } from "@/app/lib/types";
 import type { Position, Trade } from "@/lib/services/dataService";
 import type { MetricsContract } from "@/app/lib/types/metrics";
-import type { PeriodHealthIssue, PeriodHealthIssueKind } from "@/app/lib/types/health";
+import type { PeriodHealthIssue } from "@/app/lib/types/health";
 
 interface CollectIssuesOptions {
   evalDate: string;

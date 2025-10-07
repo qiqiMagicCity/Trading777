@@ -9,7 +9,14 @@
     "MONITOR",
     "LOG_LEVEL",
     "FREEZE_DATE",
-    "TIINGO_API_KEY"
+    "TIINGO_API_KEY",
+    "PRICE_STRICT",
+    "RT_CLOSE_WINDOW_MIN",
+    "CLOSE_GRACE_MIN",
+    "API_RATE_LIMIT",
+    "API_REQUESTS_PER_MIN",
+    "READ_PUBLIC_MODE",
+    "PUBLIC_DATA_BASE"
   ],
   "tasks": {
     "build": {

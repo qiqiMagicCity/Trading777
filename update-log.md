@@ -1,5 +1,52 @@
 # 更新日志
 
+## 2025-11-11
+- 更正【持仓列表-当日盈亏】口径：新增两桶法专用 `buildIntradayFloatingPnlMap`，前端改读浮动盈亏并更新列标题为“当日浮动盈亏”，排除今日已实现贡献，补充分项断言确保部分平仓、翻向与纯过夜场景均按四位精度返回。
+
+## 2025-11-10
+- Step 7：收盘价缺失策略重构
+  - 新增 `marketHours.ts` 统一判断交易日、收盘窗口与宽限期，Dashboard 侧在 `ensureDailyCloses` 前判定是否已过宽限再发起补录。
+  - `generateDailyResults` 扩展 `DailyResultsDiagnostics`，区分 `pendingCloses` 与 `missingCloses`，并透出 `closeWindow`（含宽限分钟、窗口截止与 `missingClose` 标记）。
+  - Dashboard 顶部新增信息条展示“今日尚未收盘”提示，盘前/盘中/周末沿用上一交易日收盘价且不再出现“均价兜底”告警。
+  - 引入 `closePriceMigration` 处理 close_prices 的 UTC→纽约日键迁移与冲突合并，写入 `close.ny_migrated_v1` 防止重复迁移。
+  - 新增 `close-missing-policy.weekend-skip/preopen-info/postclose-grace-missing.test.ts` 及 `close-keys.ny-migration.test.ts`，并更新 `dailyResults-diagnostics.test.ts` 覆盖新诊断字段。
+  - 修正 `fetchDailyClose` 对历史交易日的宽限判定：日线 API 无结果时，如 `evaluateCloseRequirement` 判定需官方收盘价，则接受调用方 fallback 并落盘，恢复“API 不可用时仍能补写官方收盘价”场景。
+  - `close-missing-policy.postclose-grace-missing.test.ts` 引入 `resolveCloseGraceMinutes()` 断言默认宽限为 0 分钟并允许运营设定覆盖。
+  - 运行 `npm test -- apps/web/app/lib/__tests__/close-missing-policy.weekend-skip.test.ts --runInBand` 等 7 条指令与 `npm test -- apps/web/app/lib/__tests__/priceService.safe.test.ts --runInBand` 全部通过。
+
+## 2025-11-10
+- Step 6：Dashboard “当日盈亏”卡片接入 `_m6` 拆解 Tooltip，展示 realized_today / mtm_overnight / mtm_intraday_open 分项，默认首行提示纽约日口径及 20:00–23:59 ET 仍计入当日。
+- Tooltip 触发按钮新增可聚焦问讯样式（含 aria-label），健康状态下沿用灰色圆点，存在警示/解析失败时切换为琥珀底色并附带退化/告警/解析摘要。
+- 解析 `_m6` 原始字段时复用 `parseSnapshotNumber` 去除负零，并聚合 diagnostics.parseErrors + warnings，Tooltip 尾部统一输出 ⚠️ 提示，若缺乏当日快照则退化为“待补充 + 无当日快照”。
+- DashboardMetrics 单测扩充 5 个场景（仅 MTM、空头回补、全零、缺快照、解析失败），断言合计恒等式、Tooltip 文案与按钮无障碍属性；沿用 `within` 精准定位卡片。
+- 运行 `npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`、`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand` 全部通过。
+
+## 2025-11-09
+- Step 5：`calcMetricsInternal` 建立唯一 `periodEvalYmd` 来源（入参优先，其次 `nyTodayStr()`），UI 冻结日独立维护并禁止再以 `getLatestTradingDayStr` 回退周期窗口；交易、日度快照过滤统一按纽约日并包含评估日当日。
+- 修复回归：移除 `periodEvalYmd` 对 `tradingDateStr` 的隐式回退，所有调用方（含 `runAll`、Dashboard 页面与相关单测）改为显式传入评估日，确保周/月/年聚合恒以真实评估日为锚。
+- `calcWtdMtdYtdFromSnapshots` / `deriveWindowTotals` 透出 `uiTradeDayYmd`、`periodEvalYmd`、`filteredRowsCount`、`lastSnapshotYmd`、`windowStartYmd` 等诊断字段，`calcMetricsInternal` 在 UI 日≠评估日且纳入新快照时追加 `PERIOD_EVAL_DAY_INCLUDED` 调试日志。
+- 新增 `metrics-evalday-decoupling.freeze-vs-eval.test.ts`、`metrics-evalday-decoupling.after-hours.test.ts`、`metrics-evalday-decoupling.holiday-dst.test.ts` 三组回归用例，验证周末冻结、盘后、节假日 & DST 场景下 WTD/MTD/YTD 均按真实评估日累计。
+
+## 2025-11-08
+- 抽取 `parseSnapshotNumber` 统一解析日度快照的数值字段，支持数字字符串输入并在非法格式时返回 `PARSE_NUM_FAILED` 诊断。
+- `runAll.normalizeDailyRows`、`metrics.ts`、`metrics-periods.ts` 全量复用新解析器，删除 `typeof === "number"` 兜底并在解析失败时透出 `DEGEN_PARSE_FAILED` 退化。
+- `calcWtdMtdYtdFromSnapshots`、`computePeriods`、`DashboardMetrics` 将解析失败汇总到 diagnostics.parseErrors，前端 tooltip 展示字段与示例原值。
+- 补充字符串数值、非法格式、负零与入口一致性的单元测试，更新 `DailyResult` 联合类型以覆盖字符串输入。
+
+## 2025-11-06
+- 当日盈亏映射新增纳入 `realized_today`，`PositionsTable` 读取合并结果，单测覆盖部分平仓/纯未实现/纯已实现三类场景。
+- Dashboard 周/月/年卡片在退化时展示中文退化原因徽标与基线提示 tooltip，补充 UI 单测验证缺基线、基线过旧、窗口为空三种原因。
+- 更新 Dashboard 指标用例：仍为退化或缺值的窗口继续显示“待补充”，基线过期但周度仍有效时保留数值显示。
+
+## 2025-11-07
+- 当日盈亏空头场景补充“盈利为正、亏损为负”单测，确认合并映射不再翻转 FIFO 符号。
+- 周/月/年退化提示的 tooltip 增加阈值描述并改用可聚焦按钮，键盘与读屏均可获取退化原因，单测同步断言。
+- 修复 Vercel 构建报错：`DashboardMetrics` 读取 `_period.diagnostics` 时类型缺失触发 TS 报错，补齐 `Metrics._period` 的 `diagnostics` 定义确保类型一致。
+
+## 2025-11-05
+- 修复同日快照信息量评分返回字符串的问题，确保并列裁决严格基于数值信息量。
+- 清理 `metrics-periods.ts` 中未使用的正午归一导入，避免后续回退误用。
+
 ## 2025-11-04
 - calcMetricsInternal / calcTodayTradePnL 的纽约当日判定统一改用 `nyDayStr`/`nyDateStrSafe`，不再通过 `toISOString()` 取 UTC 日期，修复隔夜仓被误归类为“今日新开”的问题。
 - 新增 `metrics-overnight-short-classification.test.ts`，覆盖 2025-01-14 20:30 -05:00 卖空的隔夜留仓，确认次日归入过夜浮盈且日内盈亏为 0。
@@ -73,6 +120,10 @@
 - 检视 `runAll`、`page.tsx` 与 store 使用 `_period.degraded` 的逻辑，确认仍按退化状态渲染提示。
 
 ## 2025-10-06
+- Step 5 收尾：runAllCore 统一归一化日度快照
+  - runAllCore 入口对 MinimalDailyResult 执行 normalizeDailyRows，记录归一化前后行数并在内部仅保留纯数值 DailyResult[]。
+  - 含字符串数值的日度快照通过 runAll → calcMetrics 链路与纯数字版产出一致，并补充千分位字符串触发 DEGEN_PARSE_FAILED 的端到端单测。
+  - 新增静态守护脚本 `check-calcmetrics-daily`，阻止在 apps/web/app/lib 中重新引入 `as DailyResult(Input)` 的断言路径。
 - 移除 `normalizeMetrics` 对 WTD/MTD/YTD 旧别名的回退，仅保留显式 `M11/M12/M13` 选值。
 - 更新周期别名单测，确保旧别名输入不会带出 `M11/M12/M13`，并维持显式字段优先级。
 - 补充 `DashboardMetrics` 26030.56 退化场景回归测试，确认 UI 通过“待补充”路径提示用户。
@@ -191,3 +242,65 @@
 - 股票代码输入框接入 `datalist` 建议，沿用大写与字符过滤逻辑便于快速选择历史记录。
 - 处理 Vercel 构建报错：`PositionsTable` 汇总当日盈亏提示时直接 `map` 取 `message`，TS 未识别 `filter` 的收窄而报缺少属性。
 - 调整逻辑改用 `Set` 收集缺失提示，循环中基于 `status === "missing"` 时访问 `message`，构建再次通过类型检查。
+
+## 2025-10-30
+- Step 2-A：WTD/MTD/YTD 聚合改为唯一基线，缺失或超过阈值的基线直接退化并返回 `DEGEN_*` 原因码，同时透出基线日期与交易日距离；评估日完全按调用方传入的纽约日处理，彻底移除内部回退逻辑。
+- Step 2-B：新增无基线、基线距阈值边界、周末评估与去重等单测，显式引用退化阈值常量并校验 `diagnostics.reason/baselineMeta`，确保三项聚合不再粘连。
+- 修复 Vercel 构建报错：`calcWtdMtdYtdFromSnapshots` 返回状态仍保留零基线 `ok_zero` 分支，TS 判断 `baselineMode` 不可能等于 "zero" 导致 `next build` 中断；移除已废弃的状态分支后重新执行 `CI=1 npm run build --workspace=web`，构建顺利完成，仅保留既有 ESLint 告警。
+
+## 2025-10-31
+- 统一同日去重/排序逻辑（NY 日）。
+- 随机乱序/跨午夜/DST 稳定性测试上线。
+- 两入口共用 helper，消除输入顺序依赖。
+- 修复构建报错：`infoScore` 在对象分支使用 `reduce` 时返回值被推断为 `unknown`，Next.js 构建阶段抛出 “Type 'unknown' is not assignable to type 'number'”；改用显式循环累加字段信息量，保持评分纯数值且类型稳定。
+- 修复构建报错：`selectLatestSnapshotsByNyDay` 直接把 `unknown` 类型的 `date` 透传给 `nyDateStrSafe`，导致 Next.js 构建期类型检查失败；增加类型守卫，仅接受 `string | number | Date`，并保持原有时间判定逻辑。
+- Step 4：同日重复快照默认选最新且不再退化，`diagnostics.sameDayDuplicates` 记录重复计数，覆盖基线重复/同毫秒并列/含解析失败等单测，确保仅 DEGEN_NO_BASELINE、DEGEN_STALE_BASELINE、DEGEN_PARSE_FAILED、DEGEN_WINDOW_EMPTY 会触发退化。
+- 修复 Vercel 构建报错：`runAllCore` 的 `dailyResults` 入参仍限定为纯 `number` 字段，无法接收通过 Zod 校验后的 `string|null` 数值字符串，Next.js 构建阶段类型检查失败；改为接受 `MinimalDailyResult[]` 并移除未使用的 `DailyResultInput` 引用，保持统一解析链路类型一致。同批构建中 `scripts/verify-real.ts` 也沿用旧的 `DailySnap` 数值类型，改用 `DailyResultInput` 以兼容字符串数值快照。
+
+## 2025-11-01
+- Step 6 收口：`DashboardMetrics` 消除 `if (!metrics) return` 条件 Hook，统一以 `metricsReady` 控制渲染，保持 Hook 顺序恒定并保留加载占位样式。
+- `turbo.json` 注册 PRICE_STRICT、READ_PUBLIC_MODE 等环境变量；`env.ts` / `readPublicJson.ts` 补充 catch 注释避免 `no-empty`，`timezone.ts` 注释去除不规则空格。
+- `package.json` 的 lint 指令改为 `npx --yes turbo run lint`，确保仓库级别 lint 复用 Turbo pipeline。
+- 测试：`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`、`npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`；构建：`npm run build`；Lint：`npm run lint`（仍存在历史 `no-explicit-any` 警告，但未再触发 react-hooks/no-empty/no-irregular-whitespace 相关报错）。
+
+## 2025-11-02
+- Step 6 降噪：`calcMetricsInternal` 在未指定 `periodEvalYmd` 时尊重 `NEXT_PUBLIC_FREEZE_DATE`，确保冻结评估日的 M7 交易计数与当日盈亏拆解一致；同步保留 UI 交易日选择器的纽约截日逻辑。
+- `.eslintrc.json` 与 `apps/web/eslint.config.js` 新增 `__tests__`、`app/lib` 目录豁免规则，逐项移除 `any`、`unused`、`prefer-const` 等历史噪音，`Header` / `page.tsx` / `runAll.ts` / `priceService.ts` 等核心文件补足类型守卫与 Hook 依赖。
+- CI `build-main.yml` 串联 `npm run check:calcmetrics-daily`，`package.json` 补充 `test:periods-core`、`test:m6-ui` 快捷脚本，守护脚本与核心回归纳入日常执行清单。
+- 测试：`npm run lint`、`npm run check:calcmetrics-daily`、`npm run test:periods-core`、`npm run test:m6-ui`、`npm test -- apps/web/app/modules/__tests__/DashboardMetrics.test.tsx --runInBand`、`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。
+- 修复 Vercel 构建报错：`resolveNyDay` 接收 `(typeof window !== "undefined" && window.NEXT_PUBLIC_FREEZE_DATE)` 时被推断为 `{}`，Next.js 构建类型检查失败（期望 `string | undefined`）。改为分别读取 `process.env` 与 `window` 的候选值，并通过 `typeof === "string"` 收窄后再传入 `resolveNyDay`，重跑 `npm run build` 通过。
+- 修复 Vercel 构建报错：Dashboard M6 卡片读取 `tradingDateStr` 时直接访问 `MetricsContract` 上不存在的字段，TS 推断 `{} | undefined` 导致 `next build` 中断。改用 `isRecord` 收窄原始对象并对 `intradayDiagnostics.uiTradeDayYmd` / `rawMetrics.tradingDateStr` 做字符串判定后再回退，`npm run build --workspace=web` 通过。
+
+## 2025-11-03
+- `positionMetrics.ts` 新增 `buildIntradayFloatingBreakdown`，输出过夜/当日新开两桶的银行家舍入结果、乘数、昨今净仓与均价，统一从 legs 汇总并在合成后只乘一次乘数；`buildIntradayFloatingPnlMap` 改读新拆解保持 UI 金额一致。
+- `PositionsTable` 引入浮动拆解调试映射，列标题提示乘数只在两桶求和后应用，单元格 tooltip 展示过夜桶/当日新开桶公式、乘数、昨今净仓等细节。
+- `positionMetrics.test.ts` 增补“乘数=100 只乘一次”与“日内配对后剩余 15 股”场景，验证浮动口径与 VWAP/乘数逻辑稳定；原有断言同步适配新拆解入口。
+- 测试：`npm test -- apps/web/app/modules/__tests__/positionMetrics.test.ts --runInBand`。
+- 再补口径守护：新增银行家舍入卡点、净仓归零与缺昨收三条单测锁定浮动盈亏边界；tooltip 追加“缺昨收时过夜桶=0；当日已实现请见‘今日已实现’。” 提示，首日场景与净仓归零提示一致。
+
+## 2025-10-06 M4 自检与单测
+- 新增 selfcheckM4，覆盖时区判定、混合配对拆分、读源一致性与四舍五入时机。
+- 新增五组合成用例与前台读源一致性校验。
+- 新增脚本 `npm run selfcheck:m4`。
+
+## 2025-10-07 M4 纽约日口径与混合腿拆分修复
+- runAll 统一使用纽约交易日判定，腿级明细补充 `from`、`lotDateStr`、`fillId` 与 `pnl_raw`，并按“先合计后 round2”计算 M4/M5；同时透出 `aux.realized.today_intraday/today_total`。
+- 修复混合配对未拆分与今日腿误入 M4 的问题，确保同一 fill 同时生成历史腿与今日腿；M6 今日已实现改为 `M4 + M5_2`，与 UI 聚合保持一致。
+- 自检回归套件升级为八条强断言，新增跨日 23:00 场景与混合 fill 拆腿检查；保留 `npm run selfcheck:m4` 并新增 `npm run test:m4:fix` 统一触发。
+## 2025-10-06 M4 前台对齐与调试视图
+- 聚合层统一读取 runAll 覆盖后的 result.M4。
+- PositionsTable 增加“历史平仓(M4)”明细并仅走聚合层数据。
+- 新增 /debug/m4 调试页，展示 aux.breakdown.m4 腿级明细，并校验 sum(pnl_raw)≈result.M4。
+- 新增 UI 测试脚本 `npm run test:m4:ui`，保障读源与合计恒等式不回退。
+## 2025-10-08 M4 边界加固
+- 新增 `m4.edgecases` 回归套件，覆盖拆股复权、现金分红、乘数一次、纽约盘后跨日、混配拆腿与今日已实现恒等式。
+- 自检增强：若发现腿未明确标记 `from='history'`，将结合 NY 交易日判断并直接报错，附带 fillId/lotDateStr 定位。
+- 新脚本 `npm run test:m4:edge` 纳入 CI，要求全部场景通过。
+## 2025-10-06 Slim /debug/m4
+- /debug/m4 改为静态 + 客户端 fetch。
+- 新增 /api/debug/m4，使用注入的 apiIoProvider 调用已有 /api/* 拉数据再计算，避免把 public 打进 lambda。
+- runAll 支持 ioProvider 注入，并把 readPublicJson 改为惰性 import。
+- 解决 Vercel Serverless Function 体积超限（300MB）问题。
+## 2025-10-07 Remove /api/debug/m4 Lambda
+- 删除 /api/debug/m4 以避免将 public/ 打进 Serverless 包导致 300MB 超限。
+- /debug/m4 改为在浏览器端用 runAll({ ioProvider: apiIoProvider }) 直接计算。

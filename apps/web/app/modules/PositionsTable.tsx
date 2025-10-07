@@ -11,11 +11,15 @@ import { formatCurrency } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
 import {
-  buildIntradayPnlMap,
+  buildIntradayFloatingBreakdown,
+  buildIntradayFloatingPnlMap,
   calculateIntradayValue,
   getResolvedPrice,
+  normalizeSymbol,
+  type IntradayFloatingBreakdownEntry,
   type IntradayValueResult,
 } from "./positionMetrics";
+import { round4 } from "@/app/lib/precision";
 
 function formatNumber(value: number | undefined, decimals = 2) {
   if (value === undefined || value === null) return '--';
@@ -28,6 +32,137 @@ function formatPercent(value: number | undefined) {
   return `${(value * 100).toFixed(2)}%`;
 }
 
+function format4(value: number | undefined): string {
+  if (!Number.isFinite(value)) return "--";
+  return round4(value as number).toFixed(4);
+}
+
+function formatQuantity(value: number | undefined): string {
+  if (!Number.isFinite(value)) return "--";
+  return (value as number).toString();
+}
+
+function formatAmount(value: number | undefined): string {
+  if (!Number.isFinite(value)) return "0.0000";
+  return round4(value as number).toFixed(4);
+}
+
+function buildIntradayTooltip(
+  result: IntradayValueResult,
+  entry: IntradayFloatingBreakdownEntry | undefined,
+): string | undefined {
+  if (!entry) {
+    if (result.status === "missing") {
+      return result.message;
+    }
+    if (result.status === "ok") {
+      return "缺少拆解明细，暂无法展示两桶法细节。";
+    }
+    return undefined;
+  }
+
+  const qNow = Number.isFinite(entry.qNow) ? (entry.qNow as number) : 0;
+  const qOvernight = Number.isFinite(entry.qOvernight)
+    ? (entry.qOvernight as number)
+    : 0;
+  const todayQty = Math.abs(qNow - qOvernight);
+  const direction = qNow > 0 ? 1 : qNow < 0 ? -1 : qOvernight < 0 ? -1 : 1;
+  const isLong = direction >= 0;
+  const multiplier = entry.multiplier ?? 1;
+
+  const mark = entry.mark;
+  const prevClose = entry.prevClose;
+  const avgToday = isLong ? entry.avgTodayLong : entry.avgTodayShort;
+
+  let overnightPerUnit: number | undefined;
+  const absOvernightQty = Math.abs(qOvernight);
+  if (
+    absOvernightQty > 0 &&
+    Number.isFinite(mark) &&
+    Number.isFinite(prevClose)
+  ) {
+    if (isLong) {
+      overnightPerUnit = round4((mark! - prevClose!) * absOvernightQty);
+    } else {
+      overnightPerUnit = round4((prevClose! - mark!) * absOvernightQty);
+    }
+  }
+
+  let intradayPerUnit: number | undefined;
+  if (
+    todayQty > 0 &&
+    Number.isFinite(mark) &&
+    Number.isFinite(avgToday)
+  ) {
+    if (isLong) {
+      intradayPerUnit = round4((mark! - avgToday!) * todayQty);
+    } else {
+      intradayPerUnit = round4((avgToday! - mark!) * todayQty);
+    }
+  }
+
+  const overnightDisplay = overnightPerUnit !== undefined
+    ? round4(overnightPerUnit * multiplier)
+    : 0;
+  const intradayDisplay = intradayPerUnit !== undefined
+    ? round4(intradayPerUnit * multiplier)
+    : 0;
+  const floatingDisplay = round4(
+    ((overnightPerUnit ?? 0) + (intradayPerUnit ?? 0)) * multiplier,
+  );
+
+  const lines: string[] = [];
+  if (overnightPerUnit !== undefined) {
+    const formula = isLong
+      ? `${format4(mark)}−${format4(prevClose)}`
+      : `${format4(prevClose)}−${format4(mark)}`;
+    const multiplierNote = multiplier !== 1
+      ? `（×乘数=${multiplier} → ${formatAmount(overnightDisplay)})`
+      : '';
+    lines.push(
+      `过夜桶 = (${formula})×${formatQuantity(absOvernightQty)} = ${formatAmount(overnightPerUnit)}${multiplierNote}`,
+    );
+  } else {
+    if (entry.missingPrevClose) {
+      lines.push("缺昨收/首日：过夜=0");
+    } else {
+      lines.push("过夜桶 = 0（无过夜余量或缺少昨收/实时价）");
+    }
+  }
+
+  if (intradayPerUnit !== undefined) {
+    const avgLabel = format4(avgToday);
+    const formula = isLong
+      ? `${format4(mark)}−${avgLabel}`
+      : `${avgLabel}−${format4(mark)}`;
+    const multiplierNote = multiplier !== 1
+      ? `（×乘数=${multiplier} → ${formatAmount(intradayDisplay)})`
+      : '';
+    lines.push(
+      `当日新开桶 = (${formula})×${formatQuantity(todayQty)} = ${formatAmount(intradayPerUnit)}${multiplierNote}`,
+    );
+  } else {
+    lines.push("当日新开桶 = 0（无当日新开未平余量或缺少今日均价）");
+  }
+
+  if (multiplier !== 1) {
+    lines.push(`乘数 = ${multiplier}`);
+  }
+
+  const overnightUnitDisplay = formatAmount(overnightPerUnit ?? 0);
+  const intradayUnitDisplay = formatAmount(intradayPerUnit ?? 0);
+  lines.push(
+    `浮动合计 = round4((${overnightUnitDisplay} + ${intradayUnitDisplay}) × ${multiplier}) = ${formatAmount(floatingDisplay)}`,
+  );
+  lines.push(
+    `昨净仓 / 今净仓 = ${formatQuantity(qOvernight)} / ${formatQuantity(qNow)}`,
+  );
+  lines.push("仅包含浮动部分；今日已实现请看‘今日已实现’栏位/明细。");
+  lines.push("缺昨收时过夜桶=0；当日已实现请见‘今日已实现’。");
+
+  return lines.join("\n");
+}
+
 interface Props {
   positions: Position[];
   trades?: EnrichedTrade[];
@@ -35,7 +170,14 @@ interface Props {
 
 export function PositionsTable({ positions, trades }: Props) {
   const metrics = useStore(state => state.metrics);
-  const intradayDataset = useMemo(() => buildIntradayPnlMap(metrics), [metrics]);
+  const intradayDataset = useMemo(
+    () => buildIntradayFloatingPnlMap(metrics, positions),
+    [metrics, positions],
+  );
+  const floatingBreakdown = useMemo(
+    () => buildIntradayFloatingBreakdown(metrics, positions),
+    [metrics, positions],
+  );
 
   const results = useQueries({
     queries: positions.map((pos) => ({
@@ -150,6 +292,7 @@ export function PositionsTable({ positions, trades }: Props) {
     }
     const intradayIssues = Array.from(intradayIssueSet);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
+    const todayHistoryRealized = metrics?.M4 ?? 0; // 今日历史平仓(M4)
     const totalPnL = totalUnrealized + totalRealized;
 
     logger.debug('总计结果:', {
@@ -167,9 +310,10 @@ export function PositionsTable({ positions, trades }: Props) {
       intraday: totalIntraday,
       intradayIssues,
       realized: totalRealized,
+      historyRealizedToday: todayHistoryRealized,
       total: totalPnL
     };
-  }, [positionSummaries, metrics?.M9]);
+  }, [positionSummaries, metrics?.M9, metrics?.M4]);
 
   return (
     <div>
@@ -184,7 +328,11 @@ export function PositionsTable({ positions, trades }: Props) {
             <th>持仓单价</th>
             <th>持仓金额</th>
             <th>盈亏平衡点</th>
-            <th>当日盈亏</th>
+            <th
+              title="仅包含过夜与今日新开未平的浮动盈亏；乘数仅在两桶求和后应用一次。今日已实现请看‘今日已实现’栏位/明细。"
+            >
+              当日浮动盈亏
+            </th>
             <th>浮动百分比</th>
             <th>标的盈亏</th>
             <th>历史交易次数</th>
@@ -212,6 +360,14 @@ export function PositionsTable({ positions, trades }: Props) {
               message: "缺少 M6 legs 拆解数据，请补充隔夜与当日未平拆解后再查看当日盈亏。",
             };
             const intraday = intradayResult.status === "ok" ? intradayResult.value : undefined;
+            const symbolKey = normalizeSymbol(pos.symbol);
+            const breakdownEntry = symbolKey
+              ? floatingBreakdown.values.get(symbolKey)
+              : undefined;
+            const intradayTooltip = buildIntradayTooltip(
+              intradayResult,
+              breakdownEntry,
+            );
             const unrealizedPercent =
               resolvedPrice && pos.avgPrice ? (resolvedPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
@@ -302,7 +458,7 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{formatNumber(pos.avgPrice)}</td>
                 <td>{formatNumber(marketValue)}</td>
                 <td className="text-center">{breakEvenDisplay}</td>
-                <td className={intradayClass}>
+                <td className={intradayClass} title={intradayTooltip}>
                   {intradayResult.status === "ok" ? (
                     formatNumber(intraday)
                   ) : (
@@ -334,13 +490,26 @@ export function PositionsTable({ positions, trades }: Props) {
                     : ''
               }
             >
-              <strong>
-                {totals.intraday !== undefined
-                  ? formatCurrency(totals.intraday)
-                  : totals.intradayIssues.length > 0
-                    ? `待补充：${totals.intradayIssues.join('；')}`
-                    : '--'}
-              </strong>
+              <div className="flex flex-col gap-1">
+                <strong>
+                  {totals.intraday !== undefined
+                    ? formatCurrency(totals.intraday)
+                    : totals.intradayIssues.length > 0
+                      ? `待补充：${totals.intradayIssues.join('；')}`
+                      : '--'}
+                </strong>
+                <span
+                  className={
+                    totals.historyRealizedToday > 0
+                      ? 'green font-medium'
+                      : totals.historyRealizedToday < 0
+                        ? 'red font-medium'
+                        : 'font-medium'
+                  }
+                >
+                  历史平仓(M4)：{formatCurrency(totals.historyRealizedToday)}
+                </span>
+              </div>
             </td>
             <td></td>
             <td className={totals.total > 0 ? 'green' : totals.total < 0 ? 'red' : ''}>

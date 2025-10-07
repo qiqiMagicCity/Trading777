@@ -2,7 +2,8 @@ import type { EnrichedTrade } from "@/lib/fifo";
 import { MoneyDecimal as M, round2 } from "@/lib/money";
 import type { Position } from "@/lib/services/dataService";
 import sortTrades from "@/lib/sortTrades";
-import { nowNY, toNY } from "@/lib/timezone";
+import { nowNY, toNY, ymdInNY } from "@/lib/timezone";
+import { evaluateCloseRequirement, isTradingDay } from "@/lib/marketHours";
 import type { DailyResult } from "@/lib/types";
 
 const EPSILON = 1e-6;
@@ -20,8 +21,31 @@ export interface MissingCloseEntry {
   fallback: MissingCloseFallback;
 }
 
+export interface PendingCloseDetail {
+  symbol: string;
+  fallbacks: MissingCloseFallback[];
+}
+
+export interface PendingCloseEntry {
+  date: string;
+  details: PendingCloseDetail[];
+  reason: "PRE_CLOSE";
+}
+
+export interface CloseWindowDiagnostics {
+  date: string;
+  isTradingDay: boolean;
+  requireOfficialClose: boolean;
+  graceMinutes: number;
+  windowEndTs: number | null;
+  nowTs: number;
+  missingClose: boolean;
+}
+
 export interface DailyResultsDiagnostics {
   missingCloses: MissingCloseEntry[];
+  pendingCloses?: PendingCloseEntry[];
+  closeWindow?: CloseWindowDiagnostics;
 }
 
 function normalizeSymbol(symbol: string | undefined): string {
@@ -36,7 +60,7 @@ function toDateStr(value: string | Date | number | undefined): string | null {
   if (value === undefined || value === null) return null;
   const date = toNY(value);
   if (isNaN(date.getTime())) return null;
-  return date.toISOString().slice(0, 10);
+  return ymdInNY(date);
 }
 
 export function normalizeClosePriceMap(input: ClosePriceMap | Record<string, any> | undefined): ClosePriceMap {
@@ -136,10 +160,18 @@ export function generateDailyResults({
       const freeze = (globalThis as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE;
       return typeof freeze === "string" ? freeze.trim() : "";
     })();
+  const now = nowNY();
+  const closeRequirement = evaluateCloseRequirement(evalDateStr, now);
+  if (diagnostics) {
+    diagnostics.pendingCloses = diagnostics.pendingCloses ?? [];
+    diagnostics.closeWindow = {
+      ...closeRequirement,
+      missingClose: false,
+    };
+  }
   const treatRealtimeAsClose = (() => {
     if (freezeDate) return false;
-    const now = nowNY();
-    const nowDateStr = now.toISOString().slice(0, 10);
+    const nowDateStr = ymdInNY(now);
     if (nowDateStr !== evalDateStr) return false;
     const minutes = now.getHours() * 60 + now.getMinutes();
     return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
@@ -213,18 +245,83 @@ export function generateDailyResults({
         return map;
       })()
     : null;
+  const pendingTracker = diagnostics
+    ? (() => {
+        const map = new Map<string, Map<string, Set<MissingCloseFallback>>>();
+        for (const entry of diagnostics.pendingCloses ?? []) {
+          const bySymbol = new Map<string, Set<MissingCloseFallback>>();
+          for (const detail of entry.details) {
+            bySymbol.set(detail.symbol, new Set(detail.fallbacks));
+          }
+          map.set(entry.date, bySymbol);
+        }
+        return map;
+      })()
+    : null;
+  const ensurePending = (
+    symbol: string,
+    date: string,
+    fallback: MissingCloseFallback,
+  ) => {
+    if (!diagnostics || !pendingTracker) return;
+    const byDate = pendingTracker.get(date) ?? new Map<string, Set<MissingCloseFallback>>();
+    const set = byDate.get(symbol) ?? new Set<MissingCloseFallback>();
+    if (set.has(fallback)) return;
+    set.add(fallback);
+    byDate.set(symbol, set);
+    pendingTracker.set(date, byDate);
+
+    const order: Record<MissingCloseFallback, number> = {
+      MARK_PRICE: 0,
+      PREVIOUS_CLOSE: 1,
+      AVERAGE_COST: 2,
+    };
+
+    let entry = diagnostics.pendingCloses!.find((row) => row.date === date);
+    if (!entry) {
+      entry = { date, details: [], reason: "PRE_CLOSE" };
+      diagnostics.pendingCloses!.push(entry);
+      diagnostics.pendingCloses!.sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    let detail = entry.details.find((row) => row.symbol === symbol);
+    if (!detail) {
+      detail = { symbol, fallbacks: [] };
+      entry.details.push(detail);
+      entry.details.sort((a, b) => a.symbol.localeCompare(b.symbol));
+    }
+
+    detail.fallbacks = Array.from(set).sort((a, b) => order[a] - order[b]);
+  };
   const reportMissing = (
     symbol: string,
     date: string,
     fallback: MissingCloseFallback,
   ) => {
     if (!diagnostics || !diagTracker) return;
+    const requireOfficial = (() => {
+      if (!isTradingDay(date)) return false;
+      if (date < evalDateStr) return true;
+      if (date === evalDateStr) return closeRequirement.requireOfficialClose;
+      return evaluateCloseRequirement(date, now).requireOfficialClose;
+    })();
+
+    if (!requireOfficial) {
+      if (isTradingDay(date) && date === evalDateStr) {
+        ensurePending(symbol, date, fallback);
+      }
+      return;
+    }
+
     const key = `${date}__${symbol}`;
     const set = diagTracker.get(key) ?? new Set<MissingCloseFallback>();
     if (set.has(fallback)) return;
     set.add(fallback);
     diagTracker.set(key, set);
     diagnostics.missingCloses.push({ symbol, date, fallback });
+    if (diagnostics.closeWindow && date === diagnostics.closeWindow.date) {
+      diagnostics.closeWindow.missingClose = true;
+    }
   };
 
   for (const date of dates) {
@@ -258,13 +355,10 @@ export function generateDailyResults({
       if (byDate && Number.isFinite(byDate[date])) {
         price = Number(byDate[date]);
       }
-      if (price === undefined && date === evalDateStr) {
+      if (price === undefined && date === evalDateStr && treatRealtimeAsClose) {
         const final = finalPriceMap.get(symbol);
         if (final !== undefined && Number.isFinite(final)) {
           price = final;
-          if (!treatRealtimeAsClose) {
-            reportMissing(symbol, date, "MARK_PRICE");
-          }
         }
       }
       if (price === undefined) {

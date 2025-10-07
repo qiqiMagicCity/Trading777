@@ -1,10 +1,26 @@
 export type BreakdownRow = {
-  symbol: string; time: string;
-  action: 'SELL'|'COVER';
-  into: 'M4'|'M5.1'|'M5.2';
+  symbol: string;
+  time: string;
+  action: 'SELL' | 'COVER';
+  into: 'M4' | 'M5.1' | 'M5.2';
   qty: number;
-  openPrice?: number; fifoCost?: number; closePrice: number;
-  lotTag: 'T'|'H';
+  openPrice?: number;
+  fifoCost?: number;
+  closePrice: number;
+  lotTag: 'T' | 'H';
+  lotDateStr: string;
+  from: 'history' | 'today';
+  isToday: boolean;
+  pnl_raw: number;
+  pnl: number;
+  fillId: string;
+};
+
+export type BreakdownCollection = {
+  all: BreakdownRow[];
+  m4: BreakdownRow[];
+  m5_1: BreakdownRow[];
+  m5_2: BreakdownRow[];
 };
 
 export interface PeriodDegradedMap {
@@ -15,14 +31,43 @@ export interface PeriodDegradedMap {
 
 export type PeriodWindowKey = "wtd" | "mtd" | "ytd";
 
-export type PeriodBaselineMode = "priced" | "zero" | "partial" | "missing";
+export type PeriodBaselineMode = "priced" | "partial" | "missing";
 
 export type PeriodWindowStatus =
   | "ok"
-  | "ok_zero"
   | "partial"
   | "missing"
   | "degraded";
+
+import type { SnapshotFieldParseError } from "../snapshotNumber";
+
+export type PeriodDegradationReason =
+  | "DEGEN_NO_BASELINE"
+  | "DEGEN_STALE_BASELINE"
+  | "DEGEN_WINDOW_EMPTY"
+  | "DEGEN_PARSE_FAILED";
+
+export type PeriodParseError = SnapshotFieldParseError;
+
+export interface PeriodBaselineMeta {
+  baselineYmd?: string;
+  distanceBusinessDays?: number;
+  thresholdBusinessDays?: number;
+}
+
+export interface PeriodWindowDiagnostics {
+  status: PeriodWindowStatus;
+  degraded: boolean;
+  reason?: PeriodDegradationReason;
+  baselineMeta?: PeriodBaselineMeta;
+  parseErrors?: PeriodParseError[];
+  sameDayDuplicates?: number;
+  uiTradeDayYmd?: string;
+  periodEvalYmd?: string;
+  filteredRowsCount?: number;
+  lastSnapshotYmd?: string;
+  windowStartYmd?: string;
+}
 
 export interface PeriodWindowBreakdown {
   realized: number;
@@ -34,7 +79,10 @@ export interface PeriodWindowBreakdown {
 
 export interface MetricsContract {
   M1: number; M2: number; M3: number;
-  M4: { total: number };
+  /**
+   * 今天历史平仓盈利（M4）：runAll 覆盖后的最终数值，来源于历史腿 pnl_raw 求和后 round2。
+   */
+  M4: number;
   M5: { behavior: number; fifo: number };
   M6: { total: number };
   _m6?: {
@@ -48,15 +96,20 @@ export interface MetricsContract {
     status?: Record<PeriodWindowKey, PeriodWindowStatus>;
     breakdown?: Record<PeriodWindowKey, PeriodWindowBreakdown>;
     firstActiveDate?: string;
+    diagnostics?: Record<PeriodWindowKey, PeriodWindowDiagnostics>;
   };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
   aux?: {
-    breakdown?: BreakdownRow[];
+    breakdown?: BreakdownCollection;
     m6PriceChange?: number;
     /** 截至昨收的累计已实现盈亏 */
     m6PrevRealizedTotal?: number;
     /** 今日 FIFO 已实现盈亏（与 M5.fifo 一致，便于拆解展示） */
     m6FifoToday?: number;
+    realized?: {
+      today_intraday: number;
+      today_total: number;
+    };
     /** M6 逐标的 MTM 拆解 */
     m6Legs?: Array<{
       symbol: string;

@@ -34,7 +34,9 @@ export async function readPublicJson<T>(rel: string, fallback: T): Promise<T> {
       const url = pathToFileURL(p);
       const mod = await import(url.href, { assert: { type: 'json' } });
       return mod.default as T;
-    } catch {}
+    } catch {
+      // 继续尝试后续候选路径或回退方案
+    }
   }
 
   const base = process.env.PUBLIC_DATA_BASE;
@@ -43,7 +45,9 @@ export async function readPublicJson<T>(rel: string, fallback: T): Promise<T> {
       const url = base.endsWith('/') ? `${base}${rel}` : `${base}/${rel}`;
       const res = await fetch(url);
       if (res.ok) return (await res.json()) as T;
-    } catch {}
+    } catch {
+      // 忽略网络错误，继续尝试下一种读取方式
+    }
   }
 
   return fallback;

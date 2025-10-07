@@ -21,13 +21,15 @@ import { collectPeriodHealthIssues } from '@/app/lib/dataHealth';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { logger } from '@/lib/logger';
-import { getLatestTradingDayStr } from '@/lib/timezone';
+import { formatNY, getLatestTradingDayStr } from '@/lib/timezone';
 import {
   generateDailyResults,
   mergeClosePriceMaps,
   normalizeClosePriceMap,
   closePricesFromRows,
   type DailyResultsDiagnostics,
+  type PendingCloseEntry,
+  type CloseWindowDiagnostics,
   type MissingCloseFallback,
 } from '@/lib/dailyResults';
 import { summarizeMissingCloses } from '@/app/lib/missingClose';
@@ -37,6 +39,7 @@ import type {
   PeriodHealthStatus,
 } from '@/app/lib/types/health';
 import type { MetricsContract } from '@/app/lib/types/metrics';
+import { evaluateCloseRequirement } from '@/lib/marketHours';
 
 function resolvePrevClose(
   symbol: string,
@@ -66,9 +69,9 @@ function attachPrevClose(
   for (const pos of positions) {
     const prevClose = resolvePrevClose(pos.symbol, evalDate, closePrices);
     if (prevClose !== undefined) {
-      (pos as any).prevClose = prevClose;
+      pos.prevClose = prevClose;
     } else {
-      delete (pos as any).prevClose;
+      delete pos.prevClose;
     }
   }
 }
@@ -94,9 +97,9 @@ function buildCloseFallbacks(positions: Position[]): CloseFallbackMap {
   for (const pos of positions) {
     const symbol = pos.symbol?.trim().toUpperCase();
     if (!symbol) continue;
-    const price = Number((pos as any).last);
+    const price = Number(pos.last);
     if (!Number.isFinite(price) || price <= 0) continue;
-    if ((pos as any).priceOk === false) continue;
+    if (pos.priceOk === false) continue;
     if (fallbackMap[symbol] !== undefined) continue;
     fallbackMap[symbol] = price;
   }
@@ -105,6 +108,8 @@ function buildCloseFallbacks(positions: Position[]): CloseFallbackMap {
 
 async function ensureDailyCloses(symbols: string[], targetDate: string, fallbackCloses?: CloseFallbackMap) {
   if (!symbols.length || !targetDate) return;
+  const requirement = evaluateCloseRequirement(targetDate);
+  if (!requirement.requireOfficialClose) return;
   const unique = Array.from(new Set(symbols.map(sym => sym.trim().toUpperCase()).filter(Boolean)));
   if (!unique.length) return;
   await Promise.all(
@@ -199,6 +204,93 @@ function MissingCloseBanner({
   );
 }
 
+function PendingCloseNotice({
+  info,
+  closeWindow,
+  onDismiss,
+  dismissed,
+}: {
+  info: PendingCloseEntry | null;
+  closeWindow: CloseWindowDiagnostics | null;
+  onDismiss?: () => void;
+  dismissed?: boolean;
+}) {
+  if (!closeWindow) return null;
+  if (dismissed) return null;
+  if (!closeWindow.isTradingDay) return null;
+  if (closeWindow.requireOfficialClose) return null;
+
+  const deadline = closeWindow.windowEndTs
+    ? formatNY(closeWindow.windowEndTs, {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      })
+    : null;
+  const grace = closeWindow.graceMinutes;
+  const fallbackSegments = (info?.details ?? []).map((detail) => {
+    const labels = detail.fallbacks
+      .map((fallback) => FALLBACK_LABELS[fallback] ?? '')
+      .filter(Boolean);
+    return `${detail.symbol}${labels.length ? `（${labels.join('、')}）` : ''}`;
+  });
+
+  return (
+    <div
+      style={{
+        background: 'rgba(59,130,246,0.12)',
+        border: '1px solid rgba(59,130,246,0.4)',
+        borderRadius: 8,
+        color: '#dbeafe',
+        margin: '16px auto 0',
+        maxWidth: 'var(--page-max)',
+        padding: '14px 16px',
+        width: '90%',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <h4 style={{ margin: 0, fontSize: '1rem', color: '#bfdbfe' }}>
+            今日尚未收盘，估值暂沿用上一交易日收盘价
+          </h4>
+          <p style={{ margin: '8px 0 0', color: '#e0f2fe', lineHeight: 1.6 }}>
+            官方收盘价窗口
+            {deadline ? `预计在 ${deadline}` : '尚未结束'}
+            {Number.isFinite(grace) && grace > 0 ? `（含宽限 ${grace} 分钟）` : ''}。
+            {fallbackSegments.length > 0
+              ? ` 当前兜底标的：${fallbackSegments.join('、')}。`
+              : ' 稍后将自动补录官方收盘价。'}
+          </p>
+        </div>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(191,219,254,0.4)',
+              borderRadius: 6,
+              color: '#bfdbfe',
+              cursor: 'pointer',
+              flexShrink: 0,
+              fontSize: '0.875rem',
+              padding: '4px 10px',
+            }}
+          >
+            忽略
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
 
 export default function DashboardPage() {
@@ -212,6 +304,9 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false);
   const [missingCloseSummaries, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
   const [missingDismissed, setMissingDismissed] = useState(false);
+  const [pendingCloseInfo, setPendingCloseInfo] = useState<PendingCloseEntry | null>(null);
+  const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
+  const [pendingNoticeDismissed, setPendingNoticeDismissed] = useState(false);
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
   const periodMetaRef = useRef<MetricsContract["_period"] | undefined>(
@@ -303,26 +398,29 @@ export default function DashboardPage() {
     setPeriodHealth(null);
   }, [setMissingCloseSummaries, setMissingDismissed, setPeriodHealth]);
 
-  const updateMissingCloseState = (summaries: MissingCloseSummary[]) => {
-    const prev = summaryRef.current;
-    if (summaries.length === 0) {
-      summaryRef.current = [];
-      setMissingCloseSummaries([]);
-      if (prev.length > 0) {
+  const updateMissingCloseState = useCallback(
+    (summaries: MissingCloseSummary[]) => {
+      const prev = summaryRef.current;
+      if (summaries.length === 0) {
+        summaryRef.current = [];
+        setMissingCloseSummaries([]);
+        if (prev.length > 0) {
+          setMissingDismissed(false);
+        }
+        syncPeriodHealth();
+        return;
+      }
+
+      if (missingDismissed && !areSummariesEqual(prev, summaries)) {
         setMissingDismissed(false);
       }
+
+      summaryRef.current = summaries.slice();
+      setMissingCloseSummaries(summaries);
       syncPeriodHealth();
-      return;
-    }
-
-    if (missingDismissed && !areSummariesEqual(prev, summaries)) {
-      setMissingDismissed(false);
-    }
-
-    summaryRef.current = summaries.slice();
-    setMissingCloseSummaries(summaries);
-    syncPeriodHealth();
-  };
+    },
+    [missingDismissed, setMissingCloseSummaries, setMissingDismissed, syncPeriodHealth],
+  );
 
   const handleIgnoreMissing = () => {
     if (summaryRef.current.length === 0) return;
@@ -334,6 +432,8 @@ export default function DashboardPage() {
     async function loadData() {
       try {
         setIsLoading(true);
+        setPendingCloseInfo(null);
+        setCloseWindowInfo(null);
 
         await import('@/app/lib/dataset')
           .then(m => m.ensureDatasetReady())
@@ -352,10 +452,10 @@ export default function DashboardPage() {
         for (const pos of posList) {
           const cached = getCachedRealtimeQuote(pos.symbol);
           if (cached?.price !== undefined) {
-            (pos as any).last = cached.price;
-            (pos as any).priceOk = true;
-            (pos as any).stale = true;
-            (pos as any).lastUpdatedAt = cached.updatedAt;
+            pos.last = cached.price;
+            pos.priceOk = true;
+            pos.stale = true;
+            pos.lastUpdatedAt = cached.updatedAt;
           }
 
           try {
@@ -369,31 +469,31 @@ export default function DashboardPage() {
             }
 
             if (result && typeof result.price === 'number' && result.price !== 1) {
-              (pos as any).last = result.price;
-              (pos as any).priceOk = result.priceOk !== false;
-              (pos as any).stale = Boolean(result.stale);
-              (pos as any).lastUpdatedAt = result.updatedAt ?? Date.now();
-            } else if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-              (pos as any).priceOk = true;
-              (pos as any).stale = true;
+              pos.last = result.price;
+              pos.priceOk = result.priceOk !== false;
+              pos.stale = Boolean(result.stale);
+              pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+            } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+              pos.priceOk = true;
+              pos.stale = true;
             } else {
-              (pos as any).last = NaN;
-              (pos as any).priceOk = false;
-              (pos as any).stale = true;
+              pos.last = NaN;
+              pos.priceOk = false;
+              pos.stale = true;
             }
-          } catch (e) {
-            if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-              (pos as any).priceOk = true;
-              (pos as any).stale = true;
+          } catch {
+            if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+              pos.priceOk = true;
+              pos.stale = true;
             } else {
-              (pos as any).last = NaN;
-              (pos as any).priceOk = false;
-              (pos as any).stale = true;
+              pos.last = NaN;
+              pos.priceOk = false;
+              pos.stale = true;
             }
           }
         }
 
-        if (posList.some(p => !(p as any).priceOk)) {
+        if (posList.some(p => p.priceOk === false)) {
           if (freezeDate) {
             setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
           } else {
@@ -438,6 +538,11 @@ export default function DashboardPage() {
           closePrices: mergedClosePrices,
           evalDate: evalDateStr,
         }, diagnostics);
+        setCloseWindowInfo(diagnostics.closeWindow ?? null);
+        const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+          (entry) => entry.date === evalDateStr,
+        ) ?? null;
+        setPendingCloseInfo(pendingEntry);
         setDailyResultsCache(dailyResults);
 
         const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -446,6 +551,7 @@ export default function DashboardPage() {
         // 计算指标并存入全局状态（M6 = M4 + M5.2 + 当日MTM）
         const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
           tradingDateStr: evalDateStr,
+          periodEvalYmd: evalDateStr,
         });
         const metrics = normalizeMetrics(rawMetrics);
         issuesRef.current = collectPeriodHealthIssues({
@@ -453,10 +559,10 @@ export default function DashboardPage() {
           dailyResults,
           trades: dbTrades,
           positions: posList,
-          metrics: (metrics as MetricsContract | null),
+          metrics,
         });
         syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-        setMetrics(metrics as any);
+        setMetrics(metrics);
 
         setTrades(dbTrades);
         setPositions(posList);
@@ -464,6 +570,8 @@ export default function DashboardPage() {
       } catch (e) {
         console.error(e);
         clearPeriodHealthState();
+        setCloseWindowInfo(null);
+        setPendingCloseInfo(null);
         setError(e instanceof Error ? e.message : 'An unknown error occurred.');
       } finally {
         setIsLoading(false);
@@ -471,7 +579,12 @@ export default function DashboardPage() {
     }
 
     loadData();
-  }, []);
+  }, [
+    clearPeriodHealthState,
+    setMetrics,
+    syncPeriodHealth,
+    updateMissingCloseState,
+  ]);
 
   // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
@@ -500,10 +613,10 @@ export default function DashboardPage() {
     for (const pos of posList) {
       const cached = getCachedRealtimeQuote(pos.symbol);
       if (cached?.price !== undefined) {
-        (pos as any).last = cached.price;
-        (pos as any).priceOk = true;
-        (pos as any).stale = true;
-        (pos as any).lastUpdatedAt = cached.updatedAt;
+        pos.last = cached.price;
+        pos.priceOk = true;
+        pos.stale = true;
+        pos.lastUpdatedAt = cached.updatedAt;
       }
 
       try {
@@ -516,31 +629,31 @@ export default function DashboardPage() {
           }
         }
         if (result && typeof result.price === 'number' && result.price !== 1) {
-          (pos as any).last = result.price;
-          (pos as any).priceOk = result.priceOk !== false;
-          (pos as any).stale = Boolean(result.stale);
-          (pos as any).lastUpdatedAt = result.updatedAt ?? Date.now();
-        } else if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-          (pos as any).priceOk = true;
-          (pos as any).stale = true;
+          pos.last = result.price;
+          pos.priceOk = result.priceOk !== false;
+          pos.stale = Boolean(result.stale);
+          pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+        } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+          pos.priceOk = true;
+          pos.stale = true;
         } else {
-          (pos as any).last = NaN;
-          (pos as any).priceOk = false;
-          (pos as any).stale = true;
+          pos.last = NaN;
+          pos.priceOk = false;
+          pos.stale = true;
         }
-      } catch (e) {
-        if (Number.isFinite((pos as any).last) && (pos as any).lastUpdatedAt) {
-          (pos as any).priceOk = true;
-          (pos as any).stale = true;
+      } catch {
+        if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+          pos.priceOk = true;
+          pos.stale = true;
         } else {
-          (pos as any).last = NaN;
-          (pos as any).priceOk = false;
-          (pos as any).stale = true;
+          pos.last = NaN;
+          pos.priceOk = false;
+          pos.stale = true;
         }
       }
     }
 
-    if (posList.some(p => !(p as any).priceOk)) {
+    if (posList.some(p => p.priceOk === false)) {
       clearPeriodHealthState();
       throw new Error(
         freezeDate
@@ -590,6 +703,11 @@ export default function DashboardPage() {
       },
       diagnostics,
     );
+    setCloseWindowInfo(diagnostics.closeWindow ?? null);
+    const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+      (entry) => entry.date === evalDateStr,
+    ) ?? null;
+    setPendingCloseInfo(pendingEntry);
     setDailyResultsCache(dailyResults);
 
     const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -597,6 +715,7 @@ export default function DashboardPage() {
 
     const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
       tradingDateStr: evalDateStr,
+      periodEvalYmd: evalDateStr,
     });
     const metrics = normalizeMetrics(rawMetrics);
     issuesRef.current = collectPeriodHealthIssues({
@@ -604,10 +723,10 @@ export default function DashboardPage() {
       dailyResults,
       trades: tradesSnapshot,
       positions: posList,
-      metrics: (metrics as MetricsContract | null),
+      metrics,
     });
     syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-    setMetrics(metrics as any);
+    setMetrics(metrics);
 
     setTrades(tradesSnapshot);
     setPositions(posList);
@@ -624,23 +743,23 @@ export default function DashboardPage() {
         positions.map(existing => [existing.symbol?.trim().toUpperCase(), existing] as const),
       );
       const posList: Position[] = replay.positions.map(pos => {
-        const clone = { ...pos } as Position;
+        const clone: Position = { ...pos };
         const cached = getCachedRealtimeQuote(pos.symbol);
         if (cached?.price !== undefined) {
-          (clone as any).last = cached.price;
-          (clone as any).priceOk = true;
-          (clone as any).stale = true;
-          (clone as any).lastUpdatedAt = cached.updatedAt;
+          clone.last = cached.price;
+          clone.priceOk = true;
+          clone.stale = true;
+          clone.lastUpdatedAt = cached.updatedAt;
         } else {
           const prev = prevBySymbol.get(pos.symbol?.trim().toUpperCase());
           if (prev) {
-            (clone as any).last = (prev as any).last;
-            (clone as any).priceOk = (prev as any).priceOk;
-            (clone as any).lastUpdatedAt = (prev as any).lastUpdatedAt;
-            (clone as any).stale = true;
+            clone.last = prev.last;
+            clone.priceOk = prev.priceOk;
+            clone.lastUpdatedAt = prev.lastUpdatedAt;
+            clone.stale = true;
           } else {
-            (clone as any).priceOk = false;
-            (clone as any).stale = true;
+            clone.priceOk = false;
+            clone.stale = true;
           }
         }
         return clone;
@@ -684,6 +803,12 @@ export default function DashboardPage() {
         },
         diagnostics,
       );
+      setCloseWindowInfo(diagnostics.closeWindow ?? null);
+      const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+        (entry) => entry.date === evalDateStr,
+      ) ?? null;
+      setPendingCloseInfo(pendingEntry);
+      setPendingNoticeDismissed(false);
       setDailyResultsCache(dailyResults);
 
       const summaries = summarizeMissingCloses(diagnostics.missingCloses);
@@ -691,6 +816,7 @@ export default function DashboardPage() {
 
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
         tradingDateStr: evalDateStr,
+        periodEvalYmd: evalDateStr,
       });
       const metrics = normalizeMetrics(rawMetrics);
       issuesRef.current = collectPeriodHealthIssues({
@@ -698,10 +824,10 @@ export default function DashboardPage() {
         dailyResults,
         trades: dbTrades,
         positions: posList,
-        metrics: (metrics as MetricsContract | null),
+        metrics,
       });
       syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-      setMetrics(metrics as any);
+      setMetrics(metrics);
 
       setTrades(dbTrades);
       setPositions(posList);
@@ -743,6 +869,12 @@ export default function DashboardPage() {
 
   return (
     <div>
+      <PendingCloseNotice
+        info={pendingCloseInfo}
+        closeWindow={closeWindowInfo}
+        dismissed={pendingNoticeDismissed}
+        onDismiss={() => setPendingNoticeDismissed(true)}
+      />
       {missingCloseSummaries.length > 0 && !missingDismissed && (
         <MissingCloseBanner
           summaries={missingCloseSummaries}

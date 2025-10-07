@@ -95,7 +95,7 @@ export default function TradesPage() {
     return '';
   };
 
-  let histReal = trades.reduce((s, t) => s + (t.realizedPnl || 0), 0);
+  const histReal = trades.reduce((s, t) => s + (t.realizedPnl || 0), 0);
 
   return (
     <div>

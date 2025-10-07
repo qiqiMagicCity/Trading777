@@ -13,6 +13,12 @@ describe("normalizeDailyRows", () => {
 
     expect(rows).toHaveLength(2);
     expect(rows[0]?.unrealized).toBeUndefined();
+    expect(rows[0]?.parseErrors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "unrealized", code: "PARSE_NUM_FAILED" }),
+      ]),
+    );
     expect(rows[1]?.unrealized).toBeCloseTo(45.5);
+    expect(rows[1]?.parseErrors).toBeUndefined();
   });
 });

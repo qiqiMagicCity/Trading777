@@ -37,7 +37,7 @@ for (const day of days) {
   const relevantTrades = allTrades.filter(t => nyDateStr(t.date) <= day);
   const res = await runAll(day, positions, relevantTrades, prices, { dailyResults }, { evalDate: day });
   const m = normalizeMetrics(res);
-  const totalRealized = m.M4.total + m.M5.fifo;
+  const totalRealized = m.M4 + m.M5.fifo;
   const prevRealized = dailyResults.reduce((s, r) => s + r.realized, 0);
   const realized = Math.round((totalRealized - prevRealized) * 100) / 100;
   const unrealized = Math.round(m.M3 * 100) / 100;

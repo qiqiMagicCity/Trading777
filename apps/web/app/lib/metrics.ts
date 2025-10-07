@@ -13,6 +13,12 @@ import {
   endOfDayNY,
 } from "@/lib/timezone";
 import { nyDateStr, startOfDayNY, startOfWeekNY } from "./time";
+import { selectLatestSnapshotsByNyDay } from "./metrics-snapshot-selection";
+import {
+  parseSnapshotNumber,
+  type SnapshotFieldParseError,
+  type SnapshotNumericField,
+} from "./snapshotNumber";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
@@ -52,7 +58,7 @@ function nyTodayStr(): string {
 }
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
 import { sortTrades } from "./sortTrades";
-import type { DailyResult } from "./types";
+import type { DailyResult, DailyResultInput } from "./types";
 import { sumRealized } from "./metrics-period";
 import { calcWinLossLots } from "./metrics-winloss";
 import { logger } from "@/lib/logger";
@@ -67,12 +73,18 @@ import type {
   PeriodWindowKey,
   PeriodWindowStatus,
   PeriodBaselineMode,
+  PeriodBaselineMeta,
+  PeriodWindowDiagnostics,
+  PeriodDegradationReason,
 } from "./types/metrics";
 
 const EPSILON = 1e-6;
 
+export const STALE_BASELINE_BDAYS = 5;
+
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
+  periodEvalYmd?: string;
 }
 
 /** 从后端读取汇总（直读 summary.M6 与 tradingDateStr） */
@@ -189,6 +201,7 @@ export interface Metrics {
     status?: Record<"wtd" | "mtd" | "ytd", PeriodWindowStatus>;
     breakdown?: Record<"wtd" | "mtd" | "ytd", PeriodWindowBreakdown>;
     firstActiveDate?: string;
+    diagnostics?: Record<"wtd" | "mtd" | "ytd", PeriodWindowDiagnostics>;
   };
   M7: {
     B: number;
@@ -894,6 +907,8 @@ type NormalizedDailyForWindow = {
   unrealizedDelta?: number;
   resolvedUnrealized?: number;
   missingBaselineSymbols?: string[];
+  parseErrors?: SnapshotFieldParseError[];
+  sameDayDuplicateCount?: number;
 };
 
 export interface WindowTotalsResult {
@@ -904,31 +919,51 @@ export interface WindowTotalsResult {
   firstActiveDate: string;
   breakdown: Record<PeriodWindowKey, PeriodWindowBreakdown>;
   status: Record<PeriodWindowKey, PeriodWindowStatus>;
+  diagnostics: Record<PeriodWindowKey, PeriodWindowDiagnostics>;
 }
 
 function normalizeDailyRowsForWindow(
-  daily: DailyResult[] = [],
+  daily: DailyResultInput[] = [],
   endISO: string,
 ): NormalizedDailyForWindow[] {
-  const dedup = new Map<
-    string,
-    { row: NormalizedDailyForWindow; ts: number; order: number }
-  >();
+  const latest = selectLatestSnapshotsByNyDay(daily, { maxNyDay: endISO });
 
-  (daily || []).forEach((entry, idx) => {
-    if (!entry?.date) return;
-    const day = nyDayStr(entry.date);
-    if (!day || day > endISO) return;
+  return latest.map(({ snapshot, nyDay, duplicates }) => {
+    const inheritedErrors = Array.isArray((snapshot as any)?.parseErrors)
+      ? ((snapshot as any).parseErrors as SnapshotFieldParseError[])
+          .filter((err) => err && typeof err === "object")
+          .map((err) => ({ ...err, day: err.day ?? nyDay }))
+      : [];
 
-    const tsRaw = new Date(normalizeToNyDay(entry.date)).getTime();
-    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
-    const realized = Number(entry.realized ?? 0);
-    const row: NormalizedDailyForWindow = {
-      day,
-      realized: Number.isFinite(realized) ? realized : 0,
+    const parseErrors: SnapshotFieldParseError[] = [...inheritedErrors];
+
+    const parseField = (
+      field: SnapshotNumericField,
+      value: unknown,
+      { optional = false }: { optional?: boolean } = {},
+    ): number | undefined => {
+      if (optional && (value === null || value === undefined)) {
+        return undefined;
+      }
+      const parsed = parseSnapshotNumber(value);
+      if (parsed.ok) {
+        return parsed.value;
+      }
+      parseErrors.push({ ...parsed.error, field, day: nyDay });
+      return undefined;
     };
 
-    const missingSymbolsSource = (entry as any)?.missingBaselineSymbols;
+    const realizedValue = parseField("realized", (snapshot as any)?.realized);
+    const row: NormalizedDailyForWindow = {
+      day: nyDay,
+      realized: realizedValue ?? 0,
+    };
+
+    if (typeof duplicates === "number" && duplicates > 0) {
+      row.sameDayDuplicateCount = duplicates;
+    }
+
+    const missingSymbolsSource = (snapshot as any)?.missingBaselineSymbols;
     if (Array.isArray(missingSymbolsSource)) {
       const normalizedSymbols = missingSymbolsSource
         .map((symbol: unknown) =>
@@ -940,32 +975,26 @@ function normalizeDailyRowsForWindow(
       }
     }
 
-    if (typeof entry.unrealized === "number" && Number.isFinite(entry.unrealized)) {
-      row.unrealized = entry.unrealized;
+    const unrealizedValue = parseField("unrealized", (snapshot as any)?.unrealized);
+    if (typeof unrealizedValue === "number") {
+      row.unrealized = unrealizedValue;
     }
 
-    if (
-      typeof entry.unrealizedDelta === "number" &&
-      Number.isFinite(entry.unrealizedDelta)
-    ) {
-      row.unrealizedDelta = entry.unrealizedDelta;
+    const unrealizedDeltaValue = parseField(
+      "unrealizedDelta",
+      (snapshot as any)?.unrealizedDelta,
+      { optional: true },
+    );
+    if (typeof unrealizedDeltaValue === "number") {
+      row.unrealizedDelta = unrealizedDeltaValue;
     }
 
-    const prev = dedup.get(day);
-    if (!prev || ts > prev.ts || (ts === prev.ts && idx > prev.order)) {
-      dedup.set(day, { row, ts, order: idx });
+    if (parseErrors.length > 0) {
+      row.parseErrors = parseErrors;
     }
+
+    return row;
   });
-
-  return Array.from(dedup.values())
-    .sort((a, b) => {
-      if (a.row.day < b.row.day) return -1;
-      if (a.row.day > b.row.day) return 1;
-      if (a.ts < b.ts) return -1;
-      if (a.ts > b.ts) return 1;
-      return a.order - b.order;
-    })
-    .map(({ row }) => row);
 }
 
 function resolveUnrealizedForWindow(
@@ -1017,16 +1046,43 @@ function findRowBefore(
   return undefined;
 }
 
-function prevTradingDay(day: string): string {
+function nextTradingDay(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return day;
   do {
-    d.setUTCDate(d.getUTCDate() - 1);
+    d.setUTCDate(d.getUTCDate() + 1);
   } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+function countTradingDaysBetween(
+  startDay: string,
+  endDay: string,
+): number | undefined {
+  if (!startDay || !endDay) return undefined;
+  if (startDay >= endDay) return 0;
+  const start = new Date(`${startDay}T00:00:00Z`);
+  const end = new Date(`${endDay}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return undefined;
+  let cursor = startDay;
+  let count = 0;
+  let guard = 0;
+  const LIMIT = 4096;
+  while (cursor < endDay && guard < LIMIT) {
+    const next = nextTradingDay(cursor);
+    if (next === cursor) break;
+    guard += 1;
+    if (next >= endDay) {
+      if (next === endDay) count += 1;
+      break;
+    }
+    count += 1;
+    cursor = next;
+  }
+  return count;
 }
 
 function firstMondayOfYear(yearStart: string): string {
@@ -1049,17 +1105,24 @@ function sumRealizedBetween(
   rows: NormalizedDailyForWindow[],
   start: string,
   end: string,
-): number {
+): { total: number; hasParseFailure: boolean } {
   let total = 0;
+  let hasParseFailure = false;
   for (const row of rows) {
     if (row.day < start) continue;
     if (row.day > end) break;
+    if (row.parseErrors?.some((err) => err.field === "realized")) {
+      hasParseFailure = true;
+    }
     total += row.realized;
   }
-  return total;
+  return { total, hasParseFailure };
 }
 
-type WindowTotalsOptions = PeriodTotalsOptions & { firstActiveDate?: string };
+type WindowTotalsOptions = PeriodTotalsOptions & {
+  firstActiveDate?: string;
+  uiTradeDayYmd?: string;
+};
 
 function deriveWindowTotals(
   rowsInput: NormalizedDailyForWindow[],
@@ -1068,6 +1131,20 @@ function deriveWindowTotals(
 ): WindowTotalsResult {
   const rows = resolveUnrealizedForWindow(rowsInput);
   const endRow = findRowOnOrBefore(rows, evalDay);
+  const uiTradeDayYmd = (() => {
+    const raw = options.uiTradeDayYmd;
+    if (!raw) return evalDay;
+    try {
+      return nyDayStr(raw);
+    } catch {
+      return evalDay;
+    }
+  })();
+  const filteredRowsCount = rows.reduce(
+    (count, row) => (row.day <= evalDay ? count + 1 : count),
+    0,
+  );
+  const lastSnapshotYmd = endRow?.day;
   const firstActiveCandidate = (() => {
     const raw = options.firstActiveDate?.trim();
     if (raw) return nyDayStr(raw);
@@ -1076,76 +1153,159 @@ function deriveWindowTotals(
   const firstActive = firstActiveCandidate || evalDay;
 
   const computeWindow = (windowStart: string) => {
-    const realized = sumRealizedBetween(rows, windowStart, evalDay);
-    const baselineRow = findRowBefore(rows, windowStart);
-    const expectedBaseline = prevTradingDay(windowStart);
+    const {
+      total: realized,
+      hasParseFailure: realizedParseFailure,
+    } = sumRealizedBetween(rows, windowStart, evalDay);
+    const baselineCandidate = findRowBefore(rows, windowStart);
+    let baselineRow =
+      baselineCandidate && baselineCandidate.day >= firstActive
+        ? baselineCandidate
+        : undefined;
 
-    let baseline = 0;
-    let degraded = false;
-    let baselineMode: PeriodBaselineMode = "zero";
-    let baselineDate: string | undefined;
+    const baselineDistance = baselineCandidate
+      ? countTradingDaysBetween(baselineCandidate.day, windowStart)
+      : undefined;
+
+    const baselineMeta: PeriodBaselineMeta | undefined = baselineCandidate
+      ? {
+          baselineYmd: baselineCandidate.day,
+          ...(typeof baselineDistance === "number"
+            ? { distanceBusinessDays: baselineDistance }
+            : {}),
+        }
+      : undefined;
+
+    let baselineMode: PeriodBaselineMode = "missing";
+    let baselineDate: string | undefined = baselineCandidate?.day;
     let missingBaselineSymbols: string[] | undefined;
+    let baselineValue: number | undefined;
+    let degradeReason: PeriodDegradationReason | undefined;
+    const windowParseErrors: SnapshotFieldParseError[] = [];
+    let sameDayDuplicates = 0;
 
-    if (baselineRow && baselineRow.day >= firstActive) {
+    for (const row of rows) {
+      if (row.day < windowStart || row.day > evalDay) continue;
+      if (row.parseErrors?.length) {
+        windowParseErrors.push(
+          ...row.parseErrors.map((err) => ({ ...err })),
+        );
+      }
+      if (row.sameDayDuplicateCount) {
+        sameDayDuplicates += row.sameDayDuplicateCount;
+      }
+    }
+
+    if (!baselineRow) {
+      const fallbackRow = rows.find(
+        (row) => row.day === windowStart,
+      )
+        ?? rows.find((row) => row.day >= windowStart);
+      if (fallbackRow && windowStart <= firstActive) {
+        baselineRow = fallbackRow;
+        baselineDate = fallbackRow.day;
+        if (Array.isArray(fallbackRow.missingBaselineSymbols)) {
+          missingBaselineSymbols = fallbackRow.missingBaselineSymbols;
+        }
+        const resolvedSameDay = fallbackRow.resolvedUnrealized;
+        if (
+          typeof resolvedSameDay === "number" &&
+          Number.isFinite(resolvedSameDay)
+        ) {
+          baselineValue = resolvedSameDay;
+          baselineMode = "priced";
+        } else {
+          baselineMode = "partial";
+        }
+      } else {
+        degradeReason = "DEGEN_NO_BASELINE";
+      }
+    } else {
       baselineDate = baselineRow.day;
       if (Array.isArray(baselineRow.missingBaselineSymbols)) {
         missingBaselineSymbols = baselineRow.missingBaselineSymbols;
       }
       const resolved = baselineRow.resolvedUnrealized;
       if (typeof resolved === "number" && Number.isFinite(resolved)) {
-        baseline = resolved;
+        baselineValue = resolved;
         baselineMode = "priced";
       } else {
         baselineMode = "partial";
       }
-    } else if (expectedBaseline >= firstActive) {
-      baselineDate = baselineRow?.day ?? expectedBaseline;
-      baselineMode = "missing";
-    } else {
-      baselineDate = expectedBaseline;
+
+      if (
+        typeof baselineDistance === "number" &&
+        baselineDistance > STALE_BASELINE_BDAYS
+      ) {
+        degradeReason = "DEGEN_STALE_BASELINE";
+        baselineMode = "missing";
+      }
+
+      if (baselineRow.parseErrors?.length) {
+        windowParseErrors.push(
+          ...baselineRow.parseErrors.map((err) => ({ ...err })),
+        );
+      }
     }
 
-    let endValue = 0;
-    const resolvedEnd = endRow?.resolvedUnrealized;
+    if (
+      baselineRow?.sameDayDuplicateCount &&
+      baselineRow.sameDayDuplicateCount > 0 &&
+      baselineRow.day < windowStart
+    ) {
+      sameDayDuplicates += baselineRow.sameDayDuplicateCount;
+    }
+
+    const hasWindowRows = rows.some(
+      (row) => row.day >= windowStart && row.day <= evalDay,
+    );
+
     let missingEndValue = false;
+    let endValue: number | undefined;
+    const resolvedEnd = endRow?.resolvedUnrealized;
     if (typeof resolvedEnd === "number" && Number.isFinite(resolvedEnd)) {
       endValue = resolvedEnd;
     } else {
       missingEndValue = true;
     }
 
-    let unrealizedDelta: number | undefined;
-    if (!missingEndValue) {
-      if (baselineMode === "priced" || baselineMode === "zero") {
-        unrealizedDelta = endValue - baseline;
-      } else if (baselineMode === "missing") {
-        unrealizedDelta = endValue - baseline;
-      }
+    if (!hasWindowRows && !degradeReason) {
+      degradeReason = "DEGEN_WINDOW_EMPTY";
     }
 
-    if (baselineMode === "missing") {
-      degraded = true;
+    if (missingEndValue && !degradeReason) {
+      degradeReason = "DEGEN_WINDOW_EMPTY";
     }
-    if (missingEndValue) {
-      degraded = true;
+
+    const hasParseFailure =
+      realizedParseFailure || windowParseErrors.length > 0;
+
+    if (hasParseFailure) {
+      degradeReason = "DEGEN_PARSE_FAILED";
     }
+
+    let unrealizedDelta: number | undefined;
+    if (!missingEndValue && baselineMode === "priced" && typeof baselineValue === "number") {
+      unrealizedDelta = endValue! - baselineValue;
+    }
+
+    const degraded = Boolean(degradeReason) || missingEndValue;
 
     let total = realized;
     if (typeof unrealizedDelta === "number") {
       total += unrealizedDelta;
     }
+    if (degraded) {
+      total = Number.NaN;
+    }
 
     let status: PeriodWindowStatus = "ok";
-    if (baselineMode === "zero") {
-      status = "ok_zero";
-    } else if (baselineMode === "partial") {
+    if (baselineMode === "partial") {
       status = "partial";
-    }
-
-    if (baselineMode === "missing") {
+    } else if (baselineMode === "missing" && !degraded) {
       status = "missing";
     }
-    if (missingEndValue) {
+    if (degraded) {
       status = "degraded";
     }
 
@@ -1161,7 +1321,16 @@ function deriveWindowTotals(
         : {}),
     };
 
-    return { total, degraded, status, breakdown };
+    return {
+      total,
+      degraded,
+      status,
+      breakdown,
+      reason: degradeReason,
+      baselineMeta,
+      parseErrors: windowParseErrors,
+      sameDayDuplicates,
+    };
   };
 
   const weekStart = weekStartForEvalDay(evalDay);
@@ -1171,6 +1340,27 @@ function deriveWindowTotals(
   const week = computeWindow(weekStart);
   const month = computeWindow(monthStart);
   const year = computeWindow(yearStart);
+
+  const buildDiagnostics = (
+    window: ReturnType<typeof computeWindow>,
+    windowStart: string,
+  ): PeriodWindowDiagnostics => ({
+    status: window.status,
+    degraded: window.degraded,
+    ...(window.reason ? { reason: window.reason } : {}),
+    ...(window.baselineMeta ? { baselineMeta: window.baselineMeta } : {}),
+    ...(window.parseErrors.length
+      ? { parseErrors: window.parseErrors }
+      : {}),
+    ...(window.sameDayDuplicates
+      ? { sameDayDuplicates: window.sameDayDuplicates }
+      : {}),
+    uiTradeDayYmd,
+    periodEvalYmd: evalDay,
+    filteredRowsCount,
+    ...(lastSnapshotYmd ? { lastSnapshotYmd } : {}),
+    windowStartYmd: windowStart,
+  });
 
   return {
     wtd: week.total,
@@ -1192,10 +1382,15 @@ function deriveWindowTotals(
       mtd: month.status,
       ytd: year.status,
     },
+    diagnostics: {
+      wtd: buildDiagnostics(week, weekStart),
+      mtd: buildDiagnostics(month, monthStart),
+      ytd: buildDiagnostics(year, yearStart),
+    },
   };
 }
 
-export function calcWtdMtdYtd(daily: DailyResult[], evalDateStr: string) {
+export function calcWtdMtdYtd(daily: DailyResultInput[], evalDateStr: string) {
   const evalDay = nyDayStr(evalDateStr);
   const rows = normalizeDailyRowsForWindow(daily, evalDay);
   const firstActive = rows[0]?.day;
@@ -1212,13 +1407,15 @@ export function getLastWtdMtdYtdExplain(): WtdMtdYtdExplain | null {
 }
 
 export function calcWtdMtdYtdFromSnapshots(
-  daily: DailyResult[] = [],
+  daily: DailyResultInput[] = [],
   evalDayStr: string,
   options: WindowTotalsOptions = {},
 ): WindowTotalsResult {
   const evalDay = nyDayStr(evalDayStr);
   const rows = normalizeDailyRowsForWindow(daily, evalDay);
-  const totals = deriveWindowTotals(rows, evalDay, options);
+  const totals = deriveWindowTotals(rows, evalDay, {
+    ...options,
+  });
 
   try {
     if (typeof window !== "undefined") {
@@ -1236,7 +1433,7 @@ export function calcWtdMtdYtdFromSnapshots(
 }
 
 export function explainWtdMtdYtdFromSnapshots(
-  daily: DailyResult[] = [],
+  daily: DailyResultInput[] = [],
   evalDayStr: string,
   options: WindowTotalsOptions = {},
 ) {
@@ -1297,6 +1494,7 @@ export function explainWtdMtdYtdFromSnapshots(
       month: totals.status.mtd,
       year: totals.status.ytd,
     },
+    diagnostics: totals.diagnostics,
   };
 }
 
@@ -1737,25 +1935,44 @@ export function calcMetricsInternal(
       sample: trades.slice(0, 3),
     });
 
-  // 基于原始交易记录（保留重复项）计算统计
-  const rawTradingDate =
-    typeof options.tradingDateStr === "string"
-      ? options.tradingDateStr.trim()
-      : undefined;
-  const providedTradingDate =
-    rawTradingDate && /^\d{4}-\d{2}-\d{2}$/.test(rawTradingDate)
-      ? rawTradingDate
-      : undefined;
-  const inputTodayStr = providedTradingDate;
-  const snapEvalDayStr = nyDayStr(inputTodayStr ?? nyTodayStr());
-  const evalDateNY = providedTradingDate
-    ? toNY(`${providedTradingDate}T12:00:00Z`)
-    : nowNY();
+  // 注意：评估日必须使用显式 periodEvalYmd（入参优先，其次 nyTodayStr）。
+  // UI 展示日可继续调用 getLatestTradingDayStr，但严禁用其回退 periodEvalYmd。
+  const resolveNyDay = (input?: string) => {
+    if (typeof input !== "string") return undefined;
+    const trimmed = input.trim();
+    if (!trimmed) return undefined;
+    try {
+      return nyDayStr(trimmed);
+    } catch (error) {
+      if (DEBUG) {
+        logger.debug("PERIOD_EVAL_RESOLVE_FAIL", { input, error });
+      }
+      return undefined;
+    }
+  };
 
-  const initialTodayStr =
-    providedTradingDate ?? getLatestTradingDayStr(evalDateNY);
-  const periodEvalStr = providedTradingDate ?? initialTodayStr;
-  const evalEnd = endOfDayNY(toNY(`${initialTodayStr}T12:00:00Z`));
+  const providedEvalDay = resolveNyDay(options.periodEvalYmd);
+  const providedUiTradeDay = resolveNyDay(options.tradingDateStr);
+  const freezeEnvValue =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_FREEZE_DATE
+      : undefined;
+  const freezeWindowValue =
+    typeof window !== "undefined"
+      ? (window as unknown as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE
+      : undefined;
+  const freezeCandidate =
+    typeof freezeEnvValue === "string"
+      ? freezeEnvValue
+      : typeof freezeWindowValue === "string"
+        ? freezeWindowValue
+        : undefined;
+  const freezeEvalDay = resolveNyDay(freezeCandidate);
+  const periodEvalStr = providedEvalDay ?? freezeEvalDay ?? nyTodayStr();
+  const evalAnchorNY = toNY(`${periodEvalStr}T12:00:00Z`);
+  const uiTradeDayYmd =
+    providedUiTradeDay ?? getLatestTradingDayStr(evalAnchorNY);
+  const evalEnd = endOfDayNY(evalAnchorNY);
 
   const safeTrades: EnrichedTrade[] = [];
   const tradeEntries: Array<{ trade: EnrichedTrade; date: Date; day: string }> =
@@ -1793,7 +2010,7 @@ export function calcMetricsInternal(
     }
   }
 
-  const todayStr = initialTodayStr;
+  const todayStr = periodEvalStr;
 
   const todayTrades = tradeEntries
     .filter((entry) => entry.day === todayStr)
@@ -1933,7 +2150,7 @@ export function calcMetricsInternal(
   const periodSnapshot = calcWtdMtdYtdFromSnapshots(
     historicalDailyResults,
     periodEvalStr,
-    { firstActiveDate },
+    { firstActiveDate, uiTradeDayYmd },
   );
   const {
     wtd,
@@ -1943,7 +2160,31 @@ export function calcMetricsInternal(
     breakdown: periodBreakdown,
     status: periodStatus,
     firstActiveDate: resolvedFirstActiveDate,
+    diagnostics: periodDiagnostics,
   } = periodSnapshot;
+
+  const diagnosticSnapshots = periodDiagnostics ?? {};
+  const lastSnapshotYmd =
+    diagnosticSnapshots.wtd?.lastSnapshotYmd ??
+    diagnosticSnapshots.mtd?.lastSnapshotYmd ??
+    diagnosticSnapshots.ytd?.lastSnapshotYmd;
+  const filteredRowsCount =
+    diagnosticSnapshots.wtd?.filteredRowsCount ??
+    diagnosticSnapshots.mtd?.filteredRowsCount ??
+    diagnosticSnapshots.ytd?.filteredRowsCount;
+
+  if (
+    uiTradeDayYmd &&
+    uiTradeDayYmd !== periodEvalStr &&
+    lastSnapshotYmd === periodEvalStr
+  ) {
+    logger.debug("PERIOD_EVAL_DAY_INCLUDED", {
+      uiTradeDayYmd,
+      periodEvalYmd: periodEvalStr,
+      lastSnapshotYmd,
+      filteredRowsCount,
+    });
+  }
   if (DEBUG) {
     try {
       checkPeriodDebug(historicalDailyResults ?? dailyResults, periodEvalStr);
@@ -1995,23 +2236,15 @@ export function calcMetricsInternal(
     },
   };
 
-  const hasDegradedFlag = Boolean(
-    degraded?.wtd || degraded?.mtd || degraded?.ytd,
-  );
-  const hasNonOkStatus = Object.values(periodStatus ?? {}).some(
-    (state) => state && state !== "ok" && state !== "ok_zero",
-  );
-
-  if (hasDegradedFlag || hasNonOkStatus) {
-    metrics._period = {
-      degraded,
-      ...(periodStatus ? { status: periodStatus } : {}),
-      ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
-      ...(resolvedFirstActiveDate
-        ? { firstActiveDate: resolvedFirstActiveDate }
-        : {}),
-    };
-  }
+  metrics._period = {
+    degraded,
+    ...(periodStatus ? { status: periodStatus } : {}),
+    ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
+    ...(resolvedFirstActiveDate
+      ? { firstActiveDate: resolvedFirstActiveDate }
+      : {}),
+    ...(periodDiagnostics ? { diagnostics: periodDiagnostics } : {}),
+  };
 
   assertM6(metrics);
 
@@ -2069,7 +2302,7 @@ export function normalizeMetrics(input: any): MetricsContract {
     const win = Number(value?.win ?? value?.W ?? 0);
     const loss = Number(value?.loss ?? value?.L ?? 0);
     const flat = Number(value?.flat ?? value?.F ?? 0);
-    let rateRaw = value?.rate ?? value?.winRate ?? value?.winRatePct;
+    const rateRaw = value?.rate ?? value?.winRate ?? value?.winRatePct;
     let rate = Number(rateRaw);
     if (!Number.isFinite(rate)) {
       const denom = win + loss;
@@ -2083,7 +2316,9 @@ export function normalizeMetrics(input: any): MetricsContract {
   const M1 = Number(input?.M1 ?? 0);
   const M2 = Number(input?.M2 ?? 0);
   const M3 = Number(input?.M3 ?? 0);
-  const M4 = { total: pickTotal(input?.M4) };
+  const M4 = Number.isFinite(Number(input?.M4))
+    ? Number(input?.M4)
+    : pickTotal(input?.M4);
   const M5 = {
     behavior: Number(
       input?.M5?.behavior ?? input?.M5?.trade ?? input?.M5_1 ?? 0,
@@ -2099,12 +2334,21 @@ export function normalizeMetrics(input: any): MetricsContract {
   const prevRealized = input?.aux?.m6PrevRealizedTotal;
   const fifoToday = input?.aux?.m6FifoToday;
   const rawRealizedToday = Number(input?._m6?.realizedToday);
+  const rawRealizedTotalAux = Number(input?.aux?.realized?.today_total);
+  const rawRealizedIntradayAux = Number(input?.aux?.realized?.today_intraday);
   const rawMtmOvernight = Number(input?._m6?.mtmOvernight);
   const rawMtmIntraday = Number(input?._m6?.mtmIntradayOpen);
-  const realizedToday = Number.isFinite(rawRealizedToday)
+  const realizedToday = Number.isFinite(rawRealizedTotalAux)
+    ? rawRealizedTotalAux
+    : Number.isFinite(rawRealizedToday)
     ? rawRealizedToday
     : Number.isFinite(prevRealized) && Number.isFinite(fifoToday)
     ? Number(prevRealized) + Number(fifoToday)
+    : 0;
+  const realizedIntraday = Number.isFinite(rawRealizedIntradayAux)
+    ? rawRealizedIntradayAux
+    : Number.isFinite(fifoToday)
+    ? Number(fifoToday)
     : 0;
   const mtmOvernight = Number.isFinite(rawMtmOvernight)
     ? rawMtmOvernight
@@ -2184,8 +2428,38 @@ export function normalizeMetrics(input: any): MetricsContract {
         (s: unknown): s is string => typeof s === "string",
       )
     : [];
+  const rawBreakdown = input?.aux?.breakdown;
+  const breakdown = rawBreakdown
+    ? Array.isArray(rawBreakdown)
+      ? {
+          all: rawBreakdown.map((row) => ({ ...(row ?? {}) })),
+          m4: rawBreakdown
+            .filter((row: any) => row?.into === "M4")
+            .map((row: any) => ({ ...(row ?? {}) })),
+          m5_1: rawBreakdown
+            .filter((row: any) => row?.into === "M5.1")
+            .map((row: any) => ({ ...(row ?? {}) })),
+          m5_2: rawBreakdown
+            .filter((row: any) => row?.into === "M5.2")
+            .map((row: any) => ({ ...(row ?? {}) })),
+        }
+      : {
+          all: Array.isArray((rawBreakdown as any).all)
+            ? (rawBreakdown as any).all.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+          m4: Array.isArray((rawBreakdown as any).m4)
+            ? (rawBreakdown as any).m4.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+          m5_1: Array.isArray((rawBreakdown as any).m5_1)
+            ? (rawBreakdown as any).m5_1.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+          m5_2: Array.isArray((rawBreakdown as any).m5_2)
+            ? (rawBreakdown as any).m5_2.map((row: any) => ({ ...(row ?? {}) }))
+            : [],
+        }
+    : undefined;
   const aux = {
-    breakdown: input?.aux?.breakdown ?? [],
+    breakdown,
     m6PriceChange: priceChange,
     m6PrevRealizedTotal:
       typeof prevRealized === "number" && Number.isFinite(prevRealized)
@@ -2194,6 +2468,13 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6FifoToday:
       typeof fifoToday === "number" && Number.isFinite(fifoToday)
         ? fifoToday
+        : undefined,
+    realized:
+      Number.isFinite(realizedToday) || Number.isFinite(realizedIntraday)
+        ? {
+            today_intraday: realizedIntraday,
+            today_total: realizedToday,
+          }
         : undefined,
     m6Legs,
     m6Excluded,
@@ -2216,6 +2497,19 @@ export function normalizeMetrics(input: any): MetricsContract {
                 breakdown: Object.fromEntries(
                   Object.entries(
                     input._period.breakdown as Record<string, any>,
+                  ).map(([key, value]) => [
+                    key,
+                    value && typeof value === "object" ? { ...value } : value,
+                  ]),
+                ),
+              }
+            : {}),
+          ...(input._period?.diagnostics &&
+          typeof input._period.diagnostics === "object"
+            ? {
+                diagnostics: Object.fromEntries(
+                  Object.entries(
+                    input._period.diagnostics as Record<string, any>,
                   ).map(([key, value]) => [
                     key,
                     value && typeof value === "object" ? { ...value } : value,
@@ -2279,5 +2573,5 @@ export function normalizeMetrics(input: any): MetricsContract {
 // 兼容监控的扁平投影（监控/脚本可能用到）
 export function projectToM6(input: any) {
   const m = normalizeMetrics(input);
-  return { M3: m.M3, M4: m.M4.total, M5_2: m.M5.fifo, M6: m.M6.total };
+  return { M3: m.M3, M4: m.M4, M5_2: m.M5.fifo, M6: m.M6.total };
 }

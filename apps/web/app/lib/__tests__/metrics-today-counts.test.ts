@@ -65,7 +65,7 @@ describe("calcMetrics daily trade detection", () => {
     expect(metrics.M7.S).toBe(0);
     expect(metrics.M5.behavior).toBe(0);
     expect(metrics.M5.fifo).toBe(0);
-    expect(metrics.M4.total).toBe(0);
+    expect(metrics.M4).toBe(0);
     expect(metrics.M6.total).toBe(0);
   });
 });

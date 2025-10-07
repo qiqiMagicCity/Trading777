@@ -8,15 +8,126 @@ import {
   normalizeMetrics,
   isDebug,
   getLastWtdMtdYtdExplain,
+  STALE_BASELINE_BDAYS,
 } from "@/app/lib/metrics";
-import type { MetricsContract } from "@/app/lib/types/metrics";
+import type {
+  MetricsContract,
+  PeriodBaselineMeta,
+  PeriodDegradationReason,
+  PeriodParseError,
+} from "@/app/lib/types/metrics";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MissingCloseFallback } from "@/app/lib/dailyResults";
+import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 
 const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
   MARK_PRICE: "使用最新价兜底",
   PREVIOUS_CLOSE: "沿用上一日价格",
   AVERAGE_COST: "使用均价兜底",
+};
+
+const DEGRADE_REASON_LABELS: Record<PeriodDegradationReason, string> = {
+  DEGEN_NO_BASELINE: "缺基线",
+  DEGEN_STALE_BASELINE: "基线过旧",
+  DEGEN_WINDOW_EMPTY: "窗口空",
+  DEGEN_PARSE_FAILED: "解析失败",
+};
+
+function summarizeParseErrors(parseErrors?: PeriodParseError[]): string[] {
+  if (!parseErrors || parseErrors.length === 0) {
+    return [];
+  }
+
+  const grouped = new Map<string, { count: number; samples: string[] }>();
+  for (const err of parseErrors) {
+    if (!err || err.field === undefined) continue;
+    const key = String(err.field);
+    const bucket = grouped.get(key) ?? { count: 0, samples: [] };
+    bucket.count += 1;
+    if (bucket.samples.length < 2) {
+      const rawValue =
+        err.trimmed !== undefined
+          ? err.trimmed
+          : err.value === null
+          ? "null"
+          : err.value === undefined
+          ? "undefined"
+          : typeof err.value === "object"
+          ? JSON.stringify(err.value)
+          : String(err.value);
+      const sample = rawValue === "" ? "(空字符串)" : rawValue;
+      const day = err.day ? `${err.day}→` : "";
+      bucket.samples.push(`${day}${sample}`);
+    }
+    grouped.set(key, bucket);
+  }
+
+  return Array.from(grouped.entries()).map(([field, info]) => {
+    const samples = info.samples.join("，");
+    return `${field}：${info.count} 条${samples ? `（示例 ${samples}）` : ""}`;
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isPeriodParseErrorLike(value: unknown): value is PeriodParseError {
+  return isRecord(value) && "field" in value;
+}
+
+function composeDegradeTooltip(
+  label: string,
+  reason?: PeriodDegradationReason,
+  baselineMeta?: PeriodBaselineMeta,
+  parseErrors?: PeriodParseError[],
+): string {
+  const lines: string[] = [];
+  const reasonLine = reason ? `${label}（${reason}）` : label;
+  lines.push(`退化原因：${reasonLine}`);
+
+  if (baselineMeta?.baselineYmd) {
+    lines.push(`基线日期：${baselineMeta.baselineYmd}`);
+  }
+
+  const distance =
+    baselineMeta &&
+    typeof baselineMeta.distanceBusinessDays === "number" &&
+    Number.isFinite(baselineMeta.distanceBusinessDays)
+      ? baselineMeta.distanceBusinessDays
+      : undefined;
+
+  const threshold =
+    baselineMeta &&
+    typeof baselineMeta.thresholdBusinessDays === "number" &&
+    Number.isFinite(baselineMeta.thresholdBusinessDays)
+      ? baselineMeta.thresholdBusinessDays
+      : undefined;
+
+  if (distance !== undefined) {
+    if (reason === "DEGEN_STALE_BASELINE") {
+      const displayThreshold = threshold ?? STALE_BASELINE_BDAYS;
+      lines.push(`距评估日 ${distance} 个交易日（阈值 ${displayThreshold}）`);
+    } else {
+      lines.push(`距评估日 ${distance} 个交易日`);
+    }
+  } else if (reason === "DEGEN_STALE_BASELINE") {
+    const displayThreshold = threshold ?? STALE_BASELINE_BDAYS;
+    lines.push(`基线已超过阈值 ${displayThreshold} 个交易日`);
+  }
+
+  const parseSummaries = summarizeParseErrors(parseErrors);
+  if (parseSummaries.length > 0) {
+    lines.push(`解析失败：${parseSummaries.join("；")}`);
+  }
+
+  return lines.join("\n");
+}
+
+const WINDOW_KEY_MAP: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
+  M11: "wtd",
+  M12: "mtd",
+  M13: "ytd",
 };
 
 /**
@@ -38,7 +149,7 @@ function MetricCard({
   colorClass,
   dataTestId,
 }: {
-  title: string;
+  title: ReactNode;
   value: ReactNode;
   colorClass?: string;
   dataTestId?: string;
@@ -56,6 +167,8 @@ function MetricCard({
  * 显示所有交易系统指标的卡片视图
  */
 export function DashboardMetrics({ enrichedTrades, positions }: Props) {
+  void enrichedTrades;
+  void positions;
   // 从全局状态获取指标
   const rawMetrics = useStore((state) => state.metrics);
   const periodHealth = useStore((state) => state.periodHealth);
@@ -68,6 +181,185 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const periodMeta = rawMetrics?._period;
   const periodStatusMap = periodMeta?.status;
   const periodBreakdown = periodMeta?.breakdown;
+
+  const m6Card = useMemo(() => {
+    if (!metrics) {
+      return null;
+    }
+
+    const normalizeNumber = (value: unknown): number | undefined => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return undefined;
+      }
+      return Object.is(value, -0) ? 0 : value;
+    };
+
+    const normalizedM6 = metrics._m6 ?? null;
+    const rawM6 = rawMetrics?._m6 ?? null;
+    const diagnosticsRoot = rawMetrics?._period?.diagnostics;
+    const intradayDiagnosticsRaw =
+      diagnosticsRoot && "intraday" in diagnosticsRoot
+        ? (diagnosticsRoot as Record<string, unknown>).intraday
+        : undefined;
+    const intradayDiagnostics = isRecord(intradayDiagnosticsRaw)
+      ? intradayDiagnosticsRaw
+      : undefined;
+    const intradayReason: PeriodDegradationReason | undefined =
+      intradayDiagnostics &&
+      typeof intradayDiagnostics.reason === "string"
+        ? (intradayDiagnostics.reason as PeriodDegradationReason)
+        : undefined;
+    const intradayParseErrors = Array.isArray(intradayDiagnostics?.parseErrors)
+      ? intradayDiagnostics.parseErrors.filter(isPeriodParseErrorLike)
+      : [];
+    const rawMetricsRecord = isRecord(rawMetrics)
+      ? (rawMetrics as Record<string, unknown>)
+      : null;
+    let rawTradingDate: string | undefined;
+    if (
+      rawMetricsRecord &&
+      typeof rawMetricsRecord.tradingDateStr === "string"
+    ) {
+      rawTradingDate = rawMetricsRecord.tradingDateStr as string;
+    } else {
+      rawTradingDate = undefined;
+    }
+    const diagnosticsTradeDay =
+      intradayDiagnostics &&
+      typeof intradayDiagnostics.uiTradeDayYmd === "string"
+        ? intradayDiagnostics.uiTradeDayYmd
+        : undefined;
+    const tradingDay: string | undefined =
+      diagnosticsTradeDay ?? rawTradingDate;
+
+    const componentFieldMap = {
+      realizedToday: "realized_today",
+      mtmOvernight: "mtm_overnight",
+      mtmIntradayOpen: "mtm_intraday_open",
+    } as const;
+
+    type ComponentKey = keyof typeof componentFieldMap;
+
+    const hasRawBreakdown =
+      rawM6 &&
+      (Object.prototype.hasOwnProperty.call(rawM6, "realizedToday") ||
+        Object.prototype.hasOwnProperty.call(rawM6, "mtmOvernight") ||
+        Object.prototype.hasOwnProperty.call(rawM6, "mtmIntradayOpen"));
+
+    const componentDetails = (Object.keys(componentFieldMap) as ComponentKey[]).map(
+      (key) => {
+        const normalizedValue = normalizeNumber(normalizedM6?.[key]) ?? 0;
+        const rawHasValue = rawM6
+          ? Object.prototype.hasOwnProperty.call(rawM6, key)
+          : false;
+        let derivedParseError: PeriodParseError | null = null;
+        if (rawHasValue) {
+          const parsed = parseSnapshotNumber(rawM6?.[key]);
+          if (!parsed.ok) {
+            derivedParseError = {
+              ...parsed.error,
+              field: componentFieldMap[key],
+              day: tradingDay ?? "N/A",
+            };
+          }
+        }
+        return {
+          key,
+          label:
+            key === "realizedToday"
+              ? "已实现盈亏"
+              : key === "mtmOvernight"
+              ? "隔夜 MTM"
+              : "日内 MTM",
+          field: componentFieldMap[key],
+          value: normalizedValue,
+          rawHasValue,
+          parseError: derivedParseError,
+        };
+      },
+    );
+
+    const derivedParseErrors = componentDetails
+      .map((item) => item.parseError)
+      .filter((err): err is PeriodParseError => !!err);
+
+    const parseErrorsMap = new Map<string, PeriodParseError>();
+    for (const err of [...intradayParseErrors, ...derivedParseErrors]) {
+      if (!err) continue;
+      const key = `${err.field}|${err.day}|${err.trimmed ?? ""}|${String(
+        err.value,
+      )}`;
+      if (!parseErrorsMap.has(key)) {
+        parseErrorsMap.set(key, err);
+      }
+    }
+    const parseErrors = Array.from(parseErrorsMap.values());
+
+    const componentsSum = componentDetails.reduce(
+      (sum, item) => sum + (item.value ?? 0),
+      0,
+    );
+    const total = normalizeNumber(componentsSum) ?? 0;
+    const rawTotal = normalizeNumber(metrics.M6?.total);
+    const totalMismatch =
+      rawTotal !== undefined && Math.abs(rawTotal - total) > 0.01;
+
+    const warnings = Array.isArray(normalizedM6?.warnings)
+      ? normalizedM6!.warnings.filter((msg) => typeof msg === "string" && msg)
+      : [];
+
+    const hasAlerts =
+      Boolean(intradayReason) || warnings.length > 0 || parseErrors.length > 0 || totalMismatch;
+
+    const tooltipLines: string[] = [];
+    if (!hasRawBreakdown) {
+      tooltipLines.push("无当日快照");
+      tooltipLines.push("纽约日口径（America/New_York），20:00–23:59 ET 仍计入当日。");
+    } else {
+      tooltipLines.push(
+        "纽约日口径（America/New_York），20:00–23:59 ET 仍计入当日。",
+      );
+      for (const item of componentDetails) {
+        tooltipLines.push(
+          `${item.label}（${item.field}）：${formatCurrency(item.value ?? 0)}`,
+        );
+      }
+      tooltipLines.push(`合计：${formatCurrency(total)}`);
+
+      const alertLines: string[] = [];
+      if (intradayReason) {
+        const label = DEGRADE_REASON_LABELS[intradayReason];
+        const reasonLabel = label
+          ? `${label}（${intradayReason}）`
+          : intradayReason;
+        alertLines.push(`⚠️ 退化原因：${reasonLabel}`);
+      }
+      if (warnings.length > 0) {
+        for (const warning of warnings) {
+          alertLines.push(`⚠️ ${warning}`);
+        }
+      }
+      const parseSummaries = summarizeParseErrors(parseErrors);
+      if (parseSummaries.length > 0) {
+        alertLines.push(`⚠️ 解析失败：${parseSummaries.join("；")}`);
+      }
+      if (totalMismatch && rawTotal !== undefined) {
+        alertLines.push(
+          `⚠️ 合计校验：拆解=${formatCurrency(total)}，原值=${formatCurrency(rawTotal)}`,
+        );
+      }
+      if (alertLines.length > 0) {
+        tooltipLines.push("", ...alertLines);
+      }
+    }
+
+    return {
+      status: hasRawBreakdown ? "ok" : "missing",
+      total,
+      tooltip: tooltipLines.join("\n"),
+      hasAlerts,
+    } as const;
+  }, [metrics, rawMetrics]);
 
   type PeriodCardState =
     | "ok"
@@ -153,12 +445,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     } as const;
   }, [metrics]);
 
-  const windowKeyMap: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
-    M11: "wtd",
-    M12: "mtd",
-    M13: "ytd",
-  };
-
   // 卡片渲染时统一读取 periodValues.*.value，缺失时占位 0
 
   useEffect(() => {
@@ -169,7 +455,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       MTD: periodValues.M12,
       YTD: periodValues.M13,
     };
-    // eslint-disable-next-line no-console
     console.log("PERIOD-CARDS (final source)", payload);
   }, [debugEnabled, periodValues, rawMetrics]);
 
@@ -205,33 +490,44 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       );
       const ssrMetrics =
         ssr?.props?.pageProps?.metrics ?? ssr?.props?.pageProps?.data?.metrics;
-      // eslint-disable-next-line no-console
       console.log(
         "SSR has metrics?",
         !!ssrMetrics,
         ssrMetrics ? Object.keys(ssrMetrics) : null,
       );
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.log("SSR metrics inspect failed:", e);
     }
 
-    const rawAny = rawMetrics as any;
+    const rawRecord = isRecord(rawMetrics) ? rawMetrics : null;
 
-    // eslint-disable-next-line no-console
     console.log("PERIOD-CARDS (final source)", {
       WTD: periodValues.M11,
       MTD: periodValues.M12,
       YTD: periodValues.M13,
     });
-    // eslint-disable-next-line no-console
     console.log("COMPARE raw alias vs Mxx:", {
       M11: metrics?.M11,
       M12: metrics?.M12,
       M13: metrics?.M13,
-      raw_WTD: rawAny?.WTD ?? rawAny?.wtd,
-      raw_MTD: rawAny?.MTD ?? rawAny?.mtd,
-      raw_YTD: rawAny?.YTD ?? rawAny?.ytd,
+      raw_WTD:
+        (rawRecord && typeof rawRecord.WTD === "number"
+          ? rawRecord.WTD
+          : typeof rawRecord?.wtd === "number"
+          ? rawRecord?.wtd
+          : undefined),
+      raw_MTD:
+        (rawRecord && typeof rawRecord.MTD === "number"
+          ? rawRecord.MTD
+          : typeof rawRecord?.mtd === "number"
+          ? rawRecord?.mtd
+          : undefined),
+      raw_YTD:
+        (rawRecord && typeof rawRecord.YTD === "number"
+          ? rawRecord.YTD
+          : typeof rawRecord?.ytd === "number"
+          ? rawRecord?.ytd
+          : undefined),
     });
 
     let tries = 0;
@@ -239,23 +535,18 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     const timer = setInterval(() => {
       tries += 1;
       const detail = getLastWtdMtdYtdExplain();
-      if (detail) {
-        // eslint-disable-next-line no-console
-        console.log("[M11/M12/M13 debug]", detail);
-        if (typeof console.table === "function") {
-          // eslint-disable-next-line no-console
-          console.table(detail.ranges.week.rows);
-          // eslint-disable-next-line no-console
-          console.table(detail.ranges.month.rows);
-          // eslint-disable-next-line no-console
-          console.table(detail.ranges.year.rows);
-        }
-        clearInterval(timer);
-      } else if (tries >= maxTries) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          "debugM11: no explain captured (did metrics compute on client?)",
-        );
+        if (detail) {
+          console.log("[M11/M12/M13 debug]", detail);
+          if (typeof console.table === "function") {
+            console.table(detail.ranges.week.rows);
+            console.table(detail.ranges.month.rows);
+            console.table(detail.ranges.year.rows);
+          }
+          clearInterval(timer);
+        } else if (tries >= maxTries) {
+          console.warn(
+            "debugM11: no explain captured (did metrics compute on client?)",
+          );
         clearInterval(timer);
       }
     }, 300);
@@ -306,6 +597,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   // 格式化指标值并确定颜色
   const formattedMetrics = useMemo(() => {
     if (!metrics) return [];
+    const diagnostics = rawMetrics?._period?.diagnostics;
     return order.map((key) => {
       const value =
         key === "M11"
@@ -324,7 +616,13 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           ? "metric-mtd"
           : key === "M13"
           ? "metric-ytd"
+          : key === "M6"
+          ? "metric-m6"
           : undefined;
+      const baseTitle = metricNames[key] ?? key;
+      let titleNode: ReactNode = baseTitle;
+
+      let numericForColor: number | undefined;
 
       // 根据不同指标类型格式化值
       if (key === "M5") {
@@ -368,16 +666,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             <span>{(m10.rate * 100).toFixed(1)}%</span>
           </>
         );
-      } else {
+      } else if (key !== "M6") {
         const numValue =
-          key === "M4" || key === "M6"
-            ? (value as { total: number } | undefined)?.total
+          key === "M4"
+            ? (value as number | undefined)
             : (value as number | undefined);
-        let numericForColor: number | undefined;
 
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
-          const breakdown = periodBreakdown?.[windowKeyMap[key]];
+          const breakdown = periodBreakdown?.[WINDOW_KEY_MAP[key]];
 
           if (state === "partial") {
             const realizedValue =
@@ -452,15 +749,111 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         }
       }
 
+      if (key === "M6") {
+        const card = m6Card;
+        const total = card?.total ?? 0;
+        const status = card?.status ?? "missing";
+        const tooltip = card?.tooltip ?? "无当日快照";
+        const hasAlerts = card?.hasAlerts ?? false;
+
+        if (status === "missing") {
+          formattedValue = (
+            <span className="text-muted-foreground font-medium">待补充</span>
+          );
+        } else {
+          formattedValue = formatCurrency(total);
+          numericForColor = total;
+        }
+
+        if (status === "ok") {
+          colorClass =
+            total > 0 ? "green" : total < 0 ? "red" : "";
+        }
+
+        const buttonClassName = hasAlerts
+          ? "inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[11px] font-semibold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:ring-offset-amber-100"
+          : "inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-slate-100";
+
+        titleNode = (
+          <span className="inline-flex items-center gap-2">
+            <span>{baseTitle}</span>
+            <button
+              type="button"
+              className={buttonClassName}
+              title={tooltip}
+              aria-label="当日盈亏拆解（纽约日口径）"
+              data-testid="metric-m6-breakdown-trigger"
+            >
+              i
+            </button>
+          </span>
+        );
+
+        return {
+          key,
+          title: titleNode,
+          value: formattedValue,
+          colorClass,
+          dataTestId,
+        };
+      }
+
+      if (key === "M11" || key === "M12" || key === "M13") {
+        const windowKey = WINDOW_KEY_MAP[key];
+        const diag = diagnostics?.[windowKey];
+        if (periodCardStates[key] === "degraded" && diag?.degraded) {
+          const reasonLabel = diag.reason
+            ? DEGRADE_REASON_LABELS[diag.reason] ?? "指标退化"
+            : "指标退化";
+          const tooltip = composeDegradeTooltip(
+            reasonLabel,
+            diag.reason,
+            diag.baselineMeta,
+            diag.parseErrors,
+          );
+          titleNode = (
+            <span className="inline-flex items-center gap-2">
+              <span>{baseTitle}</span>
+              <span
+                className="inline-flex items-center gap-1 text-xs font-medium text-amber-700"
+                data-testid={`period-degrade-hint-${key.toLowerCase()}`}
+              >
+                <span className="rounded bg-amber-100 px-1.5 py-0.5">
+                  {reasonLabel}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-1 focus:ring-offset-amber-100 dark:focus:ring-offset-slate-900"
+                  title={tooltip}
+                  aria-label={`${baseTitle}退化原因：${reasonLabel}`}
+                  data-testid={`period-degrade-tooltip-${key.toLowerCase()}`}
+                >
+                  ?
+                </button>
+              </span>
+            </span>
+          );
+        }
+      }
+
       return {
         key,
-        title: metricNames[key],
+        title: titleNode,
         value: formattedValue,
         colorClass,
         dataTestId,
       };
     });
-  }, [metrics, metricNames, order, periodCardStates, periodValues]);
+  }, [
+    metrics,
+    metricNames,
+    order,
+    periodCardStates,
+    periodValues,
+    periodBreakdown,
+    rawMetrics?._period?.diagnostics,
+    m6Card,
+  ]);
 
   const rows = useMemo(
     () => [
@@ -477,9 +870,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     "grid grid-cols-6 gap-4 justify-items-center",
   ];
 
-  if (!metrics) {
-    return <section id="stats" className="stats-grid">正在加载指标...</section>;
-  }
+  const metricsReady = Boolean(metrics);
 
   const degradedKeys = useMemo(
     () =>
@@ -568,57 +959,61 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
   return (
     <section id="stats" className="my-5">
-      <div className="flex flex-col items-center gap-4">
-        {rows.map((row, index) => (
-          <div key={index} className={rowClassNames[index] ?? "grid gap-4"}>
-            {row.map((metric) => (
-              <MetricCard
-                key={metric.key}
-                title={metric.title!}
-                value={metric.value}
-                colorClass={metric.colorClass}
-                dataTestId={metric.dataTestId}
-              />
-            ))}
-          </div>
-        ))}
-        {selfCheckMessage && (
-          <div
-            className="w-full max-w-3xl rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700"
-            data-testid="period-self-check"
-          >
-            {selfCheckMessage}
-          </div>
-        )}
-        {shouldShowPeriodSummary && (
-          <div
-            className={
-              periodStatus === "partial"
-                ? "w-full max-w-3xl rounded-md border border-slate-200 bg-slate-100 p-3 text-sm text-slate-700"
-                : "w-full max-w-3xl rounded-md border border-amber-200 bg-amber-100/70 p-3 text-sm text-amber-900"
-            }
-            data-testid="period-health-summary"
-          >
-            <div className="font-medium">
-              指标异常提醒
-              {summaryIntroParts.length > 0
-                ? `（${summaryIntroParts.join("；")}）`
-                : ""}
+      {metricsReady ? (
+        <div className="flex flex-col items-center gap-4">
+          {rows.map((row, index) => (
+            <div key={index} className={rowClassNames[index] ?? "grid gap-4"}>
+              {row.map((metric) => (
+                <MetricCard
+                  key={metric.key}
+                  title={metric.title!}
+                  value={metric.value}
+                  colorClass={metric.colorClass}
+                  dataTestId={metric.dataTestId}
+                />
+              ))}
             </div>
-            {summaryMessages.length > 0 ? (
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                {summaryMessages.map((msg) => (
-                  <li key={msg}>{msg}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2">
-                请检查 close_prices 数据源，补充缺失的收盘价或确认兜底策略。
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+          ))}
+          {selfCheckMessage && (
+            <div
+              className="w-full max-w-3xl rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700"
+              data-testid="period-self-check"
+            >
+              {selfCheckMessage}
+            </div>
+          )}
+          {shouldShowPeriodSummary && (
+            <div
+              className={
+                periodStatus === "partial"
+                  ? "w-full max-w-3xl rounded-md border border-slate-200 bg-slate-100 p-3 text-sm text-slate-700"
+                  : "w-full max-w-3xl rounded-md border border-amber-200 bg-amber-100/70 p-3 text-sm text-amber-900"
+              }
+              data-testid="period-health-summary"
+            >
+              <div className="font-medium">
+                指标异常提醒
+                {summaryIntroParts.length > 0
+                  ? `（${summaryIntroParts.join("；")}）`
+                  : ""}
+              </div>
+              {summaryMessages.length > 0 ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {summaryMessages.map((msg) => (
+                    <li key={msg}>{msg}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2">
+                  请检查 close_prices 数据源，补充缺失的收盘价或确认兜底策略。
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="stats-grid">正在加载指标...</div>
+      )}
     </section>
   );
 }
