@@ -42,6 +42,7 @@ export type EnrichedTrade = Trade & {
   accTotalCost: number;
   accRealizedPnl: number;
   netPosition: number;
+  isInitialPosition?: boolean;
 };
 
 export type InitialPosition = {

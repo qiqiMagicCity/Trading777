@@ -184,6 +184,10 @@ export interface Metrics {
   M1: number;
   M2: number;
   M3: number;
+  /**
+   * @deprecated 前端请改读 {@link normalizeMetrics}.M4（与 runAll().result.M4 对齐）。
+   * 仅用于兼容旧有调用，避免直接消费 calcMetrics 内部口径。
+   */
   M4: number;
   M5: {
     trade: number;
@@ -1555,6 +1559,9 @@ export function calcTodayFifoPnL(
   seedInitialLots(sortedTrades, longFifo, shortFifo);
   let pnl = 0;
   for (const t of sortedTrades) {
+    if (t.isInitialPosition) {
+      continue;
+    }
     if (!isValidTradeDate(t.date, todayStr, "calcTodayFifoPnL", t)) continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);
@@ -1660,6 +1667,9 @@ export function calcHistoryFifoPnL(
   seedInitialLots(sortedTrades, longFifo, shortFifo);
   let pnl = 0;
   for (const t of sortedTrades) {
+    if (t.isInitialPosition) {
+      continue;
+    }
     if (!isValidTradeDate(t.date, todayStr, "calcHistoryFifoPnL", t)) continue;
     const { symbol, action, price, date } = t;
     const quantity = Math.abs(t.quantity);

@@ -7,7 +7,7 @@ import { useEffect, useState, useMemo } from "react";
 import SymbolLogo from "@/components/SymbolLogo";
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
-import { formatCurrency } from '@/lib/metrics';
+import { formatCurrency, normalizeMetrics } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
 import {
@@ -169,7 +169,11 @@ interface Props {
 }
 
 export function PositionsTable({ positions, trades }: Props) {
-  const metrics = useStore(state => state.metrics);
+  const rawMetrics = useStore(state => state.metrics);
+  const metrics = useMemo(
+    () => (rawMetrics ? normalizeMetrics(rawMetrics) : null),
+    [rawMetrics],
+  );
   const intradayDataset = useMemo(
     () => buildIntradayFloatingPnlMap(metrics, positions),
     [metrics, positions],
