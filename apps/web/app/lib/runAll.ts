@@ -16,17 +16,8 @@ import {
 } from "./time";
 import type { DailyResult } from "./types";
 import { resolveTradingDateStr } from "./tradingDay";
-import {
-  assertM6Equality,
-  assertNoOverClose,
-  assertLotConservation,
-  assertNoNegativeLots,
-  snapshotArtifacts,
-} from "./monitor";
 import { MoneyDecimal as Decimal, round2 } from "./money";
 import { buildEnrichedTrades, replayPortfolio } from "./tradeReplay";
-import fs from "fs";
-import path from "path";
 import type { IoProvider } from "./io/providers";
 import { assertSchema } from "./schemas/assertSchema";
 import { Trades, Positions, PriceMap, DailyResults } from "./schemas/real";
@@ -36,10 +27,65 @@ import {
   type SnapshotNumericField,
 } from "./snapshotNumber";
 
+let cachedFs: typeof import("fs") | null = null;
+let cachedPath: typeof import("path") | null = null;
+type MonitorModule = {
+  assertM6Equality: (result: unknown) => void;
+  assertNoOverClose: (enriched: unknown) => void;
+  assertLotConservation: (positions: InitialPosition[], enriched: unknown) => void;
+  assertNoNegativeLots: (enriched: unknown) => void;
+  snapshotArtifacts: (
+    input: {
+      initialPositions: InitialPosition[];
+      rawTrades: RawTrade[];
+      closePrices: ClosePriceMap;
+      dailyResults: MinimalDailyResult[];
+    },
+    result: unknown,
+  ) => void;
+};
+let cachedMonitor: MonitorModule | null = null;
+
+async function loadFs() {
+  if (typeof window !== "undefined") {
+    throw new Error("fs module is not available in the browser");
+  }
+  if (!cachedFs) {
+    const nodeRequire = eval("require") as (module: string) => unknown;
+    cachedFs = nodeRequire("fs") as typeof import("fs");
+  }
+  return cachedFs;
+}
+
+async function loadPath() {
+  if (typeof window !== "undefined") {
+    throw new Error("path module is not available in the browser");
+  }
+  if (!cachedPath) {
+    const nodeRequire = eval("require") as (module: string) => unknown;
+    cachedPath = nodeRequire("path") as typeof import("path");
+  }
+  return cachedPath;
+}
+
+async function loadMonitor(): Promise<MonitorModule> {
+  if (typeof window !== "undefined") {
+    throw new Error("monitor helpers are not available in the browser");
+  }
+  if (!cachedMonitor) {
+    const nodeRequire = eval("require") as (module: string) => unknown;
+    const moduleName = ["./mon", "itor"].join("");
+    cachedMonitor = nodeRequire(moduleName) as MonitorModule;
+  }
+  return cachedMonitor;
+}
+
 async function readJsonSafe<T>(relName: string, fallback: T): Promise<T> {
+  const pathModule = await loadPath();
+  const fs = await loadFs();
   const candidates = [
-    path.join(process.cwd(), "apps", "web", "public", relName),
-    path.join(process.cwd(), "public", relName),
+    pathModule.join(process.cwd(), "apps", "web", "public", relName),
+    pathModule.join(process.cwd(), "public", relName),
   ];
 
   for (const candidate of candidates) {
@@ -739,7 +785,7 @@ function needsSyntheticDailyResults(
  * 但在函数开头即通过 normalizeDailyRows 归一化为纯数值 DailyResult[]，
  * 后续 calcMetrics / computePeriods 全程只处理数值形态快照。
  */
-function runAllCore(
+async function runAllCore(
   _date: string,
   initialPositions: InitialPosition[],
   rawTrades: RawTrade[],
@@ -1063,7 +1109,8 @@ function runAllCore(
   } as const;
 
   if (process.env.MONITOR === "1") {
-    snapshotArtifacts(
+    const monitor = await loadMonitor();
+    monitor.snapshotArtifacts(
       {
         initialPositions: baselinePositions,
         rawTrades,
@@ -1073,15 +1120,17 @@ function runAllCore(
       result,
     );
     try {
-      assertM6Equality(result);
-      assertNoOverClose(enriched);
-      assertLotConservation(baselinePositions, enriched);
-      assertNoNegativeLots(enriched);
+      monitor.assertM6Equality(result);
+      monitor.assertNoOverClose(enriched);
+      monitor.assertLotConservation(baselinePositions, enriched);
+      monitor.assertNoNegativeLots(enriched);
     } catch (err: any) {
-      const outDir = path.resolve(process.cwd(), ".artifacts/outputs");
+      const pathModule = await loadPath();
+      const fs = await loadFs();
+      const outDir = pathModule.resolve(process.cwd(), ".artifacts/outputs");
       fs.mkdirSync(outDir, { recursive: true });
       fs.writeFileSync(
-        path.join(outDir, "failure.json"),
+        pathModule.join(outDir, "failure.json"),
         JSON.stringify({ error: err?.message || String(err) }, null, 2),
       );
       throw err;

@@ -301,3 +301,6 @@
 - 新增 /api/debug/m4，使用注入的 apiIoProvider 调用已有 /api/* 拉数据再计算，避免把 public 打进 lambda。
 - runAll 支持 ioProvider 注入，并把 readPublicJson 改为惰性 import。
 - 解决 Vercel Serverless Function 体积超限（300MB）问题。
+## 2025-10-07 Remove /api/debug/m4 Lambda
+- 删除 /api/debug/m4 以避免将 public/ 打进 Serverless 包导致 300MB 超限。
+- /debug/m4 改为在浏览器端用 runAll({ ioProvider: apiIoProvider }) 直接计算。
