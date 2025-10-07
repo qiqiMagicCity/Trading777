@@ -8,6 +8,7 @@ import SymbolLogo from "@/components/SymbolLogo";
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
 import { formatCurrency, normalizeMetrics } from '@/lib/metrics';
+import { selectM4TodaySummary } from '@/app/lib/m4Today';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
 import {
@@ -296,7 +297,7 @@ export function PositionsTable({ positions, trades }: Props) {
     }
     const intradayIssues = Array.from(intradayIssueSet);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
-    const todayHistoryRealized = metrics?.M4 ?? 0; // 今日历史平仓(M4)
+    const todayM4 = selectM4TodaySummary(metrics ?? null);
     const totalPnL = totalUnrealized + totalRealized;
 
     logger.debug('总计结果:', {
@@ -305,7 +306,8 @@ export function PositionsTable({ positions, trades }: Props) {
       totalIntraday,
       intradayIssues,
       totalRealized,
-      totalPnL
+      totalPnL,
+      todayM4,
     });
 
     return {
@@ -314,10 +316,10 @@ export function PositionsTable({ positions, trades }: Props) {
       intraday: totalIntraday,
       intradayIssues,
       realized: totalRealized,
-      historyRealizedToday: todayHistoryRealized,
-      total: totalPnL
+      todayM4,
+      total: totalPnL,
     };
-  }, [positionSummaries, metrics?.M9, metrics?.M4]);
+  }, [positionSummaries, metrics]);
 
   return (
     <div>
@@ -504,14 +506,29 @@ export function PositionsTable({ positions, trades }: Props) {
                 </strong>
                 <span
                   className={
-                    totals.historyRealizedToday > 0
+                    totals.todayM4.total > 0
                       ? 'green font-medium'
-                      : totals.historyRealizedToday < 0
+                      : totals.todayM4.total < 0
                         ? 'red font-medium'
                         : 'font-medium'
                   }
+                  title={totals.todayM4.tooltip ?? undefined}
                 >
-                  历史平仓(M4)：{formatCurrency(totals.historyRealizedToday)}
+                  <span className="inline-flex items-center gap-1">
+                    <span>今日盈亏(M4)</span>
+                    {totals.todayM4.degraded && (
+                      <span
+                        style={{
+                          backgroundColor: '#f59e0b',
+                          borderRadius: '9999px',
+                          display: 'inline-flex',
+                          height: '8px',
+                          width: '8px',
+                        }}
+                      />
+                    )}
+                  </span>
+                  ：{formatCurrency(totals.todayM4.total)}
                 </span>
               </div>
             </td>

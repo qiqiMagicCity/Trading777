@@ -21,7 +21,7 @@ import { collectPeriodHealthIssues } from '@/app/lib/dataHealth';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { logger } from '@/lib/logger';
-import { formatNY, getLatestTradingDayStr } from '@/lib/timezone';
+import { formatNY, getLatestTradingDayStr, nowNY, ymdInNY, startOfWeekNY } from '@/lib/timezone';
 import {
   generateDailyResults,
   mergeClosePriceMaps,
@@ -31,8 +31,18 @@ import {
   type PendingCloseEntry,
   type CloseWindowDiagnostics,
   type MissingCloseFallback,
+  type ClosePriceMap,
 } from '@/lib/dailyResults';
 import { summarizeMissingCloses } from '@/app/lib/missingClose';
+import {
+  summarizeMissingOfficialCloses,
+  type MissingOfficialDateSummary,
+} from '@/app/lib/missingOfficialClose';
+import {
+  overlayEntriesToMap,
+  readOfficialCloseOverlay,
+  subscribeOfficialCloseOverlay,
+} from '@/app/lib/officialCloseOverlayStore';
 import type {
   MissingCloseSummary,
   PeriodHealthIssue,
@@ -125,6 +135,44 @@ async function ensureDailyCloses(symbols: string[], targetDate: string, fallback
   );
 }
 
+async function buildOfficialCloseMaps(): Promise<{
+  overlay: ClosePriceMap;
+  official: ClosePriceMap;
+  merged: ClosePriceMap;
+  fallback: ClosePriceMap;
+}> {
+  const [fileClosePricesRaw, cachedPrices, overlayEntries] = await Promise.all([
+    loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
+    getAllPrices(),
+    readOfficialCloseOverlay(),
+  ]);
+  const normalizedFileCloses = normalizeClosePriceMap(fileClosePricesRaw);
+  const overlayMap = overlayEntriesToMap(overlayEntries);
+  const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
+    includeSources: ['close_fallback'],
+  });
+  const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
+    excludeSources: ['close_fallback'],
+  });
+  const officialCloseMap = mergeClosePriceMaps(
+    overlayMap,
+    normalizedFileCloses,
+    cachedOfficialCloses,
+  );
+  const mergedCloseMap = mergeClosePriceMaps(
+    cachedFallbackCloses,
+    overlayMap,
+    normalizedFileCloses,
+    cachedOfficialCloses,
+  );
+  return {
+    overlay: overlayMap,
+    official: officialCloseMap,
+    merged: mergedCloseMap,
+    fallback: cachedFallbackCloses,
+  };
+}
+
 const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
   MARK_PRICE: '使用最新价兜底',
   PREVIOUS_CLOSE: '沿用上一日价格',
@@ -200,6 +248,166 @@ function MissingCloseBanner({
       <button className="btn" onClick={onIgnore}>
         忽略并暂时以“待补充”展示
       </button>
+    </div>
+  );
+}
+
+export function MissingOfficialCloseAlert({
+  summaries,
+}: {
+  summaries: MissingOfficialDateSummary[];
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  if (!summaries.length) return null;
+
+  const toggle = (date: string) => {
+    setExpanded((prev) => ({ ...prev, [date]: !prev[date] }));
+  };
+
+  const now = nowNY();
+  const defaultFrom = ymdInNY(startOfWeekNY(now));
+  const defaultTo = ymdInNY(now);
+  const symbolFilter = Array.from(
+    new Set(
+      summaries.flatMap((summary) =>
+        summary.symbols.map((item) => item.symbol).filter(Boolean),
+      ),
+    ),
+  )
+    .sort()
+    .join(",");
+  const impactFilter = encodeURIComponent("WTD/MTD/YTD端点浮盈可能失真");
+  const viewAllHref =
+    `/diagnostics/official-closes?status=missing&from=${defaultFrom}&to=${defaultTo}&impacts=${impactFilter}` +
+    (symbolFilter ? `&symbols=${encodeURIComponent(symbolFilter)}` : "");
+
+  return (
+    <div
+      style={{
+        background: 'rgba(255, 171, 0, 0.14)',
+        border: '1px solid rgba(255, 171, 0, 0.6)',
+        borderRadius: 8,
+        color: '#fff3cd',
+        margin: '16px auto',
+        maxWidth: 'var(--page-max)',
+        padding: '16px 18px',
+        width: '90%',
+      }}
+    >
+      <div
+        style={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        <h3 style={{ margin: 0, color: '#ffe082' }}>官方收盘价缺失提醒</h3>
+        <Link
+          href={viewAllHref}
+          style={{ color: '#ffd54f', fontSize: '0.9rem', textDecoration: 'underline' }}
+          data-testid="missing-official-view-all"
+        >
+          查看全部缺口
+        </Link>
+      </div>
+      <p style={{ margin: '0 0 12px', color: '#fff8e1' }}>
+        以下日期缺少官方昨收，M6 过夜部分已按 0 处理。请补录 close_prices.json 中的官方收盘价。
+      </p>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {summaries.map((summary) => {
+          const impacts = Array.from(
+            new Set(summary.symbols.flatMap((item) => item.impact)),
+          ).sort((a, b) => a.localeCompare(b));
+          const impactText = impacts.length ? `影响：${impacts.join('、')}` : '';
+          const symbolList = summary.symbols.map((item) => item.symbol).join('、');
+          const isExpanded = Boolean(expanded[summary.date]);
+          return (
+            <li
+              key={summary.date}
+              style={{
+                borderBottom: '1px solid rgba(255, 214, 102, 0.3)',
+                padding: '8px 0',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => toggle(summary.date)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffe082',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  padding: 0,
+                  textAlign: 'left',
+                  width: '100%',
+                }}
+              >
+                <strong>{summary.date}</strong>：{symbolList}
+                {impactText ? `（${impactText}）` : ''}
+                <span style={{ float: 'right', color: '#ffd54f' }}>
+                  {isExpanded ? '收起' : '展开'}
+                </span>
+              </button>
+              {isExpanded && (
+                <ul style={{ margin: '8px 0 0 12px', padding: 0, listStyle: 'disc' }}>
+                  {summary.symbols.map((item) => (
+                    <li key={`${summary.date}-${item.symbol}`} style={{ marginBottom: 4 }}>
+                      <strong>{item.symbol}</strong>：
+                      {item.impact.length ? item.impact.join('、') : '影响未指定'}
+                      {item.hasFallback ? '（已暂用兜底价）' : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+export function PendingOfficialCloseAlert({
+  summaries,
+}: {
+  summaries: MissingOfficialDateSummary[];
+}) {
+  if (!summaries.length) return null;
+  return (
+    <div
+      style={{
+        background: "rgba(59,130,246,0.12)",
+        border: "1px solid rgba(59,130,246,0.4)",
+        borderRadius: 8,
+        color: "#dbeafe",
+        margin: "16px auto",
+        maxWidth: "var(--page-max)",
+        padding: "14px 16px",
+        width: "90%",
+      }}
+    >
+      <h3 style={{ margin: 0, marginBottom: 8, color: "#bfdbfe" }}>
+        等待官方收盘价落地
+      </h3>
+      <p style={{ margin: "0 0 12px", color: "#e0f2fe", lineHeight: 1.6 }}>
+        今日仍在官方收盘价落地窗口内，以下标的暂沿用兜底估值。
+      </p>
+      <ul style={{ listStyle: "disc", margin: 0, paddingLeft: 20 }}>
+        {summaries.map((summary) => {
+          const label = summary.symbols
+            .map((item) =>
+              `${item.symbol}${item.hasFallback ? "（已暂用兜底）" : ""}`,
+            )
+            .join("、");
+          return (
+            <li key={`pending-${summary.date}`} style={{ marginBottom: 6 }}>
+              <strong>{summary.date}</strong>：{label}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -304,10 +512,15 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false);
   const [missingCloseSummaries, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
   const [missingDismissed, setMissingDismissed] = useState(false);
+  const [missingOfficialSummaries, setMissingOfficialSummaries] =
+    useState<MissingOfficialDateSummary[]>([]);
+  const [pendingOfficialSummaries, setPendingOfficialSummaries] =
+    useState<MissingOfficialDateSummary[]>([]);
   const [pendingCloseInfo, setPendingCloseInfo] = useState<PendingCloseEntry | null>(null);
   const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
   const [pendingNoticeDismissed, setPendingNoticeDismissed] = useState(false);
   const summaryRef = useRef<MissingCloseSummary[]>([]);
+  const officialSummaryRef = useRef<MissingOfficialDateSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
   const periodMetaRef = useRef<MetricsContract["_period"] | undefined>(
     undefined,
@@ -322,11 +535,12 @@ export default function DashboardPage() {
       }
 
       const summaries = summaryRef.current;
+      const officialSummaries = officialSummaryRef.current;
       const issues = issuesRef.current;
       const meta = periodMetaRef.current;
       const degraded = meta?.degraded;
       const statusMap = meta?.status;
-      const hasMissingClose = summaries.length > 0;
+      const hasMissingClose = summaries.length > 0 || officialSummaries.length > 0;
       const blockingIssues = issues.filter(
         (item) => item.kind !== 'BASELINE_DELTA_MISSING',
       );
@@ -391,12 +605,21 @@ export default function DashboardPage() {
 
   const clearPeriodHealthState = useCallback(() => {
     summaryRef.current = [];
+    officialSummaryRef.current = [];
     issuesRef.current = [];
     periodMetaRef.current = undefined;
     setMissingCloseSummaries([]);
+    setMissingOfficialSummaries([]);
+    setPendingOfficialSummaries([]);
     setMissingDismissed(false);
     setPeriodHealth(null);
-  }, [setMissingCloseSummaries, setMissingDismissed, setPeriodHealth]);
+  }, [
+    setMissingCloseSummaries,
+    setMissingOfficialSummaries,
+    setPendingOfficialSummaries,
+    setMissingDismissed,
+    setPeriodHealth,
+  ]);
 
   const updateMissingCloseState = useCallback(
     (summaries: MissingCloseSummary[]) => {
@@ -422,169 +645,188 @@ export default function DashboardPage() {
     [missingDismissed, setMissingCloseSummaries, setMissingDismissed, syncPeriodHealth],
   );
 
+  const updateMissingOfficialState = useCallback(
+    (summaries: MissingOfficialDateSummary[]) => {
+      officialSummaryRef.current = summaries.slice();
+      setMissingOfficialSummaries(summaries);
+      syncPeriodHealth();
+    },
+    [setMissingOfficialSummaries, syncPeriodHealth],
+  );
+
+  const updatePendingOfficialState = useCallback(
+    (summaries: MissingOfficialDateSummary[]) => {
+      setPendingOfficialSummaries(summaries);
+    },
+    [setPendingOfficialSummaries],
+  );
+
   const handleIgnoreMissing = () => {
     if (summaryRef.current.length === 0) return;
     setMissingDismissed(true);
     syncPeriodHealth();
   };
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setIsLoading(true);
-        setPendingCloseInfo(null);
-        setCloseWindowInfo(null);
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setPendingCloseInfo(null);
+      setCloseWindowInfo(null);
 
-        await import('@/app/lib/dataset')
-          .then(m => m.ensureDatasetReady())
-          .catch(err => {
-            console.error('Dataset bootstrap failed:', err);
-            // Do NOT clear DB on failure; UI may show a non-blocking warning instead.
-          });
+      await import('@/app/lib/dataset')
+        .then(m => m.ensureDatasetReady())
+        .catch(err => {
+          console.error('Dataset bootstrap failed:', err);
+          // Do NOT clear DB on failure; UI may show a non-blocking warning instead.
+        });
 
-        const dbTrades = await findTrades();
-        const replay = replayPortfolio(dbTrades);
-        const enriched = buildEnrichedTrades(replay.baseline);
-        const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
-        applyBreakEvenToPositions(posList, enriched);
+      const dbTrades = await findTrades();
+      const replay = replayPortfolio(dbTrades);
+      const enriched = buildEnrichedTrades(replay.baseline);
+      const posList: Position[] = replay.positions.map(pos => ({ ...pos }));
+      applyBreakEvenToPositions(posList, enriched);
 
-        // 为每个持仓获取最新价格
-        for (const pos of posList) {
-          const cached = getCachedRealtimeQuote(pos.symbol);
-          if (cached?.price !== undefined) {
-            pos.last = cached.price;
+      for (const pos of posList) {
+        const cached = getCachedRealtimeQuote(pos.symbol);
+        if (cached?.price !== undefined) {
+          pos.last = cached.price;
+          pos.priceOk = true;
+          pos.stale = true;
+          pos.lastUpdatedAt = cached.updatedAt;
+        }
+
+        try {
+          let result = await fetchRealtimeQuote(pos.symbol);
+          if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
+            const today = getLatestTradingDayStr();
+            const dailyClose = await fetchDailyClose(pos.symbol, today);
+            if (dailyClose) {
+              result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
+            }
+          }
+
+          if (result && typeof result.price === 'number' && result.price !== 1) {
+            pos.last = result.price;
+            pos.priceOk = result.priceOk !== false;
+            pos.stale = Boolean(result.stale);
+            pos.lastUpdatedAt = result.updatedAt ?? Date.now();
+          } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
             pos.priceOk = true;
             pos.stale = true;
-            pos.lastUpdatedAt = cached.updatedAt;
-          }
-
-          try {
-            let result = await fetchRealtimeQuote(pos.symbol);
-            if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
-              const today = getLatestTradingDayStr();
-              const dailyClose = await fetchDailyClose(pos.symbol, today);
-              if (dailyClose) {
-                result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
-              }
-            }
-
-            if (result && typeof result.price === 'number' && result.price !== 1) {
-              pos.last = result.price;
-              pos.priceOk = result.priceOk !== false;
-              pos.stale = Boolean(result.stale);
-              pos.lastUpdatedAt = result.updatedAt ?? Date.now();
-            } else if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-              pos.priceOk = true;
-              pos.stale = true;
-            } else {
-              pos.last = NaN;
-              pos.priceOk = false;
-              pos.stale = true;
-            }
-          } catch {
-            if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
-              pos.priceOk = true;
-              pos.stale = true;
-            } else {
-              pos.last = NaN;
-              pos.priceOk = false;
-              pos.stale = true;
-            }
-          }
-        }
-
-        if (posList.some(p => p.priceOk === false)) {
-          if (freezeDate) {
-            setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
           } else {
-            setError('无法获取实时价格，指标计算失败');
+            pos.last = NaN;
+            pos.priceOk = false;
+            pos.stale = true;
           }
-          clearPeriodHealthState();
-          setIsLoading(false);
-          return;
+        } catch {
+          if (Number.isFinite(pos.last) && pos.lastUpdatedAt) {
+            pos.priceOk = true;
+            pos.stale = true;
+          } else {
+            pos.last = NaN;
+            pos.priceOk = false;
+            pos.stale = true;
+          }
         }
-
-        const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
-
-        // 收盘后→下次开盘前：用持仓最新价作为 fallback，驱动 fetchDailyClose 自动落盘官方收盘价
-        if (!freezeDate) {
-          const symbols = collectSymbols(dbTrades, posList);
-          const fallbackCloses = buildCloseFallbacks(posList);
-          await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
-        }
-
-        const [fileClosePrices, cachedPrices] = await Promise.all([
-          loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
-          getAllPrices(),
-        ]);
-        const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
-          includeSources: ["close_fallback"],
-        });
-        const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
-          excludeSources: ["close_fallback"],
-        });
-        const mergedClosePrices = mergeClosePriceMaps(
-          cachedFallbackCloses,
-          normalizeClosePriceMap(fileClosePrices),
-          cachedOfficialCloses,
-        );
-
-        attachPrevClose(posList, mergedClosePrices, evalDateStr);
-
-        const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
-        const dailyResults = generateDailyResults({
-          trades: enriched,
-          positions: posList,
-          closePrices: mergedClosePrices,
-          evalDate: evalDateStr,
-        }, diagnostics);
-        setCloseWindowInfo(diagnostics.closeWindow ?? null);
-        const pendingEntry = (diagnostics.pendingCloses ?? []).find(
-          (entry) => entry.date === evalDateStr,
-        ) ?? null;
-        setPendingCloseInfo(pendingEntry);
-        setDailyResultsCache(dailyResults);
-
-        const summaries = summarizeMissingCloses(diagnostics.missingCloses);
-        updateMissingCloseState(summaries);
-
-        // 计算指标并存入全局状态（M6 = M4 + M5.2 + 当日MTM）
-        const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
-          tradingDateStr: evalDateStr,
-          periodEvalYmd: evalDateStr,
-        });
-        const metrics = normalizeMetrics(rawMetrics);
-        issuesRef.current = collectPeriodHealthIssues({
-          evalDate: evalDateStr,
-          dailyResults,
-          trades: dbTrades,
-          positions: posList,
-          metrics,
-        });
-        syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-        setMetrics(metrics);
-
-        setTrades(dbTrades);
-        setPositions(posList);
-        setEnrichedTrades(enriched);
-      } catch (e) {
-        console.error(e);
-        clearPeriodHealthState();
-        setCloseWindowInfo(null);
-        setPendingCloseInfo(null);
-        setError(e instanceof Error ? e.message : 'An unknown error occurred.');
-      } finally {
-        setIsLoading(false);
       }
-    }
 
-    loadData();
+      if (posList.some(p => p.priceOk === false)) {
+        if (freezeDate) {
+          setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
+        } else {
+          setError('无法获取实时价格，指标计算失败');
+        }
+        clearPeriodHealthState();
+        setIsLoading(false);
+        return;
+      }
+
+      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+
+      if (!freezeDate) {
+        const symbols = collectSymbols(dbTrades, posList);
+        const fallbackCloses = buildCloseFallbacks(posList);
+        await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
+      }
+
+      const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } =
+        await buildOfficialCloseMaps();
+
+      attachPrevClose(posList, mergedClosePrices, evalDateStr);
+
+      const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
+      const dailyResults = generateDailyResults({
+        trades: enriched,
+        positions: posList,
+        closePrices: mergedClosePrices,
+        evalDate: evalDateStr,
+      }, diagnostics);
+      setCloseWindowInfo(diagnostics.closeWindow ?? null);
+      const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+        (entry) => entry.date === evalDateStr,
+      ) ?? null;
+      setPendingCloseInfo(pendingEntry);
+      setDailyResultsCache(dailyResults);
+
+      const summaries = summarizeMissingCloses(diagnostics.missingCloses);
+      updateMissingCloseState(summaries);
+
+      const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
+        tradingDateStr: evalDateStr,
+        periodEvalYmd: evalDateStr,
+        officialCloseMap: officialClosePrices,
+        officialCloseOverlayMap: overlayMap,
+      });
+      const metrics = normalizeMetrics(rawMetrics);
+      const officialSummaries = summarizeMissingOfficialCloses(
+        metrics.diagnostics?.missingOfficialCloses ?? [],
+      );
+      updateMissingOfficialState(officialSummaries);
+      const pendingSummaries = summarizeMissingOfficialCloses(
+        metrics.diagnostics?.pendingOfficialCloses ?? [],
+      );
+      updatePendingOfficialState(pendingSummaries);
+      issuesRef.current = collectPeriodHealthIssues({
+        evalDate: evalDateStr,
+        dailyResults,
+        trades: dbTrades,
+        positions: posList,
+        metrics,
+      });
+      syncPeriodHealth({ meta: rawMetrics?._period ?? null });
+      setMetrics(metrics);
+
+      setTrades(dbTrades);
+      setPositions(posList);
+      setEnrichedTrades(enriched);
+    } catch (e) {
+      console.error(e);
+      clearPeriodHealthState();
+      setCloseWindowInfo(null);
+      setPendingCloseInfo(null);
+      setError(e instanceof Error ? e.message : 'An unknown error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
   }, [
     clearPeriodHealthState,
     setMetrics,
     syncPeriodHealth,
     updateMissingCloseState,
+    updatePendingOfficialState,
+    updateMissingOfficialState,
   ]);
+
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeOfficialCloseOverlay(() => {
+      void loadDashboardData();
+    });
+    return unsubscribe;
+  }, [loadDashboardData]);
 
   // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
@@ -668,28 +910,8 @@ export default function DashboardPage() {
       await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
     }
 
-    const [fileClosePricesRaw, cachedPrices] = await Promise.all([
-      (loadJson('close_prices') as Promise<Record<string, Record<string, number>>>).catch(err => {
-        logger.warn('[DashboardPage] 加载 close_prices 缓存失败', err);
-        return {} as Record<string, Record<string, number>>;
-      }),
-      getAllPrices().catch(err => {
-        logger.warn('[DashboardPage] 读取价格缓存失败', err);
-        return [];
-      }),
-    ]);
-
-    const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
-      includeSources: ['close_fallback'],
-    });
-    const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
-      excludeSources: ['close_fallback'],
-    });
-    const mergedClosePrices = mergeClosePriceMaps(
-      cachedFallbackCloses,
-      normalizeClosePriceMap(fileClosePricesRaw),
-      cachedOfficialCloses,
-    );
+    const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
+      await buildOfficialCloseMaps();
 
     attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -716,8 +938,18 @@ export default function DashboardPage() {
     const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
       tradingDateStr: evalDateStr,
       periodEvalYmd: evalDateStr,
+      officialCloseMap: officialCloseMap,
+      officialCloseOverlayMap: overlayMap,
     });
     const metrics = normalizeMetrics(rawMetrics);
+    const pendingOfficial = summarizeMissingOfficialCloses(
+      metrics.diagnostics?.pendingOfficialCloses ?? [],
+    );
+    updatePendingOfficialState(pendingOfficial);
+    const missingOfficial = summarizeMissingOfficialCloses(
+      metrics.diagnostics?.missingOfficialCloses ?? [],
+    );
+    updateMissingOfficialState(missingOfficial);
     issuesRef.current = collectPeriodHealthIssues({
       evalDate: evalDateStr,
       dailyResults,
@@ -768,28 +1000,8 @@ export default function DashboardPage() {
 
       const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
 
-      const [fileClosePricesRaw, cachedPrices] = await Promise.all([
-        (loadJson('close_prices') as Promise<Record<string, Record<string, number>>>).catch(err => {
-          logger.warn('[DashboardPage] 加载 close_prices 缓存失败', err);
-          return {} as Record<string, Record<string, number>>;
-        }),
-        getAllPrices().catch(err => {
-          logger.warn('[DashboardPage] 读取价格缓存失败', err);
-          return [];
-        }),
-      ]);
-
-      const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
-        includeSources: ['close_fallback'],
-      });
-      const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
-        excludeSources: ['close_fallback'],
-      });
-      const mergedClosePrices = mergeClosePriceMaps(
-        cachedFallbackCloses,
-        normalizeClosePriceMap(fileClosePricesRaw),
-        cachedOfficialCloses,
-      );
+      const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
+        await buildOfficialCloseMaps();
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -817,8 +1029,18 @@ export default function DashboardPage() {
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
         tradingDateStr: evalDateStr,
         periodEvalYmd: evalDateStr,
+        officialCloseMap: officialCloseMap,
+        officialCloseOverlayMap: overlayMap,
       });
       const metrics = normalizeMetrics(rawMetrics);
+      const pendingOfficial = summarizeMissingOfficialCloses(
+        metrics.diagnostics?.pendingOfficialCloses ?? [],
+      );
+      updatePendingOfficialState(pendingOfficial);
+      const missingOfficial = summarizeMissingOfficialCloses(
+        metrics.diagnostics?.missingOfficialCloses ?? [],
+      );
+      updateMissingOfficialState(missingOfficial);
       issuesRef.current = collectPeriodHealthIssues({
         evalDate: evalDateStr,
         dailyResults,
@@ -875,6 +1097,12 @@ export default function DashboardPage() {
         dismissed={pendingNoticeDismissed}
         onDismiss={() => setPendingNoticeDismissed(true)}
       />
+      {pendingOfficialSummaries.length > 0 && (
+        <PendingOfficialCloseAlert summaries={pendingOfficialSummaries} />
+      )}
+      {missingOfficialSummaries.length > 0 && (
+        <MissingOfficialCloseAlert summaries={missingOfficialSummaries} />
+      )}
       {missingCloseSummaries.length > 0 && !missingDismissed && (
         <MissingCloseBanner
           summaries={missingCloseSummaries}

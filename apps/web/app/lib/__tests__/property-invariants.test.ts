@@ -122,8 +122,27 @@ describe.skip('property based invariants', () => {
             avgPrice: p.avgPrice + shift,
           }));
 
-          const metricsBase = calcMetrics([], basePositions as any, []);
-          const metricsShifted = calcMetrics([], shiftedPositions as any, []);
+          const officialCloseMap = basePositions.reduce(
+            (acc, pos) => {
+              const symbol = pos.symbol;
+              if (!acc[symbol]) {
+                acc[symbol] = { "2024-01-01": pos.prevClose };
+              }
+              return acc;
+            },
+            {} as Record<string, Record<string, number>>,
+          );
+
+          const metricsBase = calcMetrics([], basePositions as any, [], {
+            periodEvalYmd: "2024-01-02",
+            tradingDateStr: "2024-01-02",
+            officialCloseMap,
+          });
+          const metricsShifted = calcMetrics([], shiftedPositions as any, [], {
+            periodEvalYmd: "2024-01-02",
+            tradingDateStr: "2024-01-02",
+            officialCloseMap,
+          });
 
           expect(metricsBase.M6).toBeCloseTo(metricsShifted.M6, 10);
         },

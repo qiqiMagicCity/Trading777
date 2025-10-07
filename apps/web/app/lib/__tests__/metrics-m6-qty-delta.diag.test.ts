@@ -35,7 +35,15 @@ describe("M6 qty delta diagnostic", () => {
     ];
 
     const daily: any[] = [];
-    const m = calcMetrics(trades as any, positions as any, daily);
+    const m = calcMetrics(trades as any, positions as any, daily, {
+      periodEvalYmd: "2024-09-24",
+      tradingDateStr: "2024-09-24",
+      officialCloseMap: {
+        AAA: {
+          "2024-09-23": 100,
+        },
+      },
+    });
 
     console.log("DIAG_M6", {
       M4: m.M4,

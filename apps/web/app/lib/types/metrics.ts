@@ -67,6 +67,32 @@ export interface PeriodWindowDiagnostics {
   filteredRowsCount?: number;
   lastSnapshotYmd?: string;
   windowStartYmd?: string;
+  officialClose?: PeriodWindowOfficialCloseDiagnostics;
+  degradeReasons?: PeriodWindowDegradeReason[];
+}
+
+export interface PeriodOfficialCloseSymbolImpact {
+  symbol: string;
+  purposes: string[];
+  impact: string[];
+  hasFallback: boolean;
+  firstDetectedAt?: string;
+  lastDetectedAt?: string;
+}
+
+export interface PeriodOfficialCloseDateImpact {
+  date: string;
+  symbols: PeriodOfficialCloseSymbolImpact[];
+}
+
+export interface PeriodWindowOfficialCloseDiagnostics {
+  missing: PeriodOfficialCloseDateImpact[];
+  pending: PeriodOfficialCloseDateImpact[];
+}
+
+export interface PeriodWindowDegradeReason {
+  kind: "missing_official_close";
+  entries: PeriodOfficialCloseDateImpact[];
 }
 
 export interface PeriodWindowBreakdown {
@@ -77,12 +103,32 @@ export interface PeriodWindowBreakdown {
   missingBaselineSymbols?: string[];
 }
 
+export interface MissingOfficialCloseEntry {
+  symbol: string;
+  date: string;
+  purposes: string[];
+  impact: string[];
+  hasFallback: boolean;
+  firstDetectedAt?: string;
+  lastDetectedAt?: string;
+}
+
+export interface M4TodayDetail {
+  total: number;
+  realized: number;
+  mtmOvernight: number;
+  mtmIntradayOpen: number;
+  degraded: boolean;
+  reason?: "missing_official_close_prev";
+}
+
 export interface MetricsContract {
   M1: number; M2: number; M3: number;
   /**
    * 今天历史平仓盈利（M4）：runAll 覆盖后的最终数值，来源于历史腿 pnl_raw 求和后 round2。
    */
   M4: number;
+  M4_today?: M4TodayDetail;
   M5: { behavior: number; fifo: number };
   M6: { total: number };
   _m6?: {
@@ -121,6 +167,7 @@ export interface MetricsContract {
         | "realized_today"
         | "mtm_overnight"
         | "mtm_intraday_open";
+      direction?: "long" | "short";
     }>;
     /** 因行情缺失等原因未计入 MTM 的标的 */
     m6Excluded?: Array<{
@@ -128,6 +175,10 @@ export interface MetricsContract {
       reason: "MISSING_PREV_CLOSE" | "MISSING_MARK";
     }>;
     missingPrevCloseSymbols?: string[];
+  };
+  diagnostics?: {
+    missingOfficialCloses?: MissingOfficialCloseEntry[];
+    pendingOfficialCloses?: MissingOfficialCloseEntry[];
   };
 }
 
@@ -141,6 +192,7 @@ export interface SummaryMetrics {
   M2?: number;
   M3?: number;
   M4?: number;
+  M4_today?: M4TodayDetail;
   M5_2?: number; // 今日未平日内（FIFO 未实现）
   M6?: number;   // 今日总盈亏（后端已按规则计算）
   M7?: number;
