@@ -6,6 +6,7 @@
 // === file: apps/web/app/lib/metrics.ts ===
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
+import type { MissingOfficialCloseEntry } from "./types/metrics";
 import {
   nowNY,
   toNY,
@@ -57,6 +58,15 @@ function nyTodayStr(): string {
   return nyDayStr(nowNY());
 }
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
+import type { ClosePriceMap } from "./dailyResults";
+import {
+  createMissingOfficialCloseDiagnostics,
+  type MissingOfficialCloseDiagnostics,
+} from "./diagnostics/reportMissingOfficialClose";
+import { createM4TodayDetail } from "./m4Today";
+import { evaluateCloseWindow, previousTradingDay } from "./marketHours";
+import { requireOfficialClose, setOfficialCloseContext } from "./price/requireOfficialClose";
+import { overlayCacheToMap } from "./officialCloseOverlayStore";
 import { sortTrades } from "./sortTrades";
 import type { DailyResult, DailyResultInput } from "./types";
 import { sumRealized } from "./metrics-period";
@@ -67,6 +77,7 @@ import { sumPeriod as sumPeriodBase, type PeriodTotalsOptions } from "./metrics-
 import { round4, add4, sub4, mul4, div4 } from "./precision";
 import type {
   MetricsContract,
+  M4TodayDetail,
   PeriodDegradedMap,
   SummaryMetrics,
   PeriodWindowBreakdown,
@@ -76,15 +87,164 @@ import type {
   PeriodBaselineMeta,
   PeriodWindowDiagnostics,
   PeriodDegradationReason,
+  PeriodOfficialCloseDateImpact,
+  PeriodOfficialCloseSymbolImpact,
+  PeriodWindowDegradeReason,
+  PeriodWindowOfficialCloseDiagnostics,
 } from "./types/metrics";
+import {
+  summarizeMissingOfficialCloses,
+  type MissingOfficialDateSummary,
+  type MissingOfficialSymbolSummary,
+} from "./missingOfficialClose";
 
 const EPSILON = 1e-6;
 
 export const STALE_BASELINE_BDAYS = 5;
 
+const OFFICIAL_PERIOD_IMPACT_TAGS = [
+  "M6过夜=0→影响M4",
+  "WTD/MTD/YTD端点浮盈可能失真",
+] as const;
+
+function appendOfficialPeriodImpacts(source: string[]): string[] {
+  const set = new Set(
+    source
+      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim()),
+  );
+  for (const tag of OFFICIAL_PERIOD_IMPACT_TAGS) {
+    set.add(tag);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+function cloneOfficialSymbol(
+  summary: MissingOfficialSymbolSummary,
+): PeriodOfficialCloseSymbolImpact {
+  return {
+    symbol: summary.symbol,
+    purposes: [...summary.purposes],
+    impact: appendOfficialPeriodImpacts(summary.impact),
+    hasFallback: summary.hasFallback,
+    ...(summary.firstDetectedAt ? { firstDetectedAt: summary.firstDetectedAt } : {}),
+    ...(summary.lastDetectedAt ? { lastDetectedAt: summary.lastDetectedAt } : {}),
+  };
+}
+
+function mapOfficialSummariesInRange(
+  summaries: MissingOfficialDateSummary[],
+  start: string,
+  end: string,
+): PeriodOfficialCloseDateImpact[] {
+  return summaries
+    .filter((entry) => entry.date >= start && entry.date <= end)
+    .map((entry) => ({
+      date: entry.date,
+      symbols: entry.symbols.map((symbol) => cloneOfficialSymbol(symbol)),
+    }));
+}
+
+function cloneOfficialDateImpacts(
+  entries: PeriodOfficialCloseDateImpact[],
+): PeriodOfficialCloseDateImpact[] {
+  return entries.map((entry) => ({
+    date: entry.date,
+    symbols: entry.symbols.map((symbol) => ({
+      symbol: symbol.symbol,
+      purposes: [...symbol.purposes],
+      impact: [...symbol.impact],
+      hasFallback: symbol.hasFallback,
+      ...(symbol.firstDetectedAt ? { firstDetectedAt: symbol.firstDetectedAt } : {}),
+      ...(symbol.lastDetectedAt ? { lastDetectedAt: symbol.lastDetectedAt } : {}),
+    })),
+  }));
+}
+
+function cloneOfficialDiagnostics(
+  diagnostics: PeriodWindowOfficialCloseDiagnostics,
+): PeriodWindowOfficialCloseDiagnostics {
+  return {
+    missing: cloneOfficialDateImpacts(diagnostics.missing),
+    pending: cloneOfficialDateImpacts(diagnostics.pending),
+  };
+}
+
+function mergeDegradeReasons(
+  existing: PeriodWindowDegradeReason[] | undefined,
+  officialMissing: PeriodOfficialCloseDateImpact[],
+): PeriodWindowDegradeReason[] {
+  const base = existing
+    ? existing.map((reason) => ({
+        kind: reason.kind,
+        entries: cloneOfficialDateImpacts(reason.entries),
+      }))
+    : [];
+  if (!officialMissing.length) {
+    return base;
+  }
+  const officialReason: PeriodWindowDegradeReason = {
+    kind: "missing_official_close",
+    entries: cloneOfficialDateImpacts(officialMissing),
+  };
+  const found = base.find((reason) => reason.kind === officialReason.kind);
+  if (found) {
+    found.entries = officialReason.entries;
+  } else {
+    base.push(officialReason);
+  }
+  return base;
+}
+
+function buildOfficialDiagnosticsForWindow(
+  missingSummaries: MissingOfficialDateSummary[],
+  pendingSummaries: MissingOfficialDateSummary[],
+  start: string,
+  end: string,
+): PeriodWindowOfficialCloseDiagnostics {
+  return {
+    missing: mapOfficialSummariesInRange(missingSummaries, start, end),
+    pending: mapOfficialSummariesInRange(pendingSummaries, start, end),
+  };
+}
+
+function clonePeriodWindowDiagnostics(
+  diagnostics?: PeriodWindowDiagnostics,
+): PeriodWindowDiagnostics | undefined {
+  if (!diagnostics) return undefined;
+  const clone: PeriodWindowDiagnostics = {
+    status: diagnostics.status,
+    degraded: diagnostics.degraded,
+    ...(diagnostics.reason ? { reason: diagnostics.reason } : {}),
+    ...(diagnostics.baselineMeta
+      ? { baselineMeta: { ...diagnostics.baselineMeta } }
+      : {}),
+    ...(diagnostics.parseErrors
+      ? { parseErrors: diagnostics.parseErrors.map((err) => ({ ...err })) }
+      : {}),
+    ...(diagnostics.sameDayDuplicates
+      ? { sameDayDuplicates: diagnostics.sameDayDuplicates }
+      : {}),
+    ...(diagnostics.uiTradeDayYmd ? { uiTradeDayYmd: diagnostics.uiTradeDayYmd } : {}),
+    ...(diagnostics.periodEvalYmd
+      ? { periodEvalYmd: diagnostics.periodEvalYmd }
+      : {}),
+    ...(diagnostics.filteredRowsCount !== undefined
+      ? { filteredRowsCount: diagnostics.filteredRowsCount }
+      : {}),
+    ...(diagnostics.lastSnapshotYmd ? { lastSnapshotYmd: diagnostics.lastSnapshotYmd } : {}),
+    ...(diagnostics.windowStartYmd
+      ? { windowStartYmd: diagnostics.windowStartYmd }
+      : {}),
+  };
+  return clone;
+}
+
 export interface CalcMetricsOptions {
   tradingDateStr?: string;
   periodEvalYmd?: string;
+  officialCloseMap?: ClosePriceMap;
+  officialCloseOverlayMap?: ClosePriceMap;
 }
 
 /** 从后端读取汇总（直读 summary.M6 与 tradingDateStr） */
@@ -189,6 +349,7 @@ export interface Metrics {
    * 仅用于兼容旧有调用，避免直接消费 calcMetrics 内部口径。
    */
   M4: number;
+  M4_today?: M4TodayDetail;
   M5: {
     trade: number;
     fifo: number;
@@ -251,6 +412,9 @@ export interface Metrics {
       reason: "MISSING_PREV_CLOSE" | "MISSING_MARK";
     }>;
     missingPrevCloseSymbols?: string[];
+  };
+  diagnostics?: {
+    missingOfficialCloses?: MissingOfficialCloseEntry[];
   };
 }
 
@@ -364,14 +528,21 @@ export function assertM6(metrics: Metrics) {
 }
 
 /** 严格版 M6 计算：按指定口径拆分过夜 / 当日新开未平 两部分 */
-type TodayLots = { longQty: number; longCost: number; shortQty: number; shortCost: number };
+type TodayLots = {
+  longQty: number;
+  longCost: number;
+  shortQty: number;
+  shortCost: number;
+};
+
+type IntradayOpenedLots = Record<string, { long: number; short: number }>;
 
 type BaselineSeed = Record<string, { long?: number | null; short?: number | null }>;
 
 function _buildTodayLots(
   todayTrades: EnrichedTrade[],
   baselineSeed: BaselineSeed = {},
-): Record<string, TodayLots> {
+): { lots: Record<string, TodayLots>; opened: IntradayOpenedLots } {
   // 仅记录“当日新开且仍未平”的剩余 lots（FIFO 消耗）
   const bySym = new Map<
     string,
@@ -380,6 +551,17 @@ function _buildTodayLots(
       short: { qty: number; price: number }[];
     }
   >();
+
+  const opened: IntradayOpenedLots = {};
+
+  const trackOpened = (sym: string, kind: "long" | "short", qty: number) => {
+    if (!(qty > EPSILON)) return;
+    const key = sym;
+    if (!opened[key]) {
+      opened[key] = { long: 0, short: 0 };
+    }
+    opened[key]![kind] += qty;
+  };
 
   const baseline = new Map<string, { long: number; short: number }>();
   for (const [sym, seed] of Object.entries(baselineSeed)) {
@@ -451,6 +633,7 @@ function _buildTodayLots(
     if (t.action === "buy") {
       if (Number.isFinite(price)) {
         bag.long.push({ qty, price });
+        trackOpened(sym, "long", qty);
       }
       continue;
     }
@@ -458,6 +641,7 @@ function _buildTodayLots(
     if (t.action === "short") {
       if (Number.isFinite(price)) {
         bag.short.push({ qty, price });
+        trackOpened(sym, "short", qty);
       }
       continue;
     }
@@ -474,6 +658,7 @@ function _buildTodayLots(
 
       if (remain > EPSILON && Number.isFinite(price)) {
         bag.short.push({ qty: remain, price });
+        trackOpened(sym, "short", remain);
       }
       continue;
     }
@@ -490,6 +675,7 @@ function _buildTodayLots(
 
       if (remain > EPSILON && Number.isFinite(price)) {
         bag.long.push({ qty: remain, price });
+        trackOpened(sym, "long", remain);
       }
     }
   }
@@ -531,7 +717,7 @@ function _buildTodayLots(
 
     result[sym] = { longQty, longCost, shortQty, shortCost };
   }
-  return result;
+  return { lots: result, opened };
 }
 
 function _calcM6Strict(params: {
@@ -563,6 +749,7 @@ function _calcM6Strict(params: {
     mark: number;
     amount: number;
     component: "realized_today" | "mtm_overnight" | "mtm_intraday_open";
+    direction?: "long" | "short";
   }> = [];
 
   for (const row of realizedRows.rows) {
@@ -575,6 +762,7 @@ function _calcM6Strict(params: {
       mark: row.closePrice,
       amount,
       component: "realized_today",
+      direction: row.side === "sell" ? "long" : "short",
     });
   }
 
@@ -621,11 +809,98 @@ function _calcM6Strict(params: {
     }
   }
 
-  const todayLots = _buildTodayLots(todayTrades, baselineSeed);
+  const { lots: todayLots, opened: intradayOpenedLots } = _buildTodayLots(
+    todayTrades,
+    baselineSeed,
+  );
 
   let mtmOvernight = 0;
   let mtmIntradayOpen = 0;
   const warnings: string[] = [];
+  const missingPrevCloseSymbols = new Set<string>();
+  const prevCloseDate = previousTradingDay(todayStr);
+  const prevCloseCache = new Map<
+    string,
+    ReturnType<typeof requireOfficialClose>
+  >();
+
+  const normalizedSymbol = (value: string) => value.trim().toUpperCase();
+
+  const intradayRealizedBySymbol = new Map<
+    string,
+    { long: number; short: number }
+  >();
+
+  for (const row of realizedRows.rows) {
+    if (row.into !== "M5.2") continue;
+    const key = normalizedSymbol(row.symbol);
+    if (!key) continue;
+    const bucket =
+      intradayRealizedBySymbol.get(key) ?? { long: 0, short: 0 };
+    if (row.side === "sell") {
+      bucket.long += row.qty;
+    } else if (row.side === "cover") {
+      bucket.short += row.qty;
+    }
+    intradayRealizedBySymbol.set(key, bucket);
+  }
+
+  const requestOfficialPrevClose = (symbol: string) => {
+    const key = normalizedSymbol(symbol);
+    if (!key) {
+      const missing: { ok: false; reason: "no_official_close" } = {
+        ok: false,
+        reason: "no_official_close",
+      };
+      return missing;
+    }
+    const cached = prevCloseCache.get(key);
+    if (cached) return cached;
+    if (!prevCloseDate) {
+      const missing: { ok: false; reason: "no_official_close" } = {
+        ok: false,
+        reason: "no_official_close",
+      };
+      prevCloseCache.set(key, missing);
+      return missing;
+    }
+    const result = requireOfficialClose(key, prevCloseDate, "M6");
+    prevCloseCache.set(key, result);
+    return result;
+  };
+
+  const invariantSymbols = new Set<string>([
+    ...Object.keys(todayLots),
+    ...Object.keys(intradayOpenedLots),
+    ...intradayRealizedBySymbol.keys(),
+  ]);
+
+  for (const symbol of invariantSymbols) {
+    const opened = intradayOpenedLots[symbol] ?? { long: 0, short: 0 };
+    const realized = intradayRealizedBySymbol.get(symbol) ?? {
+      long: 0,
+      short: 0,
+    };
+    const remain = todayLots[symbol] ?? {
+      longQty: 0,
+      longCost: 0,
+      shortQty: 0,
+      shortCost: 0,
+    };
+    const longGap = Math.abs(opened.long - (realized.long + remain.longQty));
+    const shortGap = Math.abs(opened.short - (realized.short + remain.shortQty));
+    if (longGap > 1e-6 || shortGap > 1e-6) {
+      throw new Error(
+        `M6 intraday lot invariant violated for ${symbol}: opened(${opened.long.toFixed(
+          6,
+        )}/${opened.short.toFixed(6)}) ≠ realized(${realized.long.toFixed(
+          6,
+        )}/${realized.short.toFixed(6)}) + remain(${remain.longQty.toFixed(
+          6,
+        )}/${remain.shortQty.toFixed(6)})`,
+      );
+    }
+  }
 
   for (const [symbol, lots] of Object.entries(todayLots)) {
     const pos = posMap.get(symbol);
@@ -638,11 +913,10 @@ function _calcM6Strict(params: {
       const v = lastPriceFallback(symbol);
       if (Number.isFinite(Number(v))) mark = Number(v);
     }
-    const prevClose = Number(pos?.prevClose);
     const hasMark = Number.isFinite(mark);
-    const hasPrev = Number.isFinite(prevClose);
     const markRounded = hasMark ? round4(mark) : NaN;
-    const prevCloseRounded = hasPrev ? round4(prevClose) : NaN;
+    let prevCloseRounded = NaN;
+    let hasPrev = false;
 
     // 2.2 当日新开仍未平的净数量（多为正、空为负）
     const todayLongQty = Number(lots.longQty ?? 0);
@@ -664,6 +938,7 @@ function _calcM6Strict(params: {
       qty: number,
       basis: number,
       pnl: number,
+      direction: "long" | "short",
     ) => {
       const roundedBasis = round4(basis);
       const roundedAmount = round4(pnl);
@@ -675,6 +950,7 @@ function _calcM6Strict(params: {
         mark: roundedMark,
         amount: roundedAmount,
         component,
+        direction,
       });
       if (component === "mtm_overnight") {
         mtmOvernight = add4(mtmOvernight, roundedAmount);
@@ -692,7 +968,7 @@ function _calcM6Strict(params: {
           const diff = sub4(markRounded, basis);
           const pnl = mul4(diff, todayLongOpen);
           if (Number.isFinite(pnl)) {
-            recordLeg("mtm_intraday_open", todayLongOpen, basis, pnl);
+            recordLeg("mtm_intraday_open", todayLongOpen, basis, pnl, "long");
           }
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日多头成本，当日新开未平不计入。`);
@@ -705,7 +981,7 @@ function _calcM6Strict(params: {
           const diff = sub4(basis, markRounded);
           const pnl = mul4(diff, todayShortOpen);
           if (Number.isFinite(pnl)) {
-            recordLeg("mtm_intraday_open", todayShortOpen, basis, pnl);
+            recordLeg("mtm_intraday_open", todayShortOpen, basis, pnl, "short");
           }
         } else {
           warnings.push(`SafePrice: ${symbol} 缺少当日空头成本，当日新开未平不计入。`);
@@ -717,19 +993,38 @@ function _calcM6Strict(params: {
 
     // === 过夜部分 ===
     if (Math.abs(overnightSigned) > 1e-9) {
+      const prevResult = requestOfficialPrevClose(symbol);
+      if (prevResult.ok) {
+        hasPrev = true;
+        prevCloseRounded = round4(prevResult.price);
+      } else {
+        missingPrevCloseSymbols.add(normalizedSymbol(symbol));
+      }
       if (hasMark && hasPrev) {
         if (overnightSigned > 0) {
           const diff = sub4(markRounded, prevCloseRounded);
           const pnl = mul4(diff, overnightSigned);
           if (Number.isFinite(pnl)) {
-            recordLeg("mtm_overnight", overnightSigned, prevCloseRounded, pnl);
+            recordLeg(
+              "mtm_overnight",
+              overnightSigned,
+              prevCloseRounded,
+              pnl,
+              "long",
+            );
           }
         } else {
           const absQty = Math.abs(overnightSigned);
           const diff = sub4(prevCloseRounded, markRounded);
           const pnl = mul4(diff, absQty);
           if (Number.isFinite(pnl)) {
-            recordLeg("mtm_overnight", absQty, prevCloseRounded, pnl);
+            recordLeg(
+              "mtm_overnight",
+              absQty,
+              prevCloseRounded,
+              pnl,
+              "short",
+            );
           }
         }
       } else {
@@ -753,11 +1048,17 @@ function _calcM6Strict(params: {
       const v = lastPriceFallback(symbol);
       if (Number.isFinite(Number(v))) mark = Number(v);
     }
-    const prevClose = Number(p.prevClose);
     const hasMark = Number.isFinite(mark);
-    const hasPrev = Number.isFinite(prevClose);
     const markRounded = hasMark ? round4(mark) : NaN;
-    const prevCloseRounded = hasPrev ? round4(prevClose) : NaN;
+    const prevResult = requestOfficialPrevClose(symbol);
+    let prevCloseRounded = NaN;
+    let hasPrev = false;
+    if (prevResult.ok) {
+      hasPrev = true;
+      prevCloseRounded = round4(prevResult.price);
+    } else {
+      missingPrevCloseSymbols.add(normalizedSymbol(symbol));
+    }
 
     if (hasMark && hasPrev) {
       if (currentQty > 0) {
@@ -772,6 +1073,7 @@ function _calcM6Strict(params: {
             mark: markRounded,
             amount,
             component: "mtm_overnight",
+            direction: "long",
           });
           mtmOvernight = add4(mtmOvernight, amount);
         }
@@ -788,6 +1090,7 @@ function _calcM6Strict(params: {
             mark: markRounded,
             amount,
             component: "mtm_overnight",
+            direction: "short",
           });
           mtmOvernight = add4(mtmOvernight, amount);
         }
@@ -819,6 +1122,7 @@ function _calcM6Strict(params: {
     mtmIntradayOpen,
     warnings,
     legs,
+    missingPrevCloseSymbols: Array.from(missingPrevCloseSymbols),
   };
 }
 
@@ -2022,6 +2326,39 @@ export function calcMetricsInternal(
 
   const todayStr = periodEvalStr;
 
+  const nowInstant = nowNY();
+
+  const officialCloseMap: ClosePriceMap =
+    (options.officialCloseMap as ClosePriceMap | undefined) ?? {};
+  const officialOverlayMap: ClosePriceMap =
+    (options.officialCloseOverlayMap as ClosePriceMap | undefined) ??
+    overlayCacheToMap();
+  const missingOfficialDiagnostics = createMissingOfficialCloseDiagnostics();
+  const { missingOfficialCloses, pendingOfficialCloses } =
+    missingOfficialDiagnostics;
+  const prevCloseDateForContext = previousTradingDay(todayStr);
+  const fallbackKeySet = new Set<string>();
+  if (prevCloseDateForContext) {
+    for (const pos of positions) {
+      const symbol = typeof pos?.symbol === "string" ? pos.symbol.trim().toUpperCase() : "";
+      if (!symbol) continue;
+      const prevCloseValue = Number(pos?.prevClose);
+      if (Number.isFinite(prevCloseValue)) {
+        fallbackKeySet.add(`${symbol}|${prevCloseDateForContext}`);
+      }
+    }
+  }
+  const releaseOfficialContext = setOfficialCloseContext({
+    map: officialCloseMap,
+    overlayMap: officialOverlayMap,
+    diagnostics: missingOfficialDiagnostics,
+    fallbackResolver: (symbol, date) =>
+      fallbackKeySet.has(`${symbol.trim().toUpperCase()}|${date}`),
+    closeWindowEvaluator: (date) =>
+      evaluateCloseWindow(date, nowInstant).inWindow,
+    resolveTargetDate: () => todayStr,
+  });
+
   const todayTrades = tradeEntries
     .filter((entry) => entry.day === todayStr)
     .map((entry) => entry.trade);
@@ -2081,18 +2418,23 @@ export function calcMetricsInternal(
     }
   }
 
-  const strict = _calcM6Strict({
-    positions,
-    todayTrades,
-    sortedTrades,
-    todayStr,
-    M4: todayHistoricalRealizedPnl,
-    M5_2: pnlFifo,
-    lastPriceFallback: (symbol) => {
-      const p = lastTradePriceToday.get(symbol);
-      return Number.isFinite(Number(p)) ? Number(p) : null;
-    },
-  });
+  let strict: ReturnType<typeof _calcM6Strict>;
+  try {
+    strict = _calcM6Strict({
+      positions,
+      todayTrades,
+      sortedTrades,
+      todayStr,
+      M4: todayHistoricalRealizedPnl,
+      M5_2: pnlFifo,
+      lastPriceFallback: (symbol) => {
+        const p = lastTradePriceToday.get(symbol);
+        return Number.isFinite(Number(p)) ? Number(p) : null;
+      },
+    });
+  } finally {
+    releaseOfficialContext();
+  }
 
   const todayTotalPnlChange = strict.M6;
   const priceChangeRounded = mRound2(
@@ -2105,6 +2447,7 @@ export function calcMetricsInternal(
     mark: leg.mark,
     amount: leg.amount,
     component: leg.component,
+    ...(leg.direction ? { direction: leg.direction } : {}),
   }));
   const m6Details = {
     realizedToday: mRound2(strict.realizedToday),
@@ -2112,6 +2455,14 @@ export function calcMetricsInternal(
     mtmIntradayOpen: mRound2(strict.mtmIntradayOpen),
     warnings: strict.warnings,
   };
+  const missingPrevCloseList = strict.missingPrevCloseSymbols ?? [];
+  const m4Degraded = missingPrevCloseList.length > 0;
+  const m4Today = createM4TodayDetail({
+    realized: strict.realizedToday,
+    mtmOvernight: strict.mtmOvernight,
+    mtmIntradayOpen: strict.mtmIntradayOpen,
+    degraded: m4Degraded,
+  });
 
   if (DEBUG)
     logger.debug("M6_DEBUG_STRICT", {
@@ -2166,14 +2517,112 @@ export function calcMetricsInternal(
     wtd,
     mtd,
     ytd,
-    degraded,
+    degraded: baseDegraded,
     breakdown: periodBreakdown,
-    status: periodStatus,
+    status: basePeriodStatus,
     firstActiveDate: resolvedFirstActiveDate,
-    diagnostics: periodDiagnostics,
+    diagnostics: basePeriodDiagnostics,
   } = periodSnapshot;
 
-  const diagnosticSnapshots = periodDiagnostics ?? {};
+  const missingSummaryByDate = summarizeMissingOfficialCloses(
+    missingOfficialCloses,
+  );
+  const pendingSummaryByDate = summarizeMissingOfficialCloses(
+    pendingOfficialCloses,
+  );
+
+  const periodWindowStarts: Record<PeriodWindowKey, string> = {
+    wtd: weekStartForEvalDay(periodEvalStr),
+    mtd: `${periodEvalStr.slice(0, 7)}-01`,
+    ytd: `${periodEvalStr.slice(0, 4)}-01-01`,
+  };
+
+  const officialByWindow: Record<
+    PeriodWindowKey,
+    PeriodWindowOfficialCloseDiagnostics
+  > = {
+    wtd: buildOfficialDiagnosticsForWindow(
+      missingSummaryByDate,
+      pendingSummaryByDate,
+      periodWindowStarts.wtd,
+      periodEvalStr,
+    ),
+    mtd: buildOfficialDiagnosticsForWindow(
+      missingSummaryByDate,
+      pendingSummaryByDate,
+      periodWindowStarts.mtd,
+      periodEvalStr,
+    ),
+    ytd: buildOfficialDiagnosticsForWindow(
+      missingSummaryByDate,
+      pendingSummaryByDate,
+      periodWindowStarts.ytd,
+      periodEvalStr,
+    ),
+  };
+
+  const officialDegradedFlags: PeriodDegradedMap = {
+    wtd: officialByWindow.wtd.missing.length > 0,
+    mtd: officialByWindow.mtd.missing.length > 0,
+    ytd: officialByWindow.ytd.missing.length > 0,
+  };
+
+  const combinedDegraded: PeriodDegradedMap = {
+    wtd: baseDegraded.wtd || officialDegradedFlags.wtd,
+    mtd: baseDegraded.mtd || officialDegradedFlags.mtd,
+    ytd: baseDegraded.ytd || officialDegradedFlags.ytd,
+  };
+
+  const periodStatusWithOfficial: Record<PeriodWindowKey, PeriodWindowStatus> = {
+    wtd: basePeriodStatus?.wtd ?? (combinedDegraded.wtd ? "degraded" : "ok"),
+    mtd: basePeriodStatus?.mtd ?? (combinedDegraded.mtd ? "degraded" : "ok"),
+    ytd: basePeriodStatus?.ytd ?? (combinedDegraded.ytd ? "degraded" : "ok"),
+  };
+
+  for (const key of ["wtd", "mtd", "ytd"] as const) {
+    if (officialDegradedFlags[key]) {
+      const current = periodStatusWithOfficial[key];
+      if (current !== "missing" && current !== "partial") {
+        periodStatusWithOfficial[key] = "degraded";
+      }
+    }
+  }
+
+  const periodDiagnosticsWithOfficial: Record<
+    PeriodWindowKey,
+    PeriodWindowDiagnostics
+  > = {} as Record<PeriodWindowKey, PeriodWindowDiagnostics>;
+
+  for (const key of ["wtd", "mtd", "ytd"] as const) {
+    const existing = clonePeriodWindowDiagnostics(basePeriodDiagnostics?.[key]);
+    const official = officialByWindow[key];
+    const mergedReasons = mergeDegradeReasons(
+      existing?.degradeReasons,
+      official.missing,
+    );
+    const diag: PeriodWindowDiagnostics =
+      existing ?? {
+        status: periodStatusWithOfficial[key],
+        degraded: combinedDegraded[key],
+      };
+    diag.status = periodStatusWithOfficial[key];
+    diag.degraded = combinedDegraded[key];
+    if (diag.degradeReasons) {
+      delete diag.degradeReasons;
+    }
+    if (mergedReasons.length > 0) {
+      diag.degradeReasons = mergedReasons;
+    }
+    if (diag.officialClose) {
+      delete diag.officialClose;
+    }
+    if (official.missing.length > 0 || official.pending.length > 0) {
+      diag.officialClose = cloneOfficialDiagnostics(official);
+    }
+    periodDiagnosticsWithOfficial[key] = diag;
+  }
+
+  const diagnosticSnapshots = basePeriodDiagnostics ?? {};
   const lastSnapshotYmd =
     diagnosticSnapshots.wtd?.lastSnapshotYmd ??
     diagnosticSnapshots.mtd?.lastSnapshotYmd ??
@@ -2213,6 +2662,7 @@ export function calcMetricsInternal(
       fifo: pnlFifo,
     },
     M6: todayTotalPnlChange,
+    M4_today: m4Today,
     _m6: m6Details,
     M7: {
       B: todayTradeCountsByType.B,
@@ -2243,17 +2693,31 @@ export function calcMetricsInternal(
       m6PrevRealizedTotal: mRound2(todayHistoricalRealizedPnl),
       m6FifoToday: mRound2(pnlFifo),
       m6Legs: legsForAux,
+      missingPrevCloseSymbols: missingPrevCloseList,
     },
   };
 
+  if (missingOfficialCloses.length > 0 || pendingOfficialCloses.length > 0) {
+    metrics.diagnostics = {
+      ...(missingOfficialCloses.length > 0
+        ? { missingOfficialCloses }
+        : {}),
+      ...(pendingOfficialCloses.length > 0
+        ? { pendingOfficialCloses }
+        : {}),
+    };
+  }
+
   metrics._period = {
-    degraded,
-    ...(periodStatus ? { status: periodStatus } : {}),
+    degraded: combinedDegraded,
+    ...(periodStatusWithOfficial ? { status: periodStatusWithOfficial } : {}),
     ...(periodBreakdown ? { breakdown: periodBreakdown } : {}),
     ...(resolvedFirstActiveDate
       ? { firstActiveDate: resolvedFirstActiveDate }
       : {}),
-    ...(periodDiagnostics ? { diagnostics: periodDiagnostics } : {}),
+    ...(periodDiagnosticsWithOfficial
+      ? { diagnostics: periodDiagnosticsWithOfficial }
+      : {}),
   };
 
   assertM6(metrics);
@@ -2411,7 +2875,19 @@ export function normalizeMetrics(input: any): MetricsContract {
             leg.component === "mtm_intraday_open"
               ? leg.component
               : undefined;
-          return { symbol: leg.symbol, qty, basis, mark, amount, component };
+          const direction =
+            leg.direction === "long" || leg.direction === "short"
+              ? leg.direction
+              : undefined;
+          return {
+            symbol: leg.symbol,
+            qty,
+            basis,
+            mark,
+            amount,
+            component,
+            ...(direction ? { direction } : {}),
+          };
         })
         .filter((leg: any): leg is {
           symbol: string;
@@ -2420,6 +2896,7 @@ export function normalizeMetrics(input: any): MetricsContract {
           mark: number;
           amount: number;
           component?: "realized_today" | "mtm_overnight" | "mtm_intraday_open";
+          direction?: "long" | "short";
         } => Boolean(leg))
     : undefined;
   const m6Excluded = Array.isArray(input?.aux?.m6Excluded)
@@ -2434,9 +2911,9 @@ export function normalizeMetrics(input: any): MetricsContract {
   const missingPrevCloseSymbols = Array.isArray(
     input?.aux?.missingPrevCloseSymbols,
   )
-    ? input.aux.missingPrevCloseSymbols.filter(
-        (s: unknown): s is string => typeof s === "string",
-      )
+    ? input.aux.missingPrevCloseSymbols
+    .map((s: unknown) => (typeof s === "string" ? s.trim().toUpperCase() : ""))
+    .filter((s: string) => s.length > 0)
     : [];
   const rawBreakdown = input?.aux?.breakdown;
   const breakdown = rawBreakdown
@@ -2468,6 +2945,104 @@ export function normalizeMetrics(input: any): MetricsContract {
             : [],
         }
     : undefined;
+  const normalizeOfficialEntries = (source: any[]): MissingOfficialCloseEntry[] =>
+    source
+      .map((entry) => {
+        const symbol =
+          typeof entry?.symbol === "string"
+            ? entry.symbol.trim().toUpperCase()
+            : "";
+        const rawDate =
+          typeof entry?.date === "string" ? entry.date.slice(0, 10) : "";
+        if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+          return null;
+        }
+        const purposes = Array.isArray(entry?.purposes)
+          ? (Array.from(
+              new Set(
+                entry.purposes.filter(
+                  (value: unknown): value is string =>
+                    typeof value === "string" && value.trim().length > 0,
+                ),
+              ),
+            ) as string[]).sort((a, b) => a.localeCompare(b))
+          : [];
+        const impact = Array.isArray(entry?.impact)
+          ? (Array.from(
+              new Set(
+                entry.impact.filter(
+                  (value: unknown): value is string =>
+                    typeof value === "string" && value.trim().length > 0,
+                ),
+              ),
+            ) as string[]).sort((a, b) => a.localeCompare(b))
+          : [];
+        const hasFallback = Boolean(entry?.hasFallback);
+        const firstDetectedAt =
+          typeof entry?.firstDetectedAt === "string"
+            ? entry.firstDetectedAt
+            : undefined;
+        const lastDetectedAt =
+          typeof entry?.lastDetectedAt === "string"
+            ? entry.lastDetectedAt
+            : undefined;
+        return {
+          symbol,
+          date: rawDate,
+          purposes,
+          impact,
+          hasFallback,
+          ...(firstDetectedAt ? { firstDetectedAt } : {}),
+          ...(lastDetectedAt ? { lastDetectedAt } : {}),
+        };
+      })
+      .filter((entry): entry is MissingOfficialCloseEntry => Boolean(entry))
+      .sort((a, b) => {
+        const dateCmp = b.date.localeCompare(a.date);
+        if (dateCmp !== 0) return dateCmp;
+        return a.symbol.localeCompare(b.symbol);
+      });
+  const normalizedMissingOfficial = Array.isArray(
+    input?.diagnostics?.missingOfficialCloses,
+  )
+    ? normalizeOfficialEntries(input.diagnostics.missingOfficialCloses as any[])
+    : [];
+  const normalizedPendingOfficial = Array.isArray(
+    input?.diagnostics?.pendingOfficialCloses,
+  )
+    ? normalizeOfficialEntries(input.diagnostics.pendingOfficialCloses as any[])
+    : [];
+  const normalizedM4Today: M4TodayDetail = (() => {
+    const raw = input?.M4_today;
+    const realizedComponent = Number.isFinite(Number(raw?.realized))
+      ? Number(raw?.realized)
+      : realizedToday;
+    const overnightComponent = Number.isFinite(Number(raw?.mtmOvernight))
+      ? Number(raw?.mtmOvernight)
+      : mtmOvernight;
+    const intradayComponent = Number.isFinite(Number(raw?.mtmIntradayOpen))
+      ? Number(raw?.mtmIntradayOpen)
+      : mtmIntradayOpen;
+    const totalComponent = Number.isFinite(Number(raw?.total))
+      ? Number(raw?.total)
+      : realizedComponent + overnightComponent + intradayComponent;
+    const degradedFlag =
+      typeof raw?.degraded === "boolean"
+        ? raw.degraded
+        : missingPrevCloseSymbols.length > 0;
+    const reason =
+      raw?.reason === "missing_official_close_prev" || degradedFlag
+        ? ("missing_official_close_prev" as const)
+        : undefined;
+    return {
+      total: totalComponent,
+      realized: realizedComponent,
+      mtmOvernight: overnightComponent,
+      mtmIntradayOpen: intradayComponent,
+      degraded: Boolean(degradedFlag),
+      ...(reason ? { reason } : {}),
+    };
+  })();
   const aux = {
     breakdown,
     m6PriceChange: priceChange,
@@ -2490,6 +3065,17 @@ export function normalizeMetrics(input: any): MetricsContract {
     m6Excluded,
     missingPrevCloseSymbols,
   };
+  const normalizedDiagnostics =
+    normalizedMissingOfficial.length > 0 || normalizedPendingOfficial.length > 0
+      ? {
+          ...(normalizedMissingOfficial.length > 0
+            ? { missingOfficialCloses: normalizedMissingOfficial }
+            : {}),
+          ...(normalizedPendingOfficial.length > 0
+            ? { pendingOfficialCloses: normalizedPendingOfficial }
+            : {}),
+        }
+      : undefined;
   const normalizedPeriodMeta =
     input?._period && typeof input._period === "object"
       ? {
@@ -2529,6 +3115,7 @@ export function normalizeMetrics(input: any): MetricsContract {
             : {}),
         }
       : undefined;
+
   const parseFiniteNumber = (value: unknown) => {
     if (typeof value === "number" && Number.isFinite(value)) {
       return value;
@@ -2565,6 +3152,7 @@ export function normalizeMetrics(input: any): MetricsContract {
     M2,
     M3,
     M4,
+    M4_today: normalizedM4Today,
     M5,
     M6,
     _m6,
@@ -2577,6 +3165,7 @@ export function normalizeMetrics(input: any): MetricsContract {
     ...(M13 !== undefined ? { M13 } : {}),
     aux,
     ...(normalizedPeriodMeta ? { _period: normalizedPeriodMeta } : {}),
+    ...(normalizedDiagnostics ? { diagnostics: normalizedDiagnostics } : {}),
   };
 }
 

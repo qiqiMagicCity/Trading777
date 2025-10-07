@@ -118,6 +118,24 @@ export const evaluateCloseRequirement = (
   };
 };
 
+export interface CloseWindowState extends CloseRequirementState {
+  inWindow: boolean;
+}
+
+export const evaluateCloseWindow = (
+  ymd: string,
+  now: Date = nowNY(),
+): CloseWindowState => {
+  const requirement = evaluateCloseRequirement(ymd, now);
+  const todayStr = ymdInNY(now);
+  const inWindow =
+    requirement.isTradingDay &&
+    requirement.date === todayStr &&
+    requirement.windowEndTs !== null &&
+    requirement.nowTs < requirement.windowEndTs;
+  return { ...requirement, inWindow };
+};
+
 export const shouldRequireOfficialClose = (
   ymd: string,
   now: Date = nowNY(),

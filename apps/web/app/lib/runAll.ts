@@ -3,6 +3,7 @@
 import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
 import { calcMetrics } from "./metrics";
+import { createM4TodayDetail } from "./m4Today";
 import { computePeriods } from "./metrics-periods";
 import { generateDailyResults } from "./dailyResults";
 import {
@@ -907,6 +908,7 @@ async function runAllCore(
     metrics = calcMetrics(enriched, positions, effectiveDailyResults, {
       tradingDateStr: evalISO,
       periodEvalYmd: evalISO,
+      officialCloseMap: closePrices,
     });
   } finally {
     if (prevFreeze === undefined) {
@@ -1063,6 +1065,16 @@ async function runAllCore(
       ? [...metrics._m6.warnings]
       : [],
   };
+  const baseM4Today = metrics.M4_today;
+  const derivedM4Degraded =
+    Boolean(baseM4Today?.degraded) ||
+    (metrics.aux?.missingPrevCloseSymbols?.length ?? 0) > 0;
+  const m4Today = createM4TodayDetail({
+    realized: todayRealizedTotal,
+    mtmOvernight: mtmOvernightRaw,
+    mtmIntradayOpen: mtmIntradayRaw,
+    degraded: derivedM4Degraded,
+  });
 
   const winRatePct = round1(metrics.M10.rate * 100);
 
@@ -1084,6 +1096,7 @@ async function runAllCore(
     M5_1: M5_1_r,
     M5_2: M5_2_r,
     M6: M6_r,
+    M4_today: m4Today,
     _m6: m6Details,
     M7: metrics.M7,
     M8: metrics.M8,

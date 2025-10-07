@@ -10,6 +10,7 @@ import {
   getLastWtdMtdYtdExplain,
   STALE_BASELINE_BDAYS,
 } from "@/app/lib/metrics";
+import { selectM4TodaySummary } from "@/app/lib/m4Today";
 import type {
   MetricsContract,
   PeriodBaselineMeta,
@@ -19,6 +20,11 @@ import type {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { MissingCloseFallback } from "@/app/lib/dailyResults";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
+import {
+  getPeriodOfficialCloseSummary,
+  formatOfficialCloseEntries,
+  formatPendingSummary,
+} from "@/app/lib/periodOfficialClose";
 
 const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
   MARK_PRICE: "使用最新价兜底",
@@ -81,6 +87,7 @@ function composeDegradeTooltip(
   reason?: PeriodDegradationReason,
   baselineMeta?: PeriodBaselineMeta,
   parseErrors?: PeriodParseError[],
+  extraLines: string[] = [],
 ): string {
   const lines: string[] = [];
   const reasonLine = reason ? `${label}（${reason}）` : label;
@@ -119,6 +126,10 @@ function composeDegradeTooltip(
   const parseSummaries = summarizeParseErrors(parseErrors);
   if (parseSummaries.length > 0) {
     lines.push(`解析失败：${parseSummaries.join("；")}`);
+  }
+
+  if (extraLines.length > 0) {
+    lines.push("", ...extraLines);
   }
 
   return lines.join("\n");
@@ -181,6 +192,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const periodMeta = rawMetrics?._period;
   const periodStatusMap = periodMeta?.status;
   const periodBreakdown = periodMeta?.breakdown;
+  const officialCloseSummary = useMemo(
+    () => getPeriodOfficialCloseSummary(metrics ?? null),
+    [metrics],
+  );
 
   const m6Card = useMemo(() => {
     if (!metrics) {
@@ -620,12 +635,36 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           ? "metric-m6"
           : undefined;
       const baseTitle = metricNames[key] ?? key;
-      let titleNode: ReactNode = baseTitle;
+      let baseTitleContent: ReactNode = baseTitle;
+      let titleNode: ReactNode = baseTitleContent;
 
       let numericForColor: number | undefined;
 
       // 根据不同指标类型格式化值
-      if (key === "M5") {
+      if (key === "M4") {
+        const summary = selectM4TodaySummary(metrics ?? null);
+        const totalValue = summary.total;
+        formattedValue = formatCurrency(totalValue);
+        numericForColor = totalValue;
+        if (summary.degraded) {
+          const tooltip = summary.tooltip ?? "因缺官方昨收，过夜=0，M4为退化值";
+          titleNode = (
+            <span className="inline-flex items-center gap-2">
+              <span>{baseTitle}</span>
+              <span
+                title={tooltip}
+                style={{
+                  backgroundColor: "#f59e0b",
+                  borderRadius: "9999px",
+                  display: "inline-flex",
+                  height: "8px",
+                  width: "8px",
+                }}
+              />
+            </span>
+          );
+        }
+      } else if (key === "M5") {
         const m5 = value as MetricsContract["M5"];
         formattedValue = (
           <>
@@ -668,9 +707,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         );
       } else if (key !== "M6") {
         const numValue =
-          key === "M4"
-            ? (value as number | undefined)
-            : (value as number | undefined);
+          value as number | undefined;
 
         if (key === "M11" || key === "M12" || key === "M13") {
           const state = periodCardStates[key];
@@ -801,19 +838,48 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       if (key === "M11" || key === "M12" || key === "M13") {
         const windowKey = WINDOW_KEY_MAP[key];
         const diag = diagnostics?.[windowKey];
+        const officialWindow = officialCloseSummary[windowKey];
+        const pendingSummaryText = formatPendingSummary(
+          officialWindow?.pending ?? [],
+        );
+        if (pendingSummaryText && periodCardStates[key] !== "degraded") {
+          baseTitleContent = (
+            <span
+              title={`等待当日官方收盘价落地：${pendingSummaryText}`}
+              data-testid={`period-pending-tooltip-${key.toLowerCase()}`}
+            >
+              {baseTitle}
+            </span>
+          );
+          titleNode = baseTitleContent;
+        }
         if (periodCardStates[key] === "degraded" && diag?.degraded) {
-          const reasonLabel = diag.reason
-            ? DEGRADE_REASON_LABELS[diag.reason] ?? "指标退化"
-            : "指标退化";
+          const reasonLabel =
+            officialWindow?.missing.length
+              ? "官方收盘价缺失"
+              : diag.reason
+              ? DEGRADE_REASON_LABELS[diag.reason] ?? "指标退化"
+              : "指标退化";
+          const officialMissingLines = formatOfficialCloseEntries(
+            officialWindow?.missing ?? [],
+          );
+          const extraLines: string[] = [];
+          if (officialMissingLines.length > 0) {
+            extraLines.push("官方收盘价缺口：", ...officialMissingLines);
+          }
+          if (pendingSummaryText) {
+            extraLines.push(`待落地：${pendingSummaryText}`);
+          }
           const tooltip = composeDegradeTooltip(
             reasonLabel,
             diag.reason,
             diag.baselineMeta,
             diag.parseErrors,
+            extraLines,
           );
           titleNode = (
             <span className="inline-flex items-center gap-2">
-              <span>{baseTitle}</span>
+              <span>{baseTitleContent}</span>
               <span
                 className="inline-flex items-center gap-1 text-xs font-medium text-amber-700"
                 data-testid={`period-degrade-hint-${key.toLowerCase()}`}

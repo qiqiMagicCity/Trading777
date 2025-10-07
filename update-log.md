@@ -271,6 +271,13 @@
 - 修复 Vercel 构建报错：`resolveNyDay` 接收 `(typeof window !== "undefined" && window.NEXT_PUBLIC_FREEZE_DATE)` 时被推断为 `{}`，Next.js 构建类型检查失败（期望 `string | undefined`）。改为分别读取 `process.env` 与 `window` 的候选值，并通过 `typeof === "string"` 收窄后再传入 `resolveNyDay`，重跑 `npm run build` 通过。
 - 修复 Vercel 构建报错：Dashboard M6 卡片读取 `tradingDateStr` 时直接访问 `MetricsContract` 上不存在的字段，TS 推断 `{} | undefined` 导致 `next build` 中断。改用 `isRecord` 收窄原始对象并对 `intradayDiagnostics.uiTradeDayYmd` / `rawMetrics.tradingDateStr` 做字符串判定后再回退，`npm run build --workspace=web` 通过。
 
+## 2025-11-05
+- `calcMetrics` 引入 `officialCloseMap` 选项，并在 `_calcM6Strict` 内强制调用 `requireOfficialClose` 读取 close_prices.json 中的官方昨收；未取得官方价时，M6 过夜桶按 0 处理并记录 `diagnostics.missingOfficialCloses`。
+- 新增 `price/requireOfficialClose.ts` 与 `diagnostics/reportMissingOfficialClose.ts`，统一聚合缺口、目的用途与影响面；`normalizeMetrics` 透传新诊断结构。
+- Dashboard 顶部新增“官方收盘价缺失提醒”黄条，按日期/标的展示影响并提示兜底状态；前端计算 `officialClosePrices` 仅聚合官方来源，并将其传入 `calcMetrics`。
+- 增补 `metrics-official-close.m6.test.ts`，覆盖“有官方价”“缺官方价仍有兜底”“纯日内”三场景；原有 `m6.overnight-pure`、`metrics-m6-qty-delta.diag`、`property-invariants` 等单测同步注入官方昨收以锁定新口径。
+- 文档补充：严格以 close_prices.json 作为唯一官方价来源，缺价时 UI 黄条与 M6 退化提示自动消失于补录后。
+
 ## 2025-11-03
 - `positionMetrics.ts` 新增 `buildIntradayFloatingBreakdown`，输出过夜/当日新开两桶的银行家舍入结果、乘数、昨今净仓与均价，统一从 legs 汇总并在合成后只乘一次乘数；`buildIntradayFloatingPnlMap` 改读新拆解保持 UI 金额一致。
 - `PositionsTable` 引入浮动拆解调试映射，列标题提示乘数只在两桶求和后应用，单元格 tooltip 展示过夜桶/当日新开桶公式、乘数、昨今净仓等细节。
@@ -309,3 +316,27 @@
 - Skip `isInitialPosition` trades in calcTodayFifoPnL / calcHistoryFifoPnL loops to prevent double seeding of baseline lots.
 - Added regression test covering "平历史后再做日内 round-trip" and asserting calcMetrics/runAll parity plus breakdown source tags.
 - PositionsTable now normalizes metrics from store before reading M4 to align with runAll result output.
+## 2025-11-04 官方收盘价严格校验（二期）
+- `calcMetrics` 与 `runAll` 新增 `M4_today` 元数据，按 `realized_today + mtm_overnight + mtm_intraday_open` 计算今日盈亏，并在缺官方昨收时附加 `missing_official_close_prev` 退化标记；`normalizeMetrics`、Dashboard 指标卡与 Positions 总计行统一读取并渲染退化提示。
+- `requireOfficialClose` 引入 `evaluateCloseWindow`，当仍处于官方收盘价落地窗口内时将缺口归档到 `pendingOfficialCloses`，前端展示蓝条提示“等待官方收盘价落地”；窗口结束仍缺价时自动转入黄条告警。
+- `summarizeMissingOfficialCloses` 输出按日期倒序聚合；`update-log` 明确“官方=close_prices.json，fallback≠官方”口径，并记录蓝条/黄条判定规则。
+- 新增 `metrics-m4-today.normalize.test.ts` 单测覆盖 M4_today 合成、退化与零交易场景，既有 `missingOfficialClose.summary.test.ts` 调整为日期倒序断言。
+- `calcMetrics` 增补当日新开/回补不变量校验，并在 `aux.m6Legs` 标注多空方向；`m4.direction-and-consistency.test.ts` 锁定多头/空头方向与“不重复计入”口径。
+- `PositionsTable` 与 `DashboardMetrics` 统一通过 `selectM4TodaySummary` 读取今日盈亏，退化提示与取值保持一致；`positions-m4-total-vs-dashboard.test.tsx` 守护前后台一致性。
+- 官方收盘价诊断补充蓝→黄→消缺全链路单测（`official-close.lifecycle.test.ts`、`banner-pending-to-yellow.test.tsx`），impact 增加 “M4今日退化（过夜=0）” 标记，确保提示口径覆盖 M4 退化。
+## 2025-11-12
+- 周/月/年周期退化与官方收盘价缺失联动：周期计算从官方收盘诊断中汇总黄条日，窗口内存在缺口即标记 `degraded` 并在 Tooltip 中列出日期、标的与“端点浮盈可能失真/M4退化”等影响；仅处于宽限期的蓝条则提示“等待当日官方收盘价”。
+- Dashboard 周期卡片与图表 Tooltip 统一读取新汇总，保持排序稳定并与缺口状态同步。
+- 新增“官方收盘价缺口治理”面板：支持按日期范围、标的、状态与影响面筛选，列表展示 fallback 情况、首次/最新检测时间，可导出当前视图 CSV 并一键跳转到官方价导入入口；Dashboard 黄条提供“查看全部缺口”快捷入口，排序统一按日期新→旧、标的字母序。
+
+## 2025-11-18 官方收盘价覆盖层与拆合股复权
+- 新增 `OfficialCloseOverlayStore`（IndexedDB），`requireOfficialClose` 先查覆盖层命中结果，再回退到 `close_prices.json`；覆盖层命中即视为官方价，不再记录缺口。缺口治理面板支持补录 CSV/手工录入、批量删除覆盖项并实时刷新 Diagnostics。
+- `calcMetrics` / Dashboard 在加载数据时合并覆盖层与文件价格，`subscribeOfficialCloseOverlay` 触发全链路重新计算，补价后黄条/退化自动消缺。`update-log` 明确官方口径 = `close_prices.json ∪ OverlayStore`，fallback 仍≠官方。
+- 引入拆/合股调整：`setCorporateActions` 维护复权因子，`requireOfficialClose` 对昨收/端点自动按目标评估日复权；M6 过夜与周期端点连贯无跳变，治理面板新增 `adjFactor` 可折叠列并写入导出 CSV。
+- 治理面板新增覆盖层列表（可多选删除）、调整因子开关与导入弹窗；新增 UI/单测覆盖导入→消缺→覆盖层展示链路以及复权场景。
+
+## 2025-11-19 修复 Next.js 页面命名导出导致的构建失败
+- Vercel 构建报错：`app/page.tsx` 额外导出 `MissingOfficialCloseAlert` 等组件，被 Next.js 判定为非法 Page 命名导出，触发 `Type error: Page "app/page.tsx" does not match the required types of a Next.js Page`，`npm run build` 同步失败。
+- 处理：将官方收盘价相关 Banner 组件抽离到 `app/modules/OfficialCloseBanners.tsx` 独立导出，`page.tsx` 仅保留默认导出；同步更新引用与测试用例路径，并补齐 `MissingOfficialCloseDiagnostics`、周期诊断等 TypeScript 类型缺失项以通过严格校验。
+- 结果：`npm run build` 正常完成，相关 UI/模块测试（黄条/蓝条生命周期、周期退化、缺口治理面板）全部通过。
+
