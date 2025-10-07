@@ -12,7 +12,7 @@ type AnyRec = Record<string, any>;
 
 // 从新/旧结构中抽取对比口径
 function pickTotals(metrics: AnyRec) {
-  const M4 = Number(metrics?.M4?.total ?? metrics?.M4 ?? 0);
+  const M4 = Number(metrics?.M4 ?? metrics?.M4?.total ?? 0);
   const M5_1 = Number(metrics?.M5?.behavior ?? metrics?.M5_1 ?? 0);
   const M5_2 = Number(metrics?.M5?.fifo ?? metrics?.M5_2 ?? 0);
   const realized = Number(metrics?.realized ?? (M4 + M5_2));

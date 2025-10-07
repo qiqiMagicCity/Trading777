@@ -45,7 +45,9 @@ describe('reliability multi-day baseline', () => {
     expect(res.M12).toBeCloseTo(8952.5, 2);
     expect(res.M13).toBeCloseTo(9552.5, 2);
 
-    const nflxRows = res.aux.breakdown.filter(
+    const bucket = res.aux.breakdown as any;
+    const breakdownRows = Array.isArray(bucket?.all) ? bucket.all : bucket ?? [];
+    const nflxRows = breakdownRows.filter(
       (r: any) => r.symbol === 'NFLX' && r.time.includes('09:40'),
     );
     const hasM4 = nflxRows.some((r: any) => r.into === 'M4' && r.qty === 100);

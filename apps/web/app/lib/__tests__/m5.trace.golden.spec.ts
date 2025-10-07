@@ -28,10 +28,11 @@ test("黄金案例：M5 拆分与总值正确", async () => {
   const m = normalizeMetrics(res);
   expect(m.M5.behavior).toBe(1670);
   expect(m.M5.fifo).toBe(1320);
-  expect(m.M4.total).toBe(6530);
+  expect(m.M4).toBe(6530);
   expect(m.M6.total).toBe(7850);
 
-  const rows = res.aux.breakdown;
+  const bucket = res.aux.breakdown as any;
+  const rows = Array.isArray(bucket?.all) ? bucket.all : bucket ?? [];
   // NFLX 09:40 SELL 120 => 100历史(M4) + 20当日(M5)
   expect(rows.some((r:any)=> r.symbol==='NFLX' && r.time.includes('09:40') && r.into==='M4'   && r.qty===100)).toBe(true);
   expect(rows.some((r:any)=> r.symbol==='NFLX' && r.time.includes('09:40') && r.into==='M5.2' && r.qty===20 )).toBe(true);

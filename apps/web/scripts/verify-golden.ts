@@ -37,8 +37,8 @@ async function main() {
   // 恒等式校验（内部会抛错，CI 直接红）
   assertM6Equality(m);
 
-  // 新口径：realized = M4.total + M5.fifo
-  const realized = (m.M4?.total ?? 0) + (m.M5?.fifo ?? 0);
+  // 新口径：realized = M4 + M5.fifo
+  const realized = (m.M4 ?? 0) + (m.M5?.fifo ?? 0);
   const m9FromComponents = realized;
 
   // 读取原始结果里的 M9（兼容旧字段）
@@ -50,7 +50,7 @@ async function main() {
   if (diff > EPS) {
     console.warn("M9 mismatch under unified contract:");
     console.warn(`- M9 (raw) = ${m9}`);
-    console.warn(`- realized (M4.total + M5.fifo) = ${realized}`);
+    console.warn(`- realized (M4 + M5.fifo) = ${realized}`);
     console.warn(`- diff = ${diff}`);
     process.exit(1);
   }

@@ -28,7 +28,7 @@ test("页面口径与算法一致（黄金案例）", async () => {
   const m = normalizeMetrics(res);
   expect(m.M5.behavior).toBe(1320);
   expect(m.M5.fifo).toBe(1320);
-  expect(m.M4.total).toBe(6530);
+  expect(m.M4).toBe(6530);
   const prevRealized = m.aux?.m6PrevRealizedTotal ?? 0;
   const priceChange = m.aux?.m6PriceChange ?? 0;
   const legs = m.aux?.m6Legs ?? [];
@@ -44,8 +44,8 @@ test("页面口径与算法一致（黄金案例）", async () => {
     .reduce((sum, leg) => sum + (leg?.amount ?? 0), 0);
   expect(legs.every((leg) => leg.qty !== 0)).toBe(true);
   expect(mtmLegSum).toBeCloseTo(priceChange, 6);
-  expect(priceChange).toBeCloseTo(m.M6.total - (m.M4.total + m.M5.fifo), 6);
-  expect(prevRealized).toBeCloseTo(m.M4.total, 6);
+  expect(priceChange).toBeCloseTo(m.M6.total - (m.M4 + m.M5.fifo), 6);
+  expect(prevRealized).toBeCloseTo(m.M4, 6);
   expect(m.M6.total).toBeCloseTo(prevRealized + m.M5.fifo + priceChange, 6);
   const realizedToday = m._m6?.realizedToday ?? 0;
   expect(realizedLegSum).toBeCloseTo(realizedToday, 6);

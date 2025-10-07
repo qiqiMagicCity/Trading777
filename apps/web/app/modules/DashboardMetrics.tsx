@@ -669,7 +669,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       } else if (key !== "M6") {
         const numValue =
           key === "M4"
-            ? (value as { total: number } | undefined)?.total
+            ? (value as number | undefined)
             : (value as number | undefined);
 
         if (key === "M11" || key === "M12" || key === "M13") {

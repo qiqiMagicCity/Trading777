@@ -292,6 +292,7 @@ export function PositionsTable({ positions, trades }: Props) {
     }
     const intradayIssues = Array.from(intradayIssueSet);
     const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
+    const todayHistoryRealized = metrics?.M4 ?? 0; // 今日历史平仓(M4)
     const totalPnL = totalUnrealized + totalRealized;
 
     logger.debug('总计结果:', {
@@ -309,9 +310,10 @@ export function PositionsTable({ positions, trades }: Props) {
       intraday: totalIntraday,
       intradayIssues,
       realized: totalRealized,
+      historyRealizedToday: todayHistoryRealized,
       total: totalPnL
     };
-  }, [positionSummaries, metrics?.M9]);
+  }, [positionSummaries, metrics?.M9, metrics?.M4]);
 
   return (
     <div>
@@ -488,13 +490,26 @@ export function PositionsTable({ positions, trades }: Props) {
                     : ''
               }
             >
-              <strong>
-                {totals.intraday !== undefined
-                  ? formatCurrency(totals.intraday)
-                  : totals.intradayIssues.length > 0
-                    ? `待补充：${totals.intradayIssues.join('；')}`
-                    : '--'}
-              </strong>
+              <div className="flex flex-col gap-1">
+                <strong>
+                  {totals.intraday !== undefined
+                    ? formatCurrency(totals.intraday)
+                    : totals.intradayIssues.length > 0
+                      ? `待补充：${totals.intradayIssues.join('；')}`
+                      : '--'}
+                </strong>
+                <span
+                  className={
+                    totals.historyRealizedToday > 0
+                      ? 'green font-medium'
+                      : totals.historyRealizedToday < 0
+                        ? 'red font-medium'
+                        : 'font-medium'
+                  }
+                >
+                  历史平仓(M4)：{formatCurrency(totals.historyRealizedToday)}
+                </span>
+              </div>
             </td>
             <td></td>
             <td className={totals.total > 0 ? 'green' : totals.total < 0 ? 'red' : ''}>

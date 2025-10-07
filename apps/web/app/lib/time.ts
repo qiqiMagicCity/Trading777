@@ -58,6 +58,17 @@ export function nyDateStrSafe(d: Date | string | number): string {
   return toETYYYYMMDD(normalizeToNyDay(d));
 }
 
+/**
+ * 判定两个时间是否属于同一纽约交易日。
+ * ⚠️ 禁止使用 `toISOString().slice(0, 10)` 这类 UTC 截串方式判别今日/历史。
+ */
+export function isSameTradingDayNY(
+  a: Date | string | number,
+  b: Date | string | number,
+): boolean {
+  return nyDateStrSafe(a) === nyDateStrSafe(b);
+}
+
 export function startOfDayNY(d: Date | string | number): Date {
   const nd = toNY(d);
   const local = new Date(nd.getFullYear(), nd.getMonth(), nd.getDate(), 0, 0, 0);

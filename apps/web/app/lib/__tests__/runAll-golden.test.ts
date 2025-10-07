@@ -18,16 +18,16 @@ describe("runAll golden case", () => {
     // Golden snapshot recalculated under the prev-close MTM spec:
     // missing prevClose quotes zero-out MTM, so M6 collapses to M4 + M5_FIFO.
     expect(priceChange).toBe(0);
-    expect(m.M6.total).toBeCloseTo(m.M4.total + m.M5.fifo + priceChange, 6);
+    expect(m.M6.total).toBeCloseTo(m.M4 + m.M5.fifo + priceChange, 6);
 
     // 2) 保留必要的健壮性断言（数值为数，非 NaN）
-    expect(Number.isFinite(m.M4.total)).toBe(true);
+    expect(Number.isFinite(m.M4)).toBe(true);
     expect(Number.isFinite(m.M5.behavior)).toBe(true);
     expect(Number.isFinite(m.M5.fifo)).toBe(true);
     expect(Number.isFinite(m.M6.total)).toBe(true);
 
     // 3) 新口径：realized + unrealized === M9
-    const realized = (m.M4.total ?? 0) + (m.M5.fifo ?? 0);
+    const realized = (m.M4 ?? 0) + (m.M5.fifo ?? 0);
     const m9FromComponents = realized;
 
     const rawM9 = (res as any).M9?.total ?? (res as any).M9;
