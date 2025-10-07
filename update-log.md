@@ -304,3 +304,8 @@
 ## 2025-10-07 Remove /api/debug/m4 Lambda
 - 删除 /api/debug/m4 以避免将 public/ 打进 Serverless 包导致 300MB 超限。
 - /debug/m4 改为在浏览器端用 runAll({ ioProvider: apiIoProvider }) 直接计算。
+
+## 2025-10-07 Fix M4 ghost lot regression
+- Skip `isInitialPosition` trades in calcTodayFifoPnL / calcHistoryFifoPnL loops to prevent double seeding of baseline lots.
+- Added regression test covering "平历史后再做日内 round-trip" and asserting calcMetrics/runAll parity plus breakdown source tags.
+- PositionsTable now normalizes metrics from store before reading M4 to align with runAll result output.
