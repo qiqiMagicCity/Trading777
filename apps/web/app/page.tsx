@@ -39,6 +39,10 @@ import {
   type MissingOfficialDateSummary,
 } from '@/app/lib/missingOfficialClose';
 import {
+  MissingOfficialCloseBanner,
+  PendingOfficialCloseBanner,
+} from '@/app/modules/OfficialCloseBanners';
+import {
   overlayEntriesToMap,
   readOfficialCloseOverlay,
   subscribeOfficialCloseOverlay,
@@ -248,166 +252,6 @@ function MissingCloseBanner({
       <button className="btn" onClick={onIgnore}>
         忽略并暂时以“待补充”展示
       </button>
-    </div>
-  );
-}
-
-export function MissingOfficialCloseAlert({
-  summaries,
-}: {
-  summaries: MissingOfficialDateSummary[];
-}) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  if (!summaries.length) return null;
-
-  const toggle = (date: string) => {
-    setExpanded((prev) => ({ ...prev, [date]: !prev[date] }));
-  };
-
-  const now = nowNY();
-  const defaultFrom = ymdInNY(startOfWeekNY(now));
-  const defaultTo = ymdInNY(now);
-  const symbolFilter = Array.from(
-    new Set(
-      summaries.flatMap((summary) =>
-        summary.symbols.map((item) => item.symbol).filter(Boolean),
-      ),
-    ),
-  )
-    .sort()
-    .join(",");
-  const impactFilter = encodeURIComponent("WTD/MTD/YTD端点浮盈可能失真");
-  const viewAllHref =
-    `/diagnostics/official-closes?status=missing&from=${defaultFrom}&to=${defaultTo}&impacts=${impactFilter}` +
-    (symbolFilter ? `&symbols=${encodeURIComponent(symbolFilter)}` : "");
-
-  return (
-    <div
-      style={{
-        background: 'rgba(255, 171, 0, 0.14)',
-        border: '1px solid rgba(255, 171, 0, 0.6)',
-        borderRadius: 8,
-        color: '#fff3cd',
-        margin: '16px auto',
-        maxWidth: 'var(--page-max)',
-        padding: '16px 18px',
-        width: '90%',
-      }}
-    >
-      <div
-        style={{
-          alignItems: 'center',
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 12,
-        }}
-      >
-        <h3 style={{ margin: 0, color: '#ffe082' }}>官方收盘价缺失提醒</h3>
-        <Link
-          href={viewAllHref}
-          style={{ color: '#ffd54f', fontSize: '0.9rem', textDecoration: 'underline' }}
-          data-testid="missing-official-view-all"
-        >
-          查看全部缺口
-        </Link>
-      </div>
-      <p style={{ margin: '0 0 12px', color: '#fff8e1' }}>
-        以下日期缺少官方昨收，M6 过夜部分已按 0 处理。请补录 close_prices.json 中的官方收盘价。
-      </p>
-      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-        {summaries.map((summary) => {
-          const impacts = Array.from(
-            new Set(summary.symbols.flatMap((item) => item.impact)),
-          ).sort((a, b) => a.localeCompare(b));
-          const impactText = impacts.length ? `影响：${impacts.join('、')}` : '';
-          const symbolList = summary.symbols.map((item) => item.symbol).join('、');
-          const isExpanded = Boolean(expanded[summary.date]);
-          return (
-            <li
-              key={summary.date}
-              style={{
-                borderBottom: '1px solid rgba(255, 214, 102, 0.3)',
-                padding: '8px 0',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => toggle(summary.date)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ffe082',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  padding: 0,
-                  textAlign: 'left',
-                  width: '100%',
-                }}
-              >
-                <strong>{summary.date}</strong>：{symbolList}
-                {impactText ? `（${impactText}）` : ''}
-                <span style={{ float: 'right', color: '#ffd54f' }}>
-                  {isExpanded ? '收起' : '展开'}
-                </span>
-              </button>
-              {isExpanded && (
-                <ul style={{ margin: '8px 0 0 12px', padding: 0, listStyle: 'disc' }}>
-                  {summary.symbols.map((item) => (
-                    <li key={`${summary.date}-${item.symbol}`} style={{ marginBottom: 4 }}>
-                      <strong>{item.symbol}</strong>：
-                      {item.impact.length ? item.impact.join('、') : '影响未指定'}
-                      {item.hasFallback ? '（已暂用兜底价）' : ''}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-export function PendingOfficialCloseAlert({
-  summaries,
-}: {
-  summaries: MissingOfficialDateSummary[];
-}) {
-  if (!summaries.length) return null;
-  return (
-    <div
-      style={{
-        background: "rgba(59,130,246,0.12)",
-        border: "1px solid rgba(59,130,246,0.4)",
-        borderRadius: 8,
-        color: "#dbeafe",
-        margin: "16px auto",
-        maxWidth: "var(--page-max)",
-        padding: "14px 16px",
-        width: "90%",
-      }}
-    >
-      <h3 style={{ margin: 0, marginBottom: 8, color: "#bfdbfe" }}>
-        等待官方收盘价落地
-      </h3>
-      <p style={{ margin: "0 0 12px", color: "#e0f2fe", lineHeight: 1.6 }}>
-        今日仍在官方收盘价落地窗口内，以下标的暂沿用兜底估值。
-      </p>
-      <ul style={{ listStyle: "disc", margin: 0, paddingLeft: 20 }}>
-        {summaries.map((summary) => {
-          const label = summary.symbols
-            .map((item) =>
-              `${item.symbol}${item.hasFallback ? "（已暂用兜底）" : ""}`,
-            )
-            .join("、");
-          return (
-            <li key={`pending-${summary.date}`} style={{ marginBottom: 6 }}>
-              <strong>{summary.date}</strong>：{label}
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
@@ -1098,10 +942,10 @@ export default function DashboardPage() {
         onDismiss={() => setPendingNoticeDismissed(true)}
       />
       {pendingOfficialSummaries.length > 0 && (
-        <PendingOfficialCloseAlert summaries={pendingOfficialSummaries} />
+        <PendingOfficialCloseBanner summaries={pendingOfficialSummaries} />
       )}
       {missingOfficialSummaries.length > 0 && (
-        <MissingOfficialCloseAlert summaries={missingOfficialSummaries} />
+        <MissingOfficialCloseBanner summaries={missingOfficialSummaries} />
       )}
       {missingCloseSummaries.length > 0 && !missingDismissed && (
         <MissingCloseBanner

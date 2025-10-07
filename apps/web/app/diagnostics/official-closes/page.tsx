@@ -67,8 +67,10 @@ export default function OfficialCloseGovernancePage() {
       return undefined;
     }
     const statusParam = searchParams.get('status');
-    const status =
-      statusParam === 'missing' || statusParam === 'pending' ? statusParam : 'all';
+    const status: 'all' | 'missing' | 'pending' =
+      statusParam === 'missing' || statusParam === 'pending'
+        ? statusParam
+        : 'all';
     const from = searchParams.get('from') ?? undefined;
     const to = searchParams.get('to') ?? undefined;
     const symbolParams = parseQueryList([

@@ -6,7 +6,7 @@ import '@testing-library/jest-dom';
 
 import { OfficialCloseGovernancePanel } from '../OfficialCloseGovernancePanel';
 import type { MetricsContract } from '@/app/lib/types/metrics';
-import { MissingOfficialCloseAlert } from '@/app/page';
+import { MissingOfficialCloseAlert } from '@/app/modules/OfficialCloseBanners';
 import { summarizeMissingOfficialCloses } from '@/app/lib/missingOfficialClose';
 
 describe('official close governance panel', () => {

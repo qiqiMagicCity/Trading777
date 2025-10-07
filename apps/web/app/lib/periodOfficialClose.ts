@@ -1,6 +1,7 @@
 import type {
   MetricsContract,
   PeriodOfficialCloseDateImpact,
+  PeriodWindowDiagnostics,
   PeriodWindowKey,
 } from "@/app/lib/types/metrics";
 
@@ -31,7 +32,9 @@ export function getPeriodOfficialCloseSummary(
     mtd: false,
     ytd: false,
   };
-  const diagnostics = metrics?._period?.diagnostics ?? {};
+  const diagnostics: Partial<
+    Record<PeriodWindowKey, PeriodWindowDiagnostics>
+  > = metrics?._period?.diagnostics ?? {};
 
   const summary = WINDOW_KEYS.reduce((acc, key) => {
     const diag = diagnostics?.[key];

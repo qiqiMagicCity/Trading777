@@ -5,9 +5,9 @@ import { render, screen, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import {
-  PendingOfficialCloseAlert,
-  MissingOfficialCloseAlert,
-} from "@/app/page";
+  PendingOfficialCloseBanner,
+  MissingOfficialCloseBanner,
+} from "@/app/modules/OfficialCloseBanners";
 import { summarizeMissingOfficialCloses } from "@/app/lib/missingOfficialClose";
 import type { MissingOfficialCloseEntry } from "@/app/lib/types/metrics";
 
@@ -48,8 +48,8 @@ describe("official close banner lifecycle", () => {
 
     const view = render(
       <>
-        <PendingOfficialCloseAlert summaries={pendingSummaries} />
-        <MissingOfficialCloseAlert summaries={[]} />
+        <PendingOfficialCloseBanner summaries={pendingSummaries} />
+        <MissingOfficialCloseBanner summaries={[]} />
       </>,
     );
 
@@ -62,8 +62,8 @@ describe("official close banner lifecycle", () => {
 
     view.rerender(
       <>
-        <PendingOfficialCloseAlert summaries={[]} />
-        <MissingOfficialCloseAlert summaries={missingSummaries} />
+        <PendingOfficialCloseBanner summaries={[]} />
+        <MissingOfficialCloseBanner summaries={missingSummaries} />
       </>,
     );
 
@@ -71,16 +71,15 @@ describe("official close banner lifecycle", () => {
     const warning = screen.getByText("官方收盘价缺失提醒");
     expect(warning).toBeInTheDocument();
 
-    const warningList = within(warning.parentElement as HTMLElement).getAllByRole(
-      "listitem",
-    );
+    const warningContainer = warning.parentElement?.parentElement as HTMLElement;
+    const warningList = within(warningContainer).getAllByRole("listitem");
     expect(warningList[0]).toHaveTextContent("2024-09-22");
     expect(warningList[0]).toHaveTextContent("影响：M4今日退化（过夜=0）、M6过夜桶=0");
 
     view.rerender(
       <>
-        <PendingOfficialCloseAlert summaries={[]} />
-        <MissingOfficialCloseAlert summaries={[]} />
+        <PendingOfficialCloseBanner summaries={[]} />
+        <MissingOfficialCloseBanner summaries={[]} />
       </>,
     );
 

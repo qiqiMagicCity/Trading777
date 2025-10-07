@@ -107,7 +107,7 @@ function parseImportText(raw: string): ImportEntry[] {
   for (const line of lines) {
     const tokens = line.split(/[\s,]+/).map((token) => token.trim()).filter(Boolean);
     if (tokens.length < 3) continue;
-    const [symbolRaw, dateRaw, priceRaw] = tokens;
+    const [symbolRaw = "", dateRaw = "", priceRaw = ""] = tokens;
     const symbol = normalizeSymbol(symbolRaw);
     const date = dateRaw.slice(0, 10);
     const price = Number(priceRaw);
@@ -438,7 +438,7 @@ export function OfficialCloseGovernancePanel({
     try {
       await Promise.all(
         selectedOverlayKeys.map((key) => {
-          const [symbol, date] = key.split('|');
+          const [symbol = '', date = ''] = key.split('|');
           return removeOfficialCloseOverlay({ symbol, date });
         }),
       );

@@ -335,3 +335,8 @@
 - 引入拆/合股调整：`setCorporateActions` 维护复权因子，`requireOfficialClose` 对昨收/端点自动按目标评估日复权；M6 过夜与周期端点连贯无跳变，治理面板新增 `adjFactor` 可折叠列并写入导出 CSV。
 - 治理面板新增覆盖层列表（可多选删除）、调整因子开关与导入弹窗；新增 UI/单测覆盖导入→消缺→覆盖层展示链路以及复权场景。
 
+## 2025-11-19 修复 Next.js 页面命名导出导致的构建失败
+- Vercel 构建报错：`app/page.tsx` 额外导出 `MissingOfficialCloseAlert` 等组件，被 Next.js 判定为非法 Page 命名导出，触发 `Type error: Page "app/page.tsx" does not match the required types of a Next.js Page`，`npm run build` 同步失败。
+- 处理：将官方收盘价相关 Banner 组件抽离到 `app/modules/OfficialCloseBanners.tsx` 独立导出，`page.tsx` 仅保留默认导出；同步更新引用与测试用例路径，并补齐 `MissingOfficialCloseDiagnostics`、周期诊断等 TypeScript 类型缺失项以通过严格校验。
+- 结果：`npm run build` 正常完成，相关 UI/模块测试（黄条/蓝条生命周期、周期退化、缺口治理面板）全部通过。
+

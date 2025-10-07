@@ -77,6 +77,7 @@ import { sumPeriod as sumPeriodBase, type PeriodTotalsOptions } from "./metrics-
 import { round4, add4, sub4, mul4, div4 } from "./precision";
 import type {
   MetricsContract,
+  M4TodayDetail,
   PeriodDegradedMap,
   SummaryMetrics,
   PeriodWindowBreakdown,
@@ -348,6 +349,7 @@ export interface Metrics {
    * 仅用于兼容旧有调用，避免直接消费 calcMetrics 内部口径。
    */
   M4: number;
+  M4_today?: M4TodayDetail;
   M5: {
     trade: number;
     fifo: number;
@@ -846,12 +848,19 @@ function _calcM6Strict(params: {
   const requestOfficialPrevClose = (symbol: string) => {
     const key = normalizedSymbol(symbol);
     if (!key) {
-      return { ok: false, reason: "no_official_close" as const };
+      const missing: { ok: false; reason: "no_official_close" } = {
+        ok: false,
+        reason: "no_official_close",
+      };
+      return missing;
     }
     const cached = prevCloseCache.get(key);
     if (cached) return cached;
     if (!prevCloseDate) {
-      const missing = { ok: false, reason: "no_official_close" as const };
+      const missing: { ok: false; reason: "no_official_close" } = {
+        ok: false,
+        reason: "no_official_close",
+      };
       prevCloseCache.set(key, missing);
       return missing;
     }
@@ -2903,8 +2912,8 @@ export function normalizeMetrics(input: any): MetricsContract {
     input?.aux?.missingPrevCloseSymbols,
   )
     ? input.aux.missingPrevCloseSymbols
-        .map((s: unknown) => (typeof s === "string" ? s.trim().toUpperCase() : ""))
-        .filter((s) => s.length > 0)
+    .map((s: unknown) => (typeof s === "string" ? s.trim().toUpperCase() : ""))
+    .filter((s: string) => s.length > 0)
     : [];
   const rawBreakdown = input?.aux?.breakdown;
   const breakdown = rawBreakdown
@@ -2949,24 +2958,24 @@ export function normalizeMetrics(input: any): MetricsContract {
           return null;
         }
         const purposes = Array.isArray(entry?.purposes)
-          ? Array.from(
+          ? (Array.from(
               new Set(
                 entry.purposes.filter(
                   (value: unknown): value is string =>
                     typeof value === "string" && value.trim().length > 0,
                 ),
               ),
-            ).sort((a, b) => a.localeCompare(b))
+            ) as string[]).sort((a, b) => a.localeCompare(b))
           : [];
         const impact = Array.isArray(entry?.impact)
-          ? Array.from(
+          ? (Array.from(
               new Set(
                 entry.impact.filter(
                   (value: unknown): value is string =>
                     typeof value === "string" && value.trim().length > 0,
                 ),
               ),
-            ).sort((a, b) => a.localeCompare(b))
+            ) as string[]).sort((a, b) => a.localeCompare(b))
           : [];
         const hasFallback = Boolean(entry?.hasFallback);
         const firstDetectedAt =
@@ -3003,7 +3012,7 @@ export function normalizeMetrics(input: any): MetricsContract {
   )
     ? normalizeOfficialEntries(input.diagnostics.pendingOfficialCloses as any[])
     : [];
-  const normalizedM4Today = (() => {
+  const normalizedM4Today: M4TodayDetail = (() => {
     const raw = input?.M4_today;
     const realizedComponent = Number.isFinite(Number(raw?.realized))
       ? Number(raw?.realized)
@@ -3023,7 +3032,7 @@ export function normalizeMetrics(input: any): MetricsContract {
         : missingPrevCloseSymbols.length > 0;
     const reason =
       raw?.reason === "missing_official_close_prev" || degradedFlag
-        ? "missing_official_close_prev"
+        ? ("missing_official_close_prev" as const)
         : undefined;
     return {
       total: totalComponent,

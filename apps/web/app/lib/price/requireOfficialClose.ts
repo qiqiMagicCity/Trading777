@@ -3,7 +3,10 @@ import type {
   MissingOfficialCloseDiagnostics,
   MissingOfficialClosePurpose,
 } from "@/app/lib/diagnostics/reportMissingOfficialClose";
-import { reportMissingOfficialClose } from "@/app/lib/diagnostics/reportMissingOfficialClose";
+import {
+  createMissingOfficialCloseDiagnostics,
+  reportMissingOfficialClose,
+} from "@/app/lib/diagnostics/reportMissingOfficialClose";
 import { getOfficialCloseOverlayPrice } from "@/app/lib/officialCloseOverlayStore";
 import { getAdjustmentFactor } from "@/app/lib/officialCloseAdjustments";
 
@@ -23,7 +26,7 @@ interface OfficialCloseContext {
 const EMPTY_CONTEXT: OfficialCloseContext = {
   map: {},
   overlayMap: {},
-  diagnostics: { missingOfficialCloses: [] },
+  diagnostics: createMissingOfficialCloseDiagnostics(),
 };
 
 let context: OfficialCloseContext = EMPTY_CONTEXT;
