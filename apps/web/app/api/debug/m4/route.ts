@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAll } from "@/app/lib/runAll";
 import { apiIoProvider } from "@/app/lib/io/providers";
-import { round2 } from "@/app/lib/money";
 
-type M4Leg = {
+type Leg = {
   fillId: string;
   time: string;
   action: string;
@@ -13,92 +12,46 @@ type M4Leg = {
   pnl_raw: number;
 };
 
-type SymbolMetrics = {
-  M4?: number;
-  aux?: {
-    breakdown?: {
-      m4?: unknown;
-      all?: unknown;
-    } | unknown;
-  };
-};
-
-type RunAllPayload = {
-  results?: Record<string, SymbolMetrics>;
-};
-
-function resolveBaseUrl(req: NextRequest): string {
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "";
-  const protocol = req.headers.get("x-forwarded-proto") ?? "https";
-  return host ? `${protocol}://${host}` : "";
+function getBaseUrl(req: NextRequest) {
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  return proto + "://" + host;
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const symbol = (searchParams.get("symbol") ?? "").toUpperCase();
+  const symbol = searchParams.get("symbol") || "";
   if (!symbol) {
-    return NextResponse.json({ ok: false, error: "symbol required" }, { status: 400 });
+    return NextResponse.json({ ok:false, error:"missing symbol" }, { status: 400 });
   }
 
   try {
-    const baseUrl = resolveBaseUrl(req);
-    const result = (await runAll({ ioProvider: apiIoProvider, baseUrl })) as RunAllPayload;
-    const perSymbol = result?.results ?? {};
-    const entry = perSymbol[symbol];
-    const fallback = result as SymbolMetrics;
-    if (!entry && !fallback?.aux?.breakdown) {
-      return NextResponse.json({ ok: false, error: "symbol not found" }, { status: 404 });
+    const baseUrl = getBaseUrl(req);
+    const r: any = await runAll({ ioProvider: apiIoProvider, baseUrl });
+    const res = r?.results?.[symbol];
+    if (!res) {
+      return NextResponse.json({ ok:false, error:"symbol not found" }, { status: 404 });
     }
 
-    const breakdown = entry?.aux?.breakdown ?? fallback?.aux?.breakdown;
-    let rawLegs: unknown = [];
-    if (Array.isArray((breakdown as { m4?: unknown })?.m4)) {
-      rawLegs = (breakdown as { m4: unknown }).m4;
-    } else if (Array.isArray((breakdown as { all?: unknown })?.all)) {
-      rawLegs = ((breakdown as { all: unknown }).all as unknown[]).filter(
-        (row) => (row as { into?: string })?.into === "M4",
-      );
-    } else if (Array.isArray(breakdown)) {
-      rawLegs = (breakdown as unknown[]).filter(
-        (row) => (row as { into?: string })?.into === "M4",
-      );
-    }
-
-    const normalizedLegs: M4Leg[] = (Array.isArray(rawLegs) ? rawLegs : [])
-      .map((leg) => ({
-        fillId: String((leg as { fillId?: unknown }).fillId ?? ""),
-        time: String((leg as { time?: unknown }).time ?? ""),
-        action: String((leg as { action?: unknown }).action ?? ""),
-        qty: Number((leg as { qty?: unknown }).qty ?? 0),
-        lotDateStr: String((leg as { lotDateStr?: unknown }).lotDateStr ?? ""),
-        from: String((leg as { from?: unknown }).from ?? ""),
-        pnl_raw: Number((leg as { pnl_raw?: unknown }).pnl_raw ?? 0),
-        symbol: String((leg as { symbol?: unknown }).symbol ?? symbol),
+    const rawLegs: any[] = Array.isArray(res?.aux?.breakdown?.m4) ? res.aux.breakdown.m4 : [];
+    const legs: Leg[] = rawLegs
+      .map((l: any) => ({
+        fillId: String(l.fillId ?? ""),
+        time: String(l.time ?? ""),
+        action: String(l.action ?? ""),
+        qty: Number(l.qty ?? 0),
+        lotDateStr: String(l.lotDateStr ?? ""),
+        from: String(l.from ?? ""),
+        pnl_raw: Number(l.pnl_raw ?? 0),
       }))
       .filter((leg) => leg.fillId.length > 0 || leg.qty !== 0);
-
-    const filteredLegs = normalizedLegs.filter((leg) => leg.symbol === symbol);
-    if (!entry && filteredLegs.length === 0) {
-      return NextResponse.json({ ok: false, error: "symbol not found" }, { status: 404 });
-    }
-
-    const sumRaw = round2(
-      filteredLegs.reduce<number>((acc, leg) => acc + Number(leg.pnl_raw ?? 0), 0),
-    );
 
     return NextResponse.json({
       ok: true,
       symbol,
-      data: {
-        M4: Number(entry?.M4 ?? sumRaw),
-        sumRaw,
-        legs: filteredLegs,
-      },
+      data: { M4: Number(res.M4 ?? 0), legs }
     });
-  } catch (error) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
-    );
+  } catch (e: any) {
+    return NextResponse.json({ ok:false, error: String(e) }, { status: 500 });
   }
 }
