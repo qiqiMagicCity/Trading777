@@ -27,7 +27,7 @@ import { MoneyDecimal as Decimal, round2 } from "./money";
 import { buildEnrichedTrades, replayPortfolio } from "./tradeReplay";
 import fs from "fs";
 import path from "path";
-import { readPublicJson } from "./io/readPublicJson";
+import type { IoProvider } from "./io/providers";
 import { assertSchema } from "./schemas/assertSchema";
 import { Trades, Positions, PriceMap, DailyResults } from "./schemas/real";
 import {
@@ -37,7 +37,27 @@ import {
 } from "./snapshotNumber";
 
 async function readJsonSafe<T>(relName: string, fallback: T): Promise<T> {
-  return readPublicJson(relName, fallback);
+  const candidates = [
+    path.join(process.cwd(), "apps", "web", "public", relName),
+    path.join(process.cwd(), "public", relName),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await fs.promises.readFile(candidate, "utf8");
+      const parsed = JSON.parse(raw || "null");
+      if (parsed !== null && parsed !== undefined) {
+        return parsed as T;
+      }
+      return fallback;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw err;
+      }
+    }
+  }
+
+  return fallback;
 }
 
 /**
@@ -74,6 +94,18 @@ export function getReplayDays(
   return Array.from(set).sort();
 }
 
+type IoRunAllInput = {
+  ioProvider: IoProvider;
+  baseUrl?: string;
+  evalDateStr?: string;
+};
+
+function isIoRunAllInput(value: unknown): value is IoRunAllInput {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<IoRunAllInput>;
+  return Boolean(candidate.ioProvider);
+}
+
 export async function runAll(...args: unknown[]) {
   if (
     args.length === 1 &&
@@ -91,6 +123,111 @@ export async function runAll(...args: unknown[]) {
       DailyResults,
     );
     return runAllCore(from, positions, trades, prices, { dailyResults: daily }, { evalDate: from });
+  }
+  if (args.length === 1 && isIoRunAllInput(args[0])) {
+    const { ioProvider, baseUrl, evalDateStr } = args[0];
+    const [tradesRaw, positionsRaw, dailyRaw, pricesRaw] = await Promise.all([
+      ioProvider.loadTrades(baseUrl),
+      ioProvider.loadPositions(baseUrl),
+      ioProvider.loadDailyResults(baseUrl),
+      ioProvider.loadClosePrices ? ioProvider.loadClosePrices(baseUrl) : undefined,
+    ]);
+
+    const normalizeTrade = (entry: unknown): RawTrade | null => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      const sideRaw = record.side ?? record.action;
+      const symbolRaw = record.symbol;
+      const priceRaw = record.price;
+      const qtyRaw = record.qty ?? record.quantity;
+      const dateRaw = record.date ?? record.time;
+      if (
+        typeof sideRaw !== "string" ||
+        typeof symbolRaw !== "string" ||
+        !Number.isFinite(Number(priceRaw)) ||
+        !Number.isFinite(Number(qtyRaw)) ||
+        typeof dateRaw !== "string"
+      ) {
+        return null;
+      }
+      return {
+        side: sideRaw.toUpperCase() as RawTrade["side"],
+        symbol: symbolRaw.toUpperCase(),
+        price: Number(priceRaw),
+        qty: Number(qtyRaw),
+        date: String(dateRaw),
+      };
+    };
+
+    const normalizePosition = (entry: unknown): InitialPosition | null => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      const symbolRaw = record.symbol;
+      const qtyRaw = record.qty ?? record.quantity;
+      const avgPriceRaw = record.avgPrice ?? record.price;
+      if (
+        typeof symbolRaw !== "string" ||
+        !Number.isFinite(Number(qtyRaw)) ||
+        !Number.isFinite(Number(avgPriceRaw))
+      ) {
+        return null;
+      }
+      return {
+        symbol: symbolRaw.toUpperCase(),
+        qty: Number(qtyRaw),
+        avgPrice: Number(avgPriceRaw),
+      };
+    };
+
+    const rawTradesSource = Array.isArray((tradesRaw as any)?.trades)
+      ? (tradesRaw as any).trades
+      : tradesRaw;
+
+    const trades = (Array.isArray(rawTradesSource) ? rawTradesSource : [])
+      .map((entry) => normalizeTrade(entry))
+      .filter((entry): entry is RawTrade => entry !== null);
+
+    const positions = (Array.isArray(positionsRaw) ? positionsRaw : [])
+      .map((entry) => normalizePosition(entry))
+      .filter((entry): entry is InitialPosition => entry !== null);
+
+    const priceSource = pricesRaw ?? {};
+    const closePrices = normalizeClosePriceMap(priceSource);
+
+    const dailyResults = Array.isArray(dailyRaw)
+      ? (dailyRaw as MinimalDailyResult[])
+      : Array.isArray((dailyRaw as any)?.rows)
+      ? ((dailyRaw as any).rows as MinimalDailyResult[])
+      : [];
+
+    const evalISO = (() => {
+      if (typeof evalDateStr === "string" && evalDateStr.trim()) {
+        return evalDateStr;
+      }
+      if (dailyResults.length > 0) {
+        const last = dailyResults[dailyResults.length - 1];
+        if (last?.date && typeof last.date === "string") {
+          return last.date;
+        }
+      }
+      if (trades.length > 0) {
+        const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
+        const lastTrade = sorted[sorted.length - 1];
+        if (lastTrade?.date) {
+          return nyDateStrSafe(lastTrade.date);
+        }
+      }
+      return nyDateStrSafe(new Date().toISOString());
+    })();
+
+    return runAllCore(
+      evalISO,
+      positions as InitialPosition[],
+      trades as RawTrade[],
+      closePrices,
+      { dailyResults },
+      { evalDate: evalISO },
+    );
   }
   return runAllCore(...(args as Parameters<typeof runAllCore>));
 }

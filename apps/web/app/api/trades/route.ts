@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -8,6 +8,8 @@ const FILE_PATH = CANDIDATE_FILE_PATH.includes(
 )
   ? CANDIDATE_FILE_PATH
   : path.join(process.cwd(), 'apps', 'web', 'public', 'trades.json');
+const POSITIONS_FILE_PATH = FILE_PATH.replace('trades.json', 'positions.json');
+const INITIAL_POSITIONS_FILE_PATH = FILE_PATH.replace('trades.json', 'initial_positions.json');
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ACTIONS = new Set(['buy', 'sell', 'short', 'cover']);
 
@@ -85,6 +87,47 @@ function normaliseTime(date: string, raw: unknown): string | null {
   }
 
   return `${date}T00:00:00`;
+}
+
+async function readJson<T>(filePath: string, fallback: T): Promise<T> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    return JSON.parse(raw || 'null') ?? fallback;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return fallback;
+    }
+    throw err;
+  }
+}
+
+function normalizePositionsPayload(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    const record = raw as Record<string, unknown>;
+    const positions = record.positions;
+    if (Array.isArray(positions)) {
+      return positions as unknown[];
+    }
+  }
+  return [];
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const kind = (searchParams.get('kind') ?? '').toLowerCase();
+
+  if (kind === 'positions') {
+    const primary = await readJson(POSITIONS_FILE_PATH, [] as unknown[]);
+    if (Array.isArray(primary) && primary.length > 0) {
+      return NextResponse.json(primary);
+    }
+    const fallback = await readJson(INITIAL_POSITIONS_FILE_PATH, [] as unknown[]);
+    return NextResponse.json(normalizePositionsPayload(fallback));
+  }
+
+  const payload = await readJson(FILE_PATH, [] as unknown);
+  return NextResponse.json(payload);
 }
 
 function toPersistedTrade(raw: Record<string, unknown>): PersistedTrade | null {

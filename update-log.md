@@ -296,3 +296,8 @@
 - 新增 `m4.edgecases` 回归套件，覆盖拆股复权、现金分红、乘数一次、纽约盘后跨日、混配拆腿与今日已实现恒等式。
 - 自检增强：若发现腿未明确标记 `from='history'`，将结合 NY 交易日判断并直接报错，附带 fillId/lotDateStr 定位。
 - 新脚本 `npm run test:m4:edge` 纳入 CI，要求全部场景通过。
+## 2025-10-06 Slim /debug/m4
+- /debug/m4 改为静态 + 客户端 fetch。
+- 新增 /api/debug/m4，使用注入的 apiIoProvider 调用已有 /api/* 拉数据再计算，避免把 public 打进 lambda。
+- runAll 支持 ioProvider 注入，并把 readPublicJson 改为惰性 import。
+- 解决 Vercel Serverless Function 体积超限（300MB）问题。
