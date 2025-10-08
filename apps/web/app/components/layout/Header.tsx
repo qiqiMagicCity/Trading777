@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { nowNY, ymdInNY } from '@/lib/timezone';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale/zh-CN';
@@ -33,6 +34,7 @@ function isDatasetPayloadCandidate(value: unknown): value is {
 }
 
 export function Header() {
+  const router = useRouter();
   const [now, setNow] = useState(nowNY());
   const [nyTime, setNyTime] = useState('');
   const [valenciaTime, setValenciaTime] = useState('');
@@ -162,6 +164,15 @@ export function Header() {
         alert(
           `成功导入 ${imported} 条收盘价。支持 {"AAPL":{"2025-01-02":123.45}} 或 {"2025-01-02":{"AAPL":123.45}} 两种结构。`,
         );
+        try {
+          router.refresh();
+          return;
+        } catch (err) {
+          console.error(err);
+        }
+        if (typeof window !== 'undefined') {
+          window.location.reload();
+        }
       } catch (err) {
         console.error(err);
         alert(`导入失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -215,6 +226,7 @@ export function Header() {
         <button id="export" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleExport}>导出</button>
         <button id="exportPrices" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleExportPrices}>导出收盘价格</button>
         <button id="importPrices" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleImportPrices}>导入收盘价格</button>
+        <a href="/debug/close" className="px-3 py-1" style={{ marginLeft: '10px', color: '#ffffff', textDecoration: 'underline' }}>诊断-收盘价</a>
       </div>
     </header>
   );

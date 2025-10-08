@@ -7,6 +7,7 @@ import {
   isTradingDay as nyIsTradingDay,
   marketBoundaries as nyMarketBoundaries,
 } from '../nyDay';
+import { isOfficialCloseSource } from '../priceSourceGuards';
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
@@ -451,13 +452,6 @@ function shouldUseRealtimeClose(
   return nowNY.getTime() < nextOpen.getTime();
 }
 
-const NON_OFFICIAL_SOURCES = new Set<CachedPrice['source']>(['close_fallback']);
-
-function isOfficialSource(source: CachedPrice['source'] | undefined | null): boolean {
-  if (!source) return false;
-  return !NON_OFFICIAL_SOURCES.has(source);
-}
-
 export interface PrevCloseWithinOptions {
   maxBack?: number;
   officialOnly?: boolean;
@@ -520,7 +514,7 @@ async function getPrevCloseWithin(
         cached &&
         typeof cached.close === 'number' &&
         Number.isFinite(cached.close) &&
-        (!officialOnly || isOfficialSource(cached.source))
+        (!officialOnly || isOfficialCloseSource(cached.source))
       ) {
         return { ymd: candidate, close: cached.close, source: cached.source };
       }
