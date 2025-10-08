@@ -15,9 +15,9 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: ESLint (time rules)
-        run: npx eslint -c .eslintrc.time.js --no-error-on-unmatched-pattern --ext .ts,.tsx,.js,.mjs,.cjs apps packages libs server api public
+        run: npm run lint:time
       - name: Time Selfcheck
-        run: node scripts/time-selfcheck.mjs
+        run: npm run time:selfcheck
       - name: Upload selfcheck artifacts
         if: always()
         uses: actions/upload-artifact@v4

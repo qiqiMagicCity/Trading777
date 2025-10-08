@@ -48,7 +48,7 @@ function stepBackOneDay(ymd: string): string {
  */
 export function resolveTradingDayStr(now: number | Date = Date.now(), opts: ResolveOpts = {}): string {
   if (opts.freeze) return opts.freeze;
-  const latest = _latestTradingDayStr(now);
+  const latest = _latestTradingDayStr(now instanceof Date ? now : new Date(now));
   if (!isTradingDay(latest)) {
     const fallback = previousTradingDay(latest);
     return fallback || latest;
