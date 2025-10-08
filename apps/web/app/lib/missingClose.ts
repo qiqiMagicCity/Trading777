@@ -45,6 +45,13 @@ export function summarizeMissingCloses(
   return result;
 }
 
+export function formatMissingCloseLineTickersOnly(
+  dateStr: string,
+  tickers: string[],
+): string {
+  return `${dateStr}：${tickers.join('、')}`;
+}
+
 export function diagnosticsHasMissing(
   diagnostics: DailyResultsDiagnostics | undefined,
 ): boolean {

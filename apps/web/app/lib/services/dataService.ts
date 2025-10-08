@@ -1,6 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
+import { migrateClosePriceMap } from "@/lib/closePriceMigration";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
 
@@ -76,6 +77,8 @@ export interface CachedPrice {
   close: number;
   source: "finnhub" | "alphavantage" | "import" | "tiingo" | "close_rt" | "close_fallback";
 }
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // Interface for metricsDaily records
 // Internal representation, adapted for the app
@@ -688,25 +691,56 @@ export async function putPrice(price: CachedPrice): Promise<void> {
   await tx.done;
 }
 
+export async function cleanupMisplacedPriceEntries(): Promise<number> {
+  const db = await getDb();
+  const tx = db.transaction(PRICES_STORE_NAME, "readwrite");
+  const store = tx.objectStore(PRICES_STORE_NAME);
+  let cursor = await store.openCursor();
+  let removed = 0;
+
+  while (cursor) {
+    const value = cursor.value as CachedPrice;
+    const key = cursor.key as [string, string];
+    const symbol = value?.symbol ?? key?.[0];
+    const date = value?.date ?? key?.[1];
+    const symbolLooksDate = typeof symbol === "string" && ISO_DATE_RE.test(symbol);
+    const dateLooksInvalid = typeof date !== "string" || !ISO_DATE_RE.test(date);
+
+    if (symbolLooksDate || dateLooksInvalid) {
+      await cursor.delete();
+      removed += 1;
+    }
+
+    cursor = await cursor.continue();
+  }
+
+  await tx.done;
+  if (removed > 0) {
+    logger.info(`[dataService] cleaned ${removed} misplaced close price entries`);
+  }
+  return removed;
+}
+
 export async function importClosePrices(
-  nestedPrices: Record<string, Record<string, number>>,
+  nestedPrices: Record<string, Record<string, number>> | unknown,
 ): Promise<number> {
-  // nestedPrices format: { '2025-07-05': { 'AAPL': 123.45, ... }, ... }
+  const { map } = migrateClosePriceMap(nestedPrices);
   let imported = 0;
   const promises: Promise<void>[] = [];
-  for (const date in nestedPrices) {
-    const dayObj = nestedPrices[date];
-    if (dayObj && typeof dayObj === "object") {
-      for (const symbol in dayObj) {
-        const close = dayObj[symbol];
-        if (typeof close === "number") {
-          promises.push(putPrice({ symbol, date, close, source: "import" }));
-          imported++;
-        }
-      }
+
+  for (const [symbol, byDate] of Object.entries(map)) {
+    if (!byDate || typeof byDate !== "object") continue;
+    for (const [date, close] of Object.entries(byDate)) {
+      if (!ISO_DATE_RE.test(date) || typeof close !== "number") continue;
+      promises.push(
+        putPrice({ symbol, date, close, source: "import" }),
+      );
+      imported += 1;
     }
   }
+
   await Promise.all(promises);
+  await cleanupMisplacedPriceEntries();
   clearDailyResultsCache();
   return imported;
 }
