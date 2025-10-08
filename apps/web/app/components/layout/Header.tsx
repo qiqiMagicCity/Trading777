@@ -156,10 +156,12 @@ export function Header() {
         const text = await file.text();
         const json = JSON.parse(text) as unknown;
         if (!json || typeof json !== 'object' || Array.isArray(json)) {
-          throw new Error('文件格式不正确，需为嵌套对象格式');
+          throw new Error('文件需为对象格式，支持“代码→日期”或“日期→代码”的嵌套结构');
         }
         const imported = await importClosePrices(json as Record<string, Record<string, number>>);
-        alert(`成功导入 ${imported} 条收盘价`);
+        alert(
+          `成功导入 ${imported} 条收盘价。支持 {"AAPL":{"2025-01-02":123.45}} 或 {"2025-01-02":{"AAPL":123.45}} 两种结构。`,
+        );
       } catch (err) {
         console.error(err);
         alert(`导入失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
