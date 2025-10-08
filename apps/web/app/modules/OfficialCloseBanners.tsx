@@ -75,10 +75,10 @@ export function MissingOfficialCloseBanner({
           ).sort((a, b) => a.localeCompare(b));
           const impactText = impacts.length ? `影响：${impacts.join("、")}` : "";
           const symbolList = summary.symbols.map((item) => item.symbol).join("、");
-          const isExpanded = Boolean(expanded[summary.date]);
+          const isExpanded = Boolean(expanded[summary.ymd]);
           return (
             <li
-              key={summary.date}
+              key={summary.ymd}
               style={{
                 borderBottom: "1px solid rgba(255, 214, 102, 0.3)",
                 padding: "8px 0",
@@ -86,7 +86,7 @@ export function MissingOfficialCloseBanner({
             >
               <button
                 type="button"
-                onClick={() => toggle(summary.date)}
+                onClick={() => toggle(summary.ymd)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -98,7 +98,7 @@ export function MissingOfficialCloseBanner({
                   padding: 0,
                 }}
               >
-                <span style={{ fontWeight: 600 }}>{summary.date}</span>
+                <span style={{ fontWeight: 600 }}>{summary.ymd}</span>
                 <span>{symbolList}</span>
                 {impactText && (
                   <span
@@ -118,7 +118,7 @@ export function MissingOfficialCloseBanner({
               {isExpanded && (
                 <ul style={{ margin: "8px 0 0 12px", padding: 0, listStyle: "disc" }}>
                   {summary.symbols.map((item) => (
-                    <li key={`${summary.date}-${item.symbol}`} style={{ marginBottom: 4 }}>
+                    <li key={`${summary.ymd}-${item.symbol}`} style={{ marginBottom: 4 }}>
                       <strong>{item.symbol}</strong>：
                       {item.impact.length ? item.impact.join("、") : "影响未指定"}
                     </li>
@@ -164,8 +164,8 @@ export function PendingOfficialCloseBanner({
         {summaries.map((summary) => {
           const label = summary.symbols.map((item) => item.symbol).join("、");
           return (
-            <li key={`pending-${summary.date}`} style={{ marginBottom: 6 }}>
-              <strong>{summary.date}</strong>：{label}
+            <li key={`pending-${summary.ymd}`} style={{ marginBottom: 6 }}>
+              <strong>{summary.ymd}</strong>：{label}
             </li>
           );
         })}

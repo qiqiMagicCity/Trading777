@@ -1,13 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { nyDateStr } from "../app/lib/time";
+import { resolveTradingDayStr } from "../app/lib/nyDay";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "../public");
 const snapshotRoot = path.resolve(__dirname, "../data/snapshots");
 
-const date = process.env.NEXT_PUBLIC_FREEZE_DATE || nyDateStr(new Date());
+const freezeRaw = process.env.NEXT_PUBLIC_FREEZE_DATE;
+const date = resolveTradingDayStr(undefined, { freeze: freezeRaw || undefined });
 const destDir = path.join(snapshotRoot, date);
 
 fs.mkdirSync(destDir, { recursive: true });

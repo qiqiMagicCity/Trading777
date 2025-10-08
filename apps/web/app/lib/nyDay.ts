@@ -15,10 +15,36 @@ export type ResolveOpts = {
 // 复用现有实现（保持行为一致）
 import { getLatestTradingDayStr as _latestTradingDayStr, ymdInNY as _ymdInNY } from './timezone';
 import { getTradingDateStr as _calendarTradingDayStr } from './tradingDay';
-import { previousTradingDay as _previousTradingDay, isTradingDay as _isTradingDay } from './marketHours';
 import { isNyseHoliday, isWeekend } from './nyseHolidays';
+import { toNY } from './time';
 
 const YMD_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const DATE_ONLY_RE = YMD_RE;
+const MARKET_OPEN_MINUTES = 9 * 60 + 30;
+const MARKET_CLOSE_MINUTES = 16 * 60;
+const ADHOC_CLOSED_DATES = new Set<string>();
+
+type CanonicalYmd = string;
+
+function isoDateFromYmd(ymd: CanonicalYmd): Date {
+  if (!DATE_ONLY_RE.test(ymd)) return new Date(NaN);
+  return toNY(`${ymd}T12:00:00Z`);
+}
+
+function offsetMinutes(ymd: CanonicalYmd, minutes: number): Date {
+  const base = isoDateFromYmd(ymd);
+  if (Number.isNaN(base.getTime())) return base;
+  const d = new Date(base.getTime());
+  d.setHours(0, 0, 0, 0);
+  d.setMinutes(minutes, 0, 0);
+  return d;
+}
+
+export type MarketBoundaries = {
+  ymd: CanonicalYmd;
+  open: Date;
+  close: Date;
+};
 
 function normalizeYmd(input: string): string | null {
   const match = YMD_RE.exec(input);
@@ -26,28 +52,39 @@ function normalizeYmd(input: string): string | null {
   return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
-function stepBackOneDay(ymd: string): string {
-  const parts = YMD_RE.exec(ymd);
-  if (!parts) return ymd;
-  const year = Number(parts[1]);
-  const month = Number(parts[2]);
-  const day = Number(parts[3]);
-  // eslint-disable-next-line no-restricted-syntax -- 内部实现依赖 UTC 快速退一天，后续会替换为 nyParse 辅助
-  const prev = new Date(Date.UTC(year, month - 1, day) - 86400000);
-  const y = String(prev.getUTCFullYear()).padStart(4, '0');
-  const m = String(prev.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(prev.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 /**
  * 统一入口（后续所有模块将逐步切换到此）：
- * - 若 opts.freeze 存在，直接返回该冻结日；
+ * - 若 opts.freeze 存在，统一规范化为 YYYY-MM-DD；若非交易日则回退上一交易日；
  * - 否则转发到现有 getLatestTradingDayStr（含盘前/周末等口径）。
- * 注：本步保持现有口径不变。
  */
+function normalizeFreezeInput(freeze: string): string | null {
+  const trimmed = freeze.trim();
+  if (!trimmed) return null;
+  const normalized = normalizeYmd(trimmed);
+  if (normalized) return normalized;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return ymdInNY(parsed);
+}
+
+function normalizeArbitraryYmd(input: string): string | null {
+  const normalized = normalizeFreezeInput(input);
+  if (!normalized) return null;
+  return normalized;
+}
+
 export function resolveTradingDayStr(now: number | Date = Date.now(), opts: ResolveOpts = {}): string {
-  if (opts.freeze) return opts.freeze;
+  const freezeInput = typeof opts.freeze === 'string' ? normalizeFreezeInput(opts.freeze) : null;
+  if (freezeInput) {
+    if (isTradingDay(freezeInput)) {
+      return freezeInput;
+    }
+    const fallback = previousTradingDay(freezeInput);
+    if (fallback) {
+      return fallback;
+    }
+    return freezeInput;
+  }
   const latest = _latestTradingDayStr(now instanceof Date ? now : new Date(now));
   if (!isTradingDay(latest)) {
     const fallback = previousTradingDay(latest);
@@ -68,36 +105,87 @@ export function calendarTradingDayStr(now: number | Date = Date.now()): string {
 
 /** 是否交易日（节假日感知） */
 export function isTradingDay(ymd: string): boolean {
-  const normalized = normalizeYmd(ymd);
-  if (!normalized) return _isTradingDay(ymd);
+  const normalized = normalizeArbitraryYmd(ymd);
+  if (!normalized) return false;
+  if (ADHOC_CLOSED_DATES.has(normalized)) return false;
   if (isWeekend(normalized)) return false;
   if (isNyseHoliday(normalized)) return false;
-  return _isTradingDay(normalized);
+  return true;
 }
 
 /** 上一交易日（节假日感知） */
 export function previousTradingDay(ymd: string): string {
-  const normalized = normalizeYmd(ymd) ?? _ymdInNY(ymd);
-  let candidate = _previousTradingDay(normalized);
-  if (!candidate) return candidate;
+  const normalized = normalizeArbitraryYmd(ymd) ?? _ymdInNY(ymd);
+  if (!normalized) return '';
+  let probe = isoDateFromYmd(normalized);
+  if (Number.isNaN(probe.getTime())) return '';
   let guard = 0;
-  while (candidate && !isTradingDay(candidate) && guard < 16) {
-    const next = _previousTradingDay(candidate);
-    if (!next || next === candidate) break;
-    candidate = next;
+  while (guard < 32) {
+    probe.setDate(probe.getDate() - 1);
+    const candidate = _ymdInNY(probe);
+    if (candidate && isTradingDay(candidate)) {
+      return candidate;
+    }
     guard += 1;
   }
-  if (candidate && !isTradingDay(candidate)) {
-    let fallback = candidate;
-    let attempts = 0;
-    while (attempts < 16 && fallback && !isTradingDay(fallback)) {
-      fallback = stepBackOneDay(fallback);
-      attempts += 1;
-    }
-    return fallback;
-  }
-  return candidate;
+  return '';
 }
+
+/** 下一交易日（节假日感知） */
+export function nextTradingDay(ymd: string): string {
+  const normalized = normalizeArbitraryYmd(ymd) ?? _ymdInNY(ymd);
+  if (!normalized) return '';
+  let probe = isoDateFromYmd(normalized);
+  if (Number.isNaN(probe.getTime())) return '';
+  let guard = 0;
+  while (guard < 32) {
+    probe.setDate(probe.getDate() + 1);
+    const candidate = _ymdInNY(probe);
+    if (candidate && isTradingDay(candidate)) {
+      return candidate;
+    }
+    guard += 1;
+  }
+  return '';
+}
+
+/** 生成指定区间内（含端点）的纽约交易日序列 */
+export function* makeTradingDayRange(
+  from: string,
+  to: string,
+): IterableIterator<string> {
+  const start = normalizeArbitraryYmd(from) ?? _ymdInNY(from);
+  const end = normalizeArbitraryYmd(to) ?? _ymdInNY(to);
+  if (!start || !end) {
+    return;
+  }
+  const [lower, upper] = start <= end ? [start, end] : [end, start];
+  let cursor = isoDateFromYmd(lower);
+  const limit = isoDateFromYmd(upper);
+  if (Number.isNaN(cursor.getTime()) || Number.isNaN(limit.getTime())) {
+    return;
+  }
+  let guard = 0;
+  while (cursor.getTime() <= limit.getTime() && guard < 512) {
+    const candidate = _ymdInNY(cursor);
+    if (candidate && isTradingDay(candidate)) {
+      yield candidate;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+    guard += 1;
+  }
+}
+
+/** 当日市场开/收盘边界（节假日感知） */
+export function marketBoundaries(ymd: string): MarketBoundaries {
+  const normalized = normalizeArbitraryYmd(ymd) ?? _ymdInNY(ymd);
+  const safe = normalized ?? '';
+  const open = offsetMinutes(safe, MARKET_OPEN_MINUTES);
+  const close = offsetMinutes(safe, MARKET_CLOSE_MINUTES);
+  return { ymd: safe, open, close };
+}
+
+export { MARKET_OPEN_MINUTES, MARKET_CLOSE_MINUTES };
 
 // 约定：从本文件导出的函数与常量，视为“纽约交易日”的唯一对外接口（Authority）。
 // 后续新增代码应仅依赖本模块，不再直接引用 timezone/tradingDay/marketHours 的内部细节。

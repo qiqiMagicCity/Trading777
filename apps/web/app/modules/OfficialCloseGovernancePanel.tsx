@@ -80,10 +80,10 @@ function flattenSummaries(
     for (const symbol of summary.symbols) {
       const factor =
         evalDate && DATE_RE.test(evalDate)
-          ? getAdjustmentFactor(symbol.symbol, summary.date, evalDate)
+          ? getAdjustmentFactor(symbol.symbol, summary.ymd, evalDate)
           : 1;
       rows.push({
-        date: summary.date,
+        date: summary.ymd,
         symbol: symbol.symbol,
         status,
         purposes: [...symbol.purposes],

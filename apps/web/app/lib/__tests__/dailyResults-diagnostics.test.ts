@@ -70,12 +70,12 @@ describe("generateDailyResults diagnostics", () => {
 
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "AMD",
-      date: "2025-09-22",
+      ymd: "2025-09-22",
       fallback: "AVERAGE_COST",
     });
     expect(diagnostics.missingCloses).not.toContainEqual({
       symbol: "AMD",
-      date: "2025-09-26",
+      ymd: "2025-09-26",
       fallback: "MARK_PRICE",
     });
     const pending = diagnostics.pendingCloses?.find((entry) => entry.date === evalDate);
@@ -106,17 +106,17 @@ describe("generateDailyResults diagnostics", () => {
 
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "AMD",
-      date: "2025-09-22",
+      ymd: "2025-09-22",
       fallback: "AVERAGE_COST",
     });
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "AMD",
-      date: "2025-09-26",
+      ymd: "2025-09-26",
       fallback: "PREVIOUS_CLOSE",
     });
     expect(diagnostics.missingCloses).not.toContainEqual({
       symbol: "AMD",
-      date: "2025-09-26",
+      ymd: "2025-09-26",
       fallback: "MARK_PRICE",
     });
     expect(diagnostics.pendingCloses?.find((entry) => entry.date === evalDate)).toBeUndefined();
@@ -132,16 +132,16 @@ describe("generateDailyResults diagnostics", () => {
 describe("summarizeMissingCloses", () => {
   it("groups entries by date and symbol", () => {
     const entries = [
-      { symbol: "AMD", date: "2025-09-22", fallback: "AVERAGE_COST" as const },
-      { symbol: "AMD", date: "2025-09-26", fallback: "MARK_PRICE" as const },
-      { symbol: "NVDA", date: "2025-09-26", fallback: "PREVIOUS_CLOSE" as const },
+      { symbol: "AMD", ymd: "2025-09-22", fallback: "AVERAGE_COST" as const },
+      { symbol: "AMD", ymd: "2025-09-26", fallback: "MARK_PRICE" as const },
+      { symbol: "NVDA", ymd: "2025-09-26", fallback: "PREVIOUS_CLOSE" as const },
     ];
 
     const summaries = summarizeMissingCloses(entries);
 
     expect(summaries).toEqual([
       {
-        date: "2025-09-22",
+        ymd: "2025-09-22",
         symbols: [
           {
             symbol: "AMD",
@@ -150,7 +150,7 @@ describe("summarizeMissingCloses", () => {
         ],
       },
       {
-        date: "2025-09-26",
+        ymd: "2025-09-26",
         symbols: [
           {
             symbol: "AMD",

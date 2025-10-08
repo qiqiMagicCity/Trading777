@@ -74,6 +74,7 @@ function nyTodayStr(): string {
   return nyDayStr(nowNY());
 }
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
+import { resolveTradingDayStr as resolveAuthorityTradingDayStr } from "./nyDay";
 import type { ClosePriceMap } from "./dailyResults";
 import {
   createMissingOfficialCloseDiagnostics,
@@ -2294,7 +2295,9 @@ export function calcMetricsInternal(
       : typeof freezeWindowValue === "string"
         ? freezeWindowValue
         : undefined;
-  const freezeEvalDay = resolveNyDay(freezeCandidate);
+  const freezeEvalDay = freezeCandidate
+    ? resolveAuthorityTradingDayStr(undefined, { freeze: freezeCandidate })
+    : undefined;
   const periodEvalStr = providedEvalDay ?? freezeEvalDay ?? nyTodayStr();
   const evalAnchorNY = toNY(`${periodEvalStr}T12:00:00Z`);
   const uiTradeDayYmd =

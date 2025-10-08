@@ -981,7 +981,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             return `${detail.symbol}${suffix}`;
           })
           .join("、");
-        messages.push(`${summary.date}：${details}`);
+        messages.push(`${summary.ymd}：${details}`);
       }
     }
     if (periodHealth?.issues?.length) {
