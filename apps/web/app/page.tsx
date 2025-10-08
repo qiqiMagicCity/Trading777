@@ -46,12 +46,8 @@ import {
   commitOfficialCloseVersion,
   type OfficialCloseBuildResult,
 } from '@/app/lib/prices/buildOfficialCloseMaps';
-import {
-  beginBuild,
-  beginCommit,
-  markPricesReady,
-  withGateTrace,
-} from '@/app/lib/prices/ready';
+import { beginBuild, beginCommit } from './lib/readiness/priceReadyGate';
+import { markPricesReady, withGateTrace } from '@/app/lib/prices/ready';
 import type {
   MissingCloseSummary,
   PeriodHealthIssue,
@@ -442,28 +438,29 @@ export default function DashboardPage() {
   );
 
   const runWithOfficialCloseCommit = useCallback(
-    async <T>(
+    <T,>(
       label: string,
       apply: (result: OfficialCloseBuildResult) => Promise<T> | T,
-    ): Promise<T> => {
-      beginBuild();
-      const previousVersion = useStore.getState().officialCloseVersion;
-      let markVersion: number | undefined;
-      try {
-        const result = await withGateTrace(`${label}:build`, () => buildOfficialCloseMaps());
-        beginCommit(result.version);
-        const output = await withGateTrace(`${label}:apply`, () => apply(result));
-        commitOfficialCloseVersion(result.version);
-        setOfficialCloseVersion(result.version);
-        markVersion = result.version;
-        return output;
-      } finally {
-        if (markVersion === undefined) {
-          setOfficialCloseVersion(previousVersion);
+    ): Promise<T> =>
+      (async () => {
+        beginBuild();
+        const previousVersion = useStore.getState().officialCloseVersion;
+        let markVersion: number | undefined;
+        try {
+          const result = await withGateTrace(`${label}:build`, () => buildOfficialCloseMaps());
+          beginCommit(result.version);
+          const output = await withGateTrace(`${label}:apply`, () => apply(result));
+          commitOfficialCloseVersion(result.version);
+          setOfficialCloseVersion(result.version);
+          markVersion = result.version;
+          return output;
+        } finally {
+          if (markVersion === undefined) {
+            setOfficialCloseVersion(previousVersion);
+          }
+          markPricesReady(markVersion);
         }
-        markPricesReady(markVersion);
-      }
-    },
+      })(),
     [setOfficialCloseVersion],
   );
 
