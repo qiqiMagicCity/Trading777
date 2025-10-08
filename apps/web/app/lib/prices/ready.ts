@@ -1,48 +1,30 @@
-let readyPromise: Promise<void> | null = null;
-let resolved = false;
+import {
+  beginBuild,
+  beginCommit,
+  markReady,
+  waitUntilAtLeast,
+  current,
+  withGateTrace,
+  resetGateForTests,
+} from "@/app/lib/readiness/priceReadyGate";
 
-function ensureReadyPromise(): Promise<void> {
-  if (resolved) {
-    return Promise.resolve();
-  }
-  if (!readyPromise) {
-    readyPromise = new Promise<void>((resolve) => {
-      if (resolved) {
-        resolve();
-        return;
-      }
-      if (typeof window === "undefined") {
-        resolved = true;
-        resolve();
-        return;
-      }
-      const handler = () => {
-        resolved = true;
-        window.removeEventListener("pricesReady", handler);
-        resolve();
-      };
-      window.addEventListener("pricesReady", handler, { once: true });
-      // Fallback: resolve on next tick to avoid blocking when no event is emitted yet.
-      queueMicrotask(() => {
-        if (!resolved) {
-          resolved = true;
-          window.removeEventListener("pricesReady", handler);
-          resolve();
-        }
-      });
-    });
-  }
-  return readyPromise;
+export { beginBuild, beginCommit, waitUntilAtLeast, current, withGateTrace };
+
+export async function pricesReady(targetVersion?: number): Promise<void> {
+  const snapshot = current();
+  const target = typeof targetVersion === "number" ? targetVersion : snapshot.version;
+  await waitUntilAtLeast(target);
 }
 
-export async function pricesReady(): Promise<void> {
-  await ensureReadyPromise();
-}
-
-export function markPricesReady() {
-  if (resolved) return;
-  resolved = true;
+export function markPricesReady(committedVersion?: number): void {
+  markReady(committedVersion);
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("pricesReady"));
+    const detail = { version: current().version };
+    window.dispatchEvent(new CustomEvent("pricesReady", { detail }));
   }
+}
+
+export function resetPricesReadyForTests(): void {
+  if (process.env.NODE_ENV !== "test") return;
+  resetGateForTests();
 }

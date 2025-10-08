@@ -16,7 +16,28 @@ export interface OfficialCloseMaps {
   fallback: ClosePriceMap;
 }
 
-export async function buildOfficialCloseMaps(): Promise<OfficialCloseMaps> {
+export interface OfficialCloseBuildResult {
+  maps: OfficialCloseMaps;
+  version: number;
+}
+
+let officialCloseVersion = 0;
+
+export function getOfficialCloseVersion(): number {
+  return officialCloseVersion;
+}
+
+export function commitOfficialCloseVersion(version: number): void {
+  if (version > officialCloseVersion) {
+    officialCloseVersion = version;
+  }
+}
+
+export function resetOfficialCloseVersionForTests(): void {
+  officialCloseVersion = 0;
+}
+
+export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult> {
   const [fileClosePricesRaw, cachedPrices, overlayEntries] = await Promise.all([
     loadJson("close_prices") as Promise<Record<string, Record<string, number>>>,
     getAllPrices(),
@@ -44,10 +65,15 @@ export async function buildOfficialCloseMaps(): Promise<OfficialCloseMaps> {
     cachedOfficialCloses,
   );
 
+  const nextVersion = officialCloseVersion + 1;
+
   return {
-    overlay: overlayMap,
-    official: officialCloseMap,
-    merged: mergedCloseMap,
-    fallback: cachedFallbackCloses,
+    maps: {
+      overlay: overlayMap,
+      official: officialCloseMap,
+      merged: mergedCloseMap,
+      fallback: cachedFallbackCloses,
+    },
+    version: nextVersion,
   };
 }
