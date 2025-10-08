@@ -40,10 +40,22 @@ export function __setRuntimeApiKeysForTest(keys: ApiKeys | null) {
   _runtimeKeys = keys;
 }
 
-type QuoteLike = { price: number };
-function isQuoteResult(x: unknown): x is QuoteLike {
-  return !!x && typeof (x as any).price === 'number';
-}
+export type QuoteResult = {
+  kind: 'quote';
+  price: number;
+  updatedAt?: number;
+  stale?: boolean;
+  priceOk?: boolean;
+  source?: string;
+  ymd?: string;
+  change?: number | null;
+  changePct?: number | null;
+};
+export type SkippedCloseResult = {
+  kind: 'skipped';
+  skipped: true;
+  reason: 'non-trading-day' | 'pre-close' | 'future-date' | 'strict-blocked' | 'invalid-date';
+};
 
 interface RealtimeCacheEntry {
   price: number;
@@ -59,11 +71,16 @@ function readRealtimeCache(symbol: string): RealtimeCacheEntry | null {
     const raw = cacheGet(rtCacheKey(symbol));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<RealtimeCacheEntry> | null;
-    if (!parsed || typeof parsed.price !== 'number' || !Number.isFinite(parsed.price)) {
+    if (!parsed) {
       return null;
     }
-    const ts = typeof parsed.ts === 'number' && Number.isFinite(parsed.ts) ? parsed.ts : 0;
-    return { price: parsed.price, ts };
+    const price = parsed?.price;
+    if (typeof price !== 'number' || !Number.isFinite(price)) {
+      return null;
+    }
+    const tsCandidate = parsed?.ts;
+    const ts = typeof tsCandidate === 'number' && Number.isFinite(tsCandidate) ? tsCandidate : 0;
+    return { price, ts };
   } catch (err) {
     console.warn('[priceService] 读取实时价格缓存失败', err);
     return null;
@@ -112,6 +129,7 @@ export function getCachedRealtimeQuote(symbol: string): QuoteResult | null {
   const cached = readRealtimeCache(symbol);
   if (!cached) return null;
   return {
+    kind: 'quote',
     price: cached.price,
     stale: true,
     priceOk: true,
@@ -235,8 +253,11 @@ async function fetchTiingoRealtimeQuote(symbol: string): Promise<number | null> 
   const cacheKey = `tiingo_rt_${symbol}`;
   try {
     const cached = JSON.parse(cacheGet(cacheKey) || 'null') as { price: number; ts: number } | null;
-    if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
-      return cached.price;
+    if (cached && Date.now() - cached.ts < 5 * 60_000) {
+      const cachedPrice = cached?.price;
+      if (typeof cachedPrice === 'number') {
+        return cachedPrice;
+      }
     }
   } catch {
     // 忽略 localStorage 访问或 JSON 解析错误
@@ -272,8 +293,11 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
   const cacheKey = `tiingo_close_${symbol}_${date}`;
   try {
     const cached = JSON.parse(cacheGet(cacheKey) || 'null') as { price: number; ts: number } | null;
-    if (cached && Date.now() - cached.ts < 5 * 60_000 && typeof cached.price === 'number') {
-      return cached.price;
+    if (cached && Date.now() - cached.ts < 5 * 60_000) {
+      const cachedPrice = cached?.price;
+      if (typeof cachedPrice === 'number') {
+        return cachedPrice;
+      }
     }
   } catch {
     // 忽略 localStorage 访问或 JSON 解析错误
@@ -302,21 +326,7 @@ async function fetchTiingoDailyClose(symbol: string, date: string): Promise<numb
   return null;
 }
 
-/** 统一返回结构 */
-export interface QuoteResult {
-  price?: number;
-  stale?: boolean;
-  priceOk?: boolean;
-  change?: number | null;
-  changePct?: number | null;
-  updatedAt?: number;
-}
-
-export interface SkippedCloseResult {
-  skipped: true;
-  reason: CloseRequirementDecision['reason'];
-}
-
+/** 统一返回结构参见上方 QuoteResult/SkippedCloseResult 判别联合定义 */
 const MAX_LOOKBACK_DAYS = 365;
 const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
 
@@ -441,18 +451,46 @@ function shouldUseRealtimeClose(
   return nowNY.getTime() < nextOpen.getTime();
 }
 
+const NON_OFFICIAL_SOURCES = new Set<CachedPrice['source']>(['close_fallback']);
+
+function isOfficialSource(source: CachedPrice['source'] | undefined | null): boolean {
+  if (!source) return false;
+  return !NON_OFFICIAL_SOURCES.has(source);
+}
+
+export interface PrevCloseWithinOptions {
+  maxBack?: number;
+  officialOnly?: boolean;
+  closeMap?: Record<string, Record<string, number>>;
+}
+
+export interface PrevCloseWithinResult {
+  ymd: string;
+  close: number;
+  source: string;
+}
+
 async function getPrevCloseWithin(
   symbol: string,
-  date: string,
-  maxLookback = MAX_LOOKBACK_DAYS,
-  closeMap?: Record<string, Record<string, number>>
-): Promise<{ date: string; price: number } | null> {
+  rawDate: string,
+  options: PrevCloseWithinOptions = {},
+): Promise<PrevCloseWithinResult | null> {
   const key = symbol.trim().toUpperCase();
-  const anchorDate = date.includes('T') ? nyYmd(new Date(date)) : date;
+  if (!key) return null;
+
+  const anchorDate = rawDate.includes('T') ? nyYmd(new Date(rawDate)) : rawDate;
   if (!parseYmd(anchorDate)) return null;
 
-  let map = closeMap;
+  const target = nyResolveTradingDayStr(undefined, { freeze: anchorDate });
+  if (!target || !parseYmd(target)) return null;
 
+  const inputIsTradingDay = nyIsTradingDay(anchorDate);
+  const maxBack = Math.max(0, options.maxBack ?? 10);
+  if (maxBack === 0) {
+    return null;
+  }
+
+  let map = options.closeMap;
   if (!map) {
     try {
       map = await loadJson('close_prices') as Record<string, Record<string, number>>;
@@ -460,52 +498,42 @@ async function getPrevCloseWithin(
       console.warn('[priceService] 读取 close_prices.json 失败', err);
       map = undefined;
     }
+
+    if (map) {
+      map = migrateClosePriceMap(map).map;
+    }
   }
 
-  if (map) {
-    map = migrateClosePriceMap(map).map;
-  }
+  const officialOnly = options.officialOnly ?? true;
+  let candidate = inputIsTradingDay ? nyPrev(target) : target;
 
-  let rolling = anchorDate;
-
-  for (let offset = 1; offset <= maxLookback; offset += 1) {
-    rolling = nyPrev(rolling);
-    const prevDate = rolling;
-
-    if (!prevDate) {
-      break;
+  for (let steps = 0; steps < maxBack && candidate; steps += 1) {
+    if (candidate > target) {
+      logger.warn('PREV_CLOSE_FUTURE_CANDIDATE', { symbol: key, target, candidate });
+      candidate = nyPrev(candidate);
+      continue;
     }
 
     try {
-      const cached = await getPrice(key, prevDate);
-      if (cached && typeof cached.close === 'number') {
-        return { date: prevDate, price: cached.close };
+      const cached = await getPrice(key, candidate);
+      if (
+        cached &&
+        typeof cached.close === 'number' &&
+        Number.isFinite(cached.close) &&
+        (!officialOnly || isOfficialSource(cached.source))
+      ) {
+        return { ymd: candidate, close: cached.close, source: cached.source };
       }
     } catch (err) {
       console.warn('[priceService] 读取缓存价格失败', err);
     }
 
-    const filePrice = map?.[key]?.[prevDate];
-    if (typeof filePrice === 'number') {
-      return { date: prevDate, price: filePrice };
+    const filePrice = map?.[key]?.[candidate];
+    if (typeof filePrice === 'number' && Number.isFinite(filePrice)) {
+      return { ymd: candidate, close: filePrice, source: 'close_prices' };
     }
-  }
 
-  const symbolMap = map?.[key];
-  if (symbolMap && typeof symbolMap === 'object') {
-    let latest: { date: string; price: number } | null = null;
-    for (const [candidateDate, candidatePrice] of Object.entries(symbolMap)) {
-      if (typeof candidatePrice !== 'number') continue;
-      if (candidateDate >= anchorDate) {
-        continue;
-      }
-      if (!latest || candidateDate > latest.date) {
-        latest = { date: candidateDate, price: candidatePrice };
-      }
-    }
-    if (latest) {
-      return latest;
-    }
+    candidate = nyPrev(candidate);
   }
 
   return null;
@@ -544,14 +572,14 @@ export async function fetchDailyClose(
   const normalizedDate = requirementDecision.date ?? normalizedInput;
 
   if (!requirementDecision.require) {
-    return { skipped: true, reason: requirementDecision.reason };
+    return { kind: 'skipped', skipped: true, reason: requirementDecision.reason };
   }
 
   try {
     const cachedPrice = await getPrice(key, normalizedDate);
     if (cachedPrice && typeof cachedPrice.close === 'number') {
       await saveToFile(key, normalizedDate, cachedPrice.close);
-      return { price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
+      return { kind: 'quote', price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
     let closeMap: Record<string, Record<string, number>> | undefined;
@@ -569,7 +597,7 @@ export async function fetchDailyClose(
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
       await saveToFile(key, normalizedDate, filePrice);
-      return { price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
+      return { kind: 'quote', price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
     const tryDailyApis = async (): Promise<{ price: number; source: CachedPrice['source'] } | null> => {
@@ -594,7 +622,7 @@ export async function fetchDailyClose(
     ) => {
       await putPrice({ symbol: key, date: normalizedDate, close: price, source });
       await saveToFile(key, normalizedDate, price);
-      return { price, stale: false, priceOk: true, updatedAt: Date.now() } as QuoteResult;
+      return { kind: 'quote', price, stale: false, priceOk: true, updatedAt: Date.now() } as QuoteResult;
     };
 
     const todayNY = nyYmd(Date.now());
@@ -620,15 +648,18 @@ export async function fetchDailyClose(
       if (allowRealtime) {
         // 1) 先用缓存的实时价（若时间戳晚于当日 16:00）
         const cachedRealtime = readRealtimeCache(key);
-        if (cachedRealtime && typeof cachedRealtime.price === 'number' && cachedRealtime.price > 0) {
-          const closeMoment = toNyDateTime(normalizedDate, 16, 0);
-          const cachedMoment = toNY(cachedRealtime.ts);
-          if (
-            Number.isFinite(closeMoment.getTime()) &&
-            Number.isFinite(cachedMoment.getTime()) &&
-            cachedMoment.getTime() >= closeMoment.getTime()
-          ) {
-            return await recordOfficialClose(cachedRealtime.price, 'close_rt');
+        if (cachedRealtime) {
+          const cachedPrice = cachedRealtime.price;
+          if (Number.isFinite(cachedPrice) && cachedPrice > 0) {
+            const closeMoment = toNyDateTime(normalizedDate, 16, 0);
+            const cachedMoment = toNY(cachedRealtime.ts);
+            if (
+              Number.isFinite(closeMoment.getTime()) &&
+              Number.isFinite(cachedMoment.getTime()) &&
+              cachedMoment.getTime() >= closeMoment.getTime()
+            ) {
+              return await recordOfficialClose(cachedRealtime.price, 'close_rt');
+            }
           }
         }
 
@@ -673,17 +704,21 @@ export async function fetchDailyClose(
     const allowFallback = requirementDecision.require && requirementDecision.reason === 'post-close' && !strictMode;
 
     if (allowFallback) {
-      const fallback = await getPrevCloseWithin(key, normalizedDate, MAX_LOOKBACK_DAYS, closeMap);
+      const fallback = await getPrevCloseWithin(key, normalizedDate, {
+        maxBack: MAX_LOOKBACK_DAYS,
+        officialOnly: true,
+        closeMap,
+      });
       if (fallback) {
         if (process.env.MONITOR === '1') {
           console.warn('[priceService] 使用前一收盘价作为回退', {
             symbol: key,
             date: normalizedDate,
-            fallbackDate: fallback.date,
-            price: fallback.price,
+            fallbackDate: fallback.ymd,
+            price: fallback.close,
           });
         }
-        return { price: fallback.price, stale: true, priceOk: true, updatedAt: Date.now() };
+        return { kind: 'quote', price: fallback.close, stale: true, priceOk: true, updatedAt: Date.now() };
       }
     }
 
@@ -719,15 +754,15 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     }
     try {
       const frozen = await fetchDailyClose(symbol, freezeEvalDay);
-      if (isQuoteResult(frozen)) {
+      if (frozen && frozen.kind === 'quote') {
         const entry = writeRealtimeCache(symbol, frozen.price);
-        return { price: frozen.price, stale: true, priceOk: true, updatedAt: entry.ts };
+        return { kind: 'quote', price: frozen.price, stale: true, priceOk: true, updatedAt: entry.ts };
       }
     } catch (err) {
       if (err instanceof NoPriceError) throw err;
       throw new NoPriceError(`no price for ${symbol}`);
     }
-    return { priceOk: false, change: null, changePct: null };
+    return { kind: 'quote', price: Number.NaN, priceOk: false, change: null, changePct: null };
   }
 
   try {
@@ -735,7 +770,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     if (finnhubPrice !== null) {
       const entry = writeRealtimeCache(symbol, finnhubPrice);
       void persistRealtimeClose(symbol, finnhubPrice, entry.ts);
-      return { price: finnhubPrice, stale: false, priceOk: true, updatedAt: entry.ts };
+      return { kind: 'quote', price: finnhubPrice, stale: false, priceOk: true, updatedAt: entry.ts };
     }
   } catch (e) {
     console.warn(`Finnhub 实时报价失败 (${symbol})`, e);
@@ -746,7 +781,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     if (tiingoPrice !== null) {
       const entry = writeRealtimeCache(symbol, tiingoPrice);
       void persistRealtimeClose(symbol, tiingoPrice, entry.ts);
-      return { price: tiingoPrice, stale: false, priceOk: true, updatedAt: entry.ts };
+      return { kind: 'quote', price: tiingoPrice, stale: false, priceOk: true, updatedAt: entry.ts };
     }
   } catch (e) {
     console.warn(`Tiingo 实时报价失败 (${symbol})`, e);
@@ -755,9 +790,9 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   const yesterday = nyPrev(nyYmd(Date.now()));
   try {
     const close = await fetchDailyClose(symbol, yesterday);
-    if (isQuoteResult(close)) {
+    if (close && close.kind === 'quote') {
       const entry = writeRealtimeCache(symbol, close.price);
-      return { price: close.price, stale: true, priceOk: true, updatedAt: entry.ts };
+      return { kind: 'quote', price: close.price, stale: true, priceOk: true, updatedAt: entry.ts };
     }
   } catch (err) {
     if (err instanceof NoPriceError) throw err;
@@ -768,16 +803,18 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   }
 
   if (cachedRealtime) {
-    return { price: cachedRealtime.price, stale: true, priceOk: true, updatedAt: cachedRealtime.ts };
+    return { kind: 'quote', price: cachedRealtime.price, stale: true, priceOk: true, updatedAt: cachedRealtime.ts };
   }
 
-  return { priceOk: false, change: null, changePct: null };
+  return { kind: 'quote', price: Number.NaN, priceOk: false, change: null, changePct: null };
 }
 
 export const __priceServiceInternals = {
   getPrevCloseWithin,
   isStrictPriceMode,
 };
+
+export { getPrevCloseWithin };
 
 /** 兼容旧版别名 */
 export async function fetchRealtimePrice(symbol: string): Promise<QuoteResult> {

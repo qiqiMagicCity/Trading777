@@ -74,7 +74,7 @@ describe('fallback only after post-close trading days', () => {
     try {
       const result = await price.fetchDailyClose('AAPL', '2025-10-06');
 
-      expect(result).toEqual({ skipped: true, reason: 'pre-close' });
+      expect(result).toEqual({ kind: 'skipped', skipped: true, reason: 'pre-close' });
       expect(getPriceMock).not.toHaveBeenCalled();
       expect(loadJsonMock).not.toHaveBeenCalled();
       expect(putPriceMock).not.toHaveBeenCalled();
@@ -94,7 +94,7 @@ describe('fallback only after post-close trading days', () => {
     try {
       const result = await price.fetchDailyClose('AAPL', '2099-01-01');
 
-      expect(result).toEqual({ skipped: true, reason: 'future-date' });
+      expect(result).toEqual({ kind: 'skipped', skipped: true, reason: 'future-date' });
       expect(getPriceMock).not.toHaveBeenCalled();
       expect(loadJsonMock).not.toHaveBeenCalled();
       expect(putPriceMock).not.toHaveBeenCalled();
@@ -122,7 +122,7 @@ describe('fallback only after post-close trading days', () => {
 
       const result = await price.fetchDailyClose('AAPL', '2025-10-06');
 
-      expect(result && 'price' in result).toBe(true);
+      expect(result && (result as any).kind).toBe('quote');
       expect((result as any).price).toBe(123.45);
       expect((result as any).stale).toBe(true);
       expect(putPriceMock).not.toHaveBeenCalled();

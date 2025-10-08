@@ -449,8 +449,8 @@ describe('priceService safe fallbacks', () => {
     loadJsonMock.mockResolvedValue({});
 
     const result = await fetchRealtimeQuote('AAPL');
-    expect(result).toMatchObject({ priceOk: false, change: null, changePct: null });
-    expect(result.price).toBeUndefined();
+    expect(result).toMatchObject({ kind: 'quote', priceOk: false, change: null, changePct: null });
+    expect(Number.isNaN(result.price)).toBe(true);
     expect(result.stale).toBeUndefined();
   });
 
