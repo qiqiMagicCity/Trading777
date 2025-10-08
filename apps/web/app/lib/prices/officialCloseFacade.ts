@@ -10,6 +10,8 @@ import { useStore } from "@/app/lib/store";
 
 export type MissingOfficialCloseMap = Record<string, MissingOfficialSymbolSummary[]>;
 
+export { getOfficialCloseVersion };
+
 export async function waitOfficialClosesReady(targetVersion?: number) {
   const baseVersion =
     typeof targetVersion === "number" ? targetVersion : getOfficialCloseVersion();

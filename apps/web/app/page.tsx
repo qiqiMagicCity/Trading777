@@ -47,6 +47,7 @@ import {
   type OfficialCloseBuildResult,
 } from '@/app/lib/prices/buildOfficialCloseMaps';
 import { beginBuild, beginCommit } from './lib/readiness/priceReadyGate';
+import { syncPackagedClosesToIdb } from '@/app/lib/prices/syncPackagedClosesToIdb';
 import { markPricesReady, withGateTrace } from '@/app/lib/prices/ready';
 import type {
   MissingCloseSummary,
@@ -444,6 +445,7 @@ export default function DashboardPage() {
     ): Promise<T> =>
       (async () => {
         beginBuild();
+        await syncPackagedClosesToIdb();
         const previousVersion = useStore.getState().officialCloseVersion;
         let markVersion: number | undefined;
         try {

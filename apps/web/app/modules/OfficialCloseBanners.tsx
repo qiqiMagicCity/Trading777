@@ -9,6 +9,7 @@ import type {
 } from "@/app/lib/missingOfficialClose";
 import { attachPricesImportedListener } from "@/app/lib/bootstrap/pricesImportedListener";
 import {
+  getOfficialCloseVersion,
   getMissingOfficialCloses,
   waitOfficialClosesReady,
 } from "@/app/lib/prices/officialCloseFacade";
@@ -57,8 +58,18 @@ function useMissingOfficialCloses(
   }, [load]);
 
   useEffect(() => {
+    const onPricesImported = async () => {
+      try {
+        const baseVersion = getOfficialCloseVersion();
+        await waitOfficialClosesReady(baseVersion + 1);
+        await load();
+      } catch (err) {
+        console.warn("[OfficialCloseBanners] refresh after import failed", err);
+      }
+    };
+
     const detachImported = attachPricesImportedListener(() => {
-      void load();
+      void onPricesImported();
     });
     const handleReady = () => {
       void load();

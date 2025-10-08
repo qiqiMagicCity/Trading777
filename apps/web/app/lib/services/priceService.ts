@@ -589,7 +589,7 @@ export async function fetchDailyClose(
 
     const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
-      await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
+      await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'official/import' });
       await saveToFile(key, normalizedDate, filePrice);
       return { kind: 'quote', price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
@@ -612,7 +612,7 @@ export async function fetchDailyClose(
 
     const recordOfficialClose = async (
       price: number,
-      source: CachedPrice['source'] = 'import'
+      source: CachedPrice['source'] = 'official/import'
     ) => {
       await putPrice({ symbol: key, date: normalizedDate, close: price, source });
       await saveToFile(key, normalizedDate, price);
