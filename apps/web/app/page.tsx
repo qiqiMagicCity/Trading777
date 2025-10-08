@@ -37,7 +37,10 @@ import {
   type ClosePriceMap,
   type MissingCloseEntry,
 } from '@/lib/dailyResults';
-import { summarizeMissingCloses } from '@/app/lib/missingClose';
+import {
+  formatMissingCloseLineTickersOnly,
+  summarizeMissingCloses,
+} from '@/app/lib/missingClose';
 import {
   summarizeMissingOfficialCloses,
   type MissingOfficialDateSummary,
@@ -260,23 +263,17 @@ function MissingCloseBanner({
         以下日期缺少官方收盘价，请补录到 close_prices.json 或使用导入功能添加。
       </p>
       <ul style={{ paddingLeft: '20px', marginTop: 0, marginBottom: '16px' }}>
-        {summaries.map((summary) => (
-          <li key={summary.ymd} style={{ marginBottom: '6px' }}>
-            <strong style={{ color: '#ffe08a' }}>{summary.ymd}</strong>：
-            {summary.symbols.map((detail, idx) => {
-              const labels = detail.fallbacks
-                .map((fb) => FALLBACK_LABELS[fb] ?? '')
-                .filter(Boolean);
-              return (
-                <span key={`${summary.ymd}-${detail.symbol}`}>
-                  {detail.symbol}
-                  {labels.length > 0 ? `（${labels.join('、')}）` : ''}
-                  {idx < summary.symbols.length - 1 ? '、' : ''}
-                </span>
-              );
-            })}
-          </li>
-        ))}
+        {summaries.map((summary) => {
+          const line = formatMissingCloseLineTickersOnly(
+            summary.ymd,
+            summary.symbols.map((detail) => detail.symbol),
+          );
+          return (
+            <li key={summary.ymd} style={{ marginBottom: '6px' }}>
+              {line}
+            </li>
+          );
+        })}
       </ul>
       <button className="btn" onClick={onIgnore}>
         忽略并暂时以“待补充”展示
