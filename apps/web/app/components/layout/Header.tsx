@@ -165,6 +165,13 @@ export function Header() {
           `成功导入 ${imported} 条收盘价。支持 {"AAPL":{"2025-01-02":123.45}} 或 {"2025-01-02":{"AAPL":123.45}} 两种结构。`,
         );
         try {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("pricesImported"));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+        try {
           router.refresh();
           return;
         } catch (err) {

@@ -1,12 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  findTrades,
-  getAllPrices,
-  setDailyResultsCache,
-} from '@/lib/services/dataService';
-import { loadJson } from '@/app/lib/dataSource';
+import { findTrades, setDailyResultsCache } from '@/lib/services/dataService';
 import type { Trade, Position } from '@/lib/services/dataService';
 import type { EnrichedTrade } from '@/lib/fifo';
 import { applyBreakEvenToPositions, buildEnrichedTrades, replayPortfolio } from '@/app/lib/tradeReplay';
@@ -26,15 +21,11 @@ import { resolveTradingDayStr } from './lib/nyDay';
 import { TradingDayProvider } from './lib/TradingDayContext';
 import {
   generateDailyResults,
-  mergeClosePriceMaps,
-  normalizeClosePriceMap,
-  closePricesFromRows,
   buildMissingCloseList,
   type DailyResultsDiagnostics,
   type PendingCloseEntry,
   type CloseWindowDiagnostics,
   type MissingCloseFallback,
-  type ClosePriceMap,
   type MissingCloseEntry,
 } from '@/lib/dailyResults';
 import {
@@ -45,16 +36,13 @@ import {
   summarizeMissingOfficialCloses,
   type MissingOfficialDateSummary,
 } from '@/app/lib/missingOfficialClose';
-import { isOfficialCloseSource } from '@/app/lib/priceSourceGuards';
 import {
   MissingOfficialCloseBanner,
   PendingOfficialCloseBanner,
 } from '@/app/modules/OfficialCloseBanners';
-import {
-  overlayEntriesToMap,
-  readOfficialCloseOverlay,
-  subscribeOfficialCloseOverlay,
-} from '@/app/lib/officialCloseOverlayStore';
+import { subscribeOfficialCloseOverlay } from '@/app/lib/officialCloseOverlayStore';
+import { buildOfficialCloseMaps } from '@/app/lib/prices/buildOfficialCloseMaps';
+import { markPricesReady } from '@/app/lib/prices/ready';
 import type {
   MissingCloseSummary,
   PeriodHealthIssue,
@@ -145,44 +133,6 @@ async function ensureDailyCloses(symbols: string[], targetDate: string, fallback
       }),
     ),
   );
-}
-
-async function buildOfficialCloseMaps(): Promise<{
-  overlay: ClosePriceMap;
-  official: ClosePriceMap;
-  merged: ClosePriceMap;
-  fallback: ClosePriceMap;
-}> {
-  const [fileClosePricesRaw, cachedPrices, overlayEntries] = await Promise.all([
-    loadJson('close_prices') as Promise<Record<string, Record<string, number>>>,
-    getAllPrices(),
-    readOfficialCloseOverlay(),
-  ]);
-  const normalizedFileCloses = normalizeClosePriceMap(fileClosePricesRaw);
-  const overlayMap = overlayEntriesToMap(overlayEntries);
-  const cachedFallbackCloses = closePricesFromRows(
-    cachedPrices.filter((row) => !isOfficialCloseSource(row.source)),
-  );
-  const cachedOfficialCloses = closePricesFromRows(
-    cachedPrices.filter((row) => isOfficialCloseSource(row.source)),
-  );
-  const officialCloseMap = mergeClosePriceMaps(
-    overlayMap,
-    normalizedFileCloses,
-    cachedOfficialCloses,
-  );
-  const mergedCloseMap = mergeClosePriceMaps(
-    cachedFallbackCloses,
-    overlayMap,
-    normalizedFileCloses,
-    cachedOfficialCloses,
-  );
-  return {
-    overlay: overlayMap,
-    official: officialCloseMap,
-    merged: mergedCloseMap,
-    fallback: cachedFallbackCloses,
-  };
 }
 
 const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
@@ -633,6 +583,7 @@ export default function DashboardPage() {
 
       const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } =
         await buildOfficialCloseMaps();
+      markPricesReady();
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -712,6 +663,19 @@ export default function DashboardPage() {
       void loadDashboardData();
     });
     return unsubscribe;
+  }, [loadDashboardData]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handler = () => {
+      void loadDashboardData();
+    };
+    window.addEventListener('pricesImported', handler);
+    window.addEventListener('pricesReady', handler);
+    return () => {
+      window.removeEventListener('pricesImported', handler);
+      window.removeEventListener('pricesReady', handler);
+    };
   }, [loadDashboardData]);
 
   // Unique set of all traded symbols
@@ -798,6 +762,7 @@ export default function DashboardPage() {
 
     const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
       await buildOfficialCloseMaps();
+    markPricesReady();
 
     attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -890,6 +855,7 @@ export default function DashboardPage() {
 
       const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
         await buildOfficialCloseMaps();
+      markPricesReady();
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 

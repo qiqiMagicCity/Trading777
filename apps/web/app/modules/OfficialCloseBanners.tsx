@@ -1,16 +1,93 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { MissingOfficialDateSummary } from "@/app/lib/missingOfficialClose";
+import type {
+  MissingOfficialDateSummary,
+  MissingOfficialSymbolSummary,
+} from "@/app/lib/missingOfficialClose";
+import { attachPricesImportedListener } from "@/app/lib/bootstrap/pricesImportedListener";
+import {
+  getMissingOfficialCloses,
+  waitOfficialClosesReady,
+} from "@/app/lib/prices/officialCloseFacade";
 import { nowNY, startOfWeekNY, ymdInNY } from "@/lib/timezone";
 
-export function MissingOfficialCloseBanner({
-  summaries,
-}: {
+type MissingOfficialCloseMap = Record<string, MissingOfficialSymbolSummary[]>;
+
+interface MissingBannerHookResult {
   summaries: MissingOfficialDateSummary[];
+  refresh: () => Promise<void>;
+  error: Error | null;
+}
+
+function normalizeSummaryMap(map: MissingOfficialCloseMap | null): MissingOfficialDateSummary[] {
+  if (!map) return [];
+  return Object.entries(map)
+    .map(([ymd, symbols]) => ({
+      ymd,
+      date: ymd,
+      symbols: symbols
+        .slice()
+        .sort((a, b) => a.symbol.localeCompare(b.symbol)),
+    }))
+    .sort((a, b) => b.ymd.localeCompare(a.ymd));
+}
+
+function useMissingOfficialCloses(
+  initialSummaries: MissingOfficialDateSummary[] = [],
+): MissingBannerHookResult {
+  const [data, setData] = useState<MissingOfficialCloseMap | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      await waitOfficialClosesReady();
+      const missing = await getMissingOfficialCloses();
+      setData(missing);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const detachImported = attachPricesImportedListener(() => {
+      void load();
+    });
+    const handleReady = () => {
+      void load();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("pricesReady", handleReady);
+    }
+    return () => {
+      if (detachImported) detachImported();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pricesReady", handleReady);
+      }
+    };
+  }, [load]);
+
+  const summaries = useMemo(() => {
+    if (data) return normalizeSummaryMap(data);
+    return initialSummaries;
+  }, [data, initialSummaries]);
+
+  return { summaries, refresh: load, error };
+}
+
+export function MissingOfficialCloseBanner({
+  summaries: summariesProp = [],
+}: {
+  summaries?: MissingOfficialDateSummary[];
 }) {
+  const { summaries } = useMissingOfficialCloses(summariesProp);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   if (!summaries.length) return null;
 
