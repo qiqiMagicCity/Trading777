@@ -16,7 +16,9 @@
     "API_RATE_LIMIT",
     "API_REQUESTS_PER_MIN",
     "READ_PUBLIC_MODE",
-    "PUBLIC_DATA_BASE"
+    "PUBLIC_DATA_BASE",
+    "SAFE_PRICE_MODE",
+    "NEXT_PUBLIC_FREEZE_DATE"
   ],
   "tasks": {
     "build": {
@@ -31,11 +33,19 @@
         ".next/**",
         "!.next/cache/**",
         "dist/**"
+      ],
+      "env": [
+        "SAFE_PRICE_MODE",
+        "NEXT_PUBLIC_FREEZE_DATE"
       ]
     },
     "lint": {
       "dependsOn": [
         "^lint"
+      ],
+      "env": [
+        "SAFE_PRICE_MODE",
+        "NEXT_PUBLIC_FREEZE_DATE"
       ]
     },
     "check-types": {

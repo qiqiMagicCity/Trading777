@@ -575,15 +575,15 @@ export default function DashboardPage() {
 
         try {
           let result = await fetchRealtimeQuote(pos.symbol);
-          if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeInput) {
+          if ((result.kind !== 'quote' || !Number.isFinite(result.price) || result.price === 1) && !freezeInput) {
             const today = resolveTradingDayStr();
             const dailyClose = await fetchDailyClose(pos.symbol, today);
-            if (dailyClose && !('skipped' in dailyClose) && typeof dailyClose.price === 'number') {
+            if (dailyClose && dailyClose.kind === 'quote' && Number.isFinite(dailyClose.price)) {
               result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
             }
           }
 
-          if (result && typeof result.price === 'number' && result.price !== 1) {
+          if (result.kind === 'quote' && Number.isFinite(result.price) && result.price !== 1) {
             pos.last = result.price;
             pos.priceOk = result.priceOk !== false;
             pos.stale = Boolean(result.stale);
@@ -745,14 +745,14 @@ export default function DashboardPage() {
 
       try {
         let result = await fetchRealtimeQuote(pos.symbol);
-        if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeInput) {
+        if ((result.kind !== 'quote' || !Number.isFinite(result.price) || result.price === 1) && !freezeInput) {
           const today = resolveTradingDayStr();
           const dailyClose = await fetchDailyClose(pos.symbol, today);
-          if (dailyClose && !('skipped' in dailyClose) && typeof dailyClose.price === 'number') {
+          if (dailyClose && dailyClose.kind === 'quote' && Number.isFinite(dailyClose.price)) {
             result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
           }
         }
-        if (result && typeof result.price === 'number' && result.price !== 1) {
+        if (result.kind === 'quote' && Number.isFinite(result.price) && result.price !== 1) {
           pos.last = result.price;
           pos.priceOk = result.priceOk !== false;
           pos.stale = Boolean(result.stale);

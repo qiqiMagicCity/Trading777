@@ -70,7 +70,7 @@ describe('fetchDailyClose non-trading day short-circuit', () => {
 
     const result = await fetchDailyClose('AAPL', '2025-10-05');
 
-    expect(result).toEqual({ skipped: true, reason: 'non-trading-day' });
+    expect(result).toEqual({ kind: 'skipped', skipped: true, reason: 'non-trading-day' });
     expect(getPriceMock).not.toHaveBeenCalled();
     expect(putPriceMock).not.toHaveBeenCalled();
     expect(loadJsonMock).not.toHaveBeenCalled();
@@ -84,7 +84,7 @@ describe('fetchDailyClose non-trading day short-circuit', () => {
 
     const result = await fetchDailyClose('AAPL', '2025-12-25');
 
-    expect(result).toEqual({ skipped: true, reason: 'non-trading-day' });
+    expect(result).toEqual({ kind: 'skipped', skipped: true, reason: 'non-trading-day' });
     expect(getPriceMock).not.toHaveBeenCalled();
     expect(putPriceMock).not.toHaveBeenCalled();
     expect(loadJsonMock).not.toHaveBeenCalled();
@@ -95,6 +95,7 @@ describe('fetchDailyClose non-trading day short-circuit', () => {
     process.env.PRICE_STRICT = '1';
 
     await expect(fetchDailyClose('AAPL', '2025-12-27')).resolves.toEqual({
+      kind: 'skipped',
       skipped: true,
       reason: 'non-trading-day',
     });
@@ -114,8 +115,8 @@ describe('fetchDailyClose non-trading day short-circuit', () => {
 
     const result = await fetchDailyClose('AAPL', tradingDay);
 
-    expect(result).not.toEqual({ skipped: true, reason: expect.any(String) });
-    expect(result && (result as any).skipped).not.toBe(true);
+    expect(result).not.toEqual({ kind: 'skipped', skipped: true, reason: expect.any(String) });
+    expect(result && (result as any).kind).toBe('quote');
     expect(getPriceMock).toHaveBeenCalledTimes(1);
   });
 });

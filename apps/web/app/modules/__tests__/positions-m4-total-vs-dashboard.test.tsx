@@ -11,7 +11,7 @@ import { DashboardMetrics } from "../DashboardMetrics";
 import { useStore } from "@/lib/store";
 
 jest.mock("@/lib/services/priceService", () => ({
-  fetchRealtimeQuote: jest.fn(() => Promise.resolve({ price: 100 })),
+  fetchRealtimeQuote: jest.fn(() => Promise.resolve({ kind: 'quote', price: 100 })),
 }));
 
 const mockFetch = jest.fn(() => Promise.resolve({ json: () => Promise.resolve({}) }));
