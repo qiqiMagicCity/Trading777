@@ -14,6 +14,7 @@ import {
   endOfDayNY,
 } from "@/lib/timezone";
 import { nyDateStr, startOfDayNY, startOfWeekNY } from "./time";
+import { tsFromYmdAtNoonUTC } from "./nyParse";
 import { selectLatestSnapshotsByNyDay } from "./metrics-snapshot-selection";
 import {
   parseSnapshotNumber,
@@ -25,13 +26,28 @@ const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
   /^(\d{4}-\d{2}-\d{2})(?:[T ])?00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})?$/i;
 
+function utcNoonOrInvalid(ymd: string): Date {
+  try {
+    return new Date(tsFromYmdAtNoonUTC(ymd));
+  } catch {
+    return new Date(Number.NaN);
+  }
+}
+
+function formatUtcDay(date: Date): string {
+  if (Number.isNaN(date.getTime())) return "NaN-NaN-NaN";
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function addDaysYmd(ymd: string, n: number): string {
-  const d = new Date(`${ymd}T00:00:00`);
-  d.setUTCDate(d.getUTCDate() + n);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  const date = utcNoonOrInvalid(ymd);
+  if (!Number.isNaN(date.getTime())) {
+    date.setUTCDate(date.getUTCDate() + n);
+  }
+  return formatUtcDay(date);
 }
 
 function normalizeToNyDay(input: string | number | Date): Date | string | number {
@@ -1355,15 +1371,12 @@ function findRowBefore(
 }
 
 function nextTradingDay(day: string): string {
-  const d = new Date(`${day}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return day;
+  const date = utcNoonOrInvalid(day);
+  if (Number.isNaN(date.getTime())) return day;
   do {
-    d.setUTCDate(d.getUTCDate() + 1);
-  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+    date.setUTCDate(date.getUTCDate() + 1);
+  } while (date.getUTCDay() === 0 || date.getUTCDay() === 6);
+  return formatUtcDay(date);
 }
 
 function countTradingDaysBetween(
@@ -1372,8 +1385,8 @@ function countTradingDaysBetween(
 ): number | undefined {
   if (!startDay || !endDay) return undefined;
   if (startDay >= endDay) return 0;
-  const start = new Date(`${startDay}T00:00:00Z`);
-  const end = new Date(`${endDay}T00:00:00Z`);
+  const start = utcNoonOrInvalid(startDay);
+  const end = utcNoonOrInvalid(endDay);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return undefined;
   let cursor = startDay;
   let count = 0;

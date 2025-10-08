@@ -1,0 +1,24 @@
+{
+  "lines": [
+    "apps/web/public/js/ny-safe.js:35:Date.UTC(",
+    "apps/web/public/js/ny-safe.js:38:Date.UTC(",
+    "apps/web/public/js/ny-safe.js:42:Date.UTC(",
+    "apps/web/public/js/ny-safe.js:54:Date.UTC(",
+    "apps/web/app/lib/runAll.ts:419:T00:00:00Z",
+    "apps/web/app/lib/runAll.ts:863:T00:00:00Z",
+    "apps/web/app/lib/runAll.ts:988:T00:00:00Z",
+    "apps/web/app/lib/runAll.ts:998:T00:00:00Z",
+    "apps/web/app/lib/services/dataService.ts:207:T00:00:00Z",
+    "apps/web/app/lib/services/priceService.ts:175:T00:00:00Z",
+    "apps/web/app/lib/services/priceService.ts:176:T23:59:59Z",
+    "apps/web/app/lib/services/dataService.ts:216:24 * 60 * 60 * 1000",
+    "apps/web/app/lib/nyParse.ts:26:86400000",
+    "apps/web/app/lib/nyseHolidays.ts:36:86400000",
+    "apps/web/app/lib/nyseHolidays.ts:50:86400000",
+    "apps/web/app/lib/nyseHolidays.ts:54:86400000",
+    "apps/web/app/lib/nyseHolidays.ts:57:86400000",
+    "apps/web/app/lib/nyseHolidays.ts:84:86400000",
+    "apps/web/app/modules/PnlChart.tsx:44:86400000",
+    "apps/web/public/js/analysisPage.js:216:86400000"
+  ]
+}

@@ -6,6 +6,7 @@ import { calcMetrics } from "./metrics";
 import { createM4TodayDetail } from "./m4Today";
 import { computePeriods } from "./metrics-periods";
 import { generateDailyResults } from "./dailyResults";
+import { tsFromYmdAtNoonUTC } from "./nyParse";
 import {
   nyDateStr,
   nyDateStrSafe,
@@ -46,6 +47,45 @@ type MonitorModule = {
   ) => void;
 };
 let cachedMonitor: MonitorModule | null = null;
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MIDNIGHT_ISO_RE =
+  /^(\d{4}-\d{2}-\d{2})(?:[T\s])?00:00(?::00(?:\.000)?)?(?:Z|[+-]\d{2}:\d{2})?$/i;
+
+function dateFromDateLike(value: unknown): Date | null {
+  if (typeof value === "string") {
+    const midnightMatch = MIDNIGHT_ISO_RE.exec(value);
+    if (midnightMatch) {
+      try {
+        return new Date(tsFromYmdAtNoonUTC(midnightMatch[1]!));
+      } catch {
+        return new Date(Number.NaN);
+      }
+    }
+    if (DATE_ONLY_RE.test(value)) {
+      try {
+        return new Date(tsFromYmdAtNoonUTC(value));
+      } catch {
+        return new Date(Number.NaN);
+      }
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+  if (typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function tsFromDateLike(value: unknown): number {
+  const parsed = dateFromDateLike(value);
+  return parsed ? parsed.getTime() : Number.NaN;
+}
 
 async function loadFs() {
   if (typeof window !== "undefined") {
@@ -369,7 +409,8 @@ type SymState = {
 function computeBaselineDate(rawTrades: RawTrade[], fallbackISO: string): string {
   let minTime = Number.POSITIVE_INFINITY;
   for (const t of rawTrades) {
-    const time = new Date(t.date).getTime();
+    const parsed = dateFromDateLike(t.date);
+    const time = parsed ? parsed.getTime() : Number.NaN;
     if (Number.isFinite(time) && time < minTime) {
       minTime = time;
     }
@@ -692,8 +733,8 @@ export function normalizeDailyRows(
     const day = nyDateStrSafe(entry.date);
     if (day > evalISO) continue;
 
-    const tsRaw = new Date(entry.date).getTime();
-    const ts = Number.isFinite(tsRaw) ? tsRaw : -Infinity;
+    const tsCandidate = tsFromDateLike(entry.date);
+    const ts = Number.isFinite(tsCandidate) ? tsCandidate : -Infinity;
     const parseErrors: SnapshotFieldParseError[] = [];
 
     const parseField = (

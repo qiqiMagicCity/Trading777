@@ -3,8 +3,9 @@ import { MoneyDecimal as M, round2 } from "@/lib/money";
 import type { Position } from "@/lib/services/dataService";
 import sortTrades from "@/lib/sortTrades";
 import { nowNY, toNY, ymdInNY } from "@/lib/timezone";
-import { evaluateCloseRequirement, isTradingDay } from "@/lib/marketHours";
+import { evaluateCloseRequirement } from "@/lib/marketHours";
 import type { DailyResult } from "@/lib/types";
+import { isTradingDay, previousTradingDay } from "./nyDay";
 
 const EPSILON = 1e-6;
 
@@ -162,10 +163,16 @@ export function generateDailyResults({
     })();
   const now = nowNY();
   const closeRequirement = evaluateCloseRequirement(evalDateStr, now);
+  const evalIsTradingDay = isTradingDay(evalDateStr);
+  const normalizedCloseRequirement = {
+    ...closeRequirement,
+    isTradingDay: evalIsTradingDay,
+    requireOfficialClose: evalIsTradingDay ? closeRequirement.requireOfficialClose : false,
+  };
   if (diagnostics) {
     diagnostics.pendingCloses = diagnostics.pendingCloses ?? [];
     diagnostics.closeWindow = {
-      ...closeRequirement,
+      ...normalizedCloseRequirement,
       missingClose: false,
     };
   }
@@ -299,15 +306,24 @@ export function generateDailyResults({
     fallback: MissingCloseFallback,
   ) => {
     if (!diagnostics || !diagTracker) return;
+    const resolveEffectiveTradingDate = (target: string): string | null => {
+      if (!isValidDateStr(target)) return null;
+      if (isTradingDay(target)) return target;
+      const prev = previousTradingDay(target);
+      return prev || null;
+    };
+    const effectiveDate = resolveEffectiveTradingDate(date);
     const requireOfficial = (() => {
-      if (!isTradingDay(date)) return false;
-      if (date < evalDateStr) return true;
-      if (date === evalDateStr) return closeRequirement.requireOfficialClose;
-      return evaluateCloseRequirement(date, now).requireOfficialClose;
+      if (!effectiveDate) return false;
+      if (effectiveDate < evalDateStr) return true;
+      if (effectiveDate === evalDateStr) {
+        return normalizedCloseRequirement.requireOfficialClose;
+      }
+      return evaluateCloseRequirement(effectiveDate, now).requireOfficialClose;
     })();
 
     if (!requireOfficial) {
-      if (isTradingDay(date) && date === evalDateStr) {
+      if (effectiveDate === evalDateStr && evalIsTradingDay) {
         ensurePending(symbol, date, fallback);
       }
       return;

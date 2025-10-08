@@ -1,0 +1,59 @@
+name: time-guards
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'libs/**'
+      - 'server/**'
+      - 'api/**'
+      - 'public/**'
+      - 'scripts/**'
+      - '.eslintrc.time.js'
+      - 'package.json'
+      - '.github/workflows/time-guards.yml'
+  push:
+    branches: [ main ]
+
+jobs:
+  time-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint (time rules)
+        run: npm run lint:time
+
+      - name: Time Selfcheck
+        run: npm run time:selfcheck
+
+      - name: Show selfcheck summary (first 120 lines)
+        if: always()
+        run: |
+          echo "------ selfcheck-time.md ------"
+          sed -n '1,120p' selfcheck-time.md || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selfcheck-time-reports
+          path: |
+            selfcheck-time.json
+            selfcheck-time.md

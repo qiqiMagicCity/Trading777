@@ -5,6 +5,7 @@
  * for all tracked symbols since START_DATE.
  * Works inside the browser or Node (using fs).
  */
+import { nyEpochRangeForYmd } from './ny-safe.js';
 import { fetchDailyCandles, saveDailyClosesBulk, getTrackedSymbols } from './services/priceService.js';
 
 const START_DATE = '2025-04-07';  // inclusive
@@ -16,7 +17,7 @@ export async function runHistoricalBackfill(progressCallback = () => {}) {
     console.warn('[Backfill] No tracked symbols found.');
     return;
   }
-  const startEpoch = Math.floor(new Date(START_DATE + 'T00:00:00Z').getTime() / 1000);
+  const startEpoch = nyEpochRangeForYmd(START_DATE).from;
   const endEpoch = Math.floor(Date.now() / 1000);
 
   for (let i = 0; i < symbols.length; i++) {

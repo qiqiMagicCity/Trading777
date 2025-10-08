@@ -1,9 +1,5 @@
 
-// ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) using UTC to avoid timezone skew ----
-function getWeekIdx(dateStr){
-  const parts = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
-}
+import { nyDow } from './ny-safe.js';
 
 /* FIFO cost calculation & metrics – ported from Apps Script (迭代3.3.2) */
 (function(g){
@@ -99,7 +95,7 @@ function getWeekIdx(dateStr){
       }
 
       // enrich trade object
-      t.weekday = (function(d){ const w=d.getDay(); return ((w+6)%7)+1; })(toNY(t.date));
+      t.weekday = ((nyDow(t.date) + 6) % 7) + 1;
       t.count   = st.count;
       t.amount  = t.qty * t.price;
       t.be      = jVal;

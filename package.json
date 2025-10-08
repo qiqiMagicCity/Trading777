@@ -23,7 +23,10 @@
     "selfcheck:m4": "jest apps/web/app/lib/__tests__/m4.selfcheck.test.ts --runInBand",
     "test:m4:fix": "jest apps/web/app/lib/__tests__/m4.selfcheck.test.ts --runInBand",
     "test:m4:ui": "jest apps/web/app/modules/__tests__/m4.ui.align.test.tsx --runInBand",
-    "test:m4:edge": "jest apps/web/app/lib/__tests__/m4.edgecases.test.ts --runInBand"
+    "test:m4:edge": "jest apps/web/app/lib/__tests__/m4.edgecases.test.ts --runInBand",
+    "lint:time": "eslint -c .eslintrc.time.js --no-error-on-unmatched-pattern --ext .ts,.tsx,.js,.mjs,.cjs apps packages libs server api public",
+    "time:selfcheck": "node scripts/time-selfcheck.mjs",
+    "time:ci": "npm run lint:time && npm run time:selfcheck"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

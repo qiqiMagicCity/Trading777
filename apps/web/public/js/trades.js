@@ -1,8 +1,9 @@
 
-// ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) using UTC to avoid timezone skew ----
+import { nyDow } from './ny-safe.js';
+
+// ---- Helper: getWeekIdx returns 0 (Sun) - 6 (Sat) using NY-safe weekday ----
 function getWeekIdx(dateStr){
-  const parts = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2])).getUTCDay();
+  return nyDow(dateStr);
 }
 (function(){
 const tbl=document.getElementById('all-trades');

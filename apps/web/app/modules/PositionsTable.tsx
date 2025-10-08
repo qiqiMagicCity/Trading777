@@ -1,5 +1,7 @@
 'use client';
 
+import { useTradingDay } from "../lib/TradingDayContext";
+import { resolveTradingDayStr } from "../lib/nyDay";
 import { useQueries } from "@tanstack/react-query";
 import type { Position } from "@/lib/services/dataService";
 import { fetchRealtimeQuote } from "@/lib/services/priceService";
@@ -175,6 +177,11 @@ export function PositionsTable({ positions, trades }: Props) {
     () => (rawMetrics ? normalizeMetrics(rawMetrics) : null),
     [rawMetrics],
   );
+  const tradingDayAuthority = useTradingDay();
+  const tradingDayTag = useMemo(
+    () => tradingDayAuthority || resolveTradingDayStr(),
+    [tradingDayAuthority],
+  );
   const intradayDataset = useMemo(
     () => buildIntradayFloatingPnlMap(metrics, positions),
     [metrics, positions],
@@ -322,7 +329,7 @@ export function PositionsTable({ positions, trades }: Props) {
   }, [positionSummaries, metrics]);
 
   return (
-    <div>
+    <div data-trading-day={tradingDayTag}>
       <table id="positions" className="table">
         <thead>
           <tr>

@@ -1,5 +1,6 @@
 // apps/web/app/lib/services/priceService.ts
 
+import { resolveTradingDayStr as nyResolveTradingDayStr, ymdInNY as nyYmd, previousTradingDay as nyPrev } from '../nyDay';
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
@@ -7,7 +8,6 @@ import { logger } from '@/lib/logger';
 import { safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
 import { nyDateStr, toNY, NY_TZ } from '../time';
-import { getTradingDateStr } from '../tradingDay';
 import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
 import { migrateClosePriceMap } from '@/lib/closePriceMigration';
 import { evaluateCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
@@ -79,7 +79,7 @@ async function persistRealtimeClose(
   const key = symbol.trim().toUpperCase();
   if (!key) return;
 
-  const tradingDate = getTradingDateStr(timestamp);
+  const tradingDate = nyResolveTradingDayStr(timestamp);
   const nowNY = toNY(timestamp);
   const windowMinutes = resolveRtCloseWindow();
   if (!shouldUseRealtimeClose(tradingDate, nowNY, windowMinutes)) return;
@@ -301,7 +301,6 @@ export interface QuoteResult {
   updatedAt?: number;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_LOOKBACK_DAYS = 365;
 const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
 
@@ -375,10 +374,8 @@ async function getPrevCloseWithin(
   closeMap?: Record<string, Record<string, number>>
 ): Promise<{ date: string; price: number } | null> {
   const key = symbol.trim().toUpperCase();
-  const anchorDate = date.includes('T') ? nyDateStr(date) : date;
-  const base = new Date(`${anchorDate}T00:00:00Z`).getTime();
-  if (!Number.isFinite(base)) return null;
-  const middayOffset = 12 * 60 * 60 * 1000;
+  const anchorDate = date.includes('T') ? nyYmd(new Date(date)) : date;
+  if (!parseYmd(anchorDate)) return null;
 
   let map = closeMap;
 
@@ -395,8 +392,15 @@ async function getPrevCloseWithin(
     map = migrateClosePriceMap(map).map;
   }
 
+  let rolling = anchorDate;
+
   for (let offset = 1; offset <= maxLookback; offset += 1) {
-    const prevDate = nyDateStr(base + middayOffset - offset * DAY_MS);
+    rolling = nyPrev(rolling);
+    const prevDate = rolling;
+
+    if (!prevDate) {
+      break;
+    }
 
     try {
       const cached = await getPrice(key, prevDate);
@@ -518,8 +522,8 @@ export async function fetchDailyClose(
       return { price, stale: false, priceOk: true, updatedAt: Date.now() } as QuoteResult;
     };
 
-    const todayNY = nyDateStr(Date.now());
-    const latestTradingDate = getTradingDateStr(Date.now());
+    const todayNY = nyYmd(Date.now());
+    const latestTradingDate = nyResolveTradingDayStr(Date.now());
     const isToday = normalizedDate === todayNY;
     const isLatestTradingDay = normalizedDate === latestTradingDate;
     const nowNY = toNY(Date.now());
@@ -659,7 +663,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     console.warn(`Tiingo 实时报价失败 (${symbol})`, e);
   }
 
-  const yesterday = nyDateStr(Date.now() - DAY_MS);
+  const yesterday = nyPrev(nyYmd(Date.now()));
   try {
     const close = await fetchDailyClose(symbol, yesterday);
     if (close && typeof close.price === 'number') {

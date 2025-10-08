@@ -1,4 +1,5 @@
 import { nyDateStr, nyDateStrSafe, startOfWeekNY, toNY } from './time';
+import { tsFromYmdAtNoonUTC } from './nyParse';
 import type { DailyResultInput } from './types';
 import { selectLatestSnapshotsByNyDay } from './metrics-snapshot-selection';
 import {
@@ -7,13 +8,28 @@ import {
   type SnapshotNumericField,
 } from './snapshotNumber';
 
+function utcNoonOrInvalid(ymd: string): Date {
+  try {
+    return new Date(tsFromYmdAtNoonUTC(ymd));
+  } catch {
+    return new Date(Number.NaN);
+  }
+}
+
+function formatUtcDay(date: Date): string {
+  if (Number.isNaN(date.getTime())) return 'NaN-NaN-NaN';
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function addDaysYmd(ymd: string, n: number): string {
-  const d = new Date(`${ymd}T00:00:00`);
-  d.setUTCDate(d.getUTCDate() + n);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const date = utcNoonOrInvalid(ymd);
+  if (!Number.isNaN(date.getTime())) {
+    date.setUTCDate(date.getUTCDate() + n);
+  }
+  return formatUtcDay(date);
 }
 
 export type Daily = Pick<
@@ -21,12 +37,27 @@ export type Daily = Pick<
   'date' | 'realized' | 'unrealized' | 'unrealizedDelta'
 >;
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function sumM9(daily: Daily[], endISO?: string): number {
   let hasParseFailure = false;
   const total = (daily || []).reduce((s, d) => {
     if (endISO && d?.date) {
-      const dt = new Date(d.date);
-      if (Number.isFinite(dt.valueOf())) {
+      const rawDate = d.date as unknown;
+      let dt: Date | null = null;
+      if (typeof rawDate === 'string') {
+        if (DATE_ONLY_RE.test(rawDate)) {
+          dt = utcNoonOrInvalid(rawDate);
+        } else {
+          dt = new Date(rawDate);
+        }
+      } else if (rawDate instanceof Date) {
+        dt = new Date(rawDate.getTime());
+      } else if (typeof rawDate === 'number') {
+        dt = new Date(rawDate);
+      }
+
+      if (dt && Number.isFinite(dt.valueOf())) {
         const day = typeof d.date === 'string' ? nyDateStrSafe(d.date) : nyDateStr(dt);
         if (day > endISO) return s;
       }
