@@ -29,15 +29,16 @@ function snapshot(): GateState {
   return { ...state };
 }
 
-function trace(event: string, details?: Record<string, unknown>) {
-  if (!process.env.DIAG_PRICE_READY_TRACE) return;
+const TRACE_ON =
+  (typeof process !== "undefined" &&
+    (process.env.NEXT_PUBLIC_DIAG_PRICE_READY_TRACE || process.env.DIAG_PRICE_READY_TRACE)) ||
+  false;
+
+// 放宽参数类型，避免 ReadyPayload 必须满足 Record<string, unknown> 的索引签名约束
+function trace(...args: unknown[]) {
+  if (!TRACE_ON) return;
   // eslint-disable-next-line no-console
-  console.log("[PRICE_GATE]", event, {
-    phase: state.phase,
-    version: state.version,
-    pendingVersion: state.pendingVersion,
-    ...(details ?? {}),
-  });
+  console.log("[PRICE_GATE]", ...args);
 }
 
 export function current(): GateState {
