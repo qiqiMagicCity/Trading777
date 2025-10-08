@@ -155,9 +155,12 @@ function mapOfficialSummariesInRange(
   end: string,
 ): PeriodOfficialCloseDateImpact[] {
   return summaries
-    .filter((entry) => entry.date >= start && entry.date <= end)
+    .filter((entry) => {
+      const ymd = entry.ymd ?? entry.date ?? "";
+      return ymd >= start && ymd <= end;
+    })
     .map((entry) => ({
-      date: entry.date,
+      date: entry.ymd ?? entry.date ?? "",
       symbols: entry.symbols.map((symbol) => cloneOfficialSymbol(symbol)),
     }));
 }

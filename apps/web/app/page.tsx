@@ -578,7 +578,7 @@ export default function DashboardPage() {
           if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeInput) {
             const today = resolveTradingDayStr();
             const dailyClose = await fetchDailyClose(pos.symbol, today);
-            if (dailyClose) {
+            if (dailyClose && !('skipped' in dailyClose) && typeof dailyClose.price === 'number') {
               result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
             }
           }
@@ -748,7 +748,7 @@ export default function DashboardPage() {
         if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeInput) {
           const today = resolveTradingDayStr();
           const dailyClose = await fetchDailyClose(pos.symbol, today);
-          if (dailyClose) {
+          if (dailyClose && !('skipped' in dailyClose) && typeof dailyClose.price === 'number') {
             result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
           }
         }
