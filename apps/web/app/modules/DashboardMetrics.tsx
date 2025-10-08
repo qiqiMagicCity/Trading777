@@ -1,5 +1,7 @@
 "use client";
 
+import { useTradingDay } from "../lib/TradingDayContext";
+import { resolveTradingDayStr } from "../lib/nyDay";
 import type { EnrichedTrade } from "@/lib/fifo";
 import type { Position } from "@/lib/services/dataService";
 import { useStore } from "@/lib/store";
@@ -184,6 +186,8 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const rawMetrics = useStore((state) => state.metrics);
   const periodHealth = useStore((state) => state.periodHealth);
   const metrics = normalizeMetrics(rawMetrics);
+  const tradingDayAuthority = useTradingDay();
+  const tradingDayFallback = useMemo(() => tradingDayAuthority || resolveTradingDayStr(), [tradingDayAuthority]);
   const debugEnabled =
     isDebug() || process.env.NEXT_PUBLIC_METRICS_DEBUG === "1";
 
@@ -245,7 +249,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         ? intradayDiagnostics.uiTradeDayYmd
         : undefined;
     const tradingDay: string | undefined =
-      diagnosticsTradeDay ?? rawTradingDate;
+      tradingDayFallback ?? diagnosticsTradeDay ?? rawTradingDate;
 
     const componentFieldMap = {
       realizedToday: "realized_today",
@@ -374,7 +378,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
       tooltip: tooltipLines.join("\n"),
       hasAlerts,
     } as const;
-  }, [metrics, rawMetrics]);
+  }, [metrics, rawMetrics, tradingDayFallback]);
 
   type PeriodCardState =
     | "ok"
@@ -1024,7 +1028,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   }
 
   return (
-    <section id="stats" className="my-5">
+    <section id="stats" className="my-5" data-trading-day={tradingDayFallback}>
       {metricsReady ? (
         <div className="flex flex-col items-center gap-4">
           {rows.map((row, index) => (

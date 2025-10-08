@@ -1,4 +1,4 @@
-import { ymdInNY } from "./lib/time.js";
+import { ymdInNY, nyNoonTsUTC } from "./ny-safe.js";
 
 function bootAnalysisPage() {
   const { toNY } = window;
@@ -9,10 +9,10 @@ function bootAnalysisPage() {
   function normalizeToNyDate(input) {
     if (!input) return null;
     try {
-      const source =
-        typeof input === "string" && DATE_ONLY_RE.test(input)
-          ? `${input}T12:00:00Z`
-          : input;
+      let source = input;
+      if (typeof input === "string" && DATE_ONLY_RE.test(input)) {
+        source = new Date(nyNoonTsUTC(input));
+      }
       const date = typeof toNY === "function" ? toNY(source) : new Date(source);
       return Number.isNaN(date?.getTime()) ? null : date;
     } catch (err) {
@@ -94,7 +94,7 @@ function bootAnalysisPage() {
           (ISO_WITH_TIME_RE.test(key)
             ? resolveNyDayString(key)
             : DATE_ONLY_RE.test(key)
-            ? resolveNyDayString(`${key}T12:00:00Z`)
+            ? resolveNyDayString(key)
             : null);
         if (dateKeyCandidate) {
           targetKey = dateKeyCandidate;
@@ -112,7 +112,7 @@ function bootAnalysisPage() {
         ISO_WITH_TIME_RE.test(value)
           ? resolveNyDayString(value)
           : DATE_ONLY_RE.test(value)
-          ? resolveNyDayString(`${value}T12:00:00Z`)
+          ? resolveNyDayString(value)
           : null;
       if (nyFromIso && nyFromIso !== value) {
         return { mutated: true, value: nyFromIso };
@@ -207,17 +207,17 @@ function bootAnalysisPage() {
 
   function enumerateDays(start, end) {
     const days = [];
-    const startDate = new Date(`${start}T00:00:00Z`);
-    const endDate = new Date(`${end}T00:00:00Z`);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      return days;
-    }
-    const cursor = new Date(startDate.getTime());
-    while (cursor <= endDate) {
-      const midday = new Date(cursor.getTime());
-      midday.setUTCHours(12, 0, 0, 0);
-      days.push(ymdInNY(midday));
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    try {
+      let cursor = nyNoonTsUTC(start);
+      const endNoon = nyNoonTsUTC(end);
+      if (!Number.isFinite(cursor) || !Number.isFinite(endNoon)) {
+        return days;
+      }
+      for (; cursor <= endNoon; cursor += 86400000) {
+        days.push(ymdInNY(new Date(cursor)));
+      }
+    } catch (err) {
+      console.warn("enumerateDays failed", err);
     }
     return days;
   }
@@ -275,7 +275,7 @@ function bootAnalysisPage() {
     if (mode === "week") {
       const weekMap = {};
       arr.forEach((d) => {
-        const dateObj = normalizeToNyDate(`${d.date}T12:00:00Z`);
+        const dateObj = normalizeToNyDate(d.date);
         const weekday = dateObj ? dateObj.getUTCDay() : 0;
         const key = `${d.date.slice(0, 7)}-W${weekday}`;
         weekMap[key] = (weekMap[key] || 0) + d.net;

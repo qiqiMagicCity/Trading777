@@ -4,6 +4,7 @@
  * v7.26
  */
 import { apiQueue } from './apiQueue.js';
+import { nyEpochRangeForYmd } from '../ny-safe.js';
 import { putPrice, getPrice } from '../lib/idb.js';
 
 // 使用内部 API 路由，避免在浏览器暴露密钥
@@ -15,8 +16,7 @@ const API_BASE  = '/api';
  * @returns {number|null}
  */
 export async function fetchFinnhubDailyClose(symbol, date){
-  const fromTs = Math.floor(new Date(date + 'T00:00:00Z').getTime()/1000);
-  const toTs   = Math.floor(new Date(date + 'T23:59:59Z').getTime()/1000);
+  const { from: fromTs, to: toTs } = nyEpochRangeForYmd(date);
   const url = `${API_BASE}/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
   try{
     const json = await apiQueue.enqueue(()=> fetch(url).then(r=>r.json()));

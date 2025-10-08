@@ -1,3 +1,5 @@
+import { ymdInNY } from './ny-safe.js';
+
 /* Trading777 交易分析 – v7.7.3 */
 (function () {
   const { nowNY, toNY, getLatestTradingDayStr } = window;
@@ -59,7 +61,7 @@
   const calendarWrap = document.getElementById("calendar-wrap");
   let curYearMonth = lastDate
     ? lastDate.slice(0, 7)
-    : nowNY().toISOString().slice(0, 7);
+    : ymdInNY(nowNY()).slice(0, 7);
 
   function renderCalendar(ym) {
     const [y, m] = ym.split("-").map((n) => parseInt(n, 10));

@@ -21,7 +21,9 @@ import { collectPeriodHealthIssues } from '@/app/lib/dataHealth';
 import { useStore } from '@/lib/store';
 import { fetchRealtimeQuote, fetchDailyClose, getCachedRealtimeQuote } from '@/lib/services/priceService';
 import { logger } from '@/lib/logger';
-import { formatNY, getLatestTradingDayStr, nowNY, ymdInNY, startOfWeekNY } from '@/lib/timezone';
+import { formatNY, nowNY, ymdInNY, startOfWeekNY } from '@/lib/timezone';
+import { resolveTradingDayStr } from './lib/nyDay';
+import { TradingDayProvider } from './lib/TradingDayContext';
 import {
   generateDailyResults,
   mergeClosePriceMaps,
@@ -363,6 +365,10 @@ export default function DashboardPage() {
   const [pendingCloseInfo, setPendingCloseInfo] = useState<PendingCloseEntry | null>(null);
   const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
   const [pendingNoticeDismissed, setPendingNoticeDismissed] = useState(false);
+  const initialTradingDay = useMemo(
+    () => (freezeDate ? freezeDate.slice(0, 10) : resolveTradingDayStr()),
+    [],
+  );
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const officialSummaryRef = useRef<MissingOfficialDateSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
@@ -542,7 +548,7 @@ export default function DashboardPage() {
         try {
           let result = await fetchRealtimeQuote(pos.symbol);
           if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
-            const today = getLatestTradingDayStr();
+            const today = resolveTradingDayStr();
             const dailyClose = await fetchDailyClose(pos.symbol, today);
             if (dailyClose) {
               result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
@@ -585,7 +591,7 @@ export default function DashboardPage() {
         return;
       }
 
-      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : resolveTradingDayStr();
 
       if (!freezeDate) {
         const symbols = collectSymbols(dbTrades, posList);
@@ -708,7 +714,7 @@ export default function DashboardPage() {
       try {
         let result = await fetchRealtimeQuote(pos.symbol);
         if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
-          const today = getLatestTradingDayStr();
+          const today = resolveTradingDayStr();
           const dailyClose = await fetchDailyClose(pos.symbol, today);
           if (dailyClose) {
             result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
@@ -842,7 +848,7 @@ export default function DashboardPage() {
       });
       applyBreakEvenToPositions(posList, enriched);
 
-      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : getLatestTradingDayStr();
+      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : resolveTradingDayStr();
 
       const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
         await buildOfficialCloseMaps();
@@ -934,7 +940,8 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
+    <TradingDayProvider initialTradingDay={initialTradingDay}>
+      <div data-trading-day={initialTradingDay}>
       <PendingCloseNotice
         info={pendingCloseInfo}
         closeWindow={closeWindowInfo}
@@ -1003,6 +1010,7 @@ export default function DashboardPage() {
         +
       </button>
       {showModal && <AddTradeModal onClose={() => setShowModal(false)} onAdded={handleTradeAdded} />}
-    </div>
+      </div>
+    </TradingDayProvider>
   );
 }
