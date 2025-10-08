@@ -45,6 +45,7 @@ import {
   summarizeMissingOfficialCloses,
   type MissingOfficialDateSummary,
 } from '@/app/lib/missingOfficialClose';
+import { isOfficialCloseSource } from '@/app/lib/priceSourceGuards';
 import {
   MissingOfficialCloseBanner,
   PendingOfficialCloseBanner,
@@ -159,12 +160,12 @@ async function buildOfficialCloseMaps(): Promise<{
   ]);
   const normalizedFileCloses = normalizeClosePriceMap(fileClosePricesRaw);
   const overlayMap = overlayEntriesToMap(overlayEntries);
-  const cachedFallbackCloses = closePricesFromRows(cachedPrices, {
-    includeSources: ['close_fallback'],
-  });
-  const cachedOfficialCloses = closePricesFromRows(cachedPrices, {
-    excludeSources: ['close_fallback'],
-  });
+  const cachedFallbackCloses = closePricesFromRows(
+    cachedPrices.filter((row) => !isOfficialCloseSource(row.source)),
+  );
+  const cachedOfficialCloses = closePricesFromRows(
+    cachedPrices.filter((row) => isOfficialCloseSource(row.source)),
+  );
   const officialCloseMap = mergeClosePriceMaps(
     overlayMap,
     normalizedFileCloses,
@@ -261,6 +262,12 @@ function MissingCloseBanner({
       <h3 style={{ marginTop: 0, marginBottom: '12px', color: '#ffe08a' }}>收盘价缺失提醒</h3>
       <p style={{ marginTop: 0, marginBottom: '12px', color: '#fff5cc' }}>
         以下日期缺少官方收盘价，请补录到 close_prices.json 或使用导入功能添加。
+        <a
+          href="/debug/close"
+          style={{ marginLeft: '8px', color: '#ffe08a', textDecoration: 'underline' }}
+        >
+          为什么缺价？
+        </a>
       </p>
       <ul style={{ paddingLeft: '20px', marginTop: 0, marginBottom: '16px' }}>
         {summaries.map((summary) => {
