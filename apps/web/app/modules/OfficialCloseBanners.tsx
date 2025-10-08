@@ -121,7 +121,6 @@ export function MissingOfficialCloseBanner({
                     <li key={`${summary.date}-${item.symbol}`} style={{ marginBottom: 4 }}>
                       <strong>{item.symbol}</strong>：
                       {item.impact.length ? item.impact.join("、") : "影响未指定"}
-                      {item.hasFallback ? "（已暂用兜底价）" : ""}
                     </li>
                   ))}
                 </ul>
@@ -163,11 +162,7 @@ export function PendingOfficialCloseBanner({
       </p>
       <ul style={{ listStyle: "disc", margin: 0, paddingLeft: 20 }}>
         {summaries.map((summary) => {
-          const label = summary.symbols
-            .map((item) =>
-              `${item.symbol}${item.hasFallback ? "（已暂用兜底）" : ""}`,
-            )
-            .join("、");
+          const label = summary.symbols.map((item) => item.symbol).join("、");
           return (
             <li key={`pending-${summary.date}`} style={{ marginBottom: 6 }}>
               <strong>{summary.date}</strong>：{label}
