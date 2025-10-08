@@ -215,6 +215,7 @@ export function Header() {
         <button id="export" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleExport}>导出</button>
         <button id="exportPrices" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleExportPrices}>导出收盘价格</button>
         <button id="importPrices" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleImportPrices}>导入收盘价格</button>
+        <a href="/debug/close" className="px-3 py-1" style={{ marginLeft: '10px', color: '#ffffff', textDecoration: 'underline' }}>诊断-收盘价</a>
       </div>
     </header>
   );

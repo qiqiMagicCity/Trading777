@@ -684,6 +684,10 @@ export async function getPrice(
   return db.get(PRICES_STORE_NAME, [symbol, date]);
 }
 
+export async function getImportedCloseMap(symbol: string, date: string) {
+  return getPrice((symbol ?? '').trim().toUpperCase(), date);
+}
+
 export async function putPrice(price: CachedPrice): Promise<void> {
   const db = await getDb();
   const tx = db.transaction(PRICES_STORE_NAME, "readwrite");

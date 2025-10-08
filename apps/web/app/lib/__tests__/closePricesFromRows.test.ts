@@ -3,6 +3,7 @@ import {
   mergeClosePriceMaps,
   normalizeClosePriceMap,
 } from "../dailyResults";
+import { isOfficialCloseSource } from "../../lib/priceSourceGuards";
 
 describe("close price precedence", () => {
   it("prefers file closes over cached fallbacks", () => {
@@ -15,12 +16,12 @@ describe("close price precedence", () => {
       },
     };
 
-    const fallbackCloses = closePricesFromRows(cachedRows, {
-      includeSources: ["close_fallback"],
-    });
-    const officialCloses = closePricesFromRows(cachedRows, {
-      excludeSources: ["close_fallback"],
-    });
+    const fallbackCloses = closePricesFromRows(
+      cachedRows.filter((row) => !isOfficialCloseSource(row.source)),
+    );
+    const officialCloses = closePricesFromRows(
+      cachedRows.filter((row) => isOfficialCloseSource(row.source)),
+    );
 
     const merged = mergeClosePriceMaps(
       fallbackCloses,
