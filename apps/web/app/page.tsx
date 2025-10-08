@@ -41,8 +41,17 @@ import {
   PendingOfficialCloseBanner,
 } from '@/app/modules/OfficialCloseBanners';
 import { subscribeOfficialCloseOverlay } from '@/app/lib/officialCloseOverlayStore';
-import { buildOfficialCloseMaps } from '@/app/lib/prices/buildOfficialCloseMaps';
-import { markPricesReady } from '@/app/lib/prices/ready';
+import {
+  buildOfficialCloseMaps,
+  commitOfficialCloseVersion,
+  type OfficialCloseBuildResult,
+} from '@/app/lib/prices/buildOfficialCloseMaps';
+import {
+  beginBuild,
+  beginCommit,
+  markPricesReady,
+  withGateTrace,
+} from '@/app/lib/prices/ready';
 import type {
   MissingCloseSummary,
   PeriodHealthIssue,
@@ -50,27 +59,6 @@ import type {
 } from '@/app/lib/types/health';
 import type { MetricsContract } from '@/app/lib/types/metrics';
 import { evaluateCloseRequirement } from '@/lib/marketHours';
-
-/**
- * emitPricesReadyAfterCommit: 以微任务延后发射 pricesReady，确保本轮同步 state 更新（含 setMetrics）已提交。
- * - 在同一事件处理栈内，setMetrics 是同步的；用 microtask/Promise.then 可以保证事件广播滞后于本栈尾部。
- * - 若运行环境无 queueMicrotask，则回退到 Promise.then。
- */
-function emitPricesReadyAfterCommit() {
-  if (typeof queueMicrotask === 'function') {
-    queueMicrotask(() => {
-      try {
-        markPricesReady();
-      } catch {}
-    });
-  } else {
-    Promise.resolve().then(() => {
-      try {
-        markPricesReady();
-      } catch {}
-    });
-  }
-}
 
 function resolvePrevClose(
   symbol: string,
@@ -380,6 +368,7 @@ export default function DashboardPage() {
   );
   const setMetrics = useStore((state) => state.setMetrics);
   const setPeriodHealth = useStore((state) => state.setPeriodHealth);
+  const setOfficialCloseVersion = useStore((state) => state.setOfficialCloseVersion);
 
   const syncPeriodHealth = useCallback(
     (options?: { meta?: MetricsContract["_period"] | null }) => {
@@ -450,6 +439,32 @@ export default function DashboardPage() {
       });
     },
     [missingDismissed, setPeriodHealth],
+  );
+
+  const runWithOfficialCloseCommit = useCallback(
+    async <T>(
+      label: string,
+      apply: (result: OfficialCloseBuildResult) => Promise<T> | T,
+    ): Promise<T> => {
+      beginBuild();
+      const previousVersion = useStore.getState().officialCloseVersion;
+      let markVersion: number | undefined;
+      try {
+        const result = await withGateTrace(`${label}:build`, () => buildOfficialCloseMaps());
+        beginCommit(result.version);
+        const output = await withGateTrace(`${label}:apply`, () => apply(result));
+        commitOfficialCloseVersion(result.version);
+        setOfficialCloseVersion(result.version);
+        markVersion = result.version;
+        return output;
+      } finally {
+        if (markVersion === undefined) {
+          setOfficialCloseVersion(previousVersion);
+        }
+        markPricesReady(markVersion);
+      }
+    },
+    [setOfficialCloseVersion],
   );
 
   useEffect(() => {
@@ -602,59 +617,61 @@ export default function DashboardPage() {
         await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
       }
 
-      const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } =
-        await buildOfficialCloseMaps();
-      emitPricesReadyAfterCommit();
+      await runWithOfficialCloseCommit('dashboard:load', async ({ maps }) => {
+        const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } =
+          maps;
 
-      attachPrevClose(posList, mergedClosePrices, evalDateStr);
+        attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
-      const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
-      const dailyResults = generateDailyResults({
-        trades: enriched,
-        positions: posList,
-        closePrices: mergedClosePrices,
-        evalDate: evalDateStr,
-      }, diagnostics);
-      setCloseWindowInfo(diagnostics.closeWindow ?? null);
-      const pendingEntry = (diagnostics.pendingCloses ?? []).find(
-        (entry) => entry.date === evalDateStr,
-      ) ?? null;
-      setPendingCloseInfo(pendingEntry);
-      setDailyResultsCache(dailyResults);
+        const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
+        const dailyResults = generateDailyResults(
+          {
+            trades: enriched,
+            positions: posList,
+            closePrices: mergedClosePrices,
+            evalDate: evalDateStr,
+          },
+          diagnostics,
+        );
+        setCloseWindowInfo(diagnostics.closeWindow ?? null);
+        const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+          (entry) => entry.date === evalDateStr,
+        ) ?? null;
+        setPendingCloseInfo(pendingEntry);
+        setDailyResultsCache(dailyResults);
 
-      const summaries = await toTradingMissingSummaries(
-        diagnostics.missingCloses,
-      );
-      updateMissingCloseState(summaries);
+        const summaries = await toTradingMissingSummaries(diagnostics.missingCloses);
+        updateMissingCloseState(summaries);
 
-      const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
-        tradingDateStr: evalDateStr,
-        periodEvalYmd: evalDateStr,
-        officialCloseMap: officialClosePrices,
-        officialCloseOverlayMap: overlayMap,
+        const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
+          tradingDateStr: evalDateStr,
+          periodEvalYmd: evalDateStr,
+          officialCloseMap: officialClosePrices,
+          officialCloseOverlayMap: overlayMap,
+        });
+        const metrics = normalizeMetrics(rawMetrics);
+        const officialSummaries = summarizeMissingOfficialCloses(
+          metrics.diagnostics?.missingOfficialCloses ?? [],
+        );
+        updateMissingOfficialState(officialSummaries);
+        const pendingSummaries = summarizeMissingOfficialCloses(
+          metrics.diagnostics?.pendingOfficialCloses ?? [],
+        );
+        updatePendingOfficialState(pendingSummaries);
+        issuesRef.current = collectPeriodHealthIssues({
+          evalDate: evalDateStr,
+          dailyResults,
+          trades: dbTrades,
+          positions: posList,
+          metrics,
+        });
+        syncPeriodHealth({ meta: rawMetrics?._period ?? null });
+        setMetrics(metrics);
+
+        setTrades(dbTrades);
+        setPositions(posList);
+        setEnrichedTrades(enriched);
       });
-      const metrics = normalizeMetrics(rawMetrics);
-      const officialSummaries = summarizeMissingOfficialCloses(
-        metrics.diagnostics?.missingOfficialCloses ?? [],
-      );
-      updateMissingOfficialState(officialSummaries);
-      const pendingSummaries = summarizeMissingOfficialCloses(
-        metrics.diagnostics?.pendingOfficialCloses ?? [],
-      );
-      updatePendingOfficialState(pendingSummaries);
-      issuesRef.current = collectPeriodHealthIssues({
-        evalDate: evalDateStr,
-        dailyResults,
-        trades: dbTrades,
-        positions: posList,
-        metrics,
-      });
-      syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-      setMetrics(metrics);
-
-      setTrades(dbTrades);
-      setPositions(posList);
-      setEnrichedTrades(enriched);
     } catch (e) {
       console.error(e);
       clearPeriodHealthState();
@@ -781,63 +798,61 @@ export default function DashboardPage() {
       await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
     }
 
-    const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
-      await buildOfficialCloseMaps();
-    emitPricesReadyAfterCommit();
+    await runWithOfficialCloseCommit('dashboard:refresh', async ({ maps }) => {
+      const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } = maps;
 
-    attachPrevClose(posList, mergedClosePrices, evalDateStr);
+      attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
-    const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
-    const dailyResults = generateDailyResults(
-      {
-        trades: enriched,
-        positions: posList,
-        closePrices: mergedClosePrices,
+      const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
+      const dailyResults = generateDailyResults(
+        {
+          trades: enriched,
+          positions: posList,
+          closePrices: mergedClosePrices,
+          evalDate: evalDateStr,
+        },
+        diagnostics,
+      );
+      setCloseWindowInfo(diagnostics.closeWindow ?? null);
+      const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+        (entry) => entry.date === evalDateStr,
+      ) ?? null;
+      setPendingCloseInfo(pendingEntry);
+      setDailyResultsCache(dailyResults);
+
+      const summaries = await toTradingMissingSummaries(diagnostics.missingCloses);
+      updateMissingCloseState(summaries);
+
+      const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
+        tradingDateStr: evalDateStr,
+        periodEvalYmd: evalDateStr,
+        officialCloseMap: officialCloseMap,
+        officialCloseOverlayMap: overlayMap,
+      });
+      const metrics = normalizeMetrics(rawMetrics);
+      const pendingOfficial = summarizeMissingOfficialCloses(
+        metrics.diagnostics?.pendingOfficialCloses ?? [],
+      );
+      updatePendingOfficialState(pendingOfficial);
+      const missingOfficial = summarizeMissingOfficialCloses(
+        metrics.diagnostics?.missingOfficialCloses ?? [],
+      );
+      updateMissingOfficialState(missingOfficial);
+      issuesRef.current = collectPeriodHealthIssues({
         evalDate: evalDateStr,
-      },
-      diagnostics,
-    );
-    setCloseWindowInfo(diagnostics.closeWindow ?? null);
-    const pendingEntry = (diagnostics.pendingCloses ?? []).find(
-      (entry) => entry.date === evalDateStr,
-    ) ?? null;
-    setPendingCloseInfo(pendingEntry);
-    setDailyResultsCache(dailyResults);
+        dailyResults,
+        trades: tradesSnapshot,
+        positions: posList,
+        metrics,
+      });
+      syncPeriodHealth({ meta: rawMetrics?._period ?? null });
+      setMetrics(metrics);
 
-    const summaries = await toTradingMissingSummaries(
-      diagnostics.missingCloses,
-    );
-    updateMissingCloseState(summaries);
-
-    const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
-      tradingDateStr: evalDateStr,
-      periodEvalYmd: evalDateStr,
-      officialCloseMap: officialCloseMap,
-      officialCloseOverlayMap: overlayMap,
+      setTrades(tradesSnapshot);
+      setPositions(posList);
+      setEnrichedTrades(enriched);
+      setRefreshError(null);
     });
-    const metrics = normalizeMetrics(rawMetrics);
-    const pendingOfficial = summarizeMissingOfficialCloses(
-      metrics.diagnostics?.pendingOfficialCloses ?? [],
-    );
-    updatePendingOfficialState(pendingOfficial);
-    const missingOfficial = summarizeMissingOfficialCloses(
-      metrics.diagnostics?.missingOfficialCloses ?? [],
-    );
-    updateMissingOfficialState(missingOfficial);
-    issuesRef.current = collectPeriodHealthIssues({
-      evalDate: evalDateStr,
-      dailyResults,
-      trades: tradesSnapshot,
-      positions: posList,
-      metrics,
-    });
-    syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-    setMetrics(metrics);
-
-    setTrades(tradesSnapshot);
-    setPositions(posList);
-    setEnrichedTrades(enriched);
-    setRefreshError(null);
   }
 
   async function reloadData() {
@@ -874,63 +889,62 @@ export default function DashboardPage() {
 
       const evalDateStr = freezeTradingDay ?? resolveTradingDayStr();
 
-      const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
-        await buildOfficialCloseMaps();
-      emitPricesReadyAfterCommit();
+      await runWithOfficialCloseCommit('dashboard:reload', async ({ maps }) => {
+        const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
+          maps;
 
-      attachPrevClose(posList, mergedClosePrices, evalDateStr);
+        attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
-      const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
-      const dailyResults = generateDailyResults(
-        {
-          trades: enriched,
-          positions: posList,
-          closePrices: mergedClosePrices,
+        const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
+        const dailyResults = generateDailyResults(
+          {
+            trades: enriched,
+            positions: posList,
+            closePrices: mergedClosePrices,
+            evalDate: evalDateStr,
+          },
+          diagnostics,
+        );
+        setCloseWindowInfo(diagnostics.closeWindow ?? null);
+        const pendingEntry = (diagnostics.pendingCloses ?? []).find(
+          (entry) => entry.date === evalDateStr,
+        ) ?? null;
+        setPendingCloseInfo(pendingEntry);
+        setPendingNoticeDismissed(false);
+        setDailyResultsCache(dailyResults);
+
+        const summaries = await toTradingMissingSummaries(diagnostics.missingCloses);
+        updateMissingCloseState(summaries);
+
+        const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
+          tradingDateStr: evalDateStr,
+          periodEvalYmd: evalDateStr,
+          officialCloseMap: officialCloseMap,
+          officialCloseOverlayMap: overlayMap,
+        });
+        const metrics = normalizeMetrics(rawMetrics);
+        const pendingOfficial = summarizeMissingOfficialCloses(
+          metrics.diagnostics?.pendingOfficialCloses ?? [],
+        );
+        updatePendingOfficialState(pendingOfficial);
+        const missingOfficial = summarizeMissingOfficialCloses(
+          metrics.diagnostics?.missingOfficialCloses ?? [],
+        );
+        updateMissingOfficialState(missingOfficial);
+        issuesRef.current = collectPeriodHealthIssues({
           evalDate: evalDateStr,
-        },
-        diagnostics,
-      );
-      setCloseWindowInfo(diagnostics.closeWindow ?? null);
-      const pendingEntry = (diagnostics.pendingCloses ?? []).find(
-        (entry) => entry.date === evalDateStr,
-      ) ?? null;
-      setPendingCloseInfo(pendingEntry);
-      setPendingNoticeDismissed(false);
-      setDailyResultsCache(dailyResults);
+          dailyResults,
+          trades: dbTrades,
+          positions: posList,
+          metrics,
+        });
+        syncPeriodHealth({ meta: rawMetrics?._period ?? null });
+        setMetrics(metrics);
 
-      const summaries = await toTradingMissingSummaries(
-        diagnostics.missingCloses,
-      );
-      updateMissingCloseState(summaries);
-
-      const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
-        tradingDateStr: evalDateStr,
-        periodEvalYmd: evalDateStr,
-        officialCloseMap: officialCloseMap,
-        officialCloseOverlayMap: overlayMap,
+        setTrades(dbTrades);
+        setPositions(posList);
+        setEnrichedTrades(enriched);
       });
-      const metrics = normalizeMetrics(rawMetrics);
-      const pendingOfficial = summarizeMissingOfficialCloses(
-        metrics.diagnostics?.pendingOfficialCloses ?? [],
-      );
-      updatePendingOfficialState(pendingOfficial);
-      const missingOfficial = summarizeMissingOfficialCloses(
-        metrics.diagnostics?.missingOfficialCloses ?? [],
-      );
-      updateMissingOfficialState(missingOfficial);
-      issuesRef.current = collectPeriodHealthIssues({
-        evalDate: evalDateStr,
-        dailyResults,
-        trades: dbTrades,
-        positions: posList,
-        metrics,
-      });
-      syncPeriodHealth({ meta: rawMetrics?._period ?? null });
-      setMetrics(metrics);
-
-      setTrades(dbTrades);
-      setPositions(posList);
-      setEnrichedTrades(enriched);
 
       const backgroundPromise = refreshPricesAndMetrics(dbTrades, evalDateStr);
       void backgroundPromise

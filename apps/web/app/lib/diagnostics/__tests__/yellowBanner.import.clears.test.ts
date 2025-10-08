@@ -1,8 +1,31 @@
 import 'fake-indexeddb/auto';
-import { waitOfficialClosesReady, getMissingOfficialCloses } from '@/app/lib/prices/officialCloseFacade';
+import {
+  waitOfficialClosesReady,
+  getMissingOfficialCloses,
+} from '@/app/lib/prices/officialCloseFacade';
+import {
+  beginBuild,
+  beginCommit,
+  markPricesReady,
+  resetPricesReadyForTests,
+} from '@/app/lib/prices/ready';
+import {
+  buildOfficialCloseMaps,
+  commitOfficialCloseVersion,
+  resetOfficialCloseVersionForTests,
+} from '@/app/lib/prices/buildOfficialCloseMaps';
+import { useStore } from '@/app/lib/store';
 import { seedClosePricesForTest } from '@/app/lib/prices/seedTest';
 
 describe('yellow banner', () => {
+  beforeEach(() => {
+    resetPricesReadyForTests();
+    resetOfficialCloseVersionForTests();
+    const store = useStore.getState();
+    store.setOfficialCloseVersion(0);
+    store.setMetrics(null);
+  });
+
   it('clears missing gaps after importing close prices', async () => {
     const FIX: Record<string, Record<string, number>> = {
       '2025-09-19': {
@@ -29,8 +52,17 @@ describe('yellow banner', () => {
     };
 
     await seedClosePricesForTest(FIX, { source: 'import' });
-    await waitOfficialClosesReady();
-    const missing = await getMissingOfficialCloses();
+
+    beginBuild();
+    const { version } = await buildOfficialCloseMaps();
+    beginCommit(version);
+    const readyPromise = waitOfficialClosesReady(version);
+    commitOfficialCloseVersion(version);
+    useStore.getState().setOfficialCloseVersion(version);
+    markPricesReady(version);
+    await readyPromise;
+
+    const missing = await getMissingOfficialCloses(version);
     expect(missing['2025-09-19'] ?? []).toEqual([]);
     expect(missing['2025-10-03'] ?? []).toEqual([]);
   });
