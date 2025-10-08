@@ -51,6 +51,27 @@ import type {
 import type { MetricsContract } from '@/app/lib/types/metrics';
 import { evaluateCloseRequirement } from '@/lib/marketHours';
 
+/**
+ * emitPricesReadyAfterCommit: 以微任务延后发射 pricesReady，确保本轮同步 state 更新（含 setMetrics）已提交。
+ * - 在同一事件处理栈内，setMetrics 是同步的；用 microtask/Promise.then 可以保证事件广播滞后于本栈尾部。
+ * - 若运行环境无 queueMicrotask，则回退到 Promise.then。
+ */
+function emitPricesReadyAfterCommit() {
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(() => {
+      try {
+        markPricesReady();
+      } catch {}
+    });
+  } else {
+    Promise.resolve().then(() => {
+      try {
+        markPricesReady();
+      } catch {}
+    });
+  }
+}
+
 function resolvePrevClose(
   symbol: string,
   evalDate: string,
@@ -583,7 +604,7 @@ export default function DashboardPage() {
 
       const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } =
         await buildOfficialCloseMaps();
-      markPricesReady();
+      emitPricesReadyAfterCommit();
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -762,7 +783,7 @@ export default function DashboardPage() {
 
     const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
       await buildOfficialCloseMaps();
-    markPricesReady();
+    emitPricesReadyAfterCommit();
 
     attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -855,7 +876,7 @@ export default function DashboardPage() {
 
       const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
         await buildOfficialCloseMaps();
-      markPricesReady();
+      emitPricesReadyAfterCommit();
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
