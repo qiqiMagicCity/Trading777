@@ -9,7 +9,7 @@ export async function seedClosePricesForTest(
   options?: { source?: CachedPrice["source"] },
 ): Promise<void> {
   const { map } = migrateClosePriceMap(input);
-  const source: CachedPrice["source"] = options?.source ?? "import";
+  const source: CachedPrice["source"] = options?.source ?? "official/import";
   const tasks: Promise<void>[] = [];
 
   for (const [symbol, byDate] of Object.entries(map)) {

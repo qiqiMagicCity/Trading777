@@ -71,11 +71,35 @@ export interface Position {
 }
 
 // New interface for cached prices
+export type OfficialCloseSourceTag =
+  | "official/import"
+  | "official/packaged"
+  | "official/exchange"
+  | "official/vendor"
+  | "official/manual";
+
+export type CachedPriceSource =
+  | "finnhub"
+  | "alphavantage"
+  | "tiingo"
+  | "close_rt"
+  | "close_fallback"
+  | OfficialCloseSourceTag;
+
 export interface CachedPrice {
   symbol: string;
   date: string;
   close: number;
-  source: "finnhub" | "alphavantage" | "import" | "tiingo" | "close_rt" | "close_fallback";
+  source: CachedPriceSource;
+}
+
+export function isOfficialCloseSource(source?: string | null): boolean {
+  if (typeof source !== "string") return false;
+  const normalized = source.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.startsWith("official/")) return true;
+  if (normalized === "official") return true;
+  return ["import", "exchange", "vendor", "manual"].includes(normalized);
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -737,7 +761,7 @@ export async function importClosePrices(
     for (const [date, close] of Object.entries(byDate)) {
       if (!ISO_DATE_RE.test(date) || typeof close !== "number") continue;
       promises.push(
-        putPrice({ symbol, date, close, source: "import" }),
+        putPrice({ symbol, date, close, source: "official/import" }),
       );
       imported += 1;
     }

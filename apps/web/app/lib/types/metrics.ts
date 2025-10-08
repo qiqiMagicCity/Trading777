@@ -69,6 +69,15 @@ export interface PeriodWindowDiagnostics {
   windowStartYmd?: string;
   officialClose?: PeriodWindowOfficialCloseDiagnostics;
   degradeReasons?: PeriodWindowDegradeReason[];
+  mode?: "close" | "live" | "degraded";
+  isComplete?: boolean;
+  missingPairs?: PeriodMissingPair[];
+}
+
+export interface PeriodMissingPair {
+  date: string;
+  symbol: string;
+  impact?: string[];
 }
 
 export interface PeriodOfficialCloseSymbolImpact {
