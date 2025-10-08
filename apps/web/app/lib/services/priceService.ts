@@ -40,6 +40,11 @@ export function __setRuntimeApiKeysForTest(keys: ApiKeys | null) {
   _runtimeKeys = keys;
 }
 
+type QuoteLike = { price: number };
+function isQuoteResult(x: unknown): x is QuoteLike {
+  return !!x && typeof (x as any).price === 'number';
+}
+
 interface RealtimeCacheEntry {
   price: number;
   ts: number;
@@ -714,7 +719,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     }
     try {
       const frozen = await fetchDailyClose(symbol, freezeEvalDay);
-      if (frozen && typeof frozen.price === 'number') {
+      if (isQuoteResult(frozen)) {
         const entry = writeRealtimeCache(symbol, frozen.price);
         return { price: frozen.price, stale: true, priceOk: true, updatedAt: entry.ts };
       }
@@ -750,7 +755,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   const yesterday = nyPrev(nyYmd(Date.now()));
   try {
     const close = await fetchDailyClose(symbol, yesterday);
-    if (close && typeof close.price === 'number') {
+    if (isQuoteResult(close)) {
       const entry = writeRealtimeCache(symbol, close.price);
       return { price: close.price, stale: true, priceOk: true, updatedAt: entry.ts };
     }
