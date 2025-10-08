@@ -10,7 +10,10 @@ export interface MissingOfficialSymbolSummary {
 }
 
 export interface MissingOfficialDateSummary {
-  date: string;
+  /** NY trading-day YYYY-MM-DD */
+  ymd: string;
+  /** @deprecated use {@link ymd} */
+  date?: string;
   symbols: MissingOfficialSymbolSummary[];
 }
 
@@ -65,8 +68,9 @@ export function summarizeMissingOfficialCloses(
 
   return Array.from(dateMap.entries())
     .map(([date, symbolMap]) => ({
+      ymd: date,
       date,
       symbols: Array.from(symbolMap.values()).sort((a, b) => a.symbol.localeCompare(b.symbol)),
     }))
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => b.ymd.localeCompare(a.ymd));
 }

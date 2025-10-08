@@ -5,7 +5,12 @@ import sortTrades from "@/lib/sortTrades";
 import { nowNY, toNY, ymdInNY } from "@/lib/timezone";
 import { evaluateCloseRequirement } from "@/lib/marketHours";
 import type { DailyResult } from "@/lib/types";
-import { isTradingDay, previousTradingDay } from "./nyDay";
+import {
+  isTradingDay,
+  previousTradingDay,
+  resolveTradingDayStr,
+  makeTradingDayRange,
+} from "./nyDay";
 
 const EPSILON = 1e-6;
 
@@ -18,7 +23,7 @@ export type MissingCloseFallback =
 
 export interface MissingCloseEntry {
   symbol: string;
-  date: string;
+  ymd: string;
   fallback: MissingCloseFallback;
 }
 
@@ -31,6 +36,12 @@ export interface PendingCloseEntry {
   date: string;
   details: PendingCloseDetail[];
   reason: "PRE_CLOSE";
+}
+
+export interface MissingCloseRangeOptions {
+  from: string;
+  to: string;
+  entries?: MissingCloseEntry[];
 }
 
 export interface CloseWindowDiagnostics {
@@ -132,6 +143,44 @@ export function mergeClosePriceMaps(...maps: ClosePriceMap[]): ClosePriceMap {
   return result;
 }
 
+function normalizeRangeBoundary(value: string): string | null {
+  if (isValidDateStr(value)) {
+    return value;
+  }
+  const normalized = toDateStr(value);
+  return normalized && isValidDateStr(normalized) ? normalized : null;
+}
+
+export async function buildMissingCloseList({
+  from,
+  to,
+  entries = [],
+}: MissingCloseRangeOptions): Promise<MissingCloseEntry[]> {
+  const start = normalizeRangeBoundary(from);
+  const end = normalizeRangeBoundary(to);
+  if (!start || !end || entries.length === 0) {
+    return [];
+  }
+
+  const [lower, upper] = start <= end ? [start, end] : [end, start];
+  const tradingDays = new Set<string>();
+  for (const day of makeTradingDayRange(lower, upper)) {
+    tradingDays.add(day);
+  }
+
+  if (tradingDays.size === 0) {
+    return [];
+  }
+
+  return entries
+    .filter((entry) => tradingDays.has(entry.ymd) && isTradingDay(entry.ymd))
+    .sort((a, b) => {
+      const dayCmp = a.ymd.localeCompare(b.ymd);
+      if (dayCmp !== 0) return dayCmp;
+      return a.symbol.localeCompare(b.symbol);
+    });
+}
+
 interface PositionState {
   qty: number;
   avgPrice: number;
@@ -150,17 +199,23 @@ export function generateDailyResults({
   closePrices,
   evalDate,
 }: DailyResultsOptions, diagnostics?: DailyResultsDiagnostics): DailyResult[] {
-  const evalDateStr = (evalDate || "").slice(0, 10);
-  if (!isValidDateStr(evalDateStr)) {
+  const trimmedEval = evalDate?.trim?.() ?? "";
+  if (trimmedEval && !isValidDateStr(trimmedEval)) {
     throw new Error(`Invalid evalDate provided: ${evalDate}`);
   }
+  const evalDateStr = resolveTradingDayStr(undefined, {
+    freeze: trimmedEval || undefined,
+  });
 
-  const freezeDate =
+  const freezeRaw =
     (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_FREEZE_DATE?.trim()) ||
     (() => {
       const freeze = (globalThis as Record<string, unknown>).NEXT_PUBLIC_FREEZE_DATE;
       return typeof freeze === "string" ? freeze.trim() : "";
     })();
+  const freezeEvalDate = freezeRaw
+    ? resolveTradingDayStr(undefined, { freeze: freezeRaw })
+    : undefined;
   const now = nowNY();
   const closeRequirement = evaluateCloseRequirement(evalDateStr, now);
   const evalIsTradingDay = isTradingDay(evalDateStr);
@@ -177,7 +232,7 @@ export function generateDailyResults({
     };
   }
   const treatRealtimeAsClose = (() => {
-    if (freezeDate) return false;
+    if (freezeEvalDate) return false;
     const nowDateStr = ymdInNY(now);
     if (nowDateStr !== evalDateStr) return false;
     const minutes = now.getHours() * 60 + now.getMinutes();
@@ -244,7 +299,7 @@ export function generateDailyResults({
     ? (() => {
         const map = new Map<string, Set<MissingCloseFallback>>();
         for (const entry of diagnostics.missingCloses) {
-          const key = `${entry.date}__${entry.symbol}`;
+          const key = `${entry.ymd}__${entry.symbol}`;
           const current = map.get(key) ?? new Set<MissingCloseFallback>();
           current.add(entry.fallback);
           map.set(key, current);
@@ -267,16 +322,16 @@ export function generateDailyResults({
     : null;
   const ensurePending = (
     symbol: string,
-    date: string,
+    tradingDate: string,
     fallback: MissingCloseFallback,
   ) => {
     if (!diagnostics || !pendingTracker) return;
-    const byDate = pendingTracker.get(date) ?? new Map<string, Set<MissingCloseFallback>>();
+    const byDate = pendingTracker.get(tradingDate) ?? new Map<string, Set<MissingCloseFallback>>();
     const set = byDate.get(symbol) ?? new Set<MissingCloseFallback>();
     if (set.has(fallback)) return;
     set.add(fallback);
     byDate.set(symbol, set);
-    pendingTracker.set(date, byDate);
+    pendingTracker.set(tradingDate, byDate);
 
     const order: Record<MissingCloseFallback, number> = {
       MARK_PRICE: 0,
@@ -284,9 +339,9 @@ export function generateDailyResults({
       AVERAGE_COST: 2,
     };
 
-    let entry = diagnostics.pendingCloses!.find((row) => row.date === date);
+    let entry = diagnostics.pendingCloses!.find((row) => row.date === tradingDate);
     if (!entry) {
-      entry = { date, details: [], reason: "PRE_CLOSE" };
+      entry = { date: tradingDate, details: [], reason: "PRE_CLOSE" };
       diagnostics.pendingCloses!.push(entry);
       diagnostics.pendingCloses!.sort((a, b) => a.date.localeCompare(b.date));
     }
@@ -323,19 +378,23 @@ export function generateDailyResults({
     })();
 
     if (!requireOfficial) {
-      if (effectiveDate === evalDateStr && evalIsTradingDay) {
-        ensurePending(symbol, date, fallback);
+      if (effectiveDate && effectiveDate === evalDateStr && evalIsTradingDay) {
+        ensurePending(symbol, effectiveDate, fallback);
       }
       return;
     }
 
-    const key = `${date}__${symbol}`;
+    if (!effectiveDate) {
+      return;
+    }
+
+    const key = `${effectiveDate}__${symbol}`;
     const set = diagTracker.get(key) ?? new Set<MissingCloseFallback>();
     if (set.has(fallback)) return;
     set.add(fallback);
     diagTracker.set(key, set);
-    diagnostics.missingCloses.push({ symbol, date, fallback });
-    if (diagnostics.closeWindow && date === diagnostics.closeWindow.date) {
+    diagnostics.missingCloses.push({ symbol, ymd: effectiveDate, fallback });
+    if (diagnostics.closeWindow && effectiveDate === diagnostics.closeWindow.date) {
       diagnostics.closeWindow.missingClose = true;
     }
   };

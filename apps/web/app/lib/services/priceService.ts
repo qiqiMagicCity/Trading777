@@ -1,6 +1,12 @@
 // apps/web/app/lib/services/priceService.ts
 
-import { resolveTradingDayStr as nyResolveTradingDayStr, ymdInNY as nyYmd, previousTradingDay as nyPrev } from '../nyDay';
+import {
+  resolveTradingDayStr as nyResolveTradingDayStr,
+  ymdInNY as nyYmd,
+  previousTradingDay as nyPrev,
+  isTradingDay as nyIsTradingDay,
+  marketBoundaries as nyMarketBoundaries,
+} from '../nyDay';
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
 import { apiQueue } from './apiQueue';
@@ -10,7 +16,7 @@ import { NoPriceError } from '../priceService';
 import { nyDateStr, toNY, NY_TZ } from '../time';
 import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
 import { migrateClosePriceMap } from '@/lib/closePriceMigration';
-import { evaluateCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
+import { evaluateCloseRequirement as evaluateMarketCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -32,6 +38,11 @@ export function __clearPriceServiceCachesForTest() {
 
 export function __setRuntimeApiKeysForTest(keys: ApiKeys | null) {
   _runtimeKeys = keys;
+}
+
+type QuoteLike = { price: number };
+function isQuoteResult(x: unknown): x is QuoteLike {
+  return !!x && typeof (x as any).price === 'number';
 }
 
 interface RealtimeCacheEntry {
@@ -301,6 +312,11 @@ export interface QuoteResult {
   updatedAt?: number;
 }
 
+export interface SkippedCloseResult {
+  skipped: true;
+  reason: CloseRequirementDecision['reason'];
+}
+
 const MAX_LOOKBACK_DAYS = 365;
 const DEFAULT_RT_CLOSE_WINDOW_MIN = 180;
 
@@ -336,18 +352,76 @@ function resolveRtCloseWindow(): number {
   return parsed;
 }
 
+export type CloseRequirementDecision =
+  | { require: false; reason: 'invalid-date'; date: null; close: null }
+  | { require: false; reason: 'non-trading-day' | 'future-date' | 'pre-close'; date: string; close: Date | null }
+  | { require: true; reason: 'post-close'; date: string; close: Date | null };
+
+export async function evaluateCloseRequirement(
+  ymd: string,
+  nowInput: Date | number = Date.now(),
+): Promise<CloseRequirementDecision> {
+  const boundaries = nyMarketBoundaries(ymd);
+  const normalized = boundaries.ymd;
+  const closeTs = boundaries.close.getTime();
+  const close = Number.isNaN(closeTs) ? null : new Date(closeTs);
+
+  if (!normalized) {
+    return { require: false, reason: 'invalid-date', date: null, close: null };
+  }
+
+  if (!nyIsTradingDay(normalized)) {
+    return { require: false, reason: 'non-trading-day', date: normalized, close };
+  }
+
+  const now = typeof nowInput === 'number' ? toNY(nowInput) : toNY(nowInput);
+  const todayStr = nyYmd(now);
+  const graceMin = resolveCloseGraceMinutes();
+  const graceMs = graceMin > 0 ? graceMin * 60_000 : 0;
+
+  if (normalized < todayStr) {
+    return { require: true, reason: 'post-close', date: normalized, close };
+  }
+  if (normalized > todayStr) {
+    return { require: false, reason: 'future-date', date: normalized, close };
+  }
+  if (close === null) {
+    return { require: false, reason: 'non-trading-day', date: normalized, close };
+  }
+
+  if (now.getTime() >= close.getTime() + graceMs) {
+    return { require: true, reason: 'post-close', date: normalized, close };
+  }
+
+  return { require: false, reason: 'pre-close', date: normalized, close };
+}
+
+let evaluateCloseRequirementImpl = evaluateCloseRequirement;
+
+export function __setEvaluateCloseRequirementForTest(
+  override: ((...args: Parameters<typeof evaluateCloseRequirement>) => Promise<CloseRequirementDecision>) | null,
+) {
+  evaluateCloseRequirementImpl = override ?? evaluateCloseRequirement;
+}
+
 // === 保留 PR 侧：确定下次开盘 & 是否允许收盘后实时价 ===
 function nextTradingOpen(date: string): Date {
   if (!parseYmd(date)) return new Date(NaN);
   const base = toNyDateTime(date, 9, 30);
   if (Number.isNaN(base.getTime())) return base;
-  const next = new Date(base.getTime());
-  next.setDate(next.getDate() + 1);
-  while (next.getDay() === 0 || next.getDay() === 6) {
-    next.setDate(next.getDate() + 1);
+  const probe = new Date(base.getTime());
+  probe.setDate(probe.getDate() + 1);
+  let guard = 0;
+  while (guard < 64) {
+    const candidateYmd = nyYmd(probe);
+    if (nyIsTradingDay(candidateYmd)) {
+      probe.setHours(9, 30, 0, 0);
+      return probe;
+    }
+    probe.setDate(probe.getDate() + 1);
+    guard += 1;
   }
-  next.setHours(9, 30, 0, 0);
-  return next;
+  return new Date(NaN);
 }
 
 function shouldUseRealtimeClose(
@@ -420,18 +494,9 @@ async function getPrevCloseWithin(
   const symbolMap = map?.[key];
   if (symbolMap && typeof symbolMap === 'object') {
     let latest: { date: string; price: number } | null = null;
-    let earliestFuture: { date: string; price: number } | null = null;
     for (const [candidateDate, candidatePrice] of Object.entries(symbolMap)) {
       if (typeof candidatePrice !== 'number') continue;
       if (candidateDate >= anchorDate) {
-        if (candidateDate > anchorDate) {
-          if (
-            !earliestFuture ||
-            new Date(candidateDate).getTime() < new Date(earliestFuture.date).getTime()
-          ) {
-            earliestFuture = { date: candidateDate, price: candidatePrice };
-          }
-        }
         continue;
       }
       if (!latest || candidateDate > latest.date) {
@@ -440,9 +505,6 @@ async function getPrevCloseWithin(
     }
     if (latest) {
       return latest;
-    }
-    if (earliestFuture) {
-      return earliestFuture;
     }
   }
 
@@ -464,13 +526,26 @@ interface FetchDailyCloseOptions {
   fallbackSource?: CachedPrice['source'];
 }
 
+function isStrictPriceMode(): boolean {
+  if (process.env.PRICE_STRICT === '1') return true;
+  const mode = process.env.SAFE_PRICE_MODE?.toLowerCase();
+  return mode === 'strict';
+}
+
 export async function fetchDailyClose(
   symbol: string,
   date: string,
   options: FetchDailyCloseOptions = {},
-): Promise<QuoteResult | null> {
+): Promise<QuoteResult | SkippedCloseResult | null> {
   const key = symbol.trim().toUpperCase();
-  const normalizedDate = date.includes('T') ? nyDateStr(date) : date;
+  const normalizedInput = date.includes('T') ? nyDateStr(date) : date;
+
+  const requirementDecision = await evaluateCloseRequirementImpl(normalizedInput);
+  const normalizedDate = requirementDecision.date ?? normalizedInput;
+
+  if (!requirementDecision.require) {
+    return { skipped: true, reason: requirementDecision.reason };
+  }
 
   try {
     const cachedPrice = await getPrice(key, normalizedDate);
@@ -527,7 +602,7 @@ export async function fetchDailyClose(
     const isToday = normalizedDate === todayNY;
     const isLatestTradingDay = normalizedDate === latestTradingDate;
     const nowNY = toNY(Date.now());
-    const requirement = evaluateCloseRequirement(normalizedDate, nowNY);
+    const requirement = evaluateMarketCloseRequirement(normalizedDate, nowNY);
     const fallbackClose = options?.fallbackClose;
     const fallbackSource = options?.fallbackSource ?? 'close_fallback';
 
@@ -594,24 +669,32 @@ export async function fetchDailyClose(
       console.warn('MISSING_CLOSE', { symbol: key, date: normalizedDate, available });
     }
 
-    const fallback = await getPrevCloseWithin(key, normalizedDate, MAX_LOOKBACK_DAYS, closeMap);
-    if (fallback) {
-      if (process.env.MONITOR === '1') {
-        const isFutureFallback = fallback.date >= normalizedDate;
-        const tag = isFutureFallback ? '[priceService] 使用未来收盘价作为回退' : '[priceService] 使用前一收盘价作为回退';
-        console.warn(tag, { symbol: key, date: normalizedDate, fallbackDate: fallback.date, price: fallback.price });
+    const strictMode = isStrictPriceMode();
+    const allowFallback = requirementDecision.require && requirementDecision.reason === 'post-close' && !strictMode;
+
+    if (allowFallback) {
+      const fallback = await getPrevCloseWithin(key, normalizedDate, MAX_LOOKBACK_DAYS, closeMap);
+      if (fallback) {
+        if (process.env.MONITOR === '1') {
+          console.warn('[priceService] 使用前一收盘价作为回退', {
+            symbol: key,
+            date: normalizedDate,
+            fallbackDate: fallback.date,
+            price: fallback.price,
+          });
+        }
+        return { price: fallback.price, stale: true, priceOk: true, updatedAt: Date.now() };
       }
-      return { price: fallback.price, stale: true, priceOk: true, updatedAt: Date.now() };
     }
 
-    if (process.env.PRICE_STRICT === '1') {
+    if (strictMode) {
       throw new NoPriceError(`missing close for ${key} ${normalizedDate}`);
     }
 
     return null;
   } catch (error) {
     console.error(`获取 ${key} 在 ${normalizedDate} 的每日收盘价时出错:`, error);
-    if (process.env.PRICE_STRICT === '1') {
+    if (isStrictPriceMode()) {
       throw error instanceof NoPriceError ? error : new NoPriceError(`missing close for ${key} ${normalizedDate}`);
     }
     return null;
@@ -621,16 +704,22 @@ export async function fetchDailyClose(
 /** 实时报价（冻结模式下直接返回冻结日收盘价） */
 let _freezeLogged = false;
 export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
-  const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
+  const freezeRaw = process.env.NEXT_PUBLIC_FREEZE_DATE?.trim();
+  const freezeEvalDay = freezeRaw
+    ? nyResolveTradingDayStr(undefined, { freeze: freezeRaw })
+    : undefined;
   const cachedRealtime = readRealtimeCache(symbol);
-  if (freezeDate) {
+  if (freezeRaw && freezeEvalDay) {
     if (!_freezeLogged) {
-      logger.info('EVAL_FREEZE', { date: freezeDate, source: 'close_prices.json' });
+      logger.info('EVAL_FREEZE', {
+        date: freezeEvalDay,
+        source: 'close_prices.json',
+      });
       _freezeLogged = true;
     }
     try {
-      const frozen = await fetchDailyClose(symbol, freezeDate);
-      if (frozen && typeof frozen.price === 'number') {
+      const frozen = await fetchDailyClose(symbol, freezeEvalDay);
+      if (isQuoteResult(frozen)) {
         const entry = writeRealtimeCache(symbol, frozen.price);
         return { price: frozen.price, stale: true, priceOk: true, updatedAt: entry.ts };
       }
@@ -666,7 +755,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
   const yesterday = nyPrev(nyYmd(Date.now()));
   try {
     const close = await fetchDailyClose(symbol, yesterday);
-    if (close && typeof close.price === 'number') {
+    if (isQuoteResult(close)) {
       const entry = writeRealtimeCache(symbol, close.price);
       return { price: close.price, stale: true, priceOk: true, updatedAt: entry.ts };
     }
@@ -684,6 +773,11 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
 
   return { priceOk: false, change: null, changePct: null };
 }
+
+export const __priceServiceInternals = {
+  getPrevCloseWithin,
+  isStrictPriceMode,
+};
 
 /** 兼容旧版别名 */
 export async function fetchRealtimePrice(symbol: string): Promise<QuoteResult> {

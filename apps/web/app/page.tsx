@@ -29,11 +29,13 @@ import {
   mergeClosePriceMaps,
   normalizeClosePriceMap,
   closePricesFromRows,
+  buildMissingCloseList,
   type DailyResultsDiagnostics,
   type PendingCloseEntry,
   type CloseWindowDiagnostics,
   type MissingCloseFallback,
   type ClosePriceMap,
+  type MissingCloseEntry,
 } from '@/lib/dailyResults';
 import { summarizeMissingCloses } from '@/app/lib/missingClose';
 import {
@@ -193,7 +195,7 @@ function areSummariesEqual(
   for (let i = 0; i < a.length; i += 1) {
     const left = a[i]!;
     const right = b[i]!;
-    if (left.date !== right.date) return false;
+    if (left.ymd !== right.ymd) return false;
     if (left.symbols.length !== right.symbols.length) return false;
     for (let j = 0; j < left.symbols.length; j += 1) {
       const ls = left.symbols[j]!;
@@ -206,6 +208,31 @@ function areSummariesEqual(
     }
   }
   return true;
+}
+
+async function toTradingMissingSummaries(
+  entries: MissingCloseEntry[],
+): Promise<MissingCloseSummary[]> {
+  if (!entries.length) {
+    return [];
+  }
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const entry of entries) {
+    const ymd = entry.ymd;
+    if (!ymd) continue;
+    if (min === null || ymd < min) min = ymd;
+    if (max === null || ymd > max) max = ymd;
+  }
+  if (!min || !max) {
+    return [];
+  }
+  const filtered = await buildMissingCloseList({
+    from: min,
+    to: max,
+    entries,
+  });
+  return summarizeMissingCloses(filtered);
 }
 
 function MissingCloseBanner({
@@ -234,14 +261,14 @@ function MissingCloseBanner({
       </p>
       <ul style={{ paddingLeft: '20px', marginTop: 0, marginBottom: '16px' }}>
         {summaries.map((summary) => (
-          <li key={summary.date} style={{ marginBottom: '6px' }}>
-            <strong style={{ color: '#ffe08a' }}>{summary.date}</strong>：
+          <li key={summary.ymd} style={{ marginBottom: '6px' }}>
+            <strong style={{ color: '#ffe08a' }}>{summary.ymd}</strong>：
             {summary.symbols.map((detail, idx) => {
               const labels = detail.fallbacks
                 .map((fb) => FALLBACK_LABELS[fb] ?? '')
                 .filter(Boolean);
               return (
-                <span key={`${summary.date}-${detail.symbol}`}>
+                <span key={`${summary.ymd}-${detail.symbol}`}>
                   {detail.symbol}
                   {labels.length > 0 ? `（${labels.join('、')}）` : ''}
                   {idx < summary.symbols.length - 1 ? '、' : ''}
@@ -345,7 +372,7 @@ function PendingCloseNotice({
   );
 }
 
-const freezeDate = process.env.NEXT_PUBLIC_FREEZE_DATE;
+const freezeInput = process.env.NEXT_PUBLIC_FREEZE_DATE?.trim() || undefined;
 
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -366,9 +393,10 @@ export default function DashboardPage() {
   const [closeWindowInfo, setCloseWindowInfo] = useState<CloseWindowDiagnostics | null>(null);
   const [pendingNoticeDismissed, setPendingNoticeDismissed] = useState(false);
   const initialTradingDay = useMemo(
-    () => (freezeDate ? freezeDate.slice(0, 10) : resolveTradingDayStr()),
-    [],
+    () => resolveTradingDayStr(undefined, { freeze: freezeInput }),
+    [freezeInput],
   );
+  const freezeTradingDay = freezeInput ? initialTradingDay : undefined;
   const summaryRef = useRef<MissingCloseSummary[]>([]);
   const officialSummaryRef = useRef<MissingOfficialDateSummary[]>([]);
   const issuesRef = useRef<PeriodHealthIssue[]>([]);
@@ -547,10 +575,10 @@ export default function DashboardPage() {
 
         try {
           let result = await fetchRealtimeQuote(pos.symbol);
-          if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
+          if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeInput) {
             const today = resolveTradingDayStr();
             const dailyClose = await fetchDailyClose(pos.symbol, today);
-            if (dailyClose) {
+            if (dailyClose && !('skipped' in dailyClose) && typeof dailyClose.price === 'number') {
               result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
             }
           }
@@ -581,8 +609,8 @@ export default function DashboardPage() {
       }
 
       if (posList.some(p => p.priceOk === false)) {
-        if (freezeDate) {
-          setError(`缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`);
+        if (freezeInput) {
+          setError(`缺少 ${freezeTradingDay} 的收盘价，请导入或编辑 close_prices.json`);
         } else {
           setError('无法获取实时价格，指标计算失败');
         }
@@ -591,9 +619,9 @@ export default function DashboardPage() {
         return;
       }
 
-      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : resolveTradingDayStr();
+      const evalDateStr = freezeTradingDay ?? resolveTradingDayStr();
 
-      if (!freezeDate) {
+      if (!freezeInput) {
         const symbols = collectSymbols(dbTrades, posList);
         const fallbackCloses = buildCloseFallbacks(posList);
         await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
@@ -618,7 +646,9 @@ export default function DashboardPage() {
       setPendingCloseInfo(pendingEntry);
       setDailyResultsCache(dailyResults);
 
-      const summaries = summarizeMissingCloses(diagnostics.missingCloses);
+      const summaries = await toTradingMissingSummaries(
+        diagnostics.missingCloses,
+      );
       updateMissingCloseState(summaries);
 
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
@@ -665,6 +695,8 @@ export default function DashboardPage() {
     updateMissingCloseState,
     updatePendingOfficialState,
     updateMissingOfficialState,
+    freezeInput,
+    freezeTradingDay,
   ]);
 
   useEffect(() => {
@@ -713,10 +745,10 @@ export default function DashboardPage() {
 
       try {
         let result = await fetchRealtimeQuote(pos.symbol);
-        if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeDate) {
+        if ((!result || typeof result.price !== 'number' || result.price === 1) && !freezeInput) {
           const today = resolveTradingDayStr();
           const dailyClose = await fetchDailyClose(pos.symbol, today);
-          if (dailyClose) {
+          if (dailyClose && !('skipped' in dailyClose) && typeof dailyClose.price === 'number') {
             result = { ...dailyClose, priceOk: dailyClose.priceOk ?? true };
           }
         }
@@ -748,13 +780,13 @@ export default function DashboardPage() {
     if (posList.some(p => p.priceOk === false)) {
       clearPeriodHealthState();
       throw new Error(
-        freezeDate
-          ? `缺少 ${freezeDate} 的收盘价，请导入或编辑 close_prices.json`
+        freezeInput
+          ? `缺少 ${freezeTradingDay} 的收盘价，请导入或编辑 close_prices.json`
           : '无法获取实时价格，指标计算失败',
       );
     }
 
-    if (!freezeDate) {
+    if (!freezeInput) {
       const symbols = collectSymbols(tradesSnapshot, posList);
       const fallbackCloses = buildCloseFallbacks(posList);
       await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
@@ -782,7 +814,9 @@ export default function DashboardPage() {
     setPendingCloseInfo(pendingEntry);
     setDailyResultsCache(dailyResults);
 
-    const summaries = summarizeMissingCloses(diagnostics.missingCloses);
+    const summaries = await toTradingMissingSummaries(
+      diagnostics.missingCloses,
+    );
     updateMissingCloseState(summaries);
 
     const rawMetrics = calcMetrics(enriched, posList, dailyResults, {
@@ -848,7 +882,7 @@ export default function DashboardPage() {
       });
       applyBreakEvenToPositions(posList, enriched);
 
-      const evalDateStr = freezeDate ? freezeDate.slice(0, 10) : resolveTradingDayStr();
+      const evalDateStr = freezeTradingDay ?? resolveTradingDayStr();
 
       const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
         await buildOfficialCloseMaps();
@@ -873,7 +907,9 @@ export default function DashboardPage() {
       setPendingNoticeDismissed(false);
       setDailyResultsCache(dailyResults);
 
-      const summaries = summarizeMissingCloses(diagnostics.missingCloses);
+      const summaries = await toTradingMissingSummaries(
+        diagnostics.missingCloses,
+      );
       updateMissingCloseState(summaries);
 
       const rawMetrics = calcMetrics(enriched, posList, dailyResults, {

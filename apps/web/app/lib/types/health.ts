@@ -6,7 +6,7 @@ export interface MissingCloseSymbolDetail {
 }
 
 export interface MissingCloseSummary {
-  date: string;
+  ymd: string;
   symbols: MissingCloseSymbolDetail[];
 }
 

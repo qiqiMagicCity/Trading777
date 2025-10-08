@@ -1,16 +1,20 @@
-import { nowNY, toNY, ymdInNY } from "@/lib/timezone";
+import { nowNY, ymdInNY } from "@/lib/timezone";
+import {
+  marketBoundaries,
+  isTradingDay as nyIsTradingDay,
+  previousTradingDay as nyPreviousTradingDay,
+  MARKET_OPEN_MINUTES,
+  MARKET_CLOSE_MINUTES,
+} from "@/app/lib/nyDay";
 
-const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-export const MARKET_OPEN_MINUTES = 9 * 60 + 30;
-export const MARKET_CLOSE_MINUTES = 16 * 60;
 const DEFAULT_CLOSE_GRACE_MIN = 0;
 
-const ADHOC_CLOSED_DATES = new Set<string>();
-
-const isoDateFromYmd = (ymd: string): Date => {
-  if (!DATE_ONLY_RE.test(ymd)) return new Date(NaN);
-  return toNY(`${ymd}T12:00:00Z`);
+export {
+  nyIsTradingDay as isTradingDay,
+  marketBoundaries,
+  nyPreviousTradingDay as previousTradingDay,
+  MARKET_OPEN_MINUTES,
+  MARKET_CLOSE_MINUTES,
 };
 
 export const resolveCloseGraceMinutes = (): number => {
@@ -24,42 +28,9 @@ export const resolveCloseGraceMinutes = (): number => {
   return parsed;
 };
 
-export const isTradingDay = (ymd: string): boolean => {
-  const base = isoDateFromYmd(ymd);
-  if (Number.isNaN(base.getTime())) return false;
-  if (ADHOC_CLOSED_DATES.has(ymd)) return false;
-  const weekday = base.getDay();
-  return weekday !== 0 && weekday !== 6;
-};
+export const marketOpenTimeNY = (ymd: string): Date => marketBoundaries(ymd).open;
 
-const offsetMinutes = (ymd: string, minutes: number): Date => {
-  const base = isoDateFromYmd(ymd);
-  if (Number.isNaN(base.getTime())) return base;
-  const d = new Date(base.getTime());
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(minutes, 0, 0);
-  return d;
-};
-
-export const marketOpenTimeNY = (ymd: string): Date =>
-  offsetMinutes(ymd, MARKET_OPEN_MINUTES);
-
-export const marketCloseTimeNY = (ymd: string): Date =>
-  offsetMinutes(ymd, MARKET_CLOSE_MINUTES);
-
-const previousTradingDayInternal = (ymd: string): string => {
-  let probe = isoDateFromYmd(ymd);
-  if (Number.isNaN(probe.getTime())) return "";
-  do {
-    probe.setDate(probe.getDate() - 1);
-  } while (!Number.isNaN(probe.getTime()) && !isTradingDay(ymdInNY(probe)));
-  return ymdInNY(probe);
-};
-
-export const previousTradingDay = (ymd: string): string => {
-  const normalized = DATE_ONLY_RE.test(ymd) ? ymd : ymdInNY(ymd);
-  return previousTradingDayInternal(normalized);
-};
+export const marketCloseTimeNY = (ymd: string): Date => marketBoundaries(ymd).close;
 
 export interface CloseRequirementState {
   date: string;
@@ -74,8 +45,9 @@ export const evaluateCloseRequirement = (
   ymd: string,
   now: Date = nowNY(),
 ): CloseRequirementState => {
-  const normalized = DATE_ONLY_RE.test(ymd) ? ymd : ymdInNY(ymd);
-  const trading = isTradingDay(normalized);
+  const boundaries = marketBoundaries(ymd);
+  const normalized = boundaries.ymd || (ymd.includes('T') ? ymdInNY(ymd) : ymd);
+  const trading = normalized ? nyIsTradingDay(normalized) : false;
   const grace = resolveCloseGraceMinutes();
   const nowTs = now.getTime();
   if (!trading) {
@@ -89,7 +61,7 @@ export const evaluateCloseRequirement = (
     };
   }
 
-  const close = marketCloseTimeNY(normalized);
+  const close = boundaries.close;
   const windowEnd = Number.isNaN(close.getTime())
     ? null
     : close.getTime() + grace * 60_000;

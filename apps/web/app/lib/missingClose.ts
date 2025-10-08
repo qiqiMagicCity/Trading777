@@ -23,11 +23,11 @@ export function summarizeMissingCloses(
     Map<string, Set<MissingCloseFallback>>
   >();
   for (const entry of entries) {
-    const bySymbol = map.get(entry.date) ?? new Map<string, Set<MissingCloseFallback>>();
+    const bySymbol = map.get(entry.ymd) ?? new Map<string, Set<MissingCloseFallback>>();
     const set = bySymbol.get(entry.symbol) ?? new Set<MissingCloseFallback>();
     set.add(entry.fallback);
     bySymbol.set(entry.symbol, set);
-    map.set(entry.date, bySymbol);
+    map.set(entry.ymd, bySymbol);
   }
   const result: MissingCloseSummary[] = [];
   for (const [date, bySymbol] of map.entries()) {
@@ -37,11 +37,11 @@ export function summarizeMissingCloses(
     }));
     symbols.sort((a, b) => a.symbol.localeCompare(b.symbol));
     result.push({
-      date,
+      ymd: date,
       symbols,
     });
   }
-  result.sort((a, b) => a.date.localeCompare(b.date));
+  result.sort((a, b) => a.ymd.localeCompare(b.ymd));
   return result;
 }
 

@@ -2,6 +2,7 @@ import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
+import { resolveTradingDayStr } from "../nyDay";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -553,7 +554,9 @@ export function getEvalDateStr(
   lastTradeDateStr?: string,
 ) {
   const freeze = process.env.NEXT_PUBLIC_FREEZE_DATE?.trim();
-  if (freeze) return freeze.slice(0, 10);
+  if (freeze) {
+    return resolveTradingDayStr(undefined, { freeze });
+  }
   const lastDaily = daily.reduce(
     (m, r) => (r.date > m ? r.date : m),
     "1900-01-01",
