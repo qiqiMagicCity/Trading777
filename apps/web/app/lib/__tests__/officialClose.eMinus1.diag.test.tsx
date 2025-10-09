@@ -71,8 +71,10 @@ describe("official close diagnostics focusing on E-1", () => {
     render(<MissingOfficialCloseBanner summaries={summaries} />);
 
     expect(
-      await screen.findByText("上一纽约交易日(E-1) 需补录：2025-03-07：AAPL、MSFT"),
+      await screen.findByText("系统按纽约交易日计算，当天(E)需要用到上一交易日(E-1)的官方昨收价。请补 E-1 的官方价，补齐后本提示自动消失。"),
     ).toBeInTheDocument();
+    const items = screen.getAllByRole("listitem");
+    expect(items[0]).toHaveTextContent("2025-03-07：AAPL、MSFT");
   });
 
   it("keeps E-1 requirement after close window on DST week", async () => {

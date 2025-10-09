@@ -17,6 +17,11 @@ export type CloseExplain = {
   missingDates?: string[];
 };
 
+export type MissingCloseEMinusOneGroup = {
+  day: string;
+  symbols: string[];
+};
+
 const YYYYMMDD = /^\d{4}-\d{2}-\d{2}$/;
 const isYYYYMMDD = (s: string) => YYYYMMDD.test(s);
 const norm = (s: string) => (s ?? "").trim().toUpperCase();
@@ -150,6 +155,30 @@ export async function explainBatch(symbols: string[], dates: string[]) {
     }
   }
   return rows;
+}
+
+export function explainMissingClose(rows: CloseExplain[]): MissingCloseEMinusOneGroup[] {
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row || row.need !== "E-1") continue;
+    if (!Array.isArray(row.missingDates)) continue;
+    for (const missing of row.missingDates) {
+      if (typeof missing !== "string" || missing.length !== 10) continue;
+      const key = missing;
+      const bucket = map.get(key) ?? new Set<string>();
+      if (row.symbol) {
+        bucket.add(String(row.symbol).toUpperCase());
+      }
+      map.set(key, bucket);
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([day, symbols]) => ({
+      day,
+      symbols: Array.from(symbols.values()).sort((a, b) => a.localeCompare(b)),
+    }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 }
 
 export async function afterImportMaintenance() {
