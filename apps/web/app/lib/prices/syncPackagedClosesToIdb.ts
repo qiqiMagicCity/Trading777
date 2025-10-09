@@ -1,9 +1,6 @@
 import { loadJson } from "@/app/lib/dataSource";
-import {
-  getPrice,
-  isOfficialImportSource,
-  putPrice,
-} from "@/lib/services/dataService";
+import { compareOfficialSourcePriority } from "@/app/lib/prices/compareOfficialSourcePriority";
+import { getPrice, putPrice } from "@/lib/services/dataService";
 
 function readFreezeFlag(): string | null {
   const envFreeze =
@@ -30,13 +27,29 @@ export function shouldSyncPackagedToIdb(): boolean {
 export interface SyncPackagedClosesStats {
   total: number;
   inserted: number;
-  skipped: number;
+  skipped: {
+    total: number;
+    higherPriority: number;
+    same: number;
+  };
 }
 
-let lastSyncStats: SyncPackagedClosesStats = { total: 0, inserted: 0, skipped: 0 };
+function createEmptyStats(): SyncPackagedClosesStats {
+  return {
+    total: 0,
+    inserted: 0,
+    skipped: { total: 0, higherPriority: 0, same: 0 },
+  };
+}
+
+let lastSyncStats: SyncPackagedClosesStats = createEmptyStats();
 
 export function getLastPackagedSyncStats(): SyncPackagedClosesStats {
-  return { ...lastSyncStats };
+  return {
+    total: lastSyncStats.total,
+    inserted: lastSyncStats.inserted,
+    skipped: { ...lastSyncStats.skipped },
+  };
 }
 
 function isValidDate(value: unknown): value is string {
@@ -49,18 +62,20 @@ function isFiniteNumber(value: unknown): value is number {
 
 export async function syncPackagedClosesToIdb(): Promise<SyncPackagedClosesStats> {
   if (!shouldSyncPackagedToIdb()) {
-    lastSyncStats = { total: 0, inserted: 0, skipped: 0 };
+    lastSyncStats = createEmptyStats();
     return lastSyncStats;
   }
   try {
     const data = await loadJson("close_prices");
     if (!data || typeof data !== "object") {
-      lastSyncStats = { total: 0, inserted: 0, skipped: 0 };
+      lastSyncStats = createEmptyStats();
       return lastSyncStats;
     }
 
     const tasks: Promise<void>[] = [];
-    let skipped = 0;
+    let skippedTotal = 0;
+    let skippedHigherPriority = 0;
+    let skippedSame = 0;
     let inserted = 0;
     let total = 0;
     for (const [rawSymbol, rawDates] of Object.entries(
@@ -76,9 +91,21 @@ export async function syncPackagedClosesToIdb(): Promise<SyncPackagedClosesStats
         total += 1;
         try {
           const existing = await getPrice(symbol, rawDate);
-          if (existing && isOfficialImportSource(existing.source)) {
-            skipped += 1;
-            continue;
+          if (existing) {
+            const priority = compareOfficialSourcePriority(
+              existing.source,
+              "official/packaged",
+            );
+            if (priority < 0) {
+              skippedHigherPriority += 1;
+              skippedTotal += 1;
+              continue;
+            }
+            if (priority === 0 && Number(existing.close) === rawClose) {
+              skippedSame += 1;
+              skippedTotal += 1;
+              continue;
+            }
           }
         } catch (error) {
           console.warn("[syncPackagedClosesToIdb] read existing price failed", error);
@@ -99,11 +126,19 @@ export async function syncPackagedClosesToIdb(): Promise<SyncPackagedClosesStats
     if (tasks.length > 0) {
       await Promise.all(tasks);
     }
-    lastSyncStats = { total, inserted, skipped };
+    lastSyncStats = {
+      total,
+      inserted,
+      skipped: {
+        total: skippedTotal,
+        higherPriority: skippedHigherPriority,
+        same: skippedSame,
+      },
+    };
     return lastSyncStats;
   } catch (err) {
     console.warn("[syncPackagedClosesToIdb] failed", err);
-    lastSyncStats = { total: 0, inserted: 0, skipped: 0 };
+    lastSyncStats = createEmptyStats();
     return lastSyncStats;
   }
 }

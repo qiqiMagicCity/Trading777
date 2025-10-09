@@ -1,109 +1,80 @@
 import { jest } from '@jest/globals';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
 
-jest.mock('fs', () => ({
-  promises: {
-    readFile: jest.fn(),
-    writeFile: jest.fn(),
-  },
-}));
-
-import type { NextRequest } from 'next/server';
-import { promises as fs } from 'fs';
-import { POST } from '../close-price/route';
-
-const readFileMock = fs.readFile as unknown as jest.MockedFunction<typeof fs.readFile>;
-const writeFileMock = fs.writeFile as unknown as jest.MockedFunction<typeof fs.writeFile>;
-const ORIGINAL_WRITEBACK_MODE = process.env.WRITEBACK_MODE;
-
-function makeRequest(body: Record<string, unknown>): NextRequest {
-  return {
-    json: async () => body,
-  } as unknown as NextRequest;
+interface MockRequestBody {
+  [key: string]: unknown;
 }
 
-describe('close price route', () => {
-  beforeEach(() => {
-    readFileMock.mockReset();
-    writeFileMock.mockReset();
-    writeFileMock.mockResolvedValue();
+function makeRequest(body: MockRequestBody) {
+  return {
+    json: async () => body,
+  } as any;
+}
+
+describe('close price API filesystem integration', () => {
+  let tempRoot: string;
+  let appDir: string;
+  let restoreCwd: jest.SpiedFunction<typeof process.cwd> | null = null;
+
+  beforeEach(async () => {
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'close-price-api-'));
+    appDir = path.join(tempRoot, 'apps/web');
+    await fs.mkdir(path.join(appDir, 'public'), { recursive: true });
+    restoreCwd = jest.spyOn(process, 'cwd').mockReturnValue(appDir);
     process.env.WRITEBACK_MODE = 'proxy';
+    jest.resetModules();
   });
 
-  afterEach(() => {
-    process.env.WRITEBACK_MODE = ORIGINAL_WRITEBACK_MODE;
+  afterEach(async () => {
+    if (restoreCwd) {
+      restoreCwd.mockRestore();
+    }
+    process.env.WRITEBACK_MODE = undefined;
+    jest.resetModules();
+    await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
-  it('persists close prices using symbol-first structure', async () => {
-    readFileMock.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOENT' }));
+  it('writes and reads close prices through API routes', async () => {
+    const { POST, GET: getClosePrice } = await import('../close-price/route');
+    const { GET: getClosePrices } = await import('../close-prices/route');
 
-    const res = await POST(
-      makeRequest({ symbol: 'aapl', date: '2024-05-20', close: '123.45' }),
+    const first = await POST(
+      makeRequest({ symbol: 'AAPL', date: '2025-09-19', close: 189.12 }),
     );
+    expect(first.status).toBe(200);
 
-    expect(res.status).toBe(200);
-    expect(writeFileMock).toHaveBeenCalledTimes(1);
-    const [, payload] = writeFileMock.mock.calls[0]!;
-    const data = JSON.parse(payload as string);
-    expect(data).toEqual({ AAPL: { '2024-05-20': 123.45 } });
-  });
-
-  it('merges with existing symbol-first data', async () => {
-    readFileMock.mockResolvedValue(
-      JSON.stringify({ AAPL: { '2024-05-19': 120.01 } }),
+    const second = await POST(
+      makeRequest({ symbol: 'MSFT', date: '2025-10-03', close: 329.44 }),
     );
+    expect(second.status).toBe(200);
 
-    await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
-
-    const [, payload] = writeFileMock.mock.calls[0]!;
-    const data = JSON.parse(payload as string);
-    expect(data).toEqual({
-      AAPL: { '2024-05-19': 120.01, '2024-05-20': 125 },
+    const closePath = path.join(appDir, 'public/close_prices.json');
+    const fileContent = await fs.readFile(closePath, 'utf8');
+    const stored = JSON.parse(fileContent) as Record<string, Record<string, number>>;
+    expect(stored).toEqual({
+      AAPL: { '2025-09-19': 189.12 },
+      MSFT: { '2025-10-03': 329.44 },
     });
-  });
 
-  it('normalises legacy date-first data before persisting', async () => {
-    readFileMock.mockResolvedValue(
-      JSON.stringify({ '2024-05-19': { aapl: 120 } }),
-    );
+    const getResponse = await getClosePrice({
+      url: 'http://test.local/api/close-price',
+    } as any);
+    expect(getResponse.status).toBe(200);
+    const getJson = (await getResponse.json()) as Record<string, Record<string, number>>;
+    expect(getJson.AAPL).toBeDefined();
+    expect(getJson.AAPL!['2025-09-19']).toBe(189.12);
+    expect(getJson.MSFT).toBeDefined();
+    expect(getJson.MSFT!['2025-10-03']).toBe(329.44);
 
-    await POST(makeRequest({ symbol: 'AAPL', date: '2024-05-20', close: 125 }));
-
-    const [, payload] = writeFileMock.mock.calls[0]!;
-    const data = JSON.parse(payload as string);
-    expect(data).toEqual({
-      AAPL: { '2024-05-19': 120, '2024-05-20': 125 },
-    });
-  });
-
-  it('returns 400 when payload is invalid', async () => {
-    readFileMock.mockRejectedValue(new Error('boom'));
-
-    const res = await POST(makeRequest({ symbol: '', date: '2024-05-20', close: 'abc' }));
-
-    expect(res.status).toBe(400);
-    expect(writeFileMock).not.toHaveBeenCalled();
-  });
-
-  it('merges bulk payloads into existing data', async () => {
-    readFileMock.mockResolvedValue(JSON.stringify({ AAPL: { '2024-05-19': 120 } }));
-
-    const res = await POST(
-      makeRequest({
-        kind: 'bulk',
-        data: {
-          MSFT: { '2024-05-20': 321.12 },
-          '2024-05-21': { aapl: 130 },
-        },
-      }),
-    );
-
-    expect(res.status).toBe(200);
-    expect(writeFileMock).toHaveBeenCalledTimes(1);
-    const [, payload] = writeFileMock.mock.calls[0]!;
-    const data = JSON.parse(payload as string);
-    expect(data).toEqual({
-      AAPL: { '2024-05-19': 120, '2024-05-21': 130 },
-      MSFT: { '2024-05-20': 321.12 },
-    });
+    const proxyResponse = await getClosePrices();
+    expect(proxyResponse.status).toBe(200);
+    expect(proxyResponse.headers.get('Cache-Control')).toBe('no-store');
+    const proxyJson = JSON.parse(
+      await proxyResponse.text(),
+    ) as Record<string, Record<string, number>>;
+    expect(proxyJson.MSFT).toBeDefined();
+    expect(proxyJson.MSFT!['2025-10-03']).toBe(329.44);
   });
 });

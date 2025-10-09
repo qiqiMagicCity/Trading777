@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
-import path from 'path';
 import { getWritebackMode } from '@/app/lib/prices/writebackConfig';
+import {
+  getPublicPathCandidates,
+  resolvePublicPath,
+} from '@/app/lib/server/publicPath';
 
-const FILE_PATH = path.join(process.cwd(), 'apps/web/public/close_prices.json');
-const DAILY_RESULTS_PATH = path.join(process.cwd(), 'apps/web/public/dailyResult.json');
+const CLOSE_PRICE_PATH = resolvePublicPath('close_prices.json');
+const CLOSE_PRICE_CANDIDATES = getPublicPathCandidates('close_prices.json');
+const DAILY_RESULTS_PATH = resolvePublicPath('dailyResult.json');
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type ClosePriceMap = Record<string, Record<string, number>>;
@@ -94,7 +98,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(payload);
   }
 
-  const payload = await readJson(FILE_PATH, {} as Record<string, unknown>);
+  const payload = await readJson(CLOSE_PRICE_PATH, {} as Record<string, unknown>);
   return NextResponse.json(payload);
 }
 
@@ -117,9 +121,12 @@ export async function POST(req: NextRequest) {
       if (Object.keys(incoming).length === 0) {
         return new Response(JSON.stringify({ error: 'empty payload' }), { status: 400 });
       }
-      const existingRaw = await readJson(FILE_PATH, {} as Record<string, unknown>);
+      const existingRaw = await readJson(
+        CLOSE_PRICE_PATH,
+        {} as Record<string, unknown>,
+      );
       const merged = mergeSymbolMaps(toSymbolFirstMap(existingRaw), incoming);
-      await fs.writeFile(FILE_PATH, JSON.stringify(merged, null, 2), 'utf8');
+      await fs.writeFile(CLOSE_PRICE_PATH, JSON.stringify(merged, null, 2), 'utf8');
       const entries = Object.values(incoming).reduce(
         (count, byDate) => count + Object.keys(byDate).length,
         0,
@@ -137,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     let data: ClosePriceMap = {};
     try {
-      const txt = await fs.readFile(FILE_PATH, 'utf8');
+      const txt = await fs.readFile(CLOSE_PRICE_PATH, 'utf8');
       data = toSymbolFirstMap(JSON.parse(txt || '{}'));
     } catch {
       data = {};
@@ -145,11 +152,14 @@ export async function POST(req: NextRequest) {
 
     (data[symbol] ??= {})[date] = close;
 
-    await fs.writeFile(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+    await fs.writeFile(CLOSE_PRICE_PATH, JSON.stringify(data, null, 2), 'utf8');
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('save close price error', err);
-    return new Response(JSON.stringify({ error: 'internal error' }), { status: 500 });
+    const errorMessage = `failed to write close_prices.json. searched: ${CLOSE_PRICE_CANDIDATES.join(
+      ', ',
+    )}`;
+    return new Response(JSON.stringify({ error: errorMessage }), { status: 500 });
   }
 }
 

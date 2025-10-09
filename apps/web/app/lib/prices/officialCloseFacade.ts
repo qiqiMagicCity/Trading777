@@ -16,6 +16,10 @@ import {
   getClosePricesUrl as baseGetClosePricesUrl,
 } from "@/app/lib/prices/closePricesFetch";
 import {
+  isHigherPriority,
+  normalizeOfficialSourceTag,
+} from "@/app/lib/prices/compareOfficialSourcePriority";
+import {
   CLOSE_PRICES_VERSION_EVENT,
   readClosePricesVersion,
   readClosePricesVersionMeta,
@@ -60,18 +64,6 @@ export function getClosePricesFetchInfo(options?: { version?: string }) {
   return baseGetClosePricesFetchInfo(options);
 }
 
-function normalizeSource(value: string | undefined, fallback: string): string {
-  const trimmed = value?.trim();
-  if (!trimmed) return fallback;
-  return trimmed;
-}
-
-function isImportSource(source: string | undefined): boolean {
-  if (!source) return false;
-  const normalized = source.trim().toLowerCase();
-  return normalized.startsWith("official/import");
-}
-
 function ensureEntryContainer<T>(
   map: Record<string, Record<string, T>>,
   symbol: string,
@@ -90,10 +82,13 @@ function upsertEntry(
   entry: OfficialCloseEntry,
 ): void {
   const target = ensureEntryContainer(detail, symbol);
-  const normalizedSource = normalizeSource(entry.source, "official/import");
   const existing = target[date];
-  if (existing && isImportSource(existing.source) && entry.fromLayer !== "overlay") {
-    return;
+  const normalizedSource = normalizeOfficialSourceTag(entry.source ?? "official/import");
+  if (existing && entry.fromLayer !== "overlay") {
+    const existingSource = normalizeOfficialSourceTag(existing.source);
+    if (!isHigherPriority(normalizedSource, existingSource)) {
+      return;
+    }
   }
   target[date] = {
     price: entry.price,

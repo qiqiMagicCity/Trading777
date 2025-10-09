@@ -211,7 +211,9 @@ export default function ClosePriceDebugger() {
             </p>
             <p>触发来源：{formatReason(stats.reason)}</p>
             <p>
-              播种跳过：{stats.seedStats.skipped} / {stats.seedStats.total}，
+              播种跳过：{stats.seedStats.skipped.total}
+              （高优先 {stats.seedStats.skipped.higherPriority}、同值
+              {stats.seedStats.skipped.same}） / {stats.seedStats.total}，
               写入：{stats.seedStats.inserted}
             </p>
             <p>fallback map 条目：{stats.fallbackCount}</p>
