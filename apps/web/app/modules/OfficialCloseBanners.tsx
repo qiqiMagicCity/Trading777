@@ -14,6 +14,7 @@ import {
   waitOfficialClosesReady,
 } from "@/app/lib/prices/officialCloseFacade";
 import { nowNY, startOfWeekNY, ymdInNY } from "@/lib/timezone";
+import { previousTradingDay, resolveTradingDayStr } from "@/app/lib/nyDay";
 
 type MissingOfficialCloseMap = Record<string, MissingOfficialSymbolSummary[]>;
 
@@ -99,12 +100,7 @@ export function MissingOfficialCloseBanner({
   summaries?: MissingOfficialDateSummary[];
 }) {
   const { summaries } = useMissingOfficialCloses(summariesProp);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  if (!summaries.length) return null;
-
-  const toggle = (date: string) => {
-    setExpanded((prev) => ({ ...prev, [date]: !prev[date] }));
-  };
+  const [copied, setCopied] = useState(false);
 
   const now = nowNY();
   const defaultFrom = ymdInNY(startOfWeekNY(now));
@@ -122,14 +118,51 @@ export function MissingOfficialCloseBanner({
   const viewAllHref =
     `/diagnostics/official-closes?status=missing&from=${defaultFrom}&to=${defaultTo}&impacts=${impactFilter}` +
     (symbolFilter ? `&symbols=${encodeURIComponent(symbolFilter)}` : "");
-  const eMinusOneSummary = summaries
-    .map((summary) => {
-      const symbols = Array.from(
-        new Set(summary.symbols.map((item) => item.symbol).filter(Boolean)),
-      ).sort((a, b) => a.localeCompare(b));
-      return `${summary.ymd}：${symbols.join("、")}`;
-    })
-    .join("；");
+  const grouped = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const summary of summaries) {
+      const day = summary?.ymd ?? summary?.date;
+      if (!day) continue;
+      const bucket = map.get(day) ?? new Set<string>();
+      for (const symbol of summary.symbols ?? []) {
+        if (!symbol?.symbol) continue;
+        bucket.add(symbol.symbol.toUpperCase());
+      }
+      if (bucket.size > 0) {
+        map.set(day, bucket);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([day, set]) => ({
+        day,
+        symbols: Array.from(set.values()).sort((a, b) => a.localeCompare(b)),
+      }))
+      .sort((a, b) => a.day.localeCompare(b.day));
+  }, [summaries]);
+
+  if (!grouped.length) return null;
+
+  const copyPayload = grouped.map((item) => `${item.day}：${item.symbols.join("、")}`).join("\n");
+
+  const handleCopy = useCallback(async () => {
+    if (!copyPayload) return;
+    try {
+      await navigator.clipboard?.writeText(copyPayload);
+      setCopied(true);
+    } catch (err) {
+      console.warn("[OfficialCloseBanners] copy failed", err);
+    }
+  }, [copyPayload]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const evalDay = resolveTradingDayStr(now);
+  const prevDay = previousTradingDay(evalDay);
+  const debugHref = `/debug/close?eval=${encodeURIComponent(evalDay)}${prevDay ? `&prev=${encodeURIComponent(prevDay)}` : ""}`;
 
   return (
     <div
@@ -146,87 +179,73 @@ export function MissingOfficialCloseBanner({
     >
       <div
         style={{
-          alignItems: "center",
+          alignItems: "flex-start",
           display: "flex",
+          flexWrap: "wrap",
           justifyContent: "space-between",
           gap: 12,
         }}
       >
-        <h3 style={{ margin: 0, color: "#ffe082" }}>官方收盘价缺失提醒</h3>
-        <Link
-          href={viewAllHref}
-          style={{ color: "#ffd54f", fontSize: "0.9rem", textDecoration: "underline" }}
-          data-testid="missing-official-view-all"
-        >
-          查看全部缺口
-        </Link>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <h3 style={{ margin: 0, color: "#ffe082" }}>官方收盘价缺失提醒</h3>
+          <p style={{ margin: 0, color: "#fff8e1", lineHeight: 1.6 }}>
+            系统按纽约交易日计算，当天(E)需要用到上一交易日(E-1)的官方昨收价。请补 E-1 的官方价，补齐后本提示自动消失。
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={handleCopy}
+            style={{
+              background: "rgba(255, 214, 102, 0.25)",
+              border: "1px solid rgba(255, 214, 102, 0.6)",
+              borderRadius: 6,
+              color: "#263238",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              padding: "6px 10px",
+            }}
+            data-testid="missing-official-copy"
+          >
+            复制待补清单
+          </button>
+          <Link
+            href={debugHref}
+            style={{
+              alignItems: "center",
+              background: "rgba(255, 214, 102, 0.15)",
+              border: "1px solid rgba(255, 214, 102, 0.4)",
+              borderRadius: 6,
+              color: "#ffd54f",
+              display: "inline-flex",
+              fontSize: "0.85rem",
+              padding: "6px 10px",
+              textDecoration: "none",
+            }}
+          >
+            为什么缺价？
+          </Link>
+          <Link
+            href={viewAllHref}
+            style={{ color: "#ffd54f", fontSize: "0.9rem", textDecoration: "underline", alignSelf: "center" }}
+            data-testid="missing-official-view-all"
+          >
+            查看全部缺口
+          </Link>
+        </div>
       </div>
-      {eMinusOneSummary && (
-        <p style={{ margin: "0 0 12px", color: "#fff8e1" }}>
-          上一纽约交易日(E-1) 需补录：{eMinusOneSummary}
-        </p>
-      )}
-      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {summaries.map((summary) => {
-          const impacts = Array.from(
-            new Set(summary.symbols.flatMap((item) => item.impact)),
-          ).sort((a, b) => a.localeCompare(b));
-          const impactText = impacts.length ? `影响：${impacts.join("、")}` : "";
-          const symbolList = summary.symbols.map((item) => item.symbol).join("、");
-          const isExpanded = Boolean(expanded[summary.ymd]);
-          return (
-            <li
-              key={summary.ymd}
-              style={{
-                borderBottom: "1px solid rgba(255, 214, 102, 0.3)",
-                padding: "8px 0",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => toggle(summary.ymd)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#ffe082",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: 0,
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>{summary.ymd}</span>
-                <span>{symbolList}</span>
-                {impactText && (
-                  <span
-                    style={{
-                      color: "#ffecb3",
-                      fontSize: "0.85rem",
-                      opacity: 0.9,
-                    }}
-                  >
-                    {impactText}
-                  </span>
-                )}
-                <span style={{ color: "#ffe082", fontSize: "0.75rem" }}>
-                  {isExpanded ? "收起" : "展开"}
-                </span>
-              </button>
-              {isExpanded && (
-                <ul style={{ margin: "8px 0 0 12px", padding: 0, listStyle: "disc" }}>
-                  {summary.symbols.map((item) => (
-                    <li key={`${summary.ymd}-${item.symbol}`} style={{ marginBottom: 4 }}>
-                      <strong>{item.symbol}</strong>：
-                      {item.impact.length ? item.impact.join("、") : "影响未指定"}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          );
-        })}
+      <ul style={{ listStyle: "disc", margin: "12px 0 0", paddingLeft: 20 }}>
+        {grouped.map((item) => (
+          <li key={item.day} style={{ marginBottom: 6, color: "#fff8e1" }}>
+            <strong>{item.day}</strong>：{item.symbols.join("、")}
+          </li>
+        ))}
       </ul>
+      {copied && (
+        <div style={{ marginTop: 8, color: "#ffe082", fontSize: "0.8rem" }} role="status">
+          已复制到剪贴板
+        </div>
+      )}
     </div>
   );
 }

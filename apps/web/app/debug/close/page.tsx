@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   explainBatch,
   afterImportMaintenance,
+  explainMissingClose,
 } from "@/app/lib/diagnostics/explainMissingClose";
 
 const DEF_SYMBOLS =
@@ -11,47 +13,59 @@ const DEF_SYMBOLS =
 const DEF_DATES = "2025-09-19,2025-10-03,2025-10-06";
 
 export default function ClosePriceDebugger() {
+  const searchParams = useSearchParams();
+  const queryEval = (searchParams.get("eval") ?? "").trim();
+  const queryPrev = (searchParams.get("prev") ?? "").trim();
+  const initialDates = useMemo(() => {
+    const parts = [queryEval, queryPrev].filter(Boolean);
+    if (!parts.length) return DEF_DATES;
+    return Array.from(new Set(parts)).join(",");
+  }, [queryEval, queryPrev]);
+
   const [symbols, setSymbols] = useState(DEF_SYMBOLS);
-  const [dates, setDates] = useState(DEF_DATES);
+  const [dates, setDates] = useState(initialDates);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const hasAutoRun = useRef(false);
 
-  const eMinusOneSummary = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const row of rows) {
-      if (row?.need !== "E-1") continue;
-      if (!Array.isArray(row?.missingDates)) continue;
-      for (const missing of row.missingDates) {
-        if (typeof missing !== "string" || missing.length !== 10) continue;
-        const bucket = map.get(missing) ?? new Set<string>();
-        bucket.add(String(row.symbol ?? "").toUpperCase());
-        map.set(missing, bucket);
+  const grouped = useMemo(() => explainMissingClose(rows), [rows]);
+  const eMinusOneSummary = useMemo(
+    () => grouped.map((item) => `${item.day}：${item.symbols.join("、")}`).join("；"),
+    [grouped],
+  );
+
+  const runWith = useCallback(
+    async (symbolInput: string, dateInput: string) => {
+      setLoading(true);
+      try {
+        await afterImportMaintenance();
+        const ss = symbolInput
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const ds = dateInput
+          .split(",")
+          .map((d) => d.trim())
+          .filter(Boolean);
+        const result = await explainBatch(ss, ds);
+        setRows(result);
+      } finally {
+        setLoading(false);
       }
-    }
-    return Array.from(map.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, symbols]) => `${date}：${Array.from(symbols).sort().join("、")}`)
-      .join("；");
-  }, [rows]);
+    },
+    [],
+  );
 
-  const onRun = async () => {
-    setLoading(true);
-    try {
-      await afterImportMaintenance();
-      const ss = symbols
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const ds = dates
-        .split(",")
-        .map((d) => d.trim())
-        .filter(Boolean);
-      const result = await explainBatch(ss, ds);
-      setRows(result);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const onRun = useCallback(() => {
+    void runWith(symbols, dates);
+  }, [runWith, symbols, dates]);
+
+  useEffect(() => {
+    if (hasAutoRun.current) return;
+    if (!queryEval) return;
+    hasAutoRun.current = true;
+    void runWith(DEF_SYMBOLS, initialDates);
+  }, [initialDates, queryEval, runWith]);
 
   return (
     <div className="p-6 space-y-4">

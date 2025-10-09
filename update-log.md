@@ -350,3 +350,8 @@
   - `noStaticImport.fails.test.ts` 利用 ripgrep 断言仓库不再存在对 `close_prices.json` 的静态 import/require。
   - `officialClose.eMinus1.diag.test.ts` 覆盖 E/E-1 缺口诊断、DST 周前一交易日推导与黄条文案。
 - 验收建议：依次执行 `npm test -- apps/web/app/lib/__tests__/closePrices.loader.cache.test.ts --runInBand`、`npm test -- apps/web/app/lib/__tests__/noStaticImport.fails.test.ts --runInBand` 与 `npm test -- apps/web/app/lib/__tests__/officialClose.eMinus1.diag.test.ts --runInBand`，确认全部绿色后再做集成回归。
+
+## 2025-11-20 黄条聚焦 E-1 缺口与诊断联动
+- 首页官方收盘价黄条仅按上一纽约交易日（E-1）分组展示，提供“复制待补清单”快速复制 `YYYY-MM-DD：符号、符号` 列表，并新增 “为什么缺价？” 直达 `/debug/close?eval=E&prev=E-1`。解释文案更新为“系统按纽约交易日计算...”以明确补价口径。
+- `/debug/close` 支持读取 `?eval=&prev=` 参数自动预填 E/E-1，页面加载后自动扫描并沿用新的 E-1 汇总，便于排查缺口。
+- `explainMissingClose` 输出 `{ day, symbols[] }` 聚合，黄条与诊断页复用同一分组逻辑；补充单测覆盖 E-1 文案与复制格式。
