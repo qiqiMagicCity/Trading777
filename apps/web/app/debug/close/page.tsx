@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   explainBatch,
   afterImportMaintenance,
@@ -15,6 +15,24 @@ export default function ClosePriceDebugger() {
   const [dates, setDates] = useState(DEF_DATES);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const eMinusOneSummary = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const row of rows) {
+      if (row?.need !== "E-1") continue;
+      if (!Array.isArray(row?.missingDates)) continue;
+      for (const missing of row.missingDates) {
+        if (typeof missing !== "string" || missing.length !== 10) continue;
+        const bucket = map.get(missing) ?? new Set<string>();
+        bucket.add(String(row.symbol ?? "").toUpperCase());
+        map.set(missing, bucket);
+      }
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, symbols]) => `${date}：${Array.from(symbols).sort().join("、")}`)
+      .join("；");
+  }, [rows]);
 
   const onRun = async () => {
     setLoading(true);
@@ -60,6 +78,11 @@ export default function ClosePriceDebugger() {
         </button>
       </div>
       <table className="w-full text-sm border">
+        {eMinusOneSummary && (
+          <caption className="caption-top text-left text-amber-700 font-medium">
+            上一纽约交易日(E-1) 需补录：{eMinusOneSummary}
+          </caption>
+        )}
         <thead className="bg-gray-50">
           <tr>
             <th className="p-2 border">symbol</th>

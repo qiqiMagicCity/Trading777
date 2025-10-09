@@ -340,3 +340,13 @@
 - 处理：将官方收盘价相关 Banner 组件抽离到 `app/modules/OfficialCloseBanners.tsx` 独立导出，`page.tsx` 仅保留默认导出；同步更新引用与测试用例路径，并补齐 `MissingOfficialCloseDiagnostics`、周期诊断等 TypeScript 类型缺失项以通过严格校验。
 - 结果：`npm run build` 正常完成，相关 UI/模块测试（黄条/蓝条生命周期、周期退化、缺口治理面板）全部通过。
 
+
+## 2025-10-08 官方昨收缓存与诊断修复
+- `loadJson('close_prices')` 启用强制版本化拉取与 `cache: 'no-store'`，优先命中最新 close_prices.json；请求失败时改从 IndexedDB 官方价表回填，并删除一切静态 import/require 回退，若仍缺数据则抛出“请补 E-1 官方昨收”提示。
+- `importClosePrices` 成功后自动刷新 `close_prices_version`，确保导入的新数据立即生效。
+- 诊断链路聚焦上一纽约交易日（E-1）：`explainClose` 新增 `need='E-1'` 标记与缺口日期列表，黄条与 `/debug/close` 统一渲染“上一纽约交易日(E-1) 需补录：YYYY-MM-DD：Symbol...” 的提示文案。
+- 新增单测：
+  - `closePrices.loader.cache.test.ts` 覆盖版本化 + no-store 行为与二次拉取命中新数据。
+  - `noStaticImport.fails.test.ts` 利用 ripgrep 断言仓库不再存在对 `close_prices.json` 的静态 import/require。
+  - `officialClose.eMinus1.diag.test.ts` 覆盖 E/E-1 缺口诊断、DST 周前一交易日推导与黄条文案。
+- 验收建议：依次执行 `npm test -- apps/web/app/lib/__tests__/closePrices.loader.cache.test.ts --runInBand`、`npm test -- apps/web/app/lib/__tests__/noStaticImport.fails.test.ts --runInBand` 与 `npm test -- apps/web/app/lib/__tests__/officialClose.eMinus1.diag.test.ts --runInBand`，确认全部绿色后再做集成回归。
