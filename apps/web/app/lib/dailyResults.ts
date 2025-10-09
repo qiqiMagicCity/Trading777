@@ -16,14 +16,16 @@ const EPSILON = 1e-6;
 
 export type Ymd = `${number}-${number}-${number}`;
 
-export interface ClosePriceBucket {
-  // 仅允许日期键（YYYY-MM-DD）存储数值价格
-  [day in Ymd]?: number;
-  // 价格来源元数据（仅用于调试/诊断，不参与指标计算）
-  __sources?: Record<Ymd, string>;
-}
-
 export const isYmd = (k: string): k is Ymd => /^\d{4}-\d{2}-\d{2}$/.test(k);
+
+/**
+ * 只允许“YYYY-MM-DD”作为价格键；__sources 用于记录来源元信息。
+ * 注意：使用 type 别名承载映射类型，避免 interface + 映射类型的语法错误。
+ */
+export type ClosePriceBucket =
+  Partial<Record<Ymd, number>> & {
+    __sources?: Partial<Record<Ymd, string>>;
+  };
 
 export type ClosePriceMap = Record<string, ClosePriceBucket>;
 
