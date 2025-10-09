@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2025-11-12
+- 修复 close_prices 导入一致性：
+  - `buildOfficialCloseMaps` 统一以 IDB → packaged → overlay 顺序合并，保留 `__sources` 元信息并阻止 `official/import` 被非 overlay 覆写。
+  - `loadJson('close_prices')` 支持 basePath/assetPrefix，成功拉取后依据 ETag/内容哈希刷新 `close_prices_version`，导入成功也立即写入最新版本。
+  - `importClosePrices` 在非只读环境写回 `/api/close-price`，并在导入结果中提示“本地生效/待写回”；写回成功后立刻重建官方价映射并广播版本事件。
+  - `syncPackagedClosesToIdb` 播种前检查 IDB，跳过覆盖用户导入的 `official/import` 条目。
+  - `/debug/close` 页面展示当前 version 与请求前缀，提示可通过 `__sources` 观察命中层。
+- 新增 `officialClose.consistency.fix.test.ts` 覆盖 overlay 优先级、版本刷新、basePath 前缀、播种保护与导入写回回归场景。
+
 ## 2025-11-11
 - 更正【持仓列表-当日盈亏】口径：新增两桶法专用 `buildIntradayFloatingPnlMap`，前端改读浮动盈亏并更新列标题为“当日浮动盈亏”，排除今日已实现贡献，补充分项断言确保部分平仓、翻向与纯过夜场景均按四位精度返回。
 

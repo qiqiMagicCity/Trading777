@@ -6,7 +6,7 @@ if (typeof globalThis.structuredClone !== "function") {
     value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
-export type OfficialCloseOverlaySource = "official_overlay";
+export type OfficialCloseOverlaySource = "official/import/overlay";
 
 export interface OfficialCloseOverlayRecord {
   symbol: string;
@@ -176,7 +176,7 @@ export async function putOfficialCloseOverlays(
       price,
       tsCreated: existing?.tsCreated ?? now,
       tsUpdated: now,
-      source: "official_overlay",
+      source: "official/import/overlay",
     });
   }
   if (normalized.size === 0) return [];
@@ -235,7 +235,9 @@ export function overlayEntriesToMap(
     if (!map[entry.symbol]) {
       map[entry.symbol] = {};
     }
-    map[entry.symbol]![entry.date] = entry.price;
+    const bucket = map[entry.symbol]!;
+    bucket[entry.date] = entry.price;
+    (bucket.__sources ??= {})[entry.date] = entry.source;
   }
   return map;
 }

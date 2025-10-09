@@ -1,5 +1,13 @@
 import "fake-indexeddb/auto";
 
+jest.mock("@/app/lib/prices/officialCloseFacade", () => ({
+  refreshOfficialCloseMaps: jest.fn().mockResolvedValue(1),
+}));
+
+jest.mock("@/app/lib/prices/ready", () => ({
+  markPricesReady: jest.fn(),
+}));
+
 import {
   closeDb,
   getPrice,

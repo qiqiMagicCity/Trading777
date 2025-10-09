@@ -1,4 +1,12 @@
 import "fake-indexeddb/auto";
+
+jest.mock("@/app/lib/prices/officialCloseFacade", () => ({
+  refreshOfficialCloseMaps: jest.fn().mockResolvedValue(1),
+}));
+
+jest.mock("@/app/lib/prices/ready", () => ({
+  markPricesReady: jest.fn(),
+}));
 import {
   cleanupMisplacedPriceEntries,
   closeDb,
@@ -8,12 +16,21 @@ import {
 } from "@/lib/services/dataService";
 
 describe("importClosePrices", () => {
+  let originalFetch: typeof fetch | undefined;
+
   beforeEach(async () => {
     await indexedDB.deleteDatabase("TradingApp");
+    originalFetch = global.fetch;
+    (global as any).fetch = jest.fn().mockResolvedValue({ ok: true });
   });
 
   afterEach(async () => {
     await closeDb();
+    if (originalFetch) {
+      global.fetch = originalFetch;
+    } else {
+      delete (global as any).fetch;
+    }
   });
 
   test("supports symbol-first and date-first nested maps", async () => {

@@ -1,5 +1,10 @@
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
 import { getOfficialCloseMapFromCache } from "@/lib/services/dataService";
+import {
+  computeClosePricesVersion,
+  getClosePricesFetchInfo,
+  writeStoredClosePricesVersion,
+} from "@/app/lib/prices/closePriceFetch";
 
 function safeGetLocalStorageItem(key: string): string | null {
   try {
@@ -52,11 +57,14 @@ function applyClosePriceMigration(raw: unknown) {
 }
 
 export async function loadJson(name: 'trades'|'initial_positions'|'close_prices') {
-  const key = name === 'close_prices' ? 'close_prices_version' : `jsonver:${name}`;
-  const stored = safeGetLocalStorageItem(key);
-  const ver = stored || String(Date.now());
+  const key = name === 'close_prices' ? null : `jsonver:${name}`;
+  const stored = key ? safeGetLocalStorageItem(key) : null;
+  const closeInfo = name === 'close_prices' ? getClosePricesFetchInfo() : null;
+  const versionForUrl = name === 'close_prices'
+    ? closeInfo!.versionForUrl
+    : stored || String(Date.now());
   const url = name === 'close_prices'
-    ? `/close_prices.json?v=${encodeURIComponent(ver)}`
+    ? closeInfo!.url
     : `/${name}.json`;
   try {
     const res = await fetch(url, { cache: 'no-store' });
@@ -64,8 +72,11 @@ export async function loadJson(name: 'trades'|'initial_positions'|'close_prices'
       const data = await res.json();
       if (data && (Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0)) {
         const result = name === 'close_prices' ? applyClosePriceMigration(data) : data;
-        if (name === 'close_prices' && !stored) {
-          safeSetLocalStorageItem(key, ver);
+        if (name === 'close_prices') {
+          const version = computeClosePricesVersion(res, result);
+          writeStoredClosePricesVersion(version);
+        } else if (!stored && key) {
+          safeSetLocalStorageItem(key, versionForUrl);
         }
         return result;
       }

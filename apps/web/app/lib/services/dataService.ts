@@ -2,6 +2,10 @@ import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
+import { ClosePriceMap } from "@/app/lib/dailyResults";
+import { writeStoredClosePricesVersion } from "@/app/lib/prices/closePriceFetch";
+import { refreshOfficialCloseMaps } from "@/app/lib/prices/officialCloseFacade";
+import { markPricesReady } from "@/app/lib/prices/ready";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
 
@@ -749,12 +753,43 @@ export async function cleanupMisplacedPriceEntries(): Promise<number> {
   return removed;
 }
 
+function isReadOnlyPriceEnvironment(): boolean {
+  const globalAny = globalThis as Record<string, unknown>;
+  const candidates = [
+    globalAny?.NEXT_PUBLIC_PRICES_READONLY,
+    globalAny?.NEXT_PUBLIC_READONLY,
+    process?.env?.NEXT_PUBLIC_PRICES_READONLY,
+    process?.env?.NEXT_PUBLIC_READONLY,
+  ];
+  for (const raw of candidates) {
+    if (typeof raw === "string") {
+      const normalized = raw.trim().toLowerCase();
+      if (normalized === "1" || normalized === "true" || normalized === "yes") {
+        return true;
+      }
+      if (normalized === "0" || normalized === "false" || normalized === "no") {
+        return false;
+      }
+    } else if (typeof raw === "boolean") {
+      return raw;
+    }
+  }
+  return false;
+}
+
+export interface ImportClosePricesResult {
+  imported: number;
+  writeBackOk: boolean;
+  writeBackSkipped: boolean;
+}
+
 export async function importClosePrices(
   nestedPrices: Record<string, Record<string, number>> | unknown,
-): Promise<number> {
+): Promise<ImportClosePricesResult> {
   const { map } = migrateClosePriceMap(nestedPrices);
   let imported = 0;
   const promises: Promise<void>[] = [];
+  const writeBackEntries: Array<{ symbol: string; date: string; close: number }> = [];
 
   for (const [symbol, byDate] of Object.entries(map)) {
     if (!byDate || typeof byDate !== "object") continue;
@@ -764,23 +799,54 @@ export async function importClosePrices(
         putPrice({ symbol, date, close, source: "official/import" }),
       );
       imported += 1;
+      writeBackEntries.push({ symbol, date, close });
     }
   }
 
   await Promise.all(promises);
   await cleanupMisplacedPriceEntries();
   clearDailyResultsCache();
-  try {
-    const stamp = String(Date.now());
-    if (typeof window !== "undefined" && window?.localStorage) {
-      window.localStorage.setItem("close_prices_version", stamp);
-    } else if (typeof localStorage !== "undefined") {
-      localStorage.setItem("close_prices_version", stamp);
+  const stamp = String(Date.now());
+  writeStoredClosePricesVersion(stamp);
+
+  const readOnly = isReadOnlyPriceEnvironment();
+  let writeBackOk = false;
+  let writeBackAttempted = false;
+
+  if (!readOnly && writeBackEntries.length > 0) {
+    if (typeof fetch !== "function") {
+      console.warn("[importClosePrices] fetch is not available; skip write-back");
+    } else {
+      writeBackAttempted = true;
+      try {
+        await Promise.all(
+          writeBackEntries.map((entry) =>
+            fetch("/api/close-price", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(entry),
+            }),
+          ),
+        );
+        writeBackOk = true;
+      } catch (error) {
+        console.warn("[importClosePrices] write-back failed", error);
+      }
     }
-  } catch {
-    // ignore storage errors
   }
-  return imported;
+
+  try {
+    const version = await refreshOfficialCloseMaps();
+    markPricesReady(version);
+  } catch (error) {
+    console.warn("[importClosePrices] refresh official close maps failed", error);
+  }
+
+  return {
+    imported,
+    writeBackOk,
+    writeBackSkipped: !writeBackAttempted,
+  };
 }
 
 export async function getAllPrices(): Promise<CachedPrice[]> {
@@ -788,14 +854,14 @@ export async function getAllPrices(): Promise<CachedPrice[]> {
   return db.getAll(PRICES_STORE_NAME);
 }
 
-export async function getOfficialCloseMapFromCache(): Promise<Record<string, Record<string, number>>> {
+export async function getOfficialCloseMapFromCache(): Promise<ClosePriceMap> {
   if (typeof indexedDB === "undefined") {
     return {};
   }
   try {
     const db = await getDb();
     const rows = await db.getAll(PRICES_STORE_NAME);
-    const map: Record<string, Record<string, number>> = {};
+    const map: ClosePriceMap = {};
     for (const row of rows) {
       if (!row || !isOfficialCloseSource(row.source)) {
         continue;
@@ -809,7 +875,11 @@ export async function getOfficialCloseMapFromCache(): Promise<Record<string, Rec
       if (!Number.isFinite(price)) {
         continue;
       }
-      (map[symbol] ??= {})[date] = price;
+      const bucket = (map[symbol] ??= {});
+      bucket[date] = price;
+      if (typeof row.source === "string") {
+        (bucket.__sources ??= {})[date] = row.source;
+      }
     }
     return map;
   } catch (error) {
