@@ -19,6 +19,13 @@ export interface MissingOfficialCloseDiagnostics {
   pendingOfficialCloses: MissingOfficialCloseEntry[];
 }
 
+export interface MissingOfficialCloseSourceInfo {
+  packagedPrice?: number;
+  idbPrice?: number;
+  overlayPrice?: number;
+  fallbackAvailable?: boolean;
+}
+
 export function createMissingOfficialCloseDiagnostics(): MissingOfficialCloseDiagnostics {
   return { missingOfficialCloses: [], pendingOfficialCloses: [] };
 }
@@ -44,6 +51,7 @@ export function reportMissingOfficialClose(
     purpose: MissingOfficialClosePurpose;
     hasFallback?: boolean;
     status?: "pending" | "missing";
+    sources?: MissingOfficialCloseSourceInfo;
   },
 ): void {
   if (!diagnostics) return;
@@ -77,6 +85,9 @@ export function reportMissingOfficialClose(
       existing.firstDetectedAt = detectedAt;
     }
     existing.lastDetectedAt = detectedAt;
+    if (payload.sources) {
+      existing.sources = mergeSourceInfo(existing.sources, payload.sources);
+    }
     return;
   }
 
@@ -88,6 +99,7 @@ export function reportMissingOfficialClose(
     hasFallback: Boolean(payload.hasFallback),
     firstDetectedAt: detectedAt,
     lastDetectedAt: detectedAt,
+    ...(payload.sources ? { sources: { ...payload.sources } } : {}),
   });
 
   target.sort((a, b) => {
@@ -95,4 +107,27 @@ export function reportMissingOfficialClose(
     if (dateCmp !== 0) return dateCmp;
     return a.symbol.localeCompare(b.symbol);
   });
+}
+
+function mergeSourceInfo(
+  existing: MissingOfficialCloseSourceInfo | undefined,
+  incoming: MissingOfficialCloseSourceInfo,
+): MissingOfficialCloseSourceInfo {
+  if (!existing) {
+    return { ...incoming };
+  }
+  const result: MissingOfficialCloseSourceInfo = { ...existing };
+  if (incoming.packagedPrice !== undefined) {
+    result.packagedPrice = incoming.packagedPrice;
+  }
+  if (incoming.idbPrice !== undefined) {
+    result.idbPrice = incoming.idbPrice;
+  }
+  if (incoming.overlayPrice !== undefined) {
+    result.overlayPrice = incoming.overlayPrice;
+  }
+  if (incoming.fallbackAvailable) {
+    result.fallbackAvailable = true;
+  }
+  return result;
 }

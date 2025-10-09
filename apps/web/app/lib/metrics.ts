@@ -305,6 +305,8 @@ export interface CalcMetricsOptions {
   periodEvalYmd?: string;
   officialCloseMap?: ClosePriceMap;
   officialCloseOverlayMap?: ClosePriceMap;
+  officialClosePackagedMap?: ClosePriceMap;
+  officialCloseIdbMap?: ClosePriceMap;
 }
 
 /** 从后端读取汇总（直读 summary.M6 与 tradingDateStr） */
@@ -2468,6 +2470,10 @@ export function calcMetricsInternal(
   const officialOverlayMap: ClosePriceMap =
     (options.officialCloseOverlayMap as ClosePriceMap | undefined) ??
     overlayCacheToMap();
+  const officialPackagedMap: ClosePriceMap =
+    (options.officialClosePackagedMap as ClosePriceMap | undefined) ?? {};
+  const officialIdbMap: ClosePriceMap =
+    (options.officialCloseIdbMap as ClosePriceMap | undefined) ?? {};
   const missingOfficialDiagnostics = createMissingOfficialCloseDiagnostics();
   const { missingOfficialCloses, pendingOfficialCloses } =
     missingOfficialDiagnostics;
@@ -2486,6 +2492,8 @@ export function calcMetricsInternal(
   const releaseOfficialContext = setOfficialCloseContext({
     map: officialCloseMap,
     overlayMap: officialOverlayMap,
+    packagedMap: officialPackagedMap,
+    idbMap: officialIdbMap,
     diagnostics: missingOfficialDiagnostics,
     fallbackResolver: (symbol, date) =>
       fallbackKeySet.has(`${symbol.trim().toUpperCase()}|${date}`),
