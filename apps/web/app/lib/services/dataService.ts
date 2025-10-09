@@ -146,6 +146,39 @@ interface TradingDB extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<TradingDB>> | undefined;
+const trackedDbConnections = new WeakSet<IDBPDatabase<TradingDB>>();
+
+function resetDbPromiseIfCurrent(db: IDBPDatabase<TradingDB>): void {
+  if (!dbPromise) return;
+  void dbPromise
+    .then((current) => {
+      if (current === db) {
+        dbPromise = undefined;
+      }
+    })
+    .catch(() => {
+      dbPromise = undefined;
+    });
+}
+
+function attachDbLifecycleHandlers(db: IDBPDatabase<TradingDB>): void {
+  if (trackedDbConnections.has(db)) {
+    return;
+  }
+  trackedDbConnections.add(db);
+
+  const handleClose = (): void => {
+    logger.warn("[dataService] IndexedDB connection closed; scheduling reopen");
+    resetDbPromiseIfCurrent(db);
+  };
+
+  db.addEventListener("close", handleClose);
+  db.addEventListener("versionchange", () => {
+    logger.info("[dataService] IndexedDB version change detected; closing connection");
+    db.close();
+    resetDbPromiseIfCurrent(db);
+  });
+}
 
 let cachedDailyResults: DailyResult[] = [];
 
@@ -175,6 +208,10 @@ function getDb(): Promise<IDBPDatabase<TradingDB>> {
           store.createIndex("by-symbol", "symbol");
         }
       },
+    });
+    void dbPromise.then(attachDbLifecycleHandlers).catch((error) => {
+      logger.error("[dataService] Failed to open IndexedDB", error);
+      dbPromise = undefined;
     });
   }
   return dbPromise!;
