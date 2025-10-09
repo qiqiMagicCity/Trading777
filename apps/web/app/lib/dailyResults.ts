@@ -118,7 +118,8 @@ export function setPrice(
 
 export function readSource(bucket: ClosePriceBucket | undefined, date: string): string | undefined {
   if (!bucket || !isYmd(date)) return undefined;
-  return bucket.__sources?.[date];
+  const d: Ymd = date;
+  return bucket.__sources?.[d];
 }
 
 export function readPrice(bucket: ClosePriceBucket | undefined, date: string): number | undefined {
