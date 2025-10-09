@@ -2,7 +2,7 @@ import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
-import { ClosePriceMap } from "@/app/lib/dailyResults";
+import { ClosePriceMap, isYmd } from "@/app/lib/dailyResults";
 import { writeStoredClosePricesVersion } from "@/app/lib/prices/closePriceFetch";
 import { refreshOfficialCloseMaps } from "@/app/lib/prices/officialCloseFacade";
 import { markPricesReady } from "@/app/lib/prices/ready";
@@ -868,7 +868,7 @@ export async function getOfficialCloseMapFromCache(): Promise<ClosePriceMap> {
       }
       const symbol = toUpperSafe(row.symbol);
       const date = typeof row.date === "string" ? row.date.slice(0, 10) : "";
-      if (!symbol || !ISO_DATE_RE.test(date)) {
+      if (!symbol || !isYmd(date)) {
         continue;
       }
       const price = Number(row.close);

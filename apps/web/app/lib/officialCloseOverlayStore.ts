@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { ClosePriceMap } from "@/app/lib/dailyResults";
+import { isYmd } from "@/app/lib/dailyResults";
 
 if (typeof globalThis.structuredClone !== "function") {
   (globalThis as any).structuredClone = <T>(value: T): T =>
@@ -235,9 +236,13 @@ export function overlayEntriesToMap(
     if (!map[entry.symbol]) {
       map[entry.symbol] = {};
     }
+    const day = entry.date;
+    if (!isYmd(day)) {
+      continue;
+    }
     const bucket = map[entry.symbol]!;
-    bucket[entry.date] = entry.price;
-    (bucket.__sources ??= {})[entry.date] = entry.source;
+    bucket[day] = entry.price;
+    (bucket.__sources ??= {})[day] = entry.source;
   }
   return map;
 }

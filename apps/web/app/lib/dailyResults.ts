@@ -14,9 +14,16 @@ import {
 
 const EPSILON = 1e-6;
 
-export interface ClosePriceBucket extends Record<string, number> {
-  __sources?: Record<string, string>;
+export type Ymd = `${number}-${number}-${number}`;
+
+export interface ClosePriceBucket {
+  // 仅允许日期键（YYYY-MM-DD）存储数值价格
+  [day in Ymd]?: number;
+  // 价格来源元数据（仅用于调试/诊断，不参与指标计算）
+  __sources?: Record<Ymd, string>;
 }
+
+export const isYmd = (k: string): k is Ymd => /^\d{4}-\d{2}-\d{2}$/.test(k);
 
 export type ClosePriceMap = Record<string, ClosePriceBucket>;
 
@@ -217,8 +224,8 @@ export function mergeClosePriceMaps(...maps: ClosePriceMap[]): ClosePriceMap {
   for (const map of maps) {
     for (const [symbol, byDate] of Object.entries(map)) {
       const target = ensureBucket(result, symbol);
-      for (const [date, price] of Object.entries(byDate)) {
-        if (date === "__sources") continue;
+      for (const date of Object.keys(byDate).filter(isYmd)) {
+        const price = byDate[date];
         const numeric = Number(price);
         if (!Number.isFinite(numeric)) continue;
         const candidateSource = readSource(byDate, date);
@@ -373,7 +380,7 @@ export function generateDailyResults({
   for (const symbol of symbolSet) {
     const byDate = normalizedClose[symbol];
     if (!byDate) continue;
-    for (const date of Object.keys(byDate)) {
+    for (const date of Object.keys(byDate).filter(isYmd)) {
       if (date <= evalDateStr) {
         dateSet.add(date);
       }
