@@ -122,6 +122,14 @@ export function MissingOfficialCloseBanner({
   const viewAllHref =
     `/diagnostics/official-closes?status=missing&from=${defaultFrom}&to=${defaultTo}&impacts=${impactFilter}` +
     (symbolFilter ? `&symbols=${encodeURIComponent(symbolFilter)}` : "");
+  const eMinusOneSummary = summaries
+    .map((summary) => {
+      const symbols = Array.from(
+        new Set(summary.symbols.map((item) => item.symbol).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b));
+      return `${summary.ymd}：${symbols.join("、")}`;
+    })
+    .join("；");
 
   return (
     <div
@@ -153,9 +161,11 @@ export function MissingOfficialCloseBanner({
           查看全部缺口
         </Link>
       </div>
-      <p style={{ margin: "0 0 12px", color: "#fff8e1" }}>
-        以下日期缺少官方昨收，M6 过夜部分已按 0 处理。请补录 close_prices.json 中的官方收盘价。
-      </p>
+      {eMinusOneSummary && (
+        <p style={{ margin: "0 0 12px", color: "#fff8e1" }}>
+          上一纽约交易日(E-1) 需补录：{eMinusOneSummary}
+        </p>
+      )}
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {summaries.map((summary) => {
           const impacts = Array.from(

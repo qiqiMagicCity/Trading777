@@ -770,12 +770,52 @@ export async function importClosePrices(
   await Promise.all(promises);
   await cleanupMisplacedPriceEntries();
   clearDailyResultsCache();
+  try {
+    const stamp = String(Date.now());
+    if (typeof window !== "undefined" && window?.localStorage) {
+      window.localStorage.setItem("close_prices_version", stamp);
+    } else if (typeof localStorage !== "undefined") {
+      localStorage.setItem("close_prices_version", stamp);
+    }
+  } catch {
+    // ignore storage errors
+  }
   return imported;
 }
 
 export async function getAllPrices(): Promise<CachedPrice[]> {
   const db = await getDb();
   return db.getAll(PRICES_STORE_NAME);
+}
+
+export async function getOfficialCloseMapFromCache(): Promise<Record<string, Record<string, number>>> {
+  if (typeof indexedDB === "undefined") {
+    return {};
+  }
+  try {
+    const db = await getDb();
+    const rows = await db.getAll(PRICES_STORE_NAME);
+    const map: Record<string, Record<string, number>> = {};
+    for (const row of rows) {
+      if (!row || !isOfficialCloseSource(row.source)) {
+        continue;
+      }
+      const symbol = toUpperSafe(row.symbol);
+      const date = typeof row.date === "string" ? row.date.slice(0, 10) : "";
+      if (!symbol || !ISO_DATE_RE.test(date)) {
+        continue;
+      }
+      const price = Number(row.close);
+      if (!Number.isFinite(price)) {
+        continue;
+      }
+      (map[symbol] ??= {})[date] = price;
+    }
+    return map;
+  } catch (error) {
+    logger.warn("[dataService] getOfficialCloseMapFromCache failed", error);
+    return {};
+  }
 }
 
 export async function addTrade(trade: Trade): Promise<number> {
