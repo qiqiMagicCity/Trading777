@@ -33,6 +33,7 @@ interface CloseDebugStats {
   version: string | null;
   updatedAt: number | null;
   reason: string;
+  packagedCount: number;
   overlayCount: number;
   fallbackCount: number;
   seedStats: SyncPackagedClosesStats;
@@ -116,6 +117,7 @@ export default function ClosePriceDebugger() {
     setStatsLoading(true);
     try {
       const { maps, debug } = await buildOfficialCloseMaps();
+      const packagedCount = countEntries(maps.packaged);
       const overlayCount = countEntries(maps.overlay);
       const fallbackCount = countEntries(maps.fallback);
       const version = readClosePricesVersion();
@@ -137,6 +139,7 @@ export default function ClosePriceDebugger() {
         version: version ?? null,
         updatedAt: meta?.updatedAt ?? null,
         reason: meta?.reason ?? "unknown",
+        packagedCount,
         overlayCount,
         fallbackCount,
         seedStats,
@@ -216,6 +219,7 @@ export default function ClosePriceDebugger() {
               {stats.seedStats.skipped.same}） / {stats.seedStats.total}，
               写入：{stats.seedStats.inserted}
             </p>
+            <p>packaged map 条目：{stats.packagedCount}</p>
             <p>fallback map 条目：{stats.fallbackCount}</p>
             <p>overlay map 条目：{stats.overlayCount}</p>
           </div>

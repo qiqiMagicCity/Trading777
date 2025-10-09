@@ -120,6 +120,7 @@ export interface MissingOfficialCloseEntry {
   hasFallback: boolean;
   firstDetectedAt?: string;
   lastDetectedAt?: string;
+  sources?: import("@/app/lib/diagnostics/reportMissingOfficialClose").MissingOfficialCloseSourceInfo;
 }
 
 export interface M4TodayDetail {

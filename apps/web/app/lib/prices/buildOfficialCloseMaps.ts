@@ -22,6 +22,7 @@ export interface OfficialCloseMaps {
   official: ClosePriceMap;
   merged: ClosePriceMap;
   fallback: ClosePriceMap;
+  packaged: ClosePriceMap;
 }
 
 export interface OfficialCloseDebugMaps {
@@ -196,6 +197,7 @@ export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult
       official: officialPriceMap,
       merged: mergedCloseMap,
       fallback: cachedFallbackCloses,
+      packaged: normalizedFileCloses,
     },
     debug: {
       packaged: normalizedFileCloses,

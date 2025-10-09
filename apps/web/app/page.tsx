@@ -637,12 +637,14 @@ export default function DashboardPage() {
         await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
       }
 
-      await runWithOfficialCloseCommit('dashboard:load', async ({ maps }) => {
+      await runWithOfficialCloseCommit('dashboard:load', async ({ maps, debug }) => {
         const {
           overlay: overlayMap,
           official: officialClosePrices,
           merged: mergedClosePrices,
+          packaged: packagedClosePrices,
         } = maps;
+        const idbClosePrices = debug?.idb ?? {};
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -671,6 +673,8 @@ export default function DashboardPage() {
           periodEvalYmd: evalDateStr,
           officialCloseMap: officialClosePrices,
           officialCloseOverlayMap: overlayMap,
+          officialClosePackagedMap: packagedClosePrices,
+          officialCloseIdbMap: idbClosePrices,
         });
         const metrics = normalizeMetrics(rawMetrics);
         const officialSummaries = summarizeMissingOfficialCloses(
@@ -839,12 +843,14 @@ export default function DashboardPage() {
       await ensureDailyCloses(symbols, evalDateStr, fallbackCloses);
     }
 
-    await runWithOfficialCloseCommit('dashboard:refresh', async ({ maps }) => {
+    await runWithOfficialCloseCommit('dashboard:refresh', async ({ maps, debug }) => {
       const {
         overlay: overlayMap,
         merged: mergedClosePrices,
         official: officialCloseMap,
+        packaged: packagedClosePrices,
       } = maps;
+      const idbClosePrices = debug?.idb ?? {};
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -873,6 +879,8 @@ export default function DashboardPage() {
         periodEvalYmd: evalDateStr,
         officialCloseMap: officialCloseMap,
         officialCloseOverlayMap: overlayMap,
+        officialClosePackagedMap: packagedClosePrices,
+        officialCloseIdbMap: idbClosePrices,
       });
       const metrics = normalizeMetrics(rawMetrics);
       const pendingOfficial = summarizeMissingOfficialCloses(
@@ -934,12 +942,14 @@ export default function DashboardPage() {
 
       const evalDateStr = freezeTradingDay ?? resolveTradingDayStr();
 
-      await runWithOfficialCloseCommit('dashboard:reload', async ({ maps }) => {
+      await runWithOfficialCloseCommit('dashboard:reload', async ({ maps, debug }) => {
         const {
           overlay: overlayMap,
           merged: mergedClosePrices,
           official: officialCloseMap,
+          packaged: packagedClosePrices,
         } = maps;
+        const idbClosePrices = debug?.idb ?? {};
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -969,6 +979,8 @@ export default function DashboardPage() {
           periodEvalYmd: evalDateStr,
           officialCloseMap: officialCloseMap,
           officialCloseOverlayMap: overlayMap,
+          officialClosePackagedMap: packagedClosePrices,
+          officialCloseIdbMap: idbClosePrices,
         });
         const metrics = normalizeMetrics(rawMetrics);
         const pendingOfficial = summarizeMissingOfficialCloses(
