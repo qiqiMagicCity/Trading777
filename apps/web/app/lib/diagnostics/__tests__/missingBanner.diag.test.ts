@@ -1,4 +1,5 @@
 import "fake-indexeddb/auto";
+import { deriveMissingDateCandidates } from "@/app/debug/close/missingDefaults";
 import { explainBatch } from "@/app/lib/diagnostics/explainMissingClose";
 
 describe("diag: explain missing close", () => {
@@ -18,7 +19,7 @@ describe("diag: explain missing close", () => {
       "SCHW",
       "COST",
     ];
-    const dates = ["2025-09-19", "2025-10-03", "2025-10-06"];
+    const dates = deriveMissingDateCandidates();
     const rows = await explainBatch(symbols, dates);
     const miss = rows.filter((r) => r.verdict === "MISSING");
     // eslint-disable-next-line no-console
