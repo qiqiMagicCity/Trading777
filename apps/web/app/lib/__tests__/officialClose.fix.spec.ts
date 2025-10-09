@@ -4,6 +4,7 @@
 import 'fake-indexeddb/auto';
 
 import { jest } from '@jest/globals';
+import { normalizeOfficialSourceTag } from '@/app/lib/prices/compareOfficialSourcePriority';
 
 type CloseJson = Record<string, Record<string, number>>;
 type StoredOfficialClose = {
@@ -180,6 +181,108 @@ describe('official close consistency fixes', () => {
     expect(idbEntry?.fromLayer).toBe('idb');
   });
 
+  it('testA2: packaged closes cannot overwrite higher-priority official sources', async () => {
+    const scenarios: Array<{
+      source: string;
+    }> = [
+      { source: 'import' },
+      { source: 'official/manual' },
+      { source: 'official/vendor' },
+      { source: 'official/exchange' },
+    ];
+
+    for (const { source } of scenarios) {
+      jest.resetModules();
+      const loadJsonMock = jest.fn<LoadJson>();
+      loadJsonMock.mockResolvedValue(
+        {
+          AAPL: { '2024-06-03': 88 },
+        } as Awaited<ReturnType<LoadJson>>,
+      );
+      const getAllPricesMock = jest.fn<GetAllPrices>();
+      getAllPricesMock.mockResolvedValue(
+        [
+          {
+            symbol: 'AAPL',
+            date: '2024-06-03',
+            close: 123,
+            source,
+          },
+        ] as Awaited<ReturnType<GetAllPrices>>,
+      );
+      const readOverlayMock = jest.fn<ReadOverlay>();
+      readOverlayMock.mockResolvedValue(
+        [] as Awaited<ReturnType<ReadOverlay>>,
+      );
+
+      jest.unstable_mockModule('@/app/lib/dataSource', () =>
+        ({
+          loadJson: loadJsonMock,
+        }) as unknown as Partial<typeof import('@/app/lib/dataSource')>,
+      );
+      jest.unstable_mockModule('@/app/lib/services/dataService', () =>
+        ({
+          getAllPrices: getAllPricesMock,
+          isOfficialCloseSource: (jest.requireActual(
+            '@/app/lib/services/dataService',
+          ) as typeof import('@/app/lib/services/dataService')).isOfficialCloseSource,
+        }) as unknown as Partial<typeof import('@/app/lib/services/dataService')>,
+      );
+      jest.unstable_mockModule('@/app/lib/officialCloseOverlayStore', () =>
+        ({
+          readOfficialCloseOverlay: readOverlayMock,
+          overlayEntriesToMap: (jest.requireActual(
+            '@/app/lib/officialCloseOverlayStore',
+          ) as typeof import('@/app/lib/officialCloseOverlayStore')).overlayEntriesToMap,
+        }) as unknown as Partial<typeof import('@/app/lib/officialCloseOverlayStore')>,
+      );
+
+      const { buildOfficialCloseMaps, resetOfficialCloseVersionForTests } = await import(
+        '@/app/lib/prices/buildOfficialCloseMaps'
+      );
+
+      resetOfficialCloseVersionForTests();
+
+      const result = await buildOfficialCloseMaps();
+      const detail = (result.debug?.detail ?? {}) as DebugDetail;
+      const entry = detail.AAPL?.['2024-06-03'];
+      expect(entry?.price).toBe(123);
+      expect(entry?.source).toBe(normalizeOfficialSourceTag(source));
+      expect(result.maps.official.AAPL?.['2024-06-03']).toBe(123);
+
+      expect(loadJsonMock).toHaveBeenCalled();
+      expect(getAllPricesMock).toHaveBeenCalled();
+      expect(readOverlayMock).toHaveBeenCalled();
+      jest.resetModules();
+    }
+  });
+
+  it('testA3: mergeOfficialCloses preserves highest priority sources', async () => {
+    const { mergeOfficialCloses } = await import(
+      '@/app/lib/prices/officialCloseFacade'
+    );
+
+    const { detail, map } = mergeOfficialCloses(
+      { AAPL: { '2024-06-04': 101 } },
+      { AAPL: { '2024-06-04': 91 } },
+      {},
+    );
+    const baseEntry = detail.AAPL?.['2024-06-04'];
+    expect(baseEntry?.price).toBe(101);
+    expect(baseEntry?.source).toBe('official/import');
+    expect(map.AAPL?.['2024-06-04']).toBe(101);
+
+    const { detail: withOverlay, map: overlayMap } = mergeOfficialCloses(
+      { AAPL: { '2024-06-04': 101 } },
+      { AAPL: { '2024-06-04': 91 } },
+      { AAPL: { '2024-06-04': 131 } },
+    );
+    const overlayEntry = withOverlay.AAPL?.['2024-06-04'];
+    expect(overlayEntry?.price).toBe(131);
+    expect(overlayEntry?.fromLayer).toBe('overlay');
+    expect(overlayMap.AAPL?.['2024-06-04']).toBe(131);
+  });
+
   it('testB: version key refreshes on fetch and import', async () => {
     const firstResponse = new Response(
       JSON.stringify({ AAPL: { '2025-01-02': 120 } }),
@@ -230,6 +333,16 @@ describe('official close consistency fixes', () => {
       'https://cdn.example.com/static/close_prices.json?v=5',
     );
 
+    process.env.NEXT_PUBLIC_BASE_PATH = '/base';
+    expect(getClosePricesUrl({ version: '77' })).toBe(
+      'https://cdn.example.com/static/base/close_prices.json?v=77',
+    );
+
+    process.env.NEXT_PUBLIC_ASSET_PREFIX = undefined;
+    process.env.NEXT_PUBLIC_BASE_PATH = undefined;
+    localStorage.setItem('close_prices_version', 'stored-version');
+    expect(getClosePricesUrl()).toBe('/close_prices.json?v=stored-version');
+
     const savedWindow = global.window;
     // simulate SSR 环境
     // @ts-expect-error - deliberately remove window to emulate server runtime
@@ -265,11 +378,13 @@ describe('official close consistency fixes', () => {
     } = await import('@/app/lib/prices/syncPackagedClosesToIdb');
 
     const result = await syncPackagedClosesToIdb();
-    expect(result.skipped).toBeGreaterThan(0);
+    expect(result.skipped.higherPriority).toBeGreaterThan(0);
+    expect(result.skipped.total).toBeGreaterThan(0);
     const cached = await getPrice('AAPL', '2025-10-01');
     expect(cached?.close).toBe(12);
     const stats = getLastPackagedSyncStats();
-    expect(stats.skipped).toBe(result.skipped);
+    expect(stats.skipped.total).toBe(result.skipped.total);
+    expect(stats.skipped.higherPriority).toBe(result.skipped.higherPriority);
   });
 
   it('testE: import writeback reports success and failure paths', async () => {

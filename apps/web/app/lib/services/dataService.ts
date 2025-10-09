@@ -3,6 +3,7 @@ import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
 import { isOfficialCloseFixEnabled } from "@/app/lib/prices/officialCloseFeatureFlag";
+import { normalizeOfficialSourceTag } from "@/app/lib/prices/compareOfficialSourcePriority";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
 
@@ -94,20 +95,20 @@ export interface CachedPrice {
   source: CachedPriceSource;
 }
 
+/**
+ * @deprecated Prefer normalizeOfficialSourceTag / compareOfficialSourcePriority
+ */
 export function isOfficialCloseSource(source?: string | null): boolean {
-  if (typeof source !== "string") return false;
-  const normalized = source.trim().toLowerCase();
-  if (!normalized) return false;
-  if (normalized.startsWith("official/")) return true;
-  if (normalized === "official") return true;
-  return ["import", "exchange", "vendor", "manual"].includes(normalized);
+  const normalized = normalizeOfficialSourceTag(source ?? null);
+  return normalized.startsWith("official/");
 }
 
+/**
+ * @deprecated Prefer normalizeOfficialSourceTag / compareOfficialSourcePriority
+ */
 export function isOfficialImportSource(source?: string | null): boolean {
-  if (typeof source !== "string") return false;
-  const normalized = source.trim().toLowerCase();
-  if (!normalized) return false;
-  return normalized.startsWith("official/import");
+  const normalized = normalizeOfficialSourceTag(source ?? null);
+  return normalized === "official/import";
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

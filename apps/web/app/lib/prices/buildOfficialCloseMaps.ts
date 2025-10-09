@@ -11,11 +11,11 @@ import {
   type OfficialCloseOverlayRecord,
 } from "@/app/lib/officialCloseOverlayStore";
 import { isOfficialCloseSource } from "@/app/lib/priceSourceGuards";
+import { getAllPrices, type CachedPrice } from "@/app/lib/services/dataService";
 import {
-  getAllPrices,
-  isOfficialImportSource,
-  type CachedPrice,
-} from "@/app/lib/services/dataService";
+  isHigherPriority,
+  normalizeOfficialSourceTag,
+} from "@/app/lib/prices/compareOfficialSourcePriority";
 
 export interface OfficialCloseMaps {
   overlay: ClosePriceMap;
@@ -82,9 +82,12 @@ function upsertOfficialEntry(
 ): void {
   const target = ensureEntryContainer(map, symbol);
   const existing = target[date];
-  const normalizedSource = entry.source?.trim() ?? "official/import";
-  if (existing && isOfficialImportSource(existing.source) && entry.fromLayer !== "overlay") {
-    return;
+  const normalizedSource = normalizeOfficialSourceTag(entry.source ?? "official/import");
+  if (existing && entry.fromLayer !== "overlay") {
+    const existingSource = normalizeOfficialSourceTag(existing.source);
+    if (!isHigherPriority(normalizedSource, existingSource)) {
+      return;
+    }
   }
   target[date] = {
     ...entry,

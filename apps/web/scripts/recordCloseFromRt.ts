@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { toZonedTime } from 'date-fns-tz';
 import { subDays } from 'date-fns';
+import { resolvePublicPath } from '../app/lib/server/publicPath';
 
 interface TradeRow {
   symbol?: string;
@@ -155,9 +155,8 @@ function sortCloseMap(map: ClosePriceMap): ClosePriceMap {
 }
 
 async function main() {
-  const publicDir = path.resolve(process.cwd(), 'apps/web/public');
-  const tradesPath = path.join(publicDir, 'trades.json');
-  const closePath = path.join(publicDir, 'close_prices.json');
+  const tradesPath = resolvePublicPath('trades.json');
+  const closePath = resolvePublicPath('close_prices.json');
 
   const trades = await readJsonFile<TradeRow[]>(tradesPath, []);
   const symbols = computeNetPositions(trades);
