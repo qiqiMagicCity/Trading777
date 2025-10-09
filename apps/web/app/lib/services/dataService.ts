@@ -2,6 +2,7 @@ import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
+import { isOfficialCloseFixEnabled } from "@/app/lib/prices/officialCloseFeatureFlag";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
 
@@ -100,6 +101,13 @@ export function isOfficialCloseSource(source?: string | null): boolean {
   if (normalized.startsWith("official/")) return true;
   if (normalized === "official") return true;
   return ["import", "exchange", "vendor", "manual"].includes(normalized);
+}
+
+export function isOfficialImportSource(source?: string | null): boolean {
+  if (typeof source !== "string") return false;
+  const normalized = source.trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.startsWith("official/import");
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -749,10 +757,9 @@ export async function cleanupMisplacedPriceEntries(): Promise<number> {
   return removed;
 }
 
-export async function importClosePrices(
-  nestedPrices: Record<string, Record<string, number>> | unknown,
+async function importClosePricesIntoCache(
+  map: Record<string, Record<string, number>>,
 ): Promise<number> {
-  const { map } = migrateClosePriceMap(nestedPrices);
   let imported = 0;
   const promises: Promise<void>[] = [];
 
@@ -770,6 +777,20 @@ export async function importClosePrices(
   await Promise.all(promises);
   await cleanupMisplacedPriceEntries();
   clearDailyResultsCache();
+  return imported;
+}
+
+export async function importClosePrices(
+  nestedPrices: Record<string, Record<string, number>> | unknown,
+): Promise<number> {
+  if (isOfficialCloseFixEnabled()) {
+    const facade = await import("@/app/lib/prices/officialCloseFacade");
+    const result = await facade.importClosePrices(nestedPrices);
+    return result.imported;
+  }
+
+  const { map } = migrateClosePriceMap(nestedPrices);
+  const imported = await importClosePricesIntoCache(map);
   try {
     const stamp = String(Date.now());
     if (typeof window !== "undefined" && window?.localStorage) {
@@ -782,6 +803,8 @@ export async function importClosePrices(
   }
   return imported;
 }
+
+export { importClosePricesIntoCache };
 
 export async function getAllPrices(): Promise<CachedPrice[]> {
   const db = await getDb();

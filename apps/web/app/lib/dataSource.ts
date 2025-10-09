@@ -1,5 +1,10 @@
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
 import { getOfficialCloseMapFromCache } from "@/lib/services/dataService";
+import {
+  fetchClosePricesResource,
+  getClosePricesFetchInfo,
+  isOfficialCloseFixEnabled,
+} from "@/app/lib/prices/officialCloseFacade";
 
 function safeGetLocalStorageItem(key: string): string | null {
   try {
@@ -51,28 +56,53 @@ function applyClosePriceMigration(raw: unknown) {
   return map;
 }
 
+async function loadClosePricesWithFix(): Promise<Record<string, Record<string, number>>> {
+  const result = await fetchClosePricesResource();
+  if (result.ok && result.bodyText) {
+    try {
+      const parsed = JSON.parse(result.bodyText) as unknown;
+      return applyClosePriceMigration(parsed);
+    } catch (error) {
+      console.warn("[dataSource] parse close_prices.json failed", error);
+    }
+  }
+  const fallback = await loadClosePricesFromIdb();
+  if (fallback && Object.keys(fallback).length > 0) {
+    return fallback;
+  }
+  throw new Error(
+    'close_prices.json 加载失败。请通过页面右上角“导入收盘价”按钮补录上一纽约交易日(E-1)的官方昨收后重试。',
+  );
+}
+
 export async function loadJson(name: 'trades'|'initial_positions'|'close_prices') {
+  if (name === 'close_prices' && isOfficialCloseFixEnabled()) {
+    return loadClosePricesWithFix();
+  }
+
   const key = name === 'close_prices' ? 'close_prices_version' : `jsonver:${name}`;
   const stored = safeGetLocalStorageItem(key);
-  const ver = stored || String(Date.now());
-  const url = name === 'close_prices'
-    ? `/close_prices.json?v=${encodeURIComponent(ver)}`
-    : `/${name}.json`;
+  const version = stored || String(Date.now());
+  const fetchInfo =
+    name === 'close_prices'
+      ? getClosePricesFetchInfo({ version })
+      : { url: `/${name}.json`, init: { cache: 'no-store' as const } };
   try {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (res.ok) {
-      const data = await res.json();
+    const response = await fetch(fetchInfo.url, fetchInfo.init);
+    if (response.ok) {
+      const data = await response.json();
       if (data && (Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0)) {
         const result = name === 'close_prices' ? applyClosePriceMigration(data) : data;
-        if (name === 'close_prices' && !stored) {
-          safeSetLocalStorageItem(key, ver);
+        if (!stored) {
+          safeSetLocalStorageItem(key, version);
         }
         return result;
       }
     }
-  } catch {
-    // ignore fetch errors
+  } catch (error) {
+    console.warn(`[dataSource] legacy loadJson(${name}) failed`, error);
   }
+
   if (name === 'close_prices') {
     const fallback = await loadClosePricesFromIdb();
     if (fallback && Object.keys(fallback).length > 0) {
@@ -82,6 +112,7 @@ export async function loadJson(name: 'trades'|'initial_positions'|'close_prices'
       'close_prices.json 加载失败。请通过页面右上角“导入收盘价”按钮补录上一纽约交易日(E-1)的官方昨收后重试。',
     );
   }
+
   switch (name) {
     case 'trades':
       return (await import('../../public/trades.json')).default;

@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["jest", "node"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "app/layout.tsx",
+    "app/page.tsx",
+    "app/debug/close/**/*",
+    "app/lib/dataSource.ts",
+    "app/lib/services/dataService.ts",
+    "app/lib/prices/**/*",
+    "app/lib/__tests__/officialClose.fix.spec.ts",
+    "app/api/close-price/route.ts",
+    "app/api/close-prices/route.ts",
+    "app/api/__tests__/close-price.fix.spec.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

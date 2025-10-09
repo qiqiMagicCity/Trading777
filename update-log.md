@@ -1,5 +1,11 @@
 # 更新日志
 
+## 2025-11-12
+- 官方收盘价修复逻辑改为“门面 + 功能开关”，默认关闭 `OFFICIAL_CLOSE_FIX_ENABLED` 以保证旧流程与测试零回归。
+- 引入 `officialCloseFacade` 收敛 close_prices 取数、403 代理、版本刷新、播种保护与导入写回，扩展字段仅在调试页实验分区展示。
+- 新增 `lint/typecheck/test:scope:official-close` 脚本与 Turbo 管线，提供仅验改范围的快检流程。
+- `/debug/close` 增设“实验特性已启用”区块，展示 version/hash/命中层/播种跳过统计，并将六项回归测试归档到 `officialClose.fix.spec.ts`。
+
 ## 2025-11-11
 - 更正【持仓列表-当日盈亏】口径：新增两桶法专用 `buildIntradayFloatingPnlMap`，前端改读浮动盈亏并更新列标题为“当日浮动盈亏”，排除今日已实现贡献，补充分项断言确保部分平仓、翻向与纯过夜场景均按四位精度返回。
 

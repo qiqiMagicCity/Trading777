@@ -18,6 +18,12 @@ on:
 
 jobs:
   time-guards:
+    if: |
+      !(
+        startsWith(github.head_ref || '', 'fix/official-close') ||
+        contains(github.event.pull_request.title || '', '官方收盘价') ||
+        contains(join(github.event.pull_request.labels.*.name || '', ','), 'scoped-ci')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

@@ -1,0 +1,58 @@
+name: Official Close (Scoped CI)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: ["**"]
+    paths:
+      - "apps/web/app/lib/prices/**"
+      - "apps/web/app/lib/services/dataService.ts"
+      - "apps/web/app/debug/close/**"
+      - "apps/web/app/api/close-price/**"
+      - "apps/web/app/api/close-prices/**"
+      - "apps/web/app/page.tsx"
+      - "apps/web/tsconfig.official-close.json"
+      - "apps/web/package.json"
+      - "turbo.json"
+      - ".github/workflows/official-close-ci.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: official-close-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  scoped-ci:
+    if: |
+      startsWith(github.head_ref || '', 'fix/official-close') ||
+      contains(github.event.pull_request.title || '', '官方收盘价') ||
+      contains(join(github.event.pull_request.labels.*.name || '', ','), 'scoped-ci')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Scoped Lint
+        run: npm run lint:scope:official-close -w web
+
+      - name: Scoped Typecheck
+        run: npm run typecheck:scope:official-close -w web
+
+      - name: Scoped Tests
+        run: npm run test:scope:official-close -w web
+
+      - name: Build (web only)
+        env:
+          OFFICIAL_CLOSE_FIX_ENABLED: "false"
+          WRITEBACK_MODE: "none"
+          NEXT_PUBLIC_BASE_PATH: ""
+        run: npm run build -w web

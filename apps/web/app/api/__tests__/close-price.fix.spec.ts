@@ -13,6 +13,7 @@ import { POST } from '../close-price/route';
 
 const readFileMock = fs.readFile as unknown as jest.MockedFunction<typeof fs.readFile>;
 const writeFileMock = fs.writeFile as unknown as jest.MockedFunction<typeof fs.writeFile>;
+const ORIGINAL_WRITEBACK_MODE = process.env.WRITEBACK_MODE;
 
 function makeRequest(body: Record<string, unknown>): NextRequest {
   return {
@@ -25,6 +26,11 @@ describe('close price route', () => {
     readFileMock.mockReset();
     writeFileMock.mockReset();
     writeFileMock.mockResolvedValue();
+    process.env.WRITEBACK_MODE = 'proxy';
+  });
+
+  afterEach(() => {
+    process.env.WRITEBACK_MODE = ORIGINAL_WRITEBACK_MODE;
   });
 
   it('persists close prices using symbol-first structure', async () => {
@@ -76,5 +82,28 @@ describe('close price route', () => {
 
     expect(res.status).toBe(400);
     expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('merges bulk payloads into existing data', async () => {
+    readFileMock.mockResolvedValue(JSON.stringify({ AAPL: { '2024-05-19': 120 } }));
+
+    const res = await POST(
+      makeRequest({
+        kind: 'bulk',
+        data: {
+          MSFT: { '2024-05-20': 321.12 },
+          '2024-05-21': { aapl: 130 },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(writeFileMock).toHaveBeenCalledTimes(1);
+    const [, payload] = writeFileMock.mock.calls[0]!;
+    const data = JSON.parse(payload as string);
+    expect(data).toEqual({
+      AAPL: { '2024-05-19': 120, '2024-05-21': 130 },
+      MSFT: { '2024-05-20': 321.12 },
+    });
   });
 });
