@@ -119,6 +119,12 @@ function readSource(bucket: ClosePriceBucket | undefined, date: string): string 
   return bucket?.__sources?.[date];
 }
 
+export function readPrice(bucket: ClosePriceBucket | undefined, date: string): number | undefined {
+  if (!bucket) return undefined;
+  if (!isYmd(date)) return undefined;
+  return bucket[date];
+}
+
 export interface NormalizeClosePriceOptions {
   defaultSource?: string;
 }
@@ -232,9 +238,9 @@ export function mergeClosePriceMaps(...maps: ClosePriceMap[]): ClosePriceMap {
     for (const [symbol, byDate] of Object.entries(map)) {
       const target = ensureBucket(result, symbol);
       for (const date of Object.keys(byDate).filter(isYmd)) {
-        const price = byDate[date];
+        const price = readPrice(byDate, date);
+        if (price === undefined || !Number.isFinite(price)) continue;
         const numeric = Number(price);
-        if (!Number.isFinite(numeric)) continue;
         const candidateSource = readSource(byDate, date);
         const existingSource = readSource(target, date);
         if (existingSource?.startsWith("official/import") && !isOverlaySource(candidateSource)) {
@@ -537,8 +543,9 @@ export function generateDailyResults({
       if (absQty <= EPSILON) return sum;
       let price: number | undefined;
       const byDate = normalizedClose[symbol];
-      if (byDate && Number.isFinite(byDate[date])) {
-        price = Number(byDate[date]);
+      const directPrice = readPrice(byDate, date);
+      if (directPrice !== undefined && Number.isFinite(directPrice)) {
+        price = Number(directPrice);
       }
       if (price === undefined && date === evalDateStr && treatRealtimeAsClose) {
         const final = finalPriceMap.get(symbol);
