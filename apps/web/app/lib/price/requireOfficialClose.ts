@@ -1,4 +1,4 @@
-import type { ClosePriceMap } from "@/app/lib/dailyResults";
+import { readPrice, type ClosePriceMap } from "@/app/lib/dailyResults";
 import type {
   MissingOfficialCloseDiagnostics,
   MissingOfficialClosePurpose,
@@ -68,7 +68,7 @@ export function requireOfficialClose(
   };
 
   const overlayPrice = (() => {
-    const fromContext = context.overlayMap?.[symbol]?.[date];
+    const fromContext = readPrice(context.overlayMap?.[symbol], date);
     if (typeof fromContext === "number" && Number.isFinite(fromContext)) {
       return fromContext;
     }
@@ -82,7 +82,7 @@ export function requireOfficialClose(
     return { ok: true, price: applyAdjustments(overlayPrice) };
   }
 
-  const price = context.map?.[symbol]?.[date];
+  const price = readPrice(context.map?.[symbol], date);
   if (typeof price === "number" && Number.isFinite(price)) {
     return { ok: true, price: applyAdjustments(price) };
   }
