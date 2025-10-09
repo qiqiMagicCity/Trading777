@@ -36,7 +36,7 @@ describe("importClosePrices", () => {
       expect(p.symbol).not.toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(p.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(typeof p.close).toBe("number");
-      expect(p.source).toBe("import");
+      expect(p.source).toBe("official/import");
     });
     expect(prices).toEqual(
       expect.arrayContaining([
@@ -49,9 +49,9 @@ describe("importClosePrices", () => {
   });
 
   test("cleanup removes misplaced symbol/date entries", async () => {
-    await putPrice({ symbol: "2025-09-19", date: "AMD", close: 101, source: "import" });
-    await putPrice({ symbol: "UAL", date: "UAL", close: 88.8, source: "import" });
-    await putPrice({ symbol: "AMD", date: "2025-09-19", close: 99.9, source: "import" });
+    await putPrice({ symbol: "2025-09-19", date: "AMD", close: 101, source: "official/import" });
+    await putPrice({ symbol: "UAL", date: "UAL", close: 88.8, source: "official/import" });
+    await putPrice({ symbol: "AMD", date: "2025-09-19", close: 99.9, source: "official/import" });
 
     const removed = await cleanupMisplacedPriceEntries();
     expect(removed).toBe(2);
@@ -62,7 +62,7 @@ describe("importClosePrices", () => {
       symbol: "AMD",
       date: "2025-09-19",
       close: 99.9,
-      source: "import",
+      source: "official/import",
     });
   });
 });

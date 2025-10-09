@@ -7,6 +7,8 @@ interface StoreState {
   setMetrics: (metrics: MetricsContract | null) => void;
   periodHealth: PeriodHealth | null;
   setPeriodHealth: (health: PeriodHealth | null) => void;
+  officialCloseVersion: number;
+  setOfficialCloseVersion: (version: number) => void;
 }
 
 export const useStore = create<StoreState>((set) => ({
@@ -14,4 +16,6 @@ export const useStore = create<StoreState>((set) => ({
   setMetrics: (metrics) => set({ metrics }),
   periodHealth: null,
   setPeriodHealth: (periodHealth) => set({ periodHealth }),
+  officialCloseVersion: 0,
+  setOfficialCloseVersion: (officialCloseVersion) => set({ officialCloseVersion }),
 }));

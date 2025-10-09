@@ -69,6 +69,15 @@ export interface PeriodWindowDiagnostics {
   windowStartYmd?: string;
   officialClose?: PeriodWindowOfficialCloseDiagnostics;
   degradeReasons?: PeriodWindowDegradeReason[];
+  mode?: "close" | "live" | "degraded";
+  isComplete?: boolean;
+  missingPairs?: PeriodMissingPair[];
+}
+
+export interface PeriodMissingPair {
+  date: string;
+  symbol: string;
+  impact?: string[];
 }
 
 export interface PeriodOfficialCloseSymbolImpact {
@@ -111,6 +120,7 @@ export interface MissingOfficialCloseEntry {
   hasFallback: boolean;
   firstDetectedAt?: string;
   lastDetectedAt?: string;
+  sources?: import("@/app/lib/diagnostics/reportMissingOfficialClose").MissingOfficialCloseSourceInfo;
 }
 
 export interface M4TodayDetail {

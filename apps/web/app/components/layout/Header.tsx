@@ -5,12 +5,11 @@ import { useRouter } from 'next/navigation';
 import { nowNY, ymdInNY } from '@/lib/timezone';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale/zh-CN';
+import { importData, exportData, getAllPrices } from '@/lib/services/dataService';
 import {
-  importData,
-  exportData,
   importClosePrices,
-  getAllPrices,
-} from '@/lib/services/dataService';
+  type ImportClosePricesResult,
+} from '@/app/lib/prices/importClosePrices';
 import type { RawTrade, Trade, Position } from '@/lib/services/dataService';
 
 type DatasetImportPayload = {
@@ -160,10 +159,21 @@ export function Header() {
         if (!json || typeof json !== 'object' || Array.isArray(json)) {
           throw new Error('文件需为对象格式，支持“代码→日期”或“日期→代码”的嵌套结构');
         }
-        const imported = await importClosePrices(json as Record<string, Record<string, number>>);
-        alert(
-          `成功导入 ${imported} 条收盘价。支持 {"AAPL":{"2025-01-02":123.45}} 或 {"2025-01-02":{"AAPL":123.45}} 两种结构。`,
+        const result = await importClosePrices(
+          json as Record<string, Record<string, number>>,
         );
+        const message = buildImportMessage(result);
+        if (result.writebackStatus === 'failed') {
+          console.warn('[Header] close price writeback failed', result.error);
+        }
+        alert(message);
+        try {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("pricesImported"));
+          }
+        } catch (err) {
+          console.error(err);
+        }
         try {
           router.refresh();
           return;
@@ -230,6 +240,22 @@ export function Header() {
       </div>
     </header>
   );
+}
+
+function buildImportMessage(result: ImportClosePricesResult): string {
+  const base = `成功导入 ${result.imported} 条收盘价。`;
+  switch (result.writebackStatus) {
+    case 'success':
+      return `${base}（已通过 WRITEBACK_MODE=${result.writebackMode} 写回服务器）`;
+    case 'unsupported':
+      return `${base}（WRITEBACK_MODE=${result.writebackMode} 暂未自动写回，请手动处理。）`;
+    case 'failed': {
+      const reason = result.error ? `原因：${result.error}` : '原因未知';
+      return `${base}（远端写回失败，已在本地生效。${reason}）`;
+    }
+    default:
+      return `${base}（本地生效，WRITEBACK_MODE=${result.writebackMode}）`;
+  }
 }
 
 // We need to add a "primary" variant to our button component

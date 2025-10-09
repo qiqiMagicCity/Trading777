@@ -18,7 +18,18 @@
     "READ_PUBLIC_MODE",
     "PUBLIC_DATA_BASE",
     "SAFE_PRICE_MODE",
-    "NEXT_PUBLIC_FREEZE_DATE"
+    "NEXT_PUBLIC_FREEZE_DATE",
+    "WRITEBACK_MODE",
+    "NEXT_PUBLIC_WRITEBACK_MODE",
+    "NEXT_PUBLIC_BASE_PATH",
+    "NEXT_PUBLIC_ASSET_PREFIX",
+    "OFFICIAL_CLOSE_FIX_ENABLED",
+    "NEXT_PUBLIC_OFFICIAL_CLOSE_FIX_ENABLED",
+    "__NEXT_ROUTER_BASEPATH",
+    "__NEXT_ASSET_PREFIX",
+    "BASE_PATH",
+    "ASSET_PREFIX",
+    "DIAG_PRICE_READY_TRACE"
   ],
   "tasks": {
     "build": {
@@ -36,7 +47,18 @@
       ],
       "env": [
         "SAFE_PRICE_MODE",
-        "NEXT_PUBLIC_FREEZE_DATE"
+        "NEXT_PUBLIC_FREEZE_DATE",
+        "WRITEBACK_MODE",
+        "NEXT_PUBLIC_WRITEBACK_MODE",
+        "NEXT_PUBLIC_BASE_PATH",
+        "NEXT_PUBLIC_ASSET_PREFIX",
+        "OFFICIAL_CLOSE_FIX_ENABLED",
+        "NEXT_PUBLIC_OFFICIAL_CLOSE_FIX_ENABLED",
+        "__NEXT_ROUTER_BASEPATH",
+        "__NEXT_ASSET_PREFIX",
+        "BASE_PATH",
+        "ASSET_PREFIX",
+        "DIAG_PRICE_READY_TRACE"
       ]
     },
     "lint": {
@@ -45,12 +67,53 @@
       ],
       "env": [
         "SAFE_PRICE_MODE",
-        "NEXT_PUBLIC_FREEZE_DATE"
+        "NEXT_PUBLIC_FREEZE_DATE",
+        "WRITEBACK_MODE",
+        "NEXT_PUBLIC_WRITEBACK_MODE",
+        "NEXT_PUBLIC_BASE_PATH",
+        "NEXT_PUBLIC_ASSET_PREFIX",
+        "OFFICIAL_CLOSE_FIX_ENABLED",
+        "NEXT_PUBLIC_OFFICIAL_CLOSE_FIX_ENABLED",
+        "__NEXT_ROUTER_BASEPATH",
+        "__NEXT_ASSET_PREFIX",
+        "BASE_PATH",
+        "ASSET_PREFIX",
+        "DIAG_PRICE_READY_TRACE"
+      ]
+    },
+    "lint:official-close": {
+      "dependsOn": [
+        "^lint:official-close"
+      ],
+      "env": [
+        "SAFE_PRICE_MODE",
+        "NEXT_PUBLIC_FREEZE_DATE",
+        "WRITEBACK_MODE",
+        "NEXT_PUBLIC_WRITEBACK_MODE",
+        "NEXT_PUBLIC_BASE_PATH",
+        "NEXT_PUBLIC_ASSET_PREFIX",
+        "OFFICIAL_CLOSE_FIX_ENABLED",
+        "NEXT_PUBLIC_OFFICIAL_CLOSE_FIX_ENABLED",
+        "__NEXT_ROUTER_BASEPATH",
+        "__NEXT_ASSET_PREFIX",
+        "BASE_PATH",
+        "ASSET_PREFIX",
+        "DIAG_PRICE_READY_TRACE"
       ]
     },
     "check-types": {
       "dependsOn": [
         "^check-types"
+      ]
+    },
+    "typecheck:official-close": {
+      "dependsOn": [
+        "^typecheck:official-close"
+      ]
+    },
+    "test:official-close": {
+      "dependsOn": [
+        "^test:official-close"
       ]
     },
     "dev": {

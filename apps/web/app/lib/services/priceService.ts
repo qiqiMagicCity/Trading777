@@ -10,6 +10,7 @@ import {
 import { isOfficialCloseSource } from '../priceSourceGuards';
 import { getPrice, putPrice, CachedPrice } from './dataService';
 import { loadJson } from '@/app/lib/dataSource';
+import { getWritebackMode } from '@/app/lib/prices/writebackConfig';
 import { apiQueue } from './apiQueue';
 import { logger } from '@/lib/logger';
 import { safeLocalStorage, lsGet, lsSet } from '../env';
@@ -145,6 +146,9 @@ export function __testCacheRW() {
 
 // 将收盘价写入服务器端 JSON 文件
 async function saveToFile(symbol: string, date: string, close: number) {
+  if (getWritebackMode() !== 'proxy') {
+    return;
+  }
   try {
     await fetch('/api/close-price', {
       method: 'POST',
@@ -589,7 +593,7 @@ export async function fetchDailyClose(
 
     const filePrice = closeMap?.[key]?.[normalizedDate];
     if (typeof filePrice === 'number') {
-      await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'import' });
+      await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'official/import' });
       await saveToFile(key, normalizedDate, filePrice);
       return { kind: 'quote', price: filePrice, stale: false, priceOk: true, updatedAt: Date.now() };
     }
@@ -612,7 +616,7 @@ export async function fetchDailyClose(
 
     const recordOfficialClose = async (
       price: number,
-      source: CachedPrice['source'] = 'import'
+      source: CachedPrice['source'] = 'official/import'
     ) => {
       await putPrice({ symbol: key, date: normalizedDate, close: price, source });
       await saveToFile(key, normalizedDate, price);

@@ -2,6 +2,8 @@ import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
+import { isOfficialCloseFixEnabled } from "@/app/lib/prices/officialCloseFeatureFlag";
+import { normalizeOfficialSourceTag } from "@/app/lib/prices/compareOfficialSourcePriority";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
 
@@ -71,11 +73,42 @@ export interface Position {
 }
 
 // New interface for cached prices
+export type OfficialCloseSourceTag =
+  | "official/import"
+  | "official/packaged"
+  | "official/exchange"
+  | "official/vendor"
+  | "official/manual";
+
+export type CachedPriceSource =
+  | "finnhub"
+  | "alphavantage"
+  | "tiingo"
+  | "close_rt"
+  | "close_fallback"
+  | OfficialCloseSourceTag;
+
 export interface CachedPrice {
   symbol: string;
   date: string;
   close: number;
-  source: "finnhub" | "alphavantage" | "import" | "tiingo" | "close_rt" | "close_fallback";
+  source: CachedPriceSource;
+}
+
+/**
+ * @deprecated Prefer normalizeOfficialSourceTag / compareOfficialSourcePriority
+ */
+export function isOfficialCloseSource(source?: string | null): boolean {
+  const normalized = normalizeOfficialSourceTag(source ?? null);
+  return normalized.startsWith("official/");
+}
+
+/**
+ * @deprecated Prefer normalizeOfficialSourceTag / compareOfficialSourcePriority
+ */
+export function isOfficialImportSource(source?: string | null): boolean {
+  const normalized = normalizeOfficialSourceTag(source ?? null);
+  return normalized === "official/import";
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -113,6 +146,39 @@ interface TradingDB extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<TradingDB>> | undefined;
+const trackedDbConnections = new WeakSet<IDBPDatabase<TradingDB>>();
+
+function resetDbPromiseIfCurrent(db: IDBPDatabase<TradingDB>): void {
+  if (!dbPromise) return;
+  void dbPromise
+    .then((current) => {
+      if (current === db) {
+        dbPromise = undefined;
+      }
+    })
+    .catch(() => {
+      dbPromise = undefined;
+    });
+}
+
+function attachDbLifecycleHandlers(db: IDBPDatabase<TradingDB>): void {
+  if (trackedDbConnections.has(db)) {
+    return;
+  }
+  trackedDbConnections.add(db);
+
+  const handleClose = (): void => {
+    logger.warn("[dataService] IndexedDB connection closed; scheduling reopen");
+    resetDbPromiseIfCurrent(db);
+  };
+
+  db.addEventListener("close", handleClose);
+  db.addEventListener("versionchange", () => {
+    logger.info("[dataService] IndexedDB version change detected; closing connection");
+    db.close();
+    resetDbPromiseIfCurrent(db);
+  });
+}
 
 let cachedDailyResults: DailyResult[] = [];
 
@@ -142,6 +208,10 @@ function getDb(): Promise<IDBPDatabase<TradingDB>> {
           store.createIndex("by-symbol", "symbol");
         }
       },
+    });
+    void dbPromise.then(attachDbLifecycleHandlers).catch((error) => {
+      logger.error("[dataService] Failed to open IndexedDB", error);
+      dbPromise = undefined;
     });
   }
   return dbPromise!;
@@ -725,10 +795,9 @@ export async function cleanupMisplacedPriceEntries(): Promise<number> {
   return removed;
 }
 
-export async function importClosePrices(
-  nestedPrices: Record<string, Record<string, number>> | unknown,
+async function importClosePricesIntoCache(
+  map: Record<string, Record<string, number>>,
 ): Promise<number> {
-  const { map } = migrateClosePriceMap(nestedPrices);
   let imported = 0;
   const promises: Promise<void>[] = [];
 
@@ -737,7 +806,7 @@ export async function importClosePrices(
     for (const [date, close] of Object.entries(byDate)) {
       if (!ISO_DATE_RE.test(date) || typeof close !== "number") continue;
       promises.push(
-        putPrice({ symbol, date, close, source: "import" }),
+        putPrice({ symbol, date, close, source: "official/import" }),
       );
       imported += 1;
     }
@@ -749,9 +818,65 @@ export async function importClosePrices(
   return imported;
 }
 
+export async function importClosePrices(
+  nestedPrices: Record<string, Record<string, number>> | unknown,
+): Promise<number> {
+  if (isOfficialCloseFixEnabled()) {
+    const facade = await import("@/app/lib/prices/officialCloseFacade");
+    const result = await facade.importClosePrices(nestedPrices);
+    return result.imported;
+  }
+
+  const { map } = migrateClosePriceMap(nestedPrices);
+  const imported = await importClosePricesIntoCache(map);
+  try {
+    const stamp = String(Date.now());
+    if (typeof window !== "undefined" && window?.localStorage) {
+      window.localStorage.setItem("close_prices_version", stamp);
+    } else if (typeof localStorage !== "undefined") {
+      localStorage.setItem("close_prices_version", stamp);
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return imported;
+}
+
+export { importClosePricesIntoCache };
+
 export async function getAllPrices(): Promise<CachedPrice[]> {
   const db = await getDb();
   return db.getAll(PRICES_STORE_NAME);
+}
+
+export async function getOfficialCloseMapFromCache(): Promise<Record<string, Record<string, number>>> {
+  if (typeof indexedDB === "undefined") {
+    return {};
+  }
+  try {
+    const db = await getDb();
+    const rows = await db.getAll(PRICES_STORE_NAME);
+    const map: Record<string, Record<string, number>> = {};
+    for (const row of rows) {
+      if (!row || !isOfficialCloseSource(row.source)) {
+        continue;
+      }
+      const symbol = toUpperSafe(row.symbol);
+      const date = typeof row.date === "string" ? row.date.slice(0, 10) : "";
+      if (!symbol || !ISO_DATE_RE.test(date)) {
+        continue;
+      }
+      const price = Number(row.close);
+      if (!Number.isFinite(price)) {
+        continue;
+      }
+      (map[symbol] ??= {})[date] = price;
+    }
+    return map;
+  } catch (error) {
+    logger.warn("[dataService] getOfficialCloseMapFromCache failed", error);
+    return {};
+  }
 }
 
 export async function addTrade(trade: Trade): Promise<number> {

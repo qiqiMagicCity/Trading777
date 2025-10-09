@@ -153,16 +153,32 @@ function mapOfficialSummariesInRange(
   summaries: MissingOfficialDateSummary[],
   start: string,
   end: string,
+  relevantSymbols?: Set<string>,
 ): PeriodOfficialCloseDateImpact[] {
+  const allowAll = !relevantSymbols || relevantSymbols.size === 0;
   return summaries
     .filter((entry) => {
       const ymd = entry.ymd ?? entry.date ?? "";
       return ymd >= start && ymd <= end;
     })
-    .map((entry) => ({
-      date: entry.ymd ?? entry.date ?? "",
-      symbols: entry.symbols.map((symbol) => cloneOfficialSymbol(symbol)),
-    }));
+    .map((entry) => {
+      const symbols = allowAll
+        ? entry.symbols.map((symbol) => cloneOfficialSymbol(symbol))
+        : entry.symbols
+            .filter((symbol) => {
+              const normalized =
+                typeof symbol.symbol === "string"
+                  ? symbol.symbol.trim().toUpperCase()
+                  : "";
+              return normalized ? relevantSymbols?.has(normalized) : false;
+            })
+            .map((symbol) => cloneOfficialSymbol(symbol));
+      return {
+        date: entry.ymd ?? entry.date ?? "",
+        symbols,
+      };
+    })
+    .filter((entry) => entry.symbols.length > 0);
 }
 
 function cloneOfficialDateImpacts(
@@ -216,15 +232,26 @@ function mergeDegradeReasons(
   return base;
 }
 
-function buildOfficialDiagnosticsForWindow(
+export function buildOfficialDiagnosticsForWindow(
   missingSummaries: MissingOfficialDateSummary[],
   pendingSummaries: MissingOfficialDateSummary[],
   start: string,
   end: string,
+  relevantSymbols?: Set<string>,
 ): PeriodWindowOfficialCloseDiagnostics {
   return {
-    missing: mapOfficialSummariesInRange(missingSummaries, start, end),
-    pending: mapOfficialSummariesInRange(pendingSummaries, start, end),
+    missing: mapOfficialSummariesInRange(
+      missingSummaries,
+      start,
+      end,
+      relevantSymbols,
+    ),
+    pending: mapOfficialSummariesInRange(
+      pendingSummaries,
+      start,
+      end,
+      relevantSymbols,
+    ),
   };
 }
 
@@ -256,6 +283,19 @@ function clonePeriodWindowDiagnostics(
     ...(diagnostics.windowStartYmd
       ? { windowStartYmd: diagnostics.windowStartYmd }
       : {}),
+    ...(diagnostics.mode ? { mode: diagnostics.mode } : {}),
+    ...(typeof diagnostics.isComplete === "boolean"
+      ? { isComplete: diagnostics.isComplete }
+      : {}),
+    ...(Array.isArray(diagnostics.missingPairs)
+      ? {
+          missingPairs: diagnostics.missingPairs.map((pair) => ({
+            date: pair.date,
+            symbol: pair.symbol,
+            ...(pair.impact ? { impact: [...pair.impact] } : {}),
+          })),
+        }
+      : {}),
   };
   return clone;
 }
@@ -265,6 +305,8 @@ export interface CalcMetricsOptions {
   periodEvalYmd?: string;
   officialCloseMap?: ClosePriceMap;
   officialCloseOverlayMap?: ClosePriceMap;
+  officialClosePackagedMap?: ClosePriceMap;
+  officialCloseIdbMap?: ClosePriceMap;
 }
 
 /** 从后端读取汇总（直读 summary.M6 与 tradingDateStr） */
@@ -1444,6 +1486,57 @@ function sumRealizedBetween(
   return { total, hasParseFailure };
 }
 
+type TelescopeDailyBook = {
+  realizedByDay?: Record<string, number>;
+  uCloseByDay?: Record<string, number>;
+};
+
+export function sumWindowByTelescope(
+  windowStart: string,
+  windowEnd: string,
+  dailyBook: TelescopeDailyBook,
+): number {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(windowStart) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(windowEnd)
+  ) {
+    return Number.NaN;
+  }
+
+  const realizedMap = dailyBook.realizedByDay ?? {};
+  const unrealizedMap = dailyBook.uCloseByDay ?? {};
+
+  let realizedSum = 0;
+  for (const [day, value] of Object.entries(realizedMap)) {
+    if (day < windowStart || day > windowEnd) continue;
+    const num = Number(value);
+    if (Number.isFinite(num)) {
+      realizedSum += num;
+    }
+  }
+
+  const sortedUnrealized = Object.entries(unrealizedMap)
+    .map(([day, value]) => [day, Number(value)] as const)
+    .filter(
+      ([day, value]) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(value),
+    )
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const endEntry = sortedUnrealized.find(([day]) => day === windowEnd);
+  if (!endEntry) {
+    return Number.NaN;
+  }
+  const [, endValue] = endEntry;
+
+  const baselineEntry = [...sortedUnrealized]
+    .reverse()
+    .find(([day]) => day < windowStart);
+  const baselineValue = baselineEntry ? baselineEntry[1] : 0;
+
+  return realizedSum + (endValue - baselineValue);
+}
+
 type WindowTotalsOptions = PeriodTotalsOptions & {
   firstActiveDate?: string;
   uiTradeDayYmd?: string;
@@ -1455,6 +1548,21 @@ function deriveWindowTotals(
   options: WindowTotalsOptions,
 ): WindowTotalsResult {
   const rows = resolveUnrealizedForWindow(rowsInput);
+  const telescopeDailyBook: TelescopeDailyBook = (() => {
+    const realizedByDay: Record<string, number> = {};
+    const uCloseByDay: Record<string, number> = {};
+    for (const row of rows) {
+      realizedByDay[row.day] =
+        (realizedByDay[row.day] ?? 0) + Number(row.realized ?? 0);
+      if (
+        typeof row.resolvedUnrealized === "number" &&
+        Number.isFinite(row.resolvedUnrealized)
+      ) {
+        uCloseByDay[row.day] = row.resolvedUnrealized;
+      }
+    }
+    return { realizedByDay, uCloseByDay };
+  })();
   const endRow = findRowOnOrBefore(rows, evalDay);
   const uiTradeDayYmd = (() => {
     const raw = options.uiTradeDayYmd;
@@ -1616,9 +1724,19 @@ function deriveWindowTotals(
 
     const degraded = Boolean(degradeReason) || missingEndValue;
 
-    let total = realized;
-    if (typeof unrealizedDelta === "number") {
-      total += unrealizedDelta;
+    const telescopeTotal = sumWindowByTelescope(
+      windowStart,
+      evalDay,
+      telescopeDailyBook,
+    );
+    let total: number;
+    if (!Number.isNaN(telescopeTotal)) {
+      total = telescopeTotal;
+    } else {
+      total = realized;
+      if (typeof unrealizedDelta === "number") {
+        total += unrealizedDelta;
+      }
     }
     if (degraded) {
       total = Number.NaN;
@@ -2352,6 +2470,10 @@ export function calcMetricsInternal(
   const officialOverlayMap: ClosePriceMap =
     (options.officialCloseOverlayMap as ClosePriceMap | undefined) ??
     overlayCacheToMap();
+  const officialPackagedMap: ClosePriceMap =
+    (options.officialClosePackagedMap as ClosePriceMap | undefined) ?? {};
+  const officialIdbMap: ClosePriceMap =
+    (options.officialCloseIdbMap as ClosePriceMap | undefined) ?? {};
   const missingOfficialDiagnostics = createMissingOfficialCloseDiagnostics();
   const { missingOfficialCloses, pendingOfficialCloses } =
     missingOfficialDiagnostics;
@@ -2370,6 +2492,8 @@ export function calcMetricsInternal(
   const releaseOfficialContext = setOfficialCloseContext({
     map: officialCloseMap,
     overlayMap: officialOverlayMap,
+    packagedMap: officialPackagedMap,
+    idbMap: officialIdbMap,
     diagnostics: missingOfficialDiagnostics,
     fallbackResolver: (symbol, date) =>
       fallbackKeySet.has(`${symbol.trim().toUpperCase()}|${date}`),
@@ -2394,6 +2518,28 @@ export function calcMetricsInternal(
     );
 
   const sortedTrades = sortTrades(safeTrades);
+
+  const relevantSymbols = (() => {
+    const set = new Set<string>();
+    for (const pos of positions) {
+      const symbol =
+        typeof pos?.symbol === "string" ? pos.symbol.trim().toUpperCase() : "";
+      if (!symbol) continue;
+      const qty = Number(pos?.qty ?? 0);
+      if (Number.isFinite(qty) && Math.abs(qty) > EPSILON) {
+        set.add(symbol);
+      }
+    }
+    for (const entry of tradeEntries) {
+      const raw = entry?.trade?.symbol;
+      if (typeof raw !== "string") continue;
+      const symbol = raw.trim().toUpperCase();
+      if (symbol) {
+        set.add(symbol);
+      }
+    }
+    return set;
+  })();
 
   // M1: 持仓成本
   const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
@@ -2565,18 +2711,21 @@ export function calcMetricsInternal(
       pendingSummaryByDate,
       periodWindowStarts.wtd,
       periodEvalStr,
+      relevantSymbols,
     ),
     mtd: buildOfficialDiagnosticsForWindow(
       missingSummaryByDate,
       pendingSummaryByDate,
       periodWindowStarts.mtd,
       periodEvalStr,
+      relevantSymbols,
     ),
     ytd: buildOfficialDiagnosticsForWindow(
       missingSummaryByDate,
       pendingSummaryByDate,
       periodWindowStarts.ytd,
       periodEvalStr,
+      relevantSymbols,
     ),
   };
 
@@ -2632,12 +2781,31 @@ export function calcMetricsInternal(
     if (mergedReasons.length > 0) {
       diag.degradeReasons = mergedReasons;
     }
+    const missingPairs = official.missing.flatMap((entry) =>
+      entry.symbols.map((symbol) => ({
+        date: entry.date,
+        symbol: symbol.symbol,
+        ...(symbol.impact?.length ? { impact: [...symbol.impact] } : {}),
+      })),
+    );
     if (diag.officialClose) {
       delete diag.officialClose;
     }
     if (official.missing.length > 0 || official.pending.length > 0) {
       diag.officialClose = cloneOfficialDiagnostics(official);
     }
+    if (missingPairs.length > 0) {
+      diag.missingPairs = missingPairs;
+    } else if (diag.missingPairs) {
+      delete diag.missingPairs;
+    }
+    diag.isComplete = missingPairs.length === 0;
+    const mode: "close" | "live" | "degraded" = combinedDegraded[key]
+      ? "degraded"
+      : official.pending.length > 0
+        ? "live"
+        : "close";
+    diag.mode = mode;
     periodDiagnosticsWithOfficial[key] = diag;
   }
 

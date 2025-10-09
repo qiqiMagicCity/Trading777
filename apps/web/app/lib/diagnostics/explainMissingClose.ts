@@ -1,5 +1,5 @@
 import { nyDateStrSafe } from "../time";
-import { isTradingDay } from "../nyDay";
+import { isTradingDay, previousTradingDay } from "../nyDay";
 import { evaluateCloseRequirement } from "../marketHours";
 import { getPrice, clearDailyResultsCache } from "../services/dataService";
 import { isOfficialCloseSource } from "../priceSourceGuards";
@@ -12,6 +12,14 @@ export type CloseExplain = {
   needOfficial: boolean;
   layers: Layer[];
   verdict: "OK" | "MISSING";
+  need?: "E" | "E-1" | null;
+  prevDate?: string | null;
+  missingDates?: string[];
+};
+
+export type MissingCloseEMinusOneGroup = {
+  day: string;
+  symbols: string[];
 };
 
 const YYYYMMDD = /^\d{4}-\d{2}-\d{2}$/;
@@ -32,6 +40,9 @@ export async function explainClose(
     needOfficial: false,
     layers,
     verdict: "MISSING",
+    need: null,
+    prevDate: null,
+    missingDates: [],
   };
 
   if (!isYYYYMMDD(date)) {
@@ -77,6 +88,51 @@ export async function explainClose(
     detail: rec ? `source=${rec.source}` : "no record",
   });
 
+  const prev = previousTradingDay(date);
+  let prevStrictOk = false;
+  if (prev && prev !== date) {
+    out.prevDate = prev;
+    const prevRec = await getPrice(symbol, prev);
+    if (prevRec && Number.isFinite((prevRec as any).close)) {
+      prevStrictOk = isOfficialCloseSource(prevRec.source);
+      layers.push({
+        step: "prev-official",
+        ok: prevStrictOk,
+        detail: prevStrictOk
+          ? `source=${prevRec.source ?? "unknown"} @ ${prev}`
+          : `缺上一纽约交易日(${prev})官方昨收`,
+      });
+    } else {
+      layers.push({
+        step: "prev-official",
+        ok: false,
+        detail: `缺上一纽约交易日(${prev})官方昨收`,
+      });
+    }
+  }
+
+  const missingDates = new Set<string>();
+  let need: "E" | "E-1" | null = null;
+  if (!strictOk) {
+    need = "E";
+    if (isYYYYMMDD(date)) {
+      missingDates.add(date);
+    }
+  }
+  if (prev && !prevStrictOk) {
+    if (strictOk) {
+      need = "E-1";
+      missingDates.clear();
+      if (isYYYYMMDD(prev)) {
+        missingDates.add(prev);
+      }
+    } else if (isYYYYMMDD(prev)) {
+      missingDates.add(prev);
+    }
+  }
+  out.need = need;
+  out.missingDates = Array.from(missingDates).sort();
+
   out.verdict = out.needOfficial
     ? strictOk
       ? "OK"
@@ -84,6 +140,10 @@ export async function explainClose(
     : rec && Number.isFinite((rec as any).close)
       ? "OK"
       : "MISSING";
+
+  if (need === "E-1") {
+    out.verdict = "MISSING";
+  }
   return out;
 }
 
@@ -95,6 +155,30 @@ export async function explainBatch(symbols: string[], dates: string[]) {
     }
   }
   return rows;
+}
+
+export function explainMissingClose(rows: CloseExplain[]): MissingCloseEMinusOneGroup[] {
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row || row.need !== "E-1") continue;
+    if (!Array.isArray(row.missingDates)) continue;
+    for (const missing of row.missingDates) {
+      if (typeof missing !== "string" || missing.length !== 10) continue;
+      const key = missing;
+      const bucket = map.get(key) ?? new Set<string>();
+      if (row.symbol) {
+        bucket.add(String(row.symbol).toUpperCase());
+      }
+      map.set(key, bucket);
+    }
+  }
+
+  return Array.from(map.entries())
+    .map(([day, symbols]) => ({
+      day,
+      symbols: Array.from(symbols.values()).sort((a, b) => a.localeCompare(b)),
+    }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 }
 
 export async function afterImportMaintenance() {
