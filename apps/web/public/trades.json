@@ -1746,8 +1746,161 @@
       "action": "short",
       "time": "2025-10-06T15:45:35",
       "id": 1560
+    },
+    {
+      "symbol": "NVDL",
+      "price": 92.8301,
+      "quantity": 700,
+      "date": "2025-10-06",
+      "action": "sell",
+      "time": "2025-10-06T15:51:25",
+      "id": 1561
+    },
+    {
+      "symbol": "APP",
+      "price": 587.4728,
+      "quantity": 100,
+      "date": "2025-10-06",
+      "action": "cover",
+      "time": "2025-10-06T15:53:36",
+      "id": 1562
+    },
+    {
+      "symbol": "APP",
+      "price": 582.9359,
+      "quantity": 133,
+      "date": "2025-10-06",
+      "action": "short",
+      "time": "2025-10-06T15:55:20",
+      "id": 1563
+    },
+    {
+      "symbol": "APP",
+      "price": 588,
+      "quantity": 17,
+      "date": "2025-10-06",
+      "action": "short",
+      "time": "2025-10-06T15:58:33",
+      "id": 1564
+    },
+    {
+      "symbol": "APP",
+      "price": 621.53,
+      "quantity": 50,
+      "date": "2025-10-07",
+      "action": "short",
+      "time": "2025-10-07T11:01:49",
+      "id": 1565
+    },
+    {
+      "symbol": "APP",
+      "price": 636.104,
+      "quantity": 50,
+      "date": "2025-10-07",
+      "action": "short",
+      "time": "2025-10-07T11:02:18",
+      "id": 1566
+    },
+    {
+      "symbol": "TSLL",
+      "price": 21.3998,
+      "quantity": 2500,
+      "date": "2025-10-07",
+      "action": "buy",
+      "time": "2025-10-07T11:02:38",
+      "id": 1567
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.7486,
+      "quantity": 1000,
+      "date": "2025-10-07",
+      "action": "buy",
+      "time": "2025-10-07T11:12:18",
+      "id": 1568
+    },
+    {
+      "symbol": "TSLL",
+      "price": 20.4001,
+      "quantity": 3500,
+      "date": "2025-10-07",
+      "action": "sell",
+      "time": "2025-10-07T11:48:32",
+      "id": 1569
+    },
+    {
+      "symbol": "COST",
+      "price": 916.33,
+      "quantity": 100,
+      "date": "2025-10-07",
+      "action": "buy",
+      "time": "2025-10-07T11:57:49",
+      "id": 1570
+    },
+    {
+      "symbol": "APP",
+      "price": 629.9521,
+      "quantity": 250,
+      "date": "2025-10-07",
+      "action": "cover",
+      "time": "2025-10-07T12:01:36",
+      "id": 1571
+    },
+    {
+      "symbol": "INTC",
+      "price": 36.9383,
+      "quantity": 7,
+      "date": "2025-10-07",
+      "action": "cover",
+      "time": "2025-10-07T12:03:38",
+      "id": 1572
+    },
+    {
+      "symbol": "AMZN",
+      "price": 221,
+      "quantity": 500,
+      "date": "2025-10-07",
+      "action": "buy",
+      "time": "2025-10-07T12:06:11",
+      "id": 1573
+    },
+    {
+      "symbol": "AMD",
+      "price": 212.6365,
+      "quantity": 555,
+      "date": "2025-10-07",
+      "action": "buy",
+      "time": "2025-10-07T12:18:08",
+      "id": 1574
+    },
+    {
+      "symbol": "AMD",
+      "price": 213,
+      "quantity": 555,
+      "date": "2025-10-07",
+      "action": "sell",
+      "time": "2025-10-07T12:33:09",
+      "id": 1575
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.8294,
+      "quantity": 555,
+      "date": "2025-10-07",
+      "action": "buy",
+      "time": "2025-10-07T12:36:59",
+      "id": 1576
+    },
+    {
+      "symbol": "GGLL",
+      "price": 64.95,
+      "quantity": 555,
+      "date": "2025-10-07",
+      "action": "sell",
+      "time": "2025-10-07T13:31:41",
+      "id": 1577
     }
   ],
   "equityCurve": [],
-  "generated": "2025-10-06T19:45:51.337Z"
+  "generated": "2025-10-08T23:43:25.457Z"
 }
