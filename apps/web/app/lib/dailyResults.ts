@@ -98,12 +98,16 @@ function assignPrice(
   price: number,
   source?: string,
 ): void {
-  bucket[date] = price;
+  if (!isYmd(date)) {
+    return;
+  }
+  const d: Ymd = date;
+  bucket[d] = price;
   if (source && source.trim()) {
-    (bucket.__sources ??= {})[date] = source.trim();
-  } else if (bucket.__sources?.[date]) {
+    (bucket.__sources ??= {})[d] = source.trim();
+  } else if (bucket.__sources?.[d]) {
     const { __sources } = bucket;
-    delete __sources[date];
+    delete __sources[d];
     if (Object.keys(__sources).length === 0) {
       delete bucket.__sources;
     }
