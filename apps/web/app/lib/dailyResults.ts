@@ -24,7 +24,8 @@ export const isYmd = (k: string): k is Ymd => /^\d{4}-\d{2}-\d{2}$/.test(k);
  */
 export type ClosePriceBucket =
   Partial<Record<Ymd, number>> & {
-    __sources?: Partial<Record<Ymd, string>>;
+    // 来源信息仅用于诊断，允许以任意字符串作为键，避免各调用点的 string 访问报错
+    __sources?: Record<string, string>;
   };
 
 export type ClosePriceMap = Record<string, ClosePriceBucket>;
