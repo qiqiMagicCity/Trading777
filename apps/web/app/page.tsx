@@ -46,8 +46,17 @@ import {
   commitOfficialCloseVersion,
   type OfficialCloseBuildResult,
 } from '@/app/lib/prices/buildOfficialCloseMaps';
+import {
+  rebuildOfficialCloseMapsWithCommit,
+  syncPackagedClosesToIdb as syncPackagedClosesToIdbFacade,
+} from '@/app/lib/prices/officialCloseFacade';
+import { isOfficialCloseFixEnabled } from '@/app/lib/prices/officialCloseFeatureFlag';
+import {
+  CLOSE_PRICES_VERSION_EVENT,
+  CLOSE_PRICES_VERSION_KEY,
+} from '@/app/lib/prices/closePricesVersion';
 import { beginBuild, beginCommit } from './lib/readiness/priceReadyGate';
-import { syncPackagedClosesToIdb } from '@/app/lib/prices/syncPackagedClosesToIdb';
+import { syncPackagedClosesToIdb as syncPackagedClosesToIdbLegacy } from '@/app/lib/prices/syncPackagedClosesToIdb';
 import { markPricesReady, withGateTrace } from '@/app/lib/prices/ready';
 import type {
   MissingCloseSummary,
@@ -438,6 +447,8 @@ export default function DashboardPage() {
     [missingDismissed, setPeriodHealth],
   );
 
+  const officialCloseFixEnabled = isOfficialCloseFixEnabled();
+
   const runWithOfficialCloseCommit = useCallback(
     <T,>(
       label: string,
@@ -445,14 +456,24 @@ export default function DashboardPage() {
     ): Promise<T> =>
       (async () => {
         beginBuild();
-        await syncPackagedClosesToIdb();
+        if (officialCloseFixEnabled) {
+          await syncPackagedClosesToIdbFacade();
+        } else {
+          await syncPackagedClosesToIdbLegacy();
+        }
         const previousVersion = useStore.getState().officialCloseVersion;
         let markVersion: number | undefined;
         try {
-          const result = await withGateTrace(`${label}:build`, () => buildOfficialCloseMaps());
+          const result = await withGateTrace(`${label}:build`, () =>
+            officialCloseFixEnabled
+              ? rebuildOfficialCloseMapsWithCommit()
+              : buildOfficialCloseMaps(),
+          );
           beginCommit(result.version);
           const output = await withGateTrace(`${label}:apply`, () => apply(result));
-          commitOfficialCloseVersion(result.version);
+          if (!officialCloseFixEnabled) {
+            commitOfficialCloseVersion(result.version);
+          }
           setOfficialCloseVersion(result.version);
           markVersion = result.version;
           return output;
@@ -463,7 +484,7 @@ export default function DashboardPage() {
           markPricesReady(markVersion);
         }
       })(),
-    [setOfficialCloseVersion],
+    [officialCloseFixEnabled, setOfficialCloseVersion],
   );
 
   useEffect(() => {
@@ -617,8 +638,11 @@ export default function DashboardPage() {
       }
 
       await runWithOfficialCloseCommit('dashboard:load', async ({ maps }) => {
-        const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } =
-          maps;
+        const {
+          overlay: overlayMap,
+          official: officialClosePrices,
+          merged: mergedClosePrices,
+        } = maps;
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -715,6 +739,24 @@ export default function DashboardPage() {
     };
   }, [loadDashboardData]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === CLOSE_PRICES_VERSION_KEY) {
+        void loadDashboardData();
+      }
+    };
+    const handleVersionEvent = () => {
+      void loadDashboardData();
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(CLOSE_PRICES_VERSION_EVENT, handleVersionEvent);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(CLOSE_PRICES_VERSION_EVENT, handleVersionEvent);
+    };
+  }, [loadDashboardData]);
+
   // Unique set of all traded symbols
   const symbolsInTrades = useMemo(() => {
     const set = new Set(trades.map(t => t.symbol));
@@ -798,7 +840,11 @@ export default function DashboardPage() {
     }
 
     await runWithOfficialCloseCommit('dashboard:refresh', async ({ maps }) => {
-      const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } = maps;
+      const {
+        overlay: overlayMap,
+        merged: mergedClosePrices,
+        official: officialCloseMap,
+      } = maps;
 
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
@@ -889,8 +935,11 @@ export default function DashboardPage() {
       const evalDateStr = freezeTradingDay ?? resolveTradingDayStr();
 
       await runWithOfficialCloseCommit('dashboard:reload', async ({ maps }) => {
-        const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } =
-          maps;
+        const {
+          overlay: overlayMap,
+          merged: mergedClosePrices,
+          official: officialCloseMap,
+        } = maps;
 
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 

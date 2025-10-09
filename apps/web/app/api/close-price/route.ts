@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getWritebackMode } from '@/app/lib/prices/writebackConfig';
 
 const FILE_PATH = path.join(process.cwd(), 'apps/web/public/close_prices.json');
 const DAILY_RESULTS_PATH = path.join(process.cwd(), 'apps/web/public/dailyResult.json');
@@ -59,6 +60,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
+function mergeSymbolMaps(target: ClosePriceMap, source: ClosePriceMap): ClosePriceMap {
+  const output = { ...target };
+  for (const [symbol, byDate] of Object.entries(source)) {
+    const bucket = output[symbol] ?? (output[symbol] = {});
+    for (const [date, price] of Object.entries(byDate)) {
+      if (typeof price === 'number' && Number.isFinite(price)) {
+        bucket[date] = price;
+      }
+    }
+  }
+  return output;
+}
+
 async function readJson<T>(filePath: string, fallback: T): Promise<T> {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
@@ -85,12 +99,37 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (getWritebackMode() !== 'proxy') {
+    return new Response(JSON.stringify({ error: 'writeback disabled' }), { status: 403 });
+  }
   try {
     const payload = await req.json();
-    const body = isRecord(payload) ? payload : {};
-    const symbol = normaliseSymbol(body.symbol);
-    const date = normaliseDate(body.date);
-    const close = normalisePrice(body.close);
+    if (!isRecord(payload)) {
+      return new Response(JSON.stringify({ error: 'invalid payload' }), { status: 400 });
+    }
+
+    const kind = typeof payload.kind === 'string' ? payload.kind.toLowerCase() : '';
+    if (kind === 'bulk') {
+      if (!('data' in payload)) {
+        return new Response(JSON.stringify({ error: 'data required' }), { status: 400 });
+      }
+      const incoming = toSymbolFirstMap(payload.data);
+      if (Object.keys(incoming).length === 0) {
+        return new Response(JSON.stringify({ error: 'empty payload' }), { status: 400 });
+      }
+      const existingRaw = await readJson(FILE_PATH, {} as Record<string, unknown>);
+      const merged = mergeSymbolMaps(toSymbolFirstMap(existingRaw), incoming);
+      await fs.writeFile(FILE_PATH, JSON.stringify(merged, null, 2), 'utf8');
+      const entries = Object.values(incoming).reduce(
+        (count, byDate) => count + Object.keys(byDate).length,
+        0,
+      );
+      return NextResponse.json({ ok: true, entries });
+    }
+
+    const symbol = normaliseSymbol(payload.symbol);
+    const date = normaliseDate(payload.date);
+    const close = normalisePrice(payload.close);
 
     if (!symbol || !date || close === null) {
       return new Response(JSON.stringify({ error: 'symbol,date,close required' }), { status: 400 });
@@ -107,7 +146,7 @@ export async function POST(req: NextRequest) {
     (data[symbol] ??= {})[date] = close;
 
     await fs.writeFile(FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
-    return new Response(JSON.stringify({ ok: true }));
+    return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('save close price error', err);
     return new Response(JSON.stringify({ error: 'internal error' }), { status: 500 });
