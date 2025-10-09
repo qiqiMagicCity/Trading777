@@ -84,10 +84,11 @@ export function normalizeClosePriceMap(input: ClosePriceMap | Record<string, any
     const target = result[symbol] ?? (result[symbol] = {});
     if (!rawByDate || typeof rawByDate !== "object") continue;
     for (const [rawDate, rawPrice] of Object.entries(rawByDate as Record<string, any>)) {
-      if (!isValidDateStr(rawDate)) continue;
+      const date = rawDate.trim();
+      if (!isValidDateStr(date)) continue;
       const price = Number(rawPrice);
       if (!Number.isFinite(price)) continue;
-      target[rawDate] = price;
+      target[date] = price;
     }
   }
   return result;
