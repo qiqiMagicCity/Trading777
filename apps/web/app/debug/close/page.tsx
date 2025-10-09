@@ -24,10 +24,14 @@ import {
   type CloseExplain,
 } from "@/app/lib/diagnostics/explainMissingClose";
 import { isOfficialCloseFixEnabled } from "@/app/lib/prices/officialCloseFacade";
+import { useStore } from "@/app/lib/store";
+import {
+  deriveMissingDateCandidates,
+  stringifyMissingDates,
+} from "@/app/debug/close/missingDefaults";
 
 const DEF_SYMBOLS =
   "AMD,BA,DIS,GOOGL,NVDL,PYPL,TSDD,UAL,AMZN,APP,INTC,SCHW,COST";
-const DEF_DATES = "2025-09-19,2025-10-03,2025-10-06";
 
 interface CloseDebugStats {
   version: string | null;
@@ -93,11 +97,22 @@ export default function ClosePriceDebugger() {
   const searchParams = useSearchParams();
   const queryEval = (searchParams.get("eval") ?? "").trim();
   const queryPrev = (searchParams.get("prev") ?? "").trim();
+  const missingOfficialEntries = useStore(
+    (state) => state.metrics?.diagnostics?.missingOfficialCloses,
+  );
+  const recommendedDateList = useMemo(
+    () => deriveMissingDateCandidates(missingOfficialEntries),
+    [missingOfficialEntries],
+  );
+  const recommendedDateValue = useMemo(
+    () => stringifyMissingDates(recommendedDateList),
+    [recommendedDateList],
+  );
   const initialDates = useMemo(() => {
     const parts = [queryEval, queryPrev].filter(Boolean);
-    if (!parts.length) return DEF_DATES;
+    if (!parts.length) return recommendedDateValue;
     return Array.from(new Set(parts)).join(",");
-  }, [queryEval, queryPrev]);
+  }, [queryEval, queryPrev, recommendedDateValue]);
 
   const [symbols, setSymbols] = useState(DEF_SYMBOLS);
   const [dates, setDates] = useState(initialDates);
@@ -106,6 +121,12 @@ export default function ClosePriceDebugger() {
   const [statsLoading, setStatsLoading] = useState(false);
   const [stats, setStats] = useState<CloseDebugStats | null>(null);
   const hasAutoRun = useRef(false);
+  const hasManualDateInput = useRef(false);
+
+  useEffect(() => {
+    if (hasManualDateInput.current) return;
+    setDates(initialDates);
+  }, [initialDates]);
 
   const grouped = useMemo(() => explainMissingClose(rows), [rows]);
   const eMinusOneSummary = useMemo(
@@ -280,7 +301,10 @@ export default function ClosePriceDebugger() {
         <input
           className="flex-1 border p-2 rounded"
           value={dates}
-          onChange={(e) => setDates(e.target.value)}
+          onChange={(e) => {
+            hasManualDateInput.current = true;
+            setDates(e.target.value);
+          }}
           placeholder="输入日期，逗号分隔"
         />
         <button
