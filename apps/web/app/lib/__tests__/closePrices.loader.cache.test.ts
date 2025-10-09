@@ -47,6 +47,9 @@ describe("loadJson close_prices caching", () => {
       json: async () => ({
         AAPL: { "2025-01-02": 123.45 },
       }),
+      headers: {
+        get: jest.fn().mockReturnValue("hash:v1"),
+      },
     });
     global.fetch = fetchMock as any;
 
@@ -68,12 +71,18 @@ describe("loadJson close_prices caching", () => {
         json: async () => ({
           AAPL: { "2025-01-02": 120 },
         }),
+        headers: {
+          get: jest.fn().mockReturnValue("etag-first"),
+        },
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           AAPL: { "2025-01-03": 130 },
         }),
+        headers: {
+          get: jest.fn().mockReturnValue("etag-second"),
+        },
       });
     global.fetch = fetchMock as any;
 

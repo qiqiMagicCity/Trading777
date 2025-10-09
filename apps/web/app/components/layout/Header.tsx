@@ -160,10 +160,13 @@ export function Header() {
         if (!json || typeof json !== 'object' || Array.isArray(json)) {
           throw new Error('文件需为对象格式，支持“代码→日期”或“日期→代码”的嵌套结构');
         }
-        const imported = await importClosePrices(json as Record<string, Record<string, number>>);
-        alert(
-          `成功导入 ${imported} 条收盘价。支持 {"AAPL":{"2025-01-02":123.45}} 或 {"2025-01-02":{"AAPL":123.45}} 两种结构。`,
-        );
+        const result = await importClosePrices(json as Record<string, Record<string, number>>);
+        const pendingMessage = result.writeBackOk
+          ? ""
+          : result.writeBackSkipped
+            ? "（已在本地缓存生效，当前环境未写回 close_prices.json）"
+            : "（已在本地缓存生效，写回 close_prices.json 失败，稍后可在调试页确认待写回状态）";
+        alert(`成功导入 ${result.imported} 条收盘价${pendingMessage}。支持 {"AAPL":{"2025-01-02":123.45}} 或 {"2025-01-02":{"AAPL":123.45}} 两种结构。`);
         try {
           if (typeof window !== "undefined") {
             window.dispatchEvent(new Event("pricesImported"));

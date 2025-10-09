@@ -1,12 +1,13 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { ClosePriceMap } from "@/app/lib/dailyResults";
+import { isYmd } from "@/app/lib/dailyResults";
 
 if (typeof globalThis.structuredClone !== "function") {
   (globalThis as any).structuredClone = <T>(value: T): T =>
     value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
-export type OfficialCloseOverlaySource = "official_overlay";
+export type OfficialCloseOverlaySource = "official/import/overlay";
 
 export interface OfficialCloseOverlayRecord {
   symbol: string;
@@ -176,7 +177,7 @@ export async function putOfficialCloseOverlays(
       price,
       tsCreated: existing?.tsCreated ?? now,
       tsUpdated: now,
-      source: "official_overlay",
+      source: "official/import/overlay",
     });
   }
   if (normalized.size === 0) return [];
@@ -235,7 +236,13 @@ export function overlayEntriesToMap(
     if (!map[entry.symbol]) {
       map[entry.symbol] = {};
     }
-    map[entry.symbol]![entry.date] = entry.price;
+    const day = entry.date;
+    if (!isYmd(day)) {
+      continue;
+    }
+    const bucket = map[entry.symbol]!;
+    bucket[day] = entry.price;
+    (bucket.__sources ??= {})[day] = entry.source;
   }
   return map;
 }

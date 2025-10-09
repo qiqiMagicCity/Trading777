@@ -1,5 +1,5 @@
 import { loadJson } from "@/app/lib/dataSource";
-import { putPrice } from "@/lib/services/dataService";
+import { getPrice, putPrice } from "@/lib/services/dataService";
 
 function isValidDate(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -26,12 +26,18 @@ export async function syncPackagedClosesToIdb(): Promise<void> {
       for (const [rawDate, rawClose] of Object.entries(rawDates)) {
         if (!isValidDate(rawDate) || !isFiniteNumber(rawClose)) continue;
         tasks.push(
-          putPrice({
-            symbol,
-            date: rawDate,
-            close: rawClose,
-            source: "official/packaged",
-          }),
+          (async () => {
+            const existing = await getPrice(symbol, rawDate);
+            if (existing?.source && existing.source.startsWith("official/import")) {
+              return;
+            }
+            await putPrice({
+              symbol,
+              date: rawDate,
+              close: rawClose,
+              source: "official/packaged",
+            });
+          })(),
         );
       }
     }

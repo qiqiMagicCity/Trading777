@@ -14,7 +14,21 @@ import {
 
 const EPSILON = 1e-6;
 
-export type ClosePriceMap = Record<string, Record<string, number>>;
+export type Ymd = `${number}-${number}-${number}`;
+
+export const isYmd = (k: string): k is Ymd => /^\d{4}-\d{2}-\d{2}$/.test(k);
+
+/**
+ * 只允许“YYYY-MM-DD”作为价格键；__sources 用于记录来源元信息。
+ * 注意：使用 type 别名承载映射类型，避免 interface + 映射类型的语法错误。
+ */
+export type ClosePriceBucket =
+  Partial<Record<Ymd, number>> & {
+    // 来源信息仅用于诊断，允许以任意字符串作为键，避免各调用点的 string 访问报错
+    __sources?: Record<string, string>;
+  };
+
+export type ClosePriceMap = Record<string, ClosePriceBucket>;
 
 export type MissingCloseFallback =
   | "MARK_PRICE"
@@ -75,19 +89,103 @@ function toDateStr(value: string | Date | number | undefined): string | null {
   return ymdInNY(date);
 }
 
-export function normalizeClosePriceMap(input: ClosePriceMap | Record<string, any> | undefined): ClosePriceMap {
+function ensureBucket(map: ClosePriceMap, symbol: string): ClosePriceBucket {
+  return (map[symbol] ??= {});
+}
+
+export function setPrice(
+  bucket: ClosePriceBucket,
+  date: string,
+  price: number,
+  source?: string,
+): void {
+  if (!isYmd(date)) return;
+  const d: Ymd = date;
+  bucket[d] = price;
+  if (source && source.trim()) {
+    (bucket.__sources ??= {})[d] = source.trim();
+    return;
+  }
+  if (!bucket.__sources?.[d]) {
+    return;
+  }
+  const { __sources } = bucket;
+  delete __sources[d];
+  if (Object.keys(__sources).length === 0) {
+    delete bucket.__sources;
+  }
+}
+
+export function readSource(bucket: ClosePriceBucket | undefined, date: string): string | undefined {
+  if (!bucket || !isYmd(date)) return undefined;
+  const d: Ymd = date;
+  return bucket.__sources?.[d];
+}
+
+export function readPrice(bucket: ClosePriceBucket | undefined, date: string): number | undefined {
+  if (!bucket || !isYmd(date)) return undefined;
+  return bucket[date];
+}
+
+export function toNumericClosePriceMap(map: ClosePriceMap): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const symbol of Object.keys(map)) {
+    const bucket = map[symbol] ?? {};
+    const numeric: Record<string, number> = {};
+    for (const day of Object.keys(bucket).filter(isYmd)) {
+      const value = bucket[day];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        numeric[day] = value;
+      }
+    }
+    out[symbol] = numeric;
+  }
+  return out;
+}
+
+export interface NormalizeClosePriceOptions {
+  defaultSource?: string;
+}
+
+export function normalizeClosePriceMap(
+  input: ClosePriceMap | Record<string, any> | undefined,
+  options: NormalizeClosePriceOptions = {},
+): ClosePriceMap {
   const result: ClosePriceMap = {};
   if (!input) return result;
+  const { defaultSource } = options;
   for (const [rawSymbol, rawByDate] of Object.entries(input)) {
     const symbol = normalizeSymbol(rawSymbol);
     if (!symbol) continue;
-    const target = result[symbol] ?? (result[symbol] = {});
+    const target = ensureBucket(result, symbol);
     if (!rawByDate || typeof rawByDate !== "object") continue;
-    for (const [rawDate, rawPrice] of Object.entries(rawByDate as Record<string, any>)) {
+    const bucket = rawByDate as ClosePriceBucket & Record<string, any>;
+    for (const [rawDate, rawPrice] of Object.entries(bucket)) {
       if (!isValidDateStr(rawDate)) continue;
-      const price = Number(rawPrice);
-      if (!Number.isFinite(price)) continue;
-      target[rawDate] = price;
+      let price: number | null = null;
+      let source: string | undefined = undefined;
+      if (rawPrice && typeof rawPrice === "object") {
+        const maybePrice = Number((rawPrice as Record<string, unknown>).price);
+        if (Number.isFinite(maybePrice)) {
+          price = maybePrice;
+        }
+        const maybeSource = (rawPrice as Record<string, unknown>).source;
+        if (typeof maybeSource === "string" && maybeSource.trim()) {
+          source = maybeSource.trim();
+        }
+      }
+      if (price === null) {
+        const numeric = Number(rawPrice);
+        if (Number.isFinite(numeric)) {
+          price = numeric;
+        }
+      }
+      if (price === null) continue;
+      const existingSource =
+        typeof bucket.__sources?.[rawDate] === "string" && bucket.__sources![rawDate]
+          ? bucket.__sources![rawDate]
+          : undefined;
+      setPrice(target, rawDate, price, source ?? existingSource ?? defaultSource);
     }
   }
   return result;
@@ -125,18 +223,54 @@ export function closePricesFromRows(
     if (!symbol || !isValidDateStr(row.date)) continue;
     const price = Number(row.close);
     if (!Number.isFinite(price)) continue;
-    (map[symbol] ??= {})[row.date] = price;
+    const bucket = ensureBucket(map, symbol);
+    setPrice(bucket, row.date, price, typeof source === "string" ? source : undefined);
   }
   return map;
+}
+
+function sourcePriority(source: string | undefined): number {
+  if (!source) return 0;
+  if (source === "official_overlay" || source.startsWith("official/import/overlay")) {
+    return 400;
+  }
+  if (source.startsWith("official/import")) {
+    return 300;
+  }
+  if (source === "official/packaged" || source === "official/file") {
+    return 200;
+  }
+  if (source.startsWith("official/")) {
+    return 150;
+  }
+  return 100;
+}
+
+function isOverlaySource(source: string | undefined): boolean {
+  return sourcePriority(source) >= 400;
 }
 
 export function mergeClosePriceMaps(...maps: ClosePriceMap[]): ClosePriceMap {
   const result: ClosePriceMap = {};
   for (const map of maps) {
     for (const [symbol, byDate] of Object.entries(map)) {
-      const target = result[symbol] ?? (result[symbol] = {});
-      for (const [date, price] of Object.entries(byDate)) {
-        target[date] = price;
+      const target = ensureBucket(result, symbol);
+      for (const date of Object.keys(byDate).filter(isYmd)) {
+        const price = readPrice(byDate, date);
+        if (price === undefined || !Number.isFinite(price)) continue;
+        const numeric = Number(price);
+        const candidateSource = readSource(byDate, date);
+        const existingSource = readSource(target, date);
+        if (existingSource?.startsWith("official/import") && !isOverlaySource(candidateSource)) {
+          continue;
+        }
+        const candidatePriority = sourcePriority(candidateSource);
+        const existingPriority = sourcePriority(existingSource);
+        if (candidatePriority < existingPriority) {
+          continue;
+        }
+        const sourceToPersist = candidateSource ?? existingSource;
+        setPrice(target, date, numeric, sourceToPersist);
       }
     }
   }
@@ -277,7 +411,7 @@ export function generateDailyResults({
   for (const symbol of symbolSet) {
     const byDate = normalizedClose[symbol];
     if (!byDate) continue;
-    for (const date of Object.keys(byDate)) {
+    for (const date of Object.keys(byDate).filter(isYmd)) {
       if (date <= evalDateStr) {
         dateSet.add(date);
       }
@@ -427,8 +561,9 @@ export function generateDailyResults({
       if (absQty <= EPSILON) return sum;
       let price: number | undefined;
       const byDate = normalizedClose[symbol];
-      if (byDate && Number.isFinite(byDate[date])) {
-        price = Number(byDate[date]);
+      const directPrice = readPrice(byDate, date);
+      if (directPrice !== undefined && Number.isFinite(directPrice)) {
+        price = Number(directPrice);
       }
       if (price === undefined && date === evalDateStr && treatRealtimeAsClose) {
         const final = finalPriceMap.get(symbol);

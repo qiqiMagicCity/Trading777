@@ -7,6 +7,7 @@ import {
   afterImportMaintenance,
   explainMissingClose,
 } from "@/app/lib/diagnostics/explainMissingClose";
+import { getClosePricesBasePath } from "@/app/lib/prices/closePriceFetch";
 
 const DEF_SYMBOLS =
   "AMD,BA,DIS,GOOGL,NVDL,PYPL,TSDD,UAL,AMZN,APP,INTC,SCHW,COST";
@@ -26,6 +27,7 @@ export default function ClosePriceDebugger() {
   const [dates, setDates] = useState(initialDates);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
   const hasAutoRun = useRef(false);
 
   const grouped = useMemo(() => explainMissingClose(rows), [rows]);
@@ -67,9 +69,27 @@ export default function ClosePriceDebugger() {
     void runWith(DEF_SYMBOLS, initialDates);
   }, [initialDates, queryEval, runWith]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem("close_prices_version");
+      setVersion(stored);
+    } catch {
+      setVersion(null);
+    }
+  }, []);
+
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-bold">诊断：导入后仍提示缺价（逐步原因）</h1>
+      <p className="text-sm text-gray-600">
+        当前 close_prices_version：{version ?? "未记录"}；请求前缀：
+        {getClosePricesBasePath() || "/"}。
+      </p>
+      <p className="text-sm text-gray-600">
+        在 officialCloseMap 内可通过 <code>__sources[YYYY-MM-DD]</code> 查看命中层
+        （official/import、official/packaged、official/import/overlay 等）。
+      </p>
       <div className="flex flex-col gap-4 md:flex-row">
         <input
           className="flex-1 border p-2 rounded"

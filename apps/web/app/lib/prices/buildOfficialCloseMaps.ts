@@ -44,7 +44,9 @@ export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult
     readOfficialCloseOverlay(),
   ]);
 
-  const normalizedFileCloses = normalizeClosePriceMap(fileClosePricesRaw);
+  const normalizedFileCloses = normalizeClosePriceMap(fileClosePricesRaw, {
+    defaultSource: "official/packaged",
+  });
   const overlayMap = overlayEntriesToMap(overlayEntries);
   const cachedFallbackCloses = closePricesFromRows(
     cachedPrices.filter((row) => !isOfficialCloseSource(row.source)),
@@ -54,15 +56,15 @@ export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult
   );
 
   const officialCloseMap = mergeClosePriceMaps(
-    overlayMap,
-    normalizedFileCloses,
     cachedOfficialCloses,
+    normalizedFileCloses,
+    overlayMap,
   );
   const mergedCloseMap = mergeClosePriceMaps(
     cachedFallbackCloses,
-    overlayMap,
-    normalizedFileCloses,
     cachedOfficialCloses,
+    normalizedFileCloses,
+    overlayMap,
   );
 
   const nextVersion = officialCloseVersion + 1;
