@@ -93,36 +93,53 @@ function ensureBucket(map: ClosePriceMap, symbol: string): ClosePriceBucket {
   return (map[symbol] ??= {});
 }
 
-function assignPrice(
+export function setPrice(
   bucket: ClosePriceBucket,
   date: string,
   price: number,
   source?: string,
 ): void {
-  if (!isYmd(date)) {
-    return;
-  }
+  if (!isYmd(date)) return;
   const d: Ymd = date;
   bucket[d] = price;
   if (source && source.trim()) {
     (bucket.__sources ??= {})[d] = source.trim();
-  } else if (bucket.__sources?.[d]) {
-    const { __sources } = bucket;
-    delete __sources[d];
-    if (Object.keys(__sources).length === 0) {
-      delete bucket.__sources;
-    }
+    return;
+  }
+  if (!bucket.__sources?.[d]) {
+    return;
+  }
+  const { __sources } = bucket;
+  delete __sources[d];
+  if (Object.keys(__sources).length === 0) {
+    delete bucket.__sources;
   }
 }
 
-function readSource(bucket: ClosePriceBucket | undefined, date: string): string | undefined {
-  return bucket?.__sources?.[date];
+export function readSource(bucket: ClosePriceBucket | undefined, date: string): string | undefined {
+  if (!bucket || !isYmd(date)) return undefined;
+  return bucket.__sources?.[date];
 }
 
 export function readPrice(bucket: ClosePriceBucket | undefined, date: string): number | undefined {
-  if (!bucket) return undefined;
-  if (!isYmd(date)) return undefined;
+  if (!bucket || !isYmd(date)) return undefined;
   return bucket[date];
+}
+
+export function toNumericClosePriceMap(map: ClosePriceMap): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const symbol of Object.keys(map)) {
+    const bucket = map[symbol] ?? {};
+    const numeric: Record<string, number> = {};
+    for (const day of Object.keys(bucket).filter(isYmd)) {
+      const value = bucket[day];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        numeric[day] = value;
+      }
+    }
+    out[symbol] = numeric;
+  }
+  return out;
 }
 
 export interface NormalizeClosePriceOptions {
@@ -167,7 +184,7 @@ export function normalizeClosePriceMap(
         typeof bucket.__sources?.[rawDate] === "string" && bucket.__sources![rawDate]
           ? bucket.__sources![rawDate]
           : undefined;
-      assignPrice(target, rawDate, price, source ?? existingSource ?? defaultSource);
+      setPrice(target, rawDate, price, source ?? existingSource ?? defaultSource);
     }
   }
   return result;
@@ -206,7 +223,7 @@ export function closePricesFromRows(
     const price = Number(row.close);
     if (!Number.isFinite(price)) continue;
     const bucket = ensureBucket(map, symbol);
-    assignPrice(bucket, row.date, price, typeof source === "string" ? source : undefined);
+    setPrice(bucket, row.date, price, typeof source === "string" ? source : undefined);
   }
   return map;
 }
@@ -252,7 +269,7 @@ export function mergeClosePriceMaps(...maps: ClosePriceMap[]): ClosePriceMap {
           continue;
         }
         const sourceToPersist = candidateSource ?? existingSource;
-        assignPrice(target, date, numeric, sourceToPersist);
+        setPrice(target, date, numeric, sourceToPersist);
       }
     }
   }

@@ -2,7 +2,7 @@ import { openDB, DBSchema, IDBPDatabase } from "idb";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
-import { ClosePriceMap, isYmd } from "@/app/lib/dailyResults";
+import { ClosePriceMap, isYmd, setPrice } from "@/app/lib/dailyResults";
 import { writeStoredClosePricesVersion } from "@/app/lib/prices/closePriceFetch";
 import { refreshOfficialCloseMaps } from "@/app/lib/prices/officialCloseFacade";
 import { markPricesReady } from "@/app/lib/prices/ready";
@@ -876,10 +876,7 @@ export async function getOfficialCloseMapFromCache(): Promise<ClosePriceMap> {
         continue;
       }
       const bucket = (map[symbol] ??= {});
-      bucket[date] = price;
-      if (typeof row.source === "string") {
-        (bucket.__sources ??= {})[date] = row.source;
-      }
+      setPrice(bucket, date, price, typeof row.source === "string" ? row.source : undefined);
     }
     return map;
   } catch (error) {

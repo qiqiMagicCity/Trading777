@@ -1,5 +1,6 @@
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
 import { getOfficialCloseMapFromCache } from "@/lib/services/dataService";
+import { toNumericClosePriceMap, type ClosePriceMap } from "./dailyResults";
 import {
   computeClosePricesVersion,
   getClosePricesFetchInfo,
@@ -44,7 +45,7 @@ async function loadClosePricesFromIdb(): Promise<Record<string, Record<string, n
       return {};
     }
     // map 已经过 migrateClosePriceMap 处理，确保结构一致
-    return map;
+    return toNumericClosePriceMap(map);
   } catch (error) {
     console.warn("[dataSource] fallback to IndexedDB failed", error);
     return {};
@@ -71,7 +72,10 @@ export async function loadJson(name: 'trades'|'initial_positions'|'close_prices'
     if (res.ok) {
       const data = await res.json();
       if (data && (Array.isArray(data) ? data.length > 0 : Object.keys(data).length > 0)) {
-        const result = name === 'close_prices' ? applyClosePriceMigration(data) : data;
+        const result =
+          name === 'close_prices'
+            ? toNumericClosePriceMap(applyClosePriceMigration(data) as ClosePriceMap)
+            : data;
         if (name === 'close_prices') {
           const version = computeClosePricesVersion(res, result);
           writeStoredClosePricesVersion(version);
