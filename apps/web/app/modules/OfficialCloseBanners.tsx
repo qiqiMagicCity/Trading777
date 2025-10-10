@@ -16,6 +16,7 @@ import {
 import type { MissingOfficialCloseEntry } from "@/app/lib/types/metrics";
 import { filterMissingOfficialCloses } from "@/app/lib/prices/filterMissingOfficialCloses";
 import { requireOfficialClose } from "@/app/lib/prices/officialCloseFacade";
+import { runOfficialCloseAudit } from "@/app/lib/diagnostics/runAlertsSelfAudit";
 import { nowNY, startOfWeekNY, ymdInNY } from "@/lib/timezone";
 import { previousTradingDay, resolveTradingDayStr } from "@/app/lib/nyDay";
 
@@ -31,6 +32,7 @@ export function MissingOfficialCloseBanner({
 
   useEffect(() => {
     setHydrated(true);
+    void runOfficialCloseAudit("HYDRATE");
   }, []);
 
   const recompute = useCallback(async () => {
@@ -51,9 +53,11 @@ export function MissingOfficialCloseBanner({
     void recompute();
     const handleImported = () => {
       void recompute();
+      void runOfficialCloseAudit("AFTER_EVENTS");
     };
     const handleReadyAfterCommit = () => {
       void recompute();
+      void runOfficialCloseAudit("AFTER_EVENTS");
     };
     window.addEventListener("pricesImported", handleImported);
     window.addEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
