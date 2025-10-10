@@ -1,5 +1,6 @@
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
 import { getOfficialCloseMapFromCache } from "@/lib/services/dataService";
+import { normalizeCloseMap, type CloseMapByDate } from "./prices/normalizeCloseMap";
 import {
   fetchClosePricesResource,
   getClosePricesFetchInfo,
@@ -34,7 +35,7 @@ function safeSetLocalStorageItem(key: string, value: string): void {
   }
 }
 
-async function loadClosePricesFromIdb(): Promise<Record<string, Record<string, number>>> {
+async function loadClosePricesFromIdb(): Promise<CloseMapByDate> {
   if (typeof indexedDB === "undefined") {
     return {};
   }
@@ -44,19 +45,19 @@ async function loadClosePricesFromIdb(): Promise<Record<string, Record<string, n
       return {};
     }
     // map 已经过 migrateClosePriceMap 处理，确保结构一致
-    return map;
+    return normalizeCloseMap(map);
   } catch (error) {
     console.warn("[dataSource] fallback to IndexedDB failed", error);
     return {};
   }
 }
 
-function applyClosePriceMigration(raw: unknown) {
+function applyClosePriceMigration(raw: unknown): CloseMapByDate {
   const { map } = migrateClosePriceMap(raw);
-  return map;
+  return normalizeCloseMap(map);
 }
 
-async function loadClosePricesWithFix(): Promise<Record<string, Record<string, number>>> {
+async function loadClosePricesWithFix(): Promise<CloseMapByDate> {
   const result = await fetchClosePricesResource();
   if (result.ok && result.bodyText) {
     try {

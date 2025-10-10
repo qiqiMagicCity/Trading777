@@ -17,8 +17,8 @@ import { safeLocalStorage, lsGet, lsSet } from '../env';
 import { NoPriceError } from '../priceService';
 import { nyDateStr, toNY, NY_TZ } from '../time';
 import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
-import { migrateClosePriceMap } from '@/lib/closePriceMigration';
 import { evaluateCloseRequirement as evaluateMarketCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
+import { type CloseMapByDate } from '@/app/lib/prices/normalizeCloseMap';
 
 // Node 降级缓存
 const mem = new Map<string, string>();
@@ -459,7 +459,7 @@ function shouldUseRealtimeClose(
 export interface PrevCloseWithinOptions {
   maxBack?: number;
   officialOnly?: boolean;
-  closeMap?: Record<string, Record<string, number>>;
+  closeMap?: CloseMapByDate;
 }
 
 export interface PrevCloseWithinResult {
@@ -491,14 +491,10 @@ async function getPrevCloseWithin(
   let map = options.closeMap;
   if (!map) {
     try {
-      map = await loadJson('close_prices') as Record<string, Record<string, number>>;
+      map = await loadJson('close_prices') as CloseMapByDate;
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
       map = undefined;
-    }
-
-    if (map) {
-      map = migrateClosePriceMap(map).map;
     }
   }
 
@@ -526,7 +522,7 @@ async function getPrevCloseWithin(
       console.warn('[priceService] 读取缓存价格失败', err);
     }
 
-    const filePrice = map?.[key]?.[candidate];
+    const filePrice = map?.[candidate]?.[key];
     if (typeof filePrice === 'number' && Number.isFinite(filePrice)) {
       return { ymd: candidate, close: filePrice, source: 'close_prices' };
     }
@@ -540,7 +536,7 @@ async function getPrevCloseWithin(
 /**
  * 获取“每日收盘价”
  * 顺序：缓存 -> close_prices.json -> 默认值(1)
- * close_prices.json 结构：{ [SYMBOL]: { [YYYY-MM-DD]: price } }
+ * close_prices.json 结构：{ [YYYY-MM-DD]: { [SYMBOL]: price } }
  */
 interface FetchDailyCloseOptions {
   /**
@@ -580,18 +576,14 @@ export async function fetchDailyClose(
       return { kind: 'quote', price: cachedPrice.close, stale: false, priceOk: true, updatedAt: Date.now() };
     }
 
-    let closeMap: Record<string, Record<string, number>> | undefined;
+    let closeMap: CloseMapByDate | undefined;
     try {
-      closeMap = await loadJson('close_prices') as Record<string, Record<string, number>>;
+      closeMap = await loadJson('close_prices') as CloseMapByDate;
     } catch (err) {
       console.warn('[priceService] 读取 close_prices.json 失败', err);
     }
 
-    if (closeMap) {
-      closeMap = migrateClosePriceMap(closeMap).map;
-    }
-
-    const filePrice = closeMap?.[key]?.[normalizedDate];
+    const filePrice = closeMap?.[normalizedDate]?.[key];
     if (typeof filePrice === 'number') {
       await putPrice({ symbol: key, date: normalizedDate, close: filePrice, source: 'official/import' });
       await saveToFile(key, normalizedDate, filePrice);
