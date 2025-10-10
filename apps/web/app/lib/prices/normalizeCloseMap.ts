@@ -4,7 +4,7 @@ type AnyMap = Record<string, any>;
 
 const isISODate = (k: string) => /^\d{4}-\d{2}-\d{2}$/.test(k);
 // 允许大写字母/数字/点/破折号（如 BRK.B、BABA-SW）
-const isTicker = (k: string) => /^[A-Z0-9.\-]{1,12}$/.test(k);
+const isTicker = (k: string) => /^[A-Z0-9.-]{1,12}$/.test(k);
 
 const toNum = (v: any) => {
   if (v == null || (typeof v === 'string' && v.trim() === '')) return undefined;

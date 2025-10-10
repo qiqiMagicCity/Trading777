@@ -1,6 +1,7 @@
 import { loadJson } from "@/app/lib/dataSource";
 import { compareOfficialSourcePriority } from "@/app/lib/prices/compareOfficialSourcePriority";
 import { getPrice, putPrice } from "@/lib/services/dataService";
+import { type CloseMapByDate } from "./normalizeCloseMap";
 
 function readFreezeFlag(): string | null {
   const envFreeze =
@@ -66,7 +67,7 @@ export async function syncPackagedClosesToIdb(): Promise<SyncPackagedClosesStats
     return lastSyncStats;
   }
   try {
-    const data = await loadJson("close_prices");
+    const data = (await loadJson("close_prices")) as CloseMapByDate;
     if (!data || typeof data !== "object") {
       lastSyncStats = createEmptyStats();
       return lastSyncStats;
@@ -78,16 +79,16 @@ export async function syncPackagedClosesToIdb(): Promise<SyncPackagedClosesStats
     let skippedSame = 0;
     let inserted = 0;
     let total = 0;
-    for (const [rawSymbol, rawDates] of Object.entries(
-      data as Record<string, Record<string, number>>,
-    )) {
-      if (!rawSymbol || typeof rawSymbol !== "string") continue;
-      const symbol = rawSymbol.trim().toUpperCase();
-      if (!symbol) continue;
-      if (!rawDates || typeof rawDates !== "object") continue;
-
-      for (const [rawDate, rawClose] of Object.entries(rawDates)) {
-        if (!isValidDate(rawDate) || !isFiniteNumber(rawClose)) continue;
+    for (const [rawDate, rawSymbols] of Object.entries(data)) {
+      if (!isValidDate(rawDate) || !rawSymbols || typeof rawSymbols !== "object") {
+        continue;
+      }
+      for (const [rawSymbol, rawClose] of Object.entries(rawSymbols)) {
+        if (!rawSymbol || typeof rawSymbol !== "string" || !isFiniteNumber(rawClose)) {
+          continue;
+        }
+        const symbol = rawSymbol.trim().toUpperCase();
+        if (!symbol) continue;
         total += 1;
         try {
           const existing = await getPrice(symbol, rawDate);

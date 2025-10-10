@@ -56,7 +56,7 @@ describe("loadJson close_prices caching", () => {
       "/close_prices.json?v=1700000000000",
       { cache: "no-store" },
     );
-    expect(result).toEqual({ AAPL: { "2025-01-02": 123.45 } });
+    expect(result).toEqual({ "2025-01-02": { AAPL: 123.45 } });
   });
 
   it("uses updated version after import bump", async () => {
@@ -78,7 +78,7 @@ describe("loadJson close_prices caching", () => {
     global.fetch = fetchMock as any;
 
     const first = await loadJson("close_prices");
-    expect(first).toEqual({ AAPL: { "2025-01-02": 120 } });
+    expect(first).toEqual({ "2025-01-02": { AAPL: 120 } });
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/close_prices.json?v=1000",
       { cache: "no-store" },
@@ -91,6 +91,6 @@ describe("loadJson close_prices caching", () => {
       "/close_prices.json?v=2000",
       { cache: "no-store" },
     );
-    expect(second).toEqual({ AAPL: { "2025-01-03": 130 } });
+    expect(second).toEqual({ "2025-01-03": { AAPL: 130 } });
   });
 });

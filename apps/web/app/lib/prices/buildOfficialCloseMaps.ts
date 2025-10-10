@@ -16,6 +16,7 @@ import {
   isHigherPriority,
   normalizeOfficialSourceTag,
 } from "@/app/lib/prices/compareOfficialSourcePriority";
+import { type CloseMapByDate } from "./normalizeCloseMap";
 
 export interface OfficialCloseMaps {
   overlay: ClosePriceMap;
@@ -163,14 +164,25 @@ function detailMapToPrices(detail: OfficialCloseDetailMap): ClosePriceMap {
   return result;
 }
 
+function byDateToSymbolMap(map: CloseMapByDate): ClosePriceMap {
+  const result: ClosePriceMap = {};
+  for (const [date, bySymbol] of Object.entries(map)) {
+    for (const [symbol, price] of Object.entries(bySymbol)) {
+      (result[symbol] ??= {})[date] = price;
+    }
+  }
+  return result;
+}
+
 export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult> {
   const [fileClosePricesRaw, cachedPrices, overlayEntries] = await Promise.all([
-    loadJson("close_prices") as Promise<Record<string, Record<string, number>>>,
+    loadJson("close_prices") as Promise<CloseMapByDate>,
     getAllPrices(),
     readOfficialCloseOverlay(),
   ]);
 
-  const normalizedFileCloses = normalizeClosePriceMap(fileClosePricesRaw);
+  const packagedBySymbol = byDateToSymbolMap(fileClosePricesRaw);
+  const normalizedFileCloses = normalizeClosePriceMap(packagedBySymbol);
   const packagedDetail = buildDetailMapFromNumeric(
     normalizedFileCloses,
     "official/packaged",
