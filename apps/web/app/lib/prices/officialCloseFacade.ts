@@ -2,6 +2,11 @@ import type { ClosePriceMap } from "@/app/lib/dailyResults";
 import { summarizeMissingOfficialCloses } from "@/app/lib/diagnostics/missingBanner";
 import type { MissingOfficialSymbolSummary } from "@/app/lib/missingOfficialClose";
 import {
+  getLatestMissingOfficialEntries,
+  setLatestOfficialCloseMaps,
+  setLatestMissingOfficialEntries,
+} from "@/app/lib/prices/officialCloseCache";
+import {
   buildOfficialCloseMaps,
   commitOfficialCloseVersion,
   getOfficialCloseVersion,
@@ -254,6 +259,13 @@ export async function fetchClosePricesResource(
 
 export async function rebuildOfficialCloseMapsWithCommit(): Promise<OfficialCloseBuildResult> {
   const result = await buildOfficialCloseMaps();
+  setLatestOfficialCloseMaps({
+    official: result.maps.official,
+    overlay: result.maps.overlay,
+    packaged: result.maps.packaged,
+    idb: result.debug?.idb ?? {},
+  });
+  setLatestMissingOfficialEntries(null);
   commitOfficialCloseVersion(result.version);
   return result;
 }
@@ -297,7 +309,8 @@ export async function getMissingOfficialCloses(
     typeof targetVersion === "number" ? targetVersion : getOfficialCloseVersion();
   await waitOfficialClosesReady(version);
   const metrics = useStore.getState().metrics;
-  const entries = metrics?.diagnostics?.missingOfficialCloses ?? [];
+  const cachedEntries = getLatestMissingOfficialEntries();
+  const entries = cachedEntries ?? metrics?.diagnostics?.missingOfficialCloses ?? [];
   const summaries = summarizeMissingOfficialCloses(entries);
   const map: MissingOfficialCloseMap = {};
   for (const summary of summaries) {

@@ -21,6 +21,7 @@ export function markPricesReady(committedVersion?: number): void {
   if (typeof window !== "undefined") {
     const detail = { version: current().version };
     window.dispatchEvent(new CustomEvent("pricesReady", { detail }));
+    window.dispatchEvent(new CustomEvent("pricesReadyAfterCommit", { detail }));
   }
 }
 

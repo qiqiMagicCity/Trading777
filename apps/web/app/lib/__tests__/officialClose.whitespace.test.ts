@@ -12,11 +12,11 @@ describe("official close whitespace handling", () => {
     jest.resetModules();
     (global as typeof globalThis & { fetch?: unknown }).fetch = undefined;
     const loadJsonMock = jest.fn().mockResolvedValue({
-      " amd ": {
-        "2025-09-19 ": "101.23",
+      "2025-09-19 ": {
+        " amd ": "101.23",
       },
-      amzn: {
-        "2025-10-03\t": "202.34",
+      "2025-10-03\t": {
+        amzn: "202.34",
       },
     });
     const getAllPricesMock = jest.fn().mockResolvedValue([]);
