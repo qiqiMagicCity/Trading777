@@ -9,7 +9,7 @@ interface Props {
 }
 
 export function PriceBadge({ price, stale, pending, requireConfirm, onConfirm }: Props) {
-  const formatted = Number.isFinite(price) ? price.toFixed(2) : '--';
+  const formatted = Number.isFinite(price) ? price.toFixed(2) : '数据缺失';
   return (
     <span className="inline-flex items-center gap-1">
       <span className={pending ? 'text-blue-500 font-semibold' : undefined}>{formatted}</span>

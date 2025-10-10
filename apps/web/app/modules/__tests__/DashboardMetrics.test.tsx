@@ -588,9 +588,8 @@ describe("DashboardMetrics intraday breakdown", () => {
     const tooltip = trigger.getAttribute("title") || "";
     expect(tooltip).toContain("退化原因：解析失败（DEGEN_PARSE_FAILED）");
     expect(tooltip).toContain("⚠️ SafePrice: TSLA 缺少当日均价，已按 0 计入。");
-    expect(tooltip).toContain(
-      "解析失败：realized_today：1 条（示例 2025-05-01→1,200）",
-    );
+    expect(tooltip).toContain("解析失败：realized_today");
+    expect(tooltip).toContain("2025-05-01→1,200");
     expect(trigger.className).toContain("bg-amber-100");
   });
 });

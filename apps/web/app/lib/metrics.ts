@@ -2932,6 +2932,9 @@ export function calcMetrics(
 }
 
 export function formatCurrency(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "数据缺失";
+  }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -2941,7 +2944,7 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatNumber(value: number, decimals: number = 2): string {
-  if (isNaN(value)) return "N/A";
+  if (!Number.isFinite(value)) return "数据缺失";
   return value.toFixed(decimals);
 }
 

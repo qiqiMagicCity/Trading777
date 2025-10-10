@@ -117,10 +117,10 @@ const getWeekdayIndex = (trade: EnrichedTrade): number | null => {
 };
 
 const getTimeDisplay = (trade: EnrichedTrade): string => {
-  if (!trade.time) return '--';
+  if (!trade.time) return '数据缺失';
   if (typeof trade.time === 'string') {
     const trimmed = trade.time.trim();
-    if (!trimmed) return '--';
+    if (!trimmed) return '数据缺失';
     if (trimmed.includes('T')) {
       const [, timePart] = trimmed.replace('Z', '').split('T');
       if (timePart) {
@@ -139,7 +139,7 @@ const getTimeDisplay = (trade: EnrichedTrade): string => {
     }
   }
   const parsed = parseTimeValue(trade);
-  if (!parsed) return '--';
+  if (!parsed) return '数据缺失';
   return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
 };
 
@@ -160,7 +160,8 @@ const getSortValue = (trade: EnrichedTrade): number => {
 };
 
 function formatNumber(value: number | undefined, decimals = 2) {
-  if (value === undefined || value === null) return '-';
+  if (value === undefined || value === null) return '数据缺失';
+  if (!Number.isFinite(value)) return '数据缺失';
   return value.toFixed(decimals);
 }
 
@@ -208,7 +209,10 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
       <tbody>
         {sortedRecent.map((trade, idx) => {
           const weekdayIndex = getWeekdayIndex(trade);
-          const weekday = typeof weekdayIndex === 'number' ? (weekdayMap[weekdayIndex] ?? '--') : '--';
+          const weekday =
+            typeof weekdayIndex === 'number'
+              ? weekdayMap[weekdayIndex] ?? '数据缺失'
+              : '数据缺失';
           const colorSide = (trade.action === 'buy' || trade.action === 'cover')
             ? 'green'
             : (trade.action === 'sell' || trade.action === 'short')
@@ -231,7 +235,7 @@ export function TradesTable({ trades }: { trades: EnrichedTrade[] }) {
                 />
               </td>
               <td>{trade.symbol}</td>
-              <td className="cn">{nameMap[trade.symbol] || '--'}</td>
+              <td className="cn">{nameMap[trade.symbol] || '数据缺失'}</td>
               <td className={colorSide}>{trade.action ? trade.action.toUpperCase() : 'UNKNOWN'}</td>
               <td>{formatNumber(trade.price)}</td>
               <td className={qtyColor}>{trade.quantity}</td>

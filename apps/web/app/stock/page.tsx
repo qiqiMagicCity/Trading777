@@ -8,7 +8,8 @@ import { computeFifo, type EnrichedTrade } from '@/lib/fifo';
 import { toNY } from '@/lib/timezone';
 
 function formatNumber(value: number | undefined, decimals = 2) {
-  if (value === undefined || value === null) return '-';
+  if (value === undefined || value === null) return '数据缺失';
+  if (!Number.isFinite(value)) return '数据缺失';
   return value.toFixed(decimals);
 }
 

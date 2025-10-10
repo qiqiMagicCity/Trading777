@@ -25,28 +25,30 @@ import {
 import { round4 } from "@/app/lib/precision";
 
 function formatNumber(value: number | undefined, decimals = 2) {
-  if (value === undefined || value === null) return '--';
+  if (value === undefined || value === null) return '数据缺失';
+  if (!Number.isFinite(value)) return '数据缺失';
   return value.toFixed(decimals);
 }
 
 // 格式化百分比
 function formatPercent(value: number | undefined) {
-  if (value === undefined || value === null) return '--';
+  if (value === undefined || value === null) return '数据缺失';
+  if (!Number.isFinite(value)) return '数据缺失';
   return `${(value * 100).toFixed(2)}%`;
 }
 
 function format4(value: number | undefined): string {
-  if (!Number.isFinite(value)) return "--";
+  if (!Number.isFinite(value)) return "数据缺失";
   return round4(value as number).toFixed(4);
 }
 
 function formatQuantity(value: number | undefined): string {
-  if (!Number.isFinite(value)) return "--";
+  if (!Number.isFinite(value)) return "数据缺失";
   return (value as number).toString();
 }
 
 function formatAmount(value: number | undefined): string {
-  if (!Number.isFinite(value)) return "0.0000";
+  if (!Number.isFinite(value)) return "数据缺失";
   return round4(value as number).toFixed(4);
 }
 
@@ -226,7 +228,7 @@ export function PositionsTable({ positions, trades }: Props) {
   }, []);
 
   const getTradeCount = (symbol: string) => {
-    if (!trades) return '--';
+    if (!trades) return '数据缺失';
     return trades.filter((t) => t.symbol === symbol).length;
   };
 
@@ -460,7 +462,7 @@ export function PositionsTable({ positions, trades }: Props) {
                   />
                 </td>
                 <td>{pos.symbol}</td>
-                <td>{nameMap[pos.symbol] || '--'}</td>
+                <td>{nameMap[pos.symbol] || '数据缺失'}</td>
                 <td>
                   <PriceBadge price={resolvedPrice} stale={isStale} pending={isPending} />
                   {isError && !isPending && (
@@ -478,7 +480,11 @@ export function PositionsTable({ positions, trades }: Props) {
                     <span>{`待补充：${intradayResult.message}`}</span>
                   )}
                 </td>
-                <td className={percentClass}>{unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : '--'}</td>
+                <td className={percentClass}>{
+                  unrealizedPercent !== undefined
+                    ? formatPercent(unrealizedPercent)
+                    : '数据缺失'
+                }</td>
                 <td className={totalClass}>{formatNumber(totalPNL)}</td>
                 <td>{getTradeCount(pos.symbol)}</td>
                 <td><a href={`/stock?symbol=${pos.symbol}`} className="details">详情</a></td>
@@ -509,7 +515,7 @@ export function PositionsTable({ positions, trades }: Props) {
                     ? formatCurrency(totals.intraday)
                     : totals.intradayIssues.length > 0
                       ? `待补充：${totals.intradayIssues.join('；')}`
-                      : '--'}
+                      : '数据缺失'}
                 </strong>
                 <span
                   className={
