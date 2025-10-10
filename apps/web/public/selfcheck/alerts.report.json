@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "generatedAt": "2025-10-10T18:09:29.776Z"
+  },
+  "buckets": {
+    "ssr": [],
+    "hydrate": [],
+    "after": []
+  },
+  "diffs": {
+    "ssr_vs_hydrate": {
+      "onlyA": [],
+      "onlyB": [],
+      "sizeA": 0,
+      "sizeB": 0
+    },
+    "hydrate_vs_after": {
+      "onlyA": [],
+      "onlyB": [],
+      "sizeA": 0,
+      "sizeB": 0
+    }
+  }
+}
