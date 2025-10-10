@@ -239,8 +239,8 @@ export function Header() {
         <a href="/debug/close" className="px-3 py-1" style={{ marginLeft: '10px', color: '#ffffff', textDecoration: 'underline' }}>诊断-收盘价</a>
         <a
           href="/debug/alerts"
-          className="text-xs"
-          style={{ marginLeft: '10px', color: '#ffffff', opacity: 0.6, textDecoration: 'underline' }}
+          className="text-xs opacity-60 hover:opacity-100 transition-opacity"
+          style={{ marginLeft: '10px', color: '#ffffff', textDecoration: 'underline' }}
         >
           诊断-提醒
         </a>

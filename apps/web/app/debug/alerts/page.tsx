@@ -1,25 +1,42 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import { getDiagBus, type AlertSample } from "@/app/lib/diagnostics/alertsSelfAudit";
-import { runOfficialCloseAudit } from "@/app/lib/diagnostics/runAlertsSelfAudit";
+import { getBus, pushSample, type AlertSample } from "@/app/lib/diagnostics/alertsBus";
+import { collectUniverse } from "@/app/lib/diagnostics/universe";
+import { scanPackagedOnly, scanUnified } from "@/app/lib/diagnostics/alertsScan";
 
 export default function Page() {
   const [rows, setRows] = useState<AlertSample[]>([]);
-  const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    setHydrated(true);
-    const bus = getDiagBus();
-    // 初次也跑一次 HYDRATE 采样，随后手动跑“事件后采样”
-    void runOfficialCloseAudit("HYDRATE");
-    setRows(bus?.dump() ?? []);
-  }, []);
-
-  const recomputeAfterEvents = async () => {
-    await runOfficialCloseAudit("AFTER_EVENTS");
-    const bus = getDiagBus();
+  const run = async (stage: 'HYDRATE' | 'AFTER_EVENTS') => {
+    const universe = await collectUniverse('both');
+    const unified = await scanUnified(universe);
+    const packaged = await scanPackagedOnly(universe);
+    pushSample({
+      stage,
+      kind: 'OfficialCloseBanner(unified)',
+      reason: 'requireOfficialClose',
+      inputs: universe,
+      outputs: { count: unified.missing.length },
+      missing: unified.missing,
+      snapshotAt: Date.now(),
+    });
+    pushSample({
+      stage,
+      kind: 'OfficialCloseBanner(packaged-only)',
+      reason: 'packaged-only',
+      inputs: universe,
+      outputs: { count: packaged.missing.length },
+      missing: packaged.missing,
+      snapshotAt: Date.now(),
+    });
+    const bus = getBus();
     setRows(bus?.dump() ?? []);
   };
+
+  useEffect(() => {
+    void run('HYDRATE');
+  }, []);
 
   return (
     <div className="p-4 space-y-3">
@@ -27,7 +44,7 @@ export default function Page() {
       <div className="flex items-center gap-2">
         <button
           className="px-3 py-1 rounded bg-black text-white"
-          onClick={recomputeAfterEvents}
+          onClick={() => void run('AFTER_EVENTS')}
         >
           重算（AFTER_EVENTS）
         </button>
@@ -35,7 +52,6 @@ export default function Page() {
       <pre className="text-sm bg-gray-100 p-3 rounded">
         {JSON.stringify(rows, null, 2)}
       </pre>
-      <p className="text-xs text-gray-500">{hydrated ? "hydrated" : "ssr"}</p>
     </div>
   );
 }
