@@ -245,6 +245,9 @@ export function Header() {
           诊断-提醒
         </a>
       </div>
+      <a href="/debug/alerts" className="text-xs opacity-60 hover:opacity-100">
+        诊断-提醒
+      </a>
     </header>
   );
 }

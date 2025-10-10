@@ -1,24 +1,10 @@
 {
   "meta": {
-    "generatedAt": "2025-10-10T18:09:29.776Z"
+    "generatedAt": "2025-10-10T19:11:35.385Z"
   },
-  "buckets": {
-    "ssr": [],
-    "hydrate": [],
-    "after": []
-  },
-  "diffs": {
-    "ssr_vs_hydrate": {
-      "onlyA": [],
-      "onlyB": [],
-      "sizeA": 0,
-      "sizeB": 0
-    },
-    "hydrate_vs_after": {
-      "onlyA": [],
-      "onlyB": [],
-      "sizeA": 0,
-      "sizeB": 0
-    }
-  }
+  "tips": [
+    "若 packaged-only 有缺、unified 无缺：说明打包文件缺价，但 IDB/overlay 已补，SSR/早期口径可能误报。",
+    "若 unified 也有缺：确为真实缺价（请补 E-1 官方价）。",
+    "若出现“蓝条闪一下”：通常为 SSR 快照与 CSR 判定不一致造成。"
+  ]
 }
