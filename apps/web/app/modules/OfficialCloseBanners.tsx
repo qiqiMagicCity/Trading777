@@ -9,104 +9,64 @@ import {
   type CSSProperties,
 } from "react";
 
-import type {
-  MissingOfficialDateSummary,
-  MissingOfficialSymbolSummary,
-} from "@/app/lib/missingOfficialClose";
-import { attachPricesImportedListener } from "@/app/lib/bootstrap/pricesImportedListener";
 import {
-  getOfficialCloseVersion,
-  getMissingOfficialCloses,
-  waitOfficialClosesReady,
-} from "@/app/lib/prices/officialCloseFacade";
+  summarizeMissingOfficialCloses,
+  type MissingOfficialDateSummary,
+} from "@/app/lib/missingOfficialClose";
+import type { MissingOfficialCloseEntry } from "@/app/lib/types/metrics";
+import { filterMissingOfficialCloses } from "@/app/lib/prices/filterMissingOfficialCloses";
+import { requireOfficialClose } from "@/app/lib/prices/officialCloseFacade";
 import { nowNY, startOfWeekNY, ymdInNY } from "@/lib/timezone";
 import { previousTradingDay, resolveTradingDayStr } from "@/app/lib/nyDay";
 
-type MissingOfficialCloseMap = Record<string, MissingOfficialSymbolSummary[]>;
+export function MissingOfficialCloseBanner({
+  summaries: _summariesProp = [],
+}: {
+  summaries?: MissingOfficialDateSummary[];
+}) {
+  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [missing, setMissing] = useState<MissingOfficialCloseEntry[]>([]);
+  const [copied, setCopied] = useState(false);
 
-interface MissingBannerHookResult {
-  summaries: MissingOfficialDateSummary[];
-  refresh: () => Promise<void>;
-  error: Error | null;
-}
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
-function normalizeSummaryMap(map: MissingOfficialCloseMap | null): MissingOfficialDateSummary[] {
-  if (!map) return [];
-  return Object.entries(map)
-    .map(([ymd, symbols]) => ({
-      ymd,
-      date: ymd,
-      symbols: symbols
-        .slice()
-        .sort((a, b) => a.symbol.localeCompare(b.symbol)),
-    }))
-    .sort((a, b) => b.ymd.localeCompare(a.ymd));
-}
-
-function useMissingOfficialCloses(
-  initialSummaries: MissingOfficialDateSummary[] = [],
-): MissingBannerHookResult {
-  const [data, setData] = useState<MissingOfficialCloseMap | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-
-  const load = useCallback(async () => {
+  const recompute = useCallback(async () => {
+    setLoading(true);
     try {
-      await waitOfficialClosesReady();
-      const missing = await getMissingOfficialCloses();
-      setData(missing);
-      setError(null);
+      const entries = await filterMissingOfficialCloses({ requireOfficialClose });
+      setMissing(entries ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
+      console.warn("[OfficialCloseBanners] recompute failed", err);
+      setMissing([]);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    const onPricesImported = async () => {
-      try {
-        const baseVersion = getOfficialCloseVersion();
-        await waitOfficialClosesReady(baseVersion + 1);
-        await load();
-      } catch (err) {
-        console.warn("[OfficialCloseBanners] refresh after import failed", err);
-      }
+    if (!hydrated) return;
+    void recompute();
+    const handleImported = () => {
+      void recompute();
     };
-
-    const detachImported = attachPricesImportedListener(() => {
-      void onPricesImported();
-    });
     const handleReadyAfterCommit = () => {
-      void load();
+      void recompute();
     };
-    if (typeof window !== "undefined") {
-      window.addEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
-    }
+    window.addEventListener("pricesImported", handleImported);
+    window.addEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
     return () => {
-      if (detachImported) detachImported();
-      if (typeof window !== "undefined") {
-        window.removeEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
-      }
+      window.removeEventListener("pricesImported", handleImported);
+      window.removeEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
     };
-  }, [load]);
+  }, [hydrated, recompute]);
 
-  const summaries = useMemo(() => {
-    if (data) return normalizeSummaryMap(data);
-    return initialSummaries;
-  }, [data, initialSummaries]);
-
-  return { summaries, refresh: load, error };
-}
-
-export function MissingOfficialCloseBanner({
-  summaries: summariesProp = [],
-}: {
-  summaries?: MissingOfficialDateSummary[];
-}) {
-  const { summaries } = useMissingOfficialCloses(summariesProp);
-  const [copied, setCopied] = useState(false);
+  const summaries = useMemo(
+    () => summarizeMissingOfficialCloses(missing ?? []),
+    [missing],
+  );
 
   const now = nowNY();
   const defaultFrom = ymdInNY(startOfWeekNY(now));
@@ -146,9 +106,10 @@ export function MissingOfficialCloseBanner({
       .sort((a, b) => a.day.localeCompare(b.day));
   }, [summaries]);
 
-  if (!grouped.length) return null;
-
-  const copyPayload = grouped.map((item) => `${item.day}：${item.symbols.join("、")}`).join("\n");
+  const copyPayload = useMemo(
+    () => grouped.map((item) => `${item.day}：${item.symbols.join("、")}`).join("\n"),
+    [grouped],
+  );
 
   const handleCopy = useCallback(async () => {
     if (!copyPayload) return;
@@ -165,6 +126,10 @@ export function MissingOfficialCloseBanner({
     const timer = window.setTimeout(() => setCopied(false), 2000);
     return () => window.clearTimeout(timer);
   }, [copied]);
+
+  if (!hydrated || loading) return null;
+  if (!missing || missing.length === 0) return null;
+  if (!grouped.length) return null;
 
   const evalDay = resolveTradingDayStr(now);
   const prevDay = previousTradingDay(evalDay);

@@ -1,23 +1,22 @@
 /** @jest-environment jsdom */
 
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import { MissingOfficialCloseBanner } from "@/app/modules/OfficialCloseBanners";
 import type { MissingOfficialDateSummary } from "@/app/lib/missingOfficialClose";
+import type { MissingOfficialCloseEntry } from "@/app/lib/types/metrics";
 
 jest.mock("@/app/lib/bootstrap/pricesImportedListener", () => ({
   attachPricesImportedListener: jest.fn(() => () => {}),
 }));
 
-jest.mock("@/app/lib/prices/officialCloseFacade", () => ({
-  waitOfficialClosesReady: jest.fn().mockResolvedValue(undefined),
-  getMissingOfficialCloses: jest.fn().mockResolvedValue({}),
-  getOfficialCloseVersion: jest.fn(() => 1),
+jest.mock("@/app/lib/prices/filterMissingOfficialCloses", () => ({
+  filterMissingOfficialCloses: jest.fn(),
 }));
 
-const { getMissingOfficialCloses } = require("@/app/lib/prices/officialCloseFacade");
+const { filterMissingOfficialCloses } = require("@/app/lib/prices/filterMissingOfficialCloses");
 
 describe("MissingOfficialCloseBanner copy helpers", () => {
   const summaries: MissingOfficialDateSummary[] = [
@@ -44,10 +43,23 @@ describe("MissingOfficialCloseBanner copy helpers", () => {
   ];
 
   beforeEach(() => {
-    (getMissingOfficialCloses as jest.Mock).mockResolvedValue({
-      "2025-09-18": summaries[0].symbols,
-      "2025-10-02": summaries[1].symbols,
-    });
+    const entries: MissingOfficialCloseEntry[] = [
+      ...summaries[0].symbols.map((symbol) => ({
+        symbol: symbol.symbol,
+        date: "2025-09-18",
+        purposes: symbol.purposes,
+        impact: symbol.impact,
+        hasFallback: symbol.hasFallback,
+      })),
+      ...summaries[1].symbols.map((symbol) => ({
+        symbol: symbol.symbol,
+        date: "2025-10-02",
+        purposes: symbol.purposes,
+        impact: symbol.impact,
+        hasFallback: symbol.hasFallback,
+      })),
+    ];
+    (filterMissingOfficialCloses as jest.Mock).mockResolvedValue(entries);
     Object.assign(navigator, {
       clipboard: {
         writeText: jest.fn().mockResolvedValue(undefined),
@@ -60,10 +72,12 @@ describe("MissingOfficialCloseBanner copy helpers", () => {
   });
 
   it("renders only previous trading day rows", async () => {
-    render(<MissingOfficialCloseBanner summaries={summaries} />);
+    await act(async () => {
+      render(<MissingOfficialCloseBanner summaries={summaries} />);
+    });
 
     expect(
-      screen.getByText("系统按纽约交易日计算，当天(E)需要用到上一交易日(E-1)的官方昨收价。请补 E-1 的官方价，补齐后本提示自动消失。"),
+      await screen.findByText("系统按纽约交易日计算，当天(E)需要用到上一交易日(E-1)的官方昨收价。请补 E-1 的官方价，补齐后本提示自动消失。"),
     ).toBeInTheDocument();
     const items = await screen.findAllByRole("listitem");
     expect(items[0]).toHaveTextContent("2025-09-18：AMD、BA、DIS、GOOGL、NVDL、PYPL、TSDD、UAL");
@@ -73,7 +87,9 @@ describe("MissingOfficialCloseBanner copy helpers", () => {
   });
 
   it("copies grouped text to clipboard", async () => {
-    render(<MissingOfficialCloseBanner summaries={summaries} />);
+    await act(async () => {
+      render(<MissingOfficialCloseBanner summaries={summaries} />);
+    });
 
     const copyButton = await screen.findByTestId("missing-official-copy");
     fireEvent.click(copyButton);
