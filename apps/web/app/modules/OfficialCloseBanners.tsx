@@ -78,16 +78,16 @@ function useMissingOfficialCloses(
     const detachImported = attachPricesImportedListener(() => {
       void onPricesImported();
     });
-    const handleReady = () => {
+    const handleReadyAfterCommit = () => {
       void load();
     };
     if (typeof window !== "undefined") {
-      window.addEventListener("pricesReady", handleReady);
+      window.addEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
     }
     return () => {
       if (detachImported) detachImported();
       if (typeof window !== "undefined") {
-        window.removeEventListener("pricesReady", handleReady);
+        window.removeEventListener("pricesReadyAfterCommit", handleReadyAfterCommit);
       }
     };
   }, [load]);

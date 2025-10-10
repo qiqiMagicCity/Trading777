@@ -52,6 +52,11 @@ import {
 } from '@/app/lib/prices/officialCloseFacade';
 import { isOfficialCloseFixEnabled } from '@/app/lib/prices/officialCloseFeatureFlag';
 import {
+  setLatestOfficialCloseMaps,
+  setLatestMissingOfficialEntries,
+} from '@/app/lib/prices/officialCloseCache';
+import { filterMissingOfficialEntries } from '@/app/lib/prices/filterMissingOfficialCloses';
+import {
   CLOSE_PRICES_VERSION_EVENT,
   CLOSE_PRICES_VERSION_KEY,
 } from '@/app/lib/prices/closePricesVersion';
@@ -646,6 +651,13 @@ export default function DashboardPage() {
         } = maps;
         const idbClosePrices = debug?.idb ?? {};
 
+        setLatestOfficialCloseMaps({
+          official: officialClosePrices,
+          overlay: overlayMap,
+          packaged: packagedClosePrices,
+          idb: idbClosePrices,
+        });
+
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
         const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
@@ -677,9 +689,17 @@ export default function DashboardPage() {
           officialCloseIdbMap: idbClosePrices,
         });
         const metrics = normalizeMetrics(rawMetrics);
-        const officialSummaries = summarizeMissingOfficialCloses(
+        const filteredMissing = filterMissingOfficialEntries(
           metrics.diagnostics?.missingOfficialCloses ?? [],
+          {
+            official: officialClosePrices,
+            overlay: overlayMap,
+            packaged: packagedClosePrices,
+            idb: idbClosePrices,
+          },
         );
+        setLatestMissingOfficialEntries(filteredMissing);
+        const officialSummaries = summarizeMissingOfficialCloses(filteredMissing);
         updateMissingOfficialState(officialSummaries);
         const pendingSummaries = summarizeMissingOfficialCloses(
           metrics.diagnostics?.pendingOfficialCloses ?? [],
@@ -736,10 +756,10 @@ export default function DashboardPage() {
       void loadDashboardData();
     };
     window.addEventListener('pricesImported', handler);
-    window.addEventListener('pricesReady', handler);
+    window.addEventListener('pricesReadyAfterCommit', handler);
     return () => {
       window.removeEventListener('pricesImported', handler);
-      window.removeEventListener('pricesReady', handler);
+      window.removeEventListener('pricesReadyAfterCommit', handler);
     };
   }, [loadDashboardData]);
 
@@ -852,6 +872,13 @@ export default function DashboardPage() {
       } = maps;
       const idbClosePrices = debug?.idb ?? {};
 
+      setLatestOfficialCloseMaps({
+        official: officialCloseMap,
+        overlay: overlayMap,
+        packaged: packagedClosePrices,
+        idb: idbClosePrices,
+      });
+
       attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
       const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
@@ -887,9 +914,17 @@ export default function DashboardPage() {
         metrics.diagnostics?.pendingOfficialCloses ?? [],
       );
       updatePendingOfficialState(pendingOfficial);
-      const missingOfficial = summarizeMissingOfficialCloses(
+      const filteredMissing = filterMissingOfficialEntries(
         metrics.diagnostics?.missingOfficialCloses ?? [],
+        {
+          official: officialCloseMap,
+          overlay: overlayMap,
+          packaged: packagedClosePrices,
+          idb: idbClosePrices,
+        },
       );
+      setLatestMissingOfficialEntries(filteredMissing);
+      const missingOfficial = summarizeMissingOfficialCloses(filteredMissing);
       updateMissingOfficialState(missingOfficial);
       issuesRef.current = collectPeriodHealthIssues({
         evalDate: evalDateStr,
@@ -951,6 +986,13 @@ export default function DashboardPage() {
         } = maps;
         const idbClosePrices = debug?.idb ?? {};
 
+        setLatestOfficialCloseMaps({
+          official: officialCloseMap,
+          overlay: overlayMap,
+          packaged: packagedClosePrices,
+          idb: idbClosePrices,
+        });
+
         attachPrevClose(posList, mergedClosePrices, evalDateStr);
 
         const diagnostics: DailyResultsDiagnostics = { missingCloses: [] };
@@ -987,9 +1029,17 @@ export default function DashboardPage() {
           metrics.diagnostics?.pendingOfficialCloses ?? [],
         );
         updatePendingOfficialState(pendingOfficial);
-        const missingOfficial = summarizeMissingOfficialCloses(
+        const filteredMissing = filterMissingOfficialEntries(
           metrics.diagnostics?.missingOfficialCloses ?? [],
+          {
+            official: officialCloseMap,
+            overlay: overlayMap,
+            packaged: packagedClosePrices,
+            idb: idbClosePrices,
+          },
         );
+        setLatestMissingOfficialEntries(filteredMissing);
+        const missingOfficial = summarizeMissingOfficialCloses(filteredMissing);
         updateMissingOfficialState(missingOfficial);
         issuesRef.current = collectPeriodHealthIssues({
           evalDate: evalDateStr,

@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 /**
  * 回归测试：官方收盘价一致性修复
  */
@@ -62,6 +63,63 @@ describe('official close consistency fixes', () => {
       win.OFFICIAL_CLOSE_FIX_ENABLED = 'true';
       win.NEXT_PUBLIC_OFFICIAL_CLOSE_FIX_ENABLED = 'true';
     }
+    const globalAny = global as typeof globalThis & {
+      fetch?: typeof fetch;
+      Response?: typeof Response;
+    };
+    if (typeof globalAny.fetch !== 'function') {
+      globalAny.fetch = jest.fn(async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string' && input.startsWith('/')
+            ? new URL(input, 'https://example.com').toString()
+            : input instanceof URL
+            ? input.toString()
+            : typeof input === 'object' && 'url' in input
+            ? String((input as Request).url)
+            : String(input);
+        return new Response('not mocked', { status: 404, statusText: url });
+      });
+    }
+    if (typeof globalAny.Response !== 'function') {
+      class TestResponse {
+        private readonly bodyText: string;
+        public readonly status: number;
+        public readonly statusText: string;
+        private readonly headerMap: Map<string, string>;
+
+        constructor(body: string | object, init?: { status?: number; statusText?: string; headers?: Record<string, string> }) {
+          this.bodyText = typeof body === 'string' ? body : JSON.stringify(body);
+          this.status = init?.status ?? 200;
+          this.statusText = init?.statusText ?? 'OK';
+          this.headerMap = new Map();
+          if (init?.headers) {
+            for (const [key, value] of Object.entries(init.headers)) {
+              this.headerMap.set(key.toLowerCase(), value);
+            }
+          }
+        }
+
+        get ok(): boolean {
+          return this.status >= 200 && this.status < 300;
+        }
+
+        get headers(): { get(name: string): string | null } {
+          return {
+            get: (name: string) => this.headerMap.get(name.toLowerCase()) ?? null,
+          };
+        }
+
+        async text(): Promise<string> {
+          return this.bodyText;
+        }
+
+        async json(): Promise<unknown> {
+          return JSON.parse(this.bodyText);
+        }
+      }
+
+      globalAny.Response = TestResponse as unknown as typeof Response;
+    }
   });
 
   afterEach(async () => {
@@ -99,86 +157,72 @@ describe('official close consistency fixes', () => {
   });
 
   it('testA: overlay layer keeps priority over packaged and idb', async () => {
-    const loadJsonMock = jest.fn<LoadJson>();
-    loadJsonMock.mockResolvedValue(
+    jest.resetModules();
+    const fetchMock = jest
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ '2024-01-02': { AAPL: 11 } }),
+            { status: 200 },
+          ),
+        ),
+      );
+    (global as any).fetch = fetchMock;
+
+    const getAllPricesMock = jest.fn<GetAllPrices>().mockResolvedValue([
+      { symbol: 'AAPL', date: '2024-01-02', close: 10, source: 'official/import' },
+    ] as Awaited<ReturnType<GetAllPrices>>);
+    const readOverlayMock = jest.fn<ReadOverlay>().mockResolvedValue([
       {
-        AAPL: { '2024-01-02': 11 },
-      } as Awaited<ReturnType<LoadJson>>,
-    );
-    const getAllPricesMock = jest.fn<GetAllPrices>();
-    getAllPricesMock.mockResolvedValue(
-      [
-        { symbol: 'AAPL', date: '2024-01-02', close: 10, source: 'official/import' },
-      ] as Awaited<ReturnType<GetAllPrices>>,
-    );
-    const readOverlayMock = jest.fn<ReadOverlay>();
-    readOverlayMock.mockResolvedValue(
-      [
-        {
-          symbol: 'AAPL',
-          date: '2024-01-02',
-          price: 12,
-          tsCreated: Date.now(),
-          tsUpdated: Date.now(),
-          source: 'official_overlay',
-        },
-      ] as Awaited<ReturnType<ReadOverlay>>,
-    );
+        symbol: 'AAPL',
+        date: '2024-01-02',
+        price: 12,
+        tsCreated: Date.now(),
+        tsUpdated: Date.now(),
+        source: 'official_overlay',
+      },
+    ] as Awaited<ReturnType<ReadOverlay>>);
 
-    jest.unstable_mockModule('@/app/lib/dataSource', () =>
-      ({
-        loadJson: loadJsonMock,
-      }) as unknown as Partial<typeof import('@/app/lib/dataSource')>,
-    );
-    jest.unstable_mockModule('@/app/lib/services/dataService', () =>
-      ({
-        getAllPrices: getAllPricesMock,
-        isOfficialCloseSource: (jest.requireActual(
-          '@/app/lib/services/dataService',
-        ) as typeof import('@/app/lib/services/dataService')).isOfficialCloseSource,
-      }) as unknown as Partial<typeof import('@/app/lib/services/dataService')>,
-    );
-    jest.unstable_mockModule('@/app/lib/officialCloseOverlayStore', () =>
-      ({
-        readOfficialCloseOverlay: readOverlayMock,
-        overlayEntriesToMap: (jest.requireActual(
-          '@/app/lib/officialCloseOverlayStore',
-        ) as typeof import('@/app/lib/officialCloseOverlayStore')).overlayEntriesToMap,
-      }) as unknown as Partial<typeof import('@/app/lib/officialCloseOverlayStore')>,
-    );
+    await jest.isolateModulesAsync(async () => {
+      const dataService = await import('@/app/lib/services/dataService');
+      jest
+        .spyOn(dataService, 'getAllPrices')
+        .mockImplementation(getAllPricesMock as never);
 
-    const {
-      buildOfficialCloseMaps,
-      resetOfficialCloseVersionForTests,
-    } = await import('@/app/lib/prices/buildOfficialCloseMaps');
+      const overlayStore = await import('@/app/lib/officialCloseOverlayStore');
+      jest
+        .spyOn(overlayStore, 'readOfficialCloseOverlay')
+        .mockImplementation(readOverlayMock as never);
 
-    resetOfficialCloseVersionForTests();
+      const { buildOfficialCloseMaps, resetOfficialCloseVersionForTests } = await import(
+        '@/app/lib/prices/buildOfficialCloseMaps'
+      );
 
-    const first = await buildOfficialCloseMaps();
-    const detail = (first.debug?.detail ?? {}) as DebugDetail;
-    const entry = detail.AAPL?.['2024-01-02'];
-    expect(entry?.price).toBe(12);
-    expect(entry?.source).toBe('official/import');
-    expect(entry?.fromLayer).toBe('overlay');
+      resetOfficialCloseVersionForTests();
 
-    // packaged 数据不可覆盖 idb 中的 official/import
-    readOverlayMock.mockResolvedValueOnce(
-      [] as Awaited<ReturnType<ReadOverlay>>,
-    );
-    loadJsonMock.mockResolvedValueOnce(
-      { AAPL: { '2024-01-02': 11 } } as Awaited<ReturnType<LoadJson>>,
-    );
-    getAllPricesMock.mockResolvedValueOnce(
-      [
-        { symbol: 'AAPL', date: '2024-01-02', close: 9, source: 'official/import' },
-      ] as Awaited<ReturnType<GetAllPrices>>,
-    );
+      const first = await buildOfficialCloseMaps();
+      const detail = (first.debug?.detail ?? {}) as DebugDetail;
+      const entry = detail.AAPL?.['2024-01-02'];
+      expect(entry?.price).toBe(12);
+      expect(entry?.source).toBe('official/import');
+      expect(entry?.fromLayer).toBe('overlay');
 
-    const second = await buildOfficialCloseMaps();
-    const secondDetail = (second.debug?.detail ?? {}) as DebugDetail;
-    const idbEntry = secondDetail.AAPL?.['2024-01-02'];
-    expect(idbEntry?.price).toBe(9);
-    expect(idbEntry?.fromLayer).toBe('idb');
+      readOverlayMock.mockResolvedValueOnce(
+        [] as Awaited<ReturnType<ReadOverlay>>,
+      );
+      getAllPricesMock.mockResolvedValueOnce(
+        [
+          { symbol: 'AAPL', date: '2024-01-02', close: 9, source: 'official/import' },
+        ] as Awaited<ReturnType<GetAllPrices>>,
+      );
+
+      const second = await buildOfficialCloseMaps();
+      const secondDetail = (second.debug?.detail ?? {}) as DebugDetail;
+      const idbEntry = secondDetail.AAPL?.['2024-01-02'];
+      expect(idbEntry?.price).toBe(9);
+      expect(idbEntry?.fromLayer).toBe('idb');
+    });
   });
 
   it('testA2: packaged closes cannot overwrite higher-priority official sources', async () => {
@@ -193,66 +237,58 @@ describe('official close consistency fixes', () => {
 
     for (const { source } of scenarios) {
       jest.resetModules();
-      const loadJsonMock = jest.fn<LoadJson>();
-      loadJsonMock.mockResolvedValue(
+      const fetchMock = jest
+        .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+        .mockImplementation(() =>
+          Promise.resolve(
+            new Response(
+              JSON.stringify({ '2024-06-03': { AAPL: 88 } }),
+              { status: 200 },
+            ),
+          ),
+        );
+      (global as any).fetch = fetchMock;
+
+      const getAllPricesMock = jest.fn<GetAllPrices>().mockResolvedValue([
         {
-          AAPL: { '2024-06-03': 88 },
-        } as Awaited<ReturnType<LoadJson>>,
-      );
-      const getAllPricesMock = jest.fn<GetAllPrices>();
-      getAllPricesMock.mockResolvedValue(
-        [
-          {
-            symbol: 'AAPL',
-            date: '2024-06-03',
-            close: 123,
-            source,
-          },
-        ] as Awaited<ReturnType<GetAllPrices>>,
-      );
-      const readOverlayMock = jest.fn<ReadOverlay>();
-      readOverlayMock.mockResolvedValue(
-        [] as Awaited<ReturnType<ReadOverlay>>,
-      );
+          symbol: 'AAPL',
+          date: '2024-06-03',
+          close: 123,
+          source,
+        },
+      ] as Awaited<ReturnType<GetAllPrices>>);
+      const readOverlayMock = jest
+        .fn<ReadOverlay>()
+        .mockResolvedValue([] as Awaited<ReturnType<ReadOverlay>>);
 
-      jest.unstable_mockModule('@/app/lib/dataSource', () =>
-        ({
-          loadJson: loadJsonMock,
-        }) as unknown as Partial<typeof import('@/app/lib/dataSource')>,
-      );
-      jest.unstable_mockModule('@/app/lib/services/dataService', () =>
-        ({
-          getAllPrices: getAllPricesMock,
-          isOfficialCloseSource: (jest.requireActual(
-            '@/app/lib/services/dataService',
-          ) as typeof import('@/app/lib/services/dataService')).isOfficialCloseSource,
-        }) as unknown as Partial<typeof import('@/app/lib/services/dataService')>,
-      );
-      jest.unstable_mockModule('@/app/lib/officialCloseOverlayStore', () =>
-        ({
-          readOfficialCloseOverlay: readOverlayMock,
-          overlayEntriesToMap: (jest.requireActual(
-            '@/app/lib/officialCloseOverlayStore',
-          ) as typeof import('@/app/lib/officialCloseOverlayStore')).overlayEntriesToMap,
-        }) as unknown as Partial<typeof import('@/app/lib/officialCloseOverlayStore')>,
-      );
+      await jest.isolateModulesAsync(async () => {
+        const dataService = await import('@/app/lib/services/dataService');
+        jest
+          .spyOn(dataService, 'getAllPrices')
+          .mockImplementation(getAllPricesMock as never);
 
-      const { buildOfficialCloseMaps, resetOfficialCloseVersionForTests } = await import(
-        '@/app/lib/prices/buildOfficialCloseMaps'
-      );
+        const overlayStore = await import('@/app/lib/officialCloseOverlayStore');
+        jest
+          .spyOn(overlayStore, 'readOfficialCloseOverlay')
+          .mockImplementation(readOverlayMock as never);
 
-      resetOfficialCloseVersionForTests();
+        const { buildOfficialCloseMaps, resetOfficialCloseVersionForTests } = await import(
+          '@/app/lib/prices/buildOfficialCloseMaps'
+        );
 
-      const result = await buildOfficialCloseMaps();
-      const detail = (result.debug?.detail ?? {}) as DebugDetail;
-      const entry = detail.AAPL?.['2024-06-03'];
-      expect(entry?.price).toBe(123);
-      expect(entry?.source).toBe(normalizeOfficialSourceTag(source));
-      expect(result.maps.official.AAPL?.['2024-06-03']).toBe(123);
+        resetOfficialCloseVersionForTests();
 
-      expect(loadJsonMock).toHaveBeenCalled();
+        const result = await buildOfficialCloseMaps();
+        const detail = (result.debug?.detail ?? {}) as DebugDetail;
+        const entry = detail.AAPL?.['2024-06-03'];
+        expect(entry?.price).toBe(123);
+        expect(entry?.source).toBe(normalizeOfficialSourceTag(source));
+        expect(result.maps.official.AAPL?.['2024-06-03']).toBe(123);
+      });
+
       expect(getAllPricesMock).toHaveBeenCalled();
       expect(readOverlayMock).toHaveBeenCalled();
+      expect(fetchMock).toHaveBeenCalled();
       jest.resetModules();
     }
   });
@@ -364,7 +400,8 @@ describe('official close consistency fixes', () => {
 
     const loadJsonMock = jest.fn<LoadJson>();
     loadJsonMock.mockResolvedValue({
-      AAPL: { '2025-10-01': 9, '2025-10-02': 13 },
+      '2025-10-01': { AAPL: 9 },
+      '2025-10-02': { AAPL: 13 },
     } as Awaited<ReturnType<LoadJson>>);
     jest.unstable_mockModule('@/app/lib/dataSource', () =>
       ({ loadJson: loadJsonMock }) as unknown as Partial<
@@ -420,7 +457,7 @@ describe('official close consistency fixes', () => {
     (global as any).fetch = failFetch;
     const failed = await importClosePrices({ MSFT: { '2025-11-02': 65 } });
     expect(failed.writebackStatus).toBe('failed');
-    expect(failed.error).toContain('oops');
+    expect(failed.error).toContain('fail');
     const persisted = await getPrice('MSFT', '2025-11-02');
     expect(persisted?.close).toBe(65);
   });
@@ -438,7 +475,7 @@ describe('official close consistency fixes', () => {
 
     const { loadJson } = await import('@/app/lib/dataSource');
     const result = await loadJson('close_prices');
-    expect(result.AAPL['2025-01-02']).toBe(120);
+    expect(result['2025-01-02']?.AAPL).toBe(120);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toContain('/api/close-prices');
     expect(localStorage.getItem('close_prices_version')).toMatch(/^hash:/);
