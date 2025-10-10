@@ -28,18 +28,12 @@ import {
   type MissingCloseFallback,
   type MissingCloseEntry,
 } from '@/lib/dailyResults';
-import {
-  formatMissingCloseLineTickersOnly,
-  summarizeMissingCloses,
-} from '@/app/lib/missingClose';
+import { summarizeMissingCloses } from '@/app/lib/missingClose';
 import {
   summarizeMissingOfficialCloses,
   type MissingOfficialDateSummary,
 } from '@/app/lib/missingOfficialClose';
-import {
-  MissingOfficialCloseBanner,
-  PendingOfficialCloseBanner,
-} from '@/app/modules/OfficialCloseBanners';
+import { PendingOfficialCloseBanner } from '@/app/modules/OfficialCloseBanners';
 import { subscribeOfficialCloseOverlay } from '@/app/lib/officialCloseOverlayStore';
 import {
   buildOfficialCloseMaps,
@@ -209,56 +203,6 @@ async function toTradingMissingSummaries(
   return summarizeMissingCloses(filtered);
 }
 
-function MissingCloseBanner({
-  summaries,
-  onIgnore,
-}: {
-  summaries: MissingCloseSummary[];
-  onIgnore: () => void;
-}) {
-  return (
-    <div
-      style={{
-        background: 'rgba(255, 193, 7, 0.12)',
-        border: '1px solid rgba(255, 193, 7, 0.6)',
-        borderRadius: '8px',
-        color: '#ffd966',
-        margin: '20px auto',
-        maxWidth: 'var(--page-max)',
-        padding: '16px',
-        width: '90%',
-      }}
-    >
-      <h3 style={{ marginTop: 0, marginBottom: '12px', color: '#ffe08a' }}>收盘价缺失提醒</h3>
-      <p style={{ marginTop: 0, marginBottom: '12px', color: '#fff5cc' }}>
-        以下日期缺少官方收盘价，请补录到 close_prices.json 或使用导入功能添加。
-        <a
-          href="/debug/close"
-          style={{ marginLeft: '8px', color: '#ffe08a', textDecoration: 'underline' }}
-        >
-          为什么缺价？
-        </a>
-      </p>
-      <ul style={{ paddingLeft: '20px', marginTop: 0, marginBottom: '16px' }}>
-        {summaries.map((summary) => {
-          const line = formatMissingCloseLineTickersOnly(
-            summary.ymd,
-            summary.symbols.map((detail) => detail.symbol),
-          );
-          return (
-            <li key={summary.ymd} style={{ marginBottom: '6px' }}>
-              {line}
-            </li>
-          );
-        })}
-      </ul>
-      <button className="btn" onClick={onIgnore}>
-        忽略并暂时以“待补充”展示
-      </button>
-    </div>
-  );
-}
-
 function PendingCloseNotice({
   info,
   closeWindow,
@@ -357,9 +301,9 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [missingCloseSummaries, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
+  const [, setMissingCloseSummaries] = useState<MissingCloseSummary[]>([]);
   const [missingDismissed, setMissingDismissed] = useState(false);
-  const [missingOfficialSummaries, setMissingOfficialSummaries] =
+  const [, setMissingOfficialSummaries] =
     useState<MissingOfficialDateSummary[]>([]);
   const [pendingOfficialSummaries, setPendingOfficialSummaries] =
     useState<MissingOfficialDateSummary[]>([]);
@@ -428,11 +372,7 @@ export default function DashboardPage() {
       if (hasMissingClose) {
         const allowIgnore = missingDismissed && !hasIssues;
         status = allowIgnore ? 'ignored' : 'missing';
-        origin = allowIgnore
-          ? 'metrics'
-          : missingDismissed
-          ? 'metrics'
-          : 'missing-close-banner';
+        origin = 'metrics';
       } else if (hasIssues || hasMissingStatus) {
         status = 'missing';
       } else if (hasDegraded || hasDegradedStatus) {
@@ -553,12 +493,6 @@ export default function DashboardPage() {
     },
     [setPendingOfficialSummaries],
   );
-
-  const handleIgnoreMissing = () => {
-    if (summaryRef.current.length === 0) return;
-    setMissingDismissed(true);
-    syncPeriodHealth();
-  };
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -1093,57 +1027,48 @@ export default function DashboardPage() {
   return (
     <TradingDayProvider initialTradingDay={initialTradingDay}>
       <div data-trading-day={initialTradingDay}>
-      <PendingCloseNotice
-        info={pendingCloseInfo}
-        closeWindow={closeWindowInfo}
-        dismissed={pendingNoticeDismissed}
-        onDismiss={() => setPendingNoticeDismissed(true)}
-      />
-      {pendingOfficialSummaries.length > 0 && (
-        <PendingOfficialCloseBanner summaries={pendingOfficialSummaries} />
-      )}
-      {missingOfficialSummaries.length > 0 && (
-        <MissingOfficialCloseBanner summaries={missingOfficialSummaries} />
-      )}
-      {missingCloseSummaries.length > 0 && !missingDismissed && (
-        <MissingCloseBanner
-          summaries={missingCloseSummaries}
-          onIgnore={handleIgnoreMissing}
+        <PendingCloseNotice
+          info={pendingCloseInfo}
+          closeWindow={closeWindowInfo}
+          dismissed={pendingNoticeDismissed}
+          onDismiss={() => setPendingNoticeDismissed(true)}
         />
-      )}
-      {isRefreshing && (
-        <div
-          style={{
-            background: 'rgba(59,130,246,0.15)',
-            border: '1px solid rgba(59,130,246,0.4)',
-            borderRadius: 8,
-            color: '#bfdbfe',
-            margin: '12px auto',
-            maxWidth: 'var(--page-max)',
-            padding: '8px 16px',
-            width: '90%',
-          }}
-        >
-          正在后台刷新交易与指标...
-        </div>
-      )}
-      {refreshError && (
-        <div
-          style={{
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.4)',
-            borderRadius: 8,
-            color: '#fecaca',
-            margin: '12px auto',
-            maxWidth: 'var(--page-max)',
-            padding: '8px 16px',
-            width: '90%',
-          }}
-        >
-          后台刷新失败：{refreshError}
-        </div>
-      )}
-      <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
+        {pendingOfficialSummaries.length > 0 && (
+          <PendingOfficialCloseBanner summaries={pendingOfficialSummaries} />
+        )}
+        {isRefreshing && (
+          <div
+            style={{
+              background: 'rgba(59,130,246,0.15)',
+              border: '1px solid rgba(59,130,246,0.4)',
+              borderRadius: 8,
+              color: '#bfdbfe',
+              margin: '12px auto',
+              maxWidth: 'var(--page-max)',
+              padding: '8px 16px',
+              width: '90%',
+            }}
+          >
+            正在后台刷新交易与指标...
+          </div>
+        )}
+        {refreshError && (
+          <div
+            style={{
+              background: 'rgba(239,68,68,0.12)',
+              border: '1px solid rgba(239,68,68,0.4)',
+              borderRadius: 8,
+              color: '#fecaca',
+              margin: '12px auto',
+              maxWidth: 'var(--page-max)',
+              padding: '8px 16px',
+              width: '90%',
+            }}
+          >
+            后台刷新失败：{refreshError}
+          </div>
+        )}
+        <DashboardMetrics enrichedTrades={enrichedTrades} positions={positions} />
 
       <h3 className="section-title" id="positions-title">目前持仓 <Link href="/analysis" className="details">交易分析</Link></h3>
       <PositionsTable positions={positions} trades={enrichedTrades} />

@@ -278,7 +278,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             derivedParseError = {
               ...parsed.error,
               field: componentFieldMap[key],
-              day: tradingDay ?? "N/A",
+              day: tradingDay ?? "数据缺失",
             };
           }
         }
@@ -981,7 +981,8 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             return `${detail.symbol}${suffix}`;
           })
           .join("、");
-        messages.push(`${summary.ymd}：${details}`);
+        const dayLabel = summary.ymd ?? (summary as any).date ?? "数据缺失";
+        messages.push(`${dayLabel}：${details}`);
       }
     }
     if (periodHealth?.issues?.length) {

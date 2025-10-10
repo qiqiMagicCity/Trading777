@@ -60,7 +60,7 @@ function uniqueSorted(values: string[]): string[] {
 }
 
 function formatTimestamp(value?: string): string {
-  if (!value) return '--';
+  if (!value) return '数据缺失';
   return value.replace('T', ' ').replace('Z', '');
 }
 

@@ -72,7 +72,8 @@ export default function TradesPage() {
   }
 
   function formatNumber(value: number | undefined, decimals = 2) {
-    if (value === undefined || value === null) return '-';
+    if (value === undefined || value === null) return '数据缺失';
+    if (!Number.isFinite(value)) return '数据缺失';
     return value.toFixed(decimals);
   }
 
@@ -157,7 +158,7 @@ export default function TradesPage() {
                   />
                 </td>
                 <td>{trade.symbol}</td>
-                <td className="cn">{nameMap[trade.symbol] || '--'}</td>
+                <td className="cn">{nameMap[trade.symbol] || '数据缺失'}</td>
                 <td>{trade.date}</td>
                 <td>{weekday}</td>
                 <td>{trade.tradeCount}</td>
