@@ -1,21 +1,20 @@
 /** @jest-environment jsdom */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import { explainClose } from "@/app/lib/diagnostics/explainMissingClose";
 import { MissingOfficialCloseBanner } from "@/app/modules/OfficialCloseBanners";
 import type { MissingOfficialDateSummary } from "@/app/lib/missingOfficialClose";
+import type { MissingOfficialCloseEntry } from "@/app/lib/types/metrics";
 
 jest.mock("@/app/lib/bootstrap/pricesImportedListener", () => ({
   attachPricesImportedListener: jest.fn(() => () => {}),
 }));
 
-jest.mock("@/app/lib/prices/officialCloseFacade", () => ({
-  waitOfficialClosesReady: jest.fn().mockResolvedValue(undefined),
-  getMissingOfficialCloses: jest.fn().mockResolvedValue({}),
-  getOfficialCloseVersion: jest.fn(() => 1),
+jest.mock("@/app/lib/prices/filterMissingOfficialCloses", () => ({
+  filterMissingOfficialCloses: jest.fn(),
 }));
 
 jest.mock("@/app/lib/services/dataService", () => ({
@@ -24,12 +23,14 @@ jest.mock("@/app/lib/services/dataService", () => ({
 }));
 
 const { getPrice } = require("@/app/lib/services/dataService");
+const { filterMissingOfficialCloses } = require("@/app/lib/prices/filterMissingOfficialCloses");
 
 describe("official close diagnostics focusing on E-1", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2025-03-11T14:30:00Z"));
     (getPrice as jest.Mock).mockReset();
+    (filterMissingOfficialCloses as jest.Mock).mockReset();
   });
 
   afterEach(() => {
@@ -68,7 +69,27 @@ describe("official close diagnostics focusing on E-1", () => {
       },
     ];
 
-    render(<MissingOfficialCloseBanner summaries={summaries} />);
+    const entries: MissingOfficialCloseEntry[] = [
+      {
+        symbol: "AAPL",
+        date: "2025-03-07",
+        purposes: ["M6"],
+        impact: ["M6过夜桶=0"],
+        hasFallback: false,
+      },
+      {
+        symbol: "MSFT",
+        date: "2025-03-07",
+        purposes: ["M6"],
+        impact: ["M6过夜桶=0"],
+        hasFallback: true,
+      },
+    ];
+    (filterMissingOfficialCloses as jest.Mock).mockResolvedValue(entries);
+
+    await act(async () => {
+      render(<MissingOfficialCloseBanner summaries={summaries} />);
+    });
 
     expect(
       await screen.findByText("系统按纽约交易日计算，当天(E)需要用到上一交易日(E-1)的官方昨收价。请补 E-1 的官方价，补齐后本提示自动消失。"),

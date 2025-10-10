@@ -57,6 +57,8 @@ export {
   getOfficialCloseVersion,
 };
 
+export { requireOfficialClose } from "@/app/lib/price/requireOfficialClose";
+
 export function isOfficialCloseFixEnabled(): boolean {
   return readFlag();
 }
