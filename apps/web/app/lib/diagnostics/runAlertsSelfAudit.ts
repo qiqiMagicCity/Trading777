@@ -1,15 +1,28 @@
-import { filterMissingOfficialCloses } from "@/app/lib/prices/filterMissingOfficialCloses";
-import { requireOfficialClose } from "@/app/lib/prices/officialCloseFacade";
-import { pushAlertSample } from "./alertsSelfAudit";
+import { scanPackagedOnly, scanUnified } from "./alertsScan";
+import { pushSample } from "./alertsBus";
+import { collectUniverse } from "./universe";
 
 export async function runOfficialCloseAudit(stage: 'SSR' | 'HYDRATE' | 'AFTER_EVENTS') {
-  const missing = await filterMissingOfficialCloses({ requireOfficialClose });
-  pushAlertSample({
+  const universe = await collectUniverse('both');
+  const unified = await scanUnified(universe);
+  const packaged = await scanPackagedOnly(universe);
+  pushSample({
     stage,
-    kind: "OfficialCloseBanner",
-    reason: "filterMissingOfficialCloses(requireOfficialClose)",
-    sources: ["overlay", "official/import", "official/packaged", "idb"],
-    missing,
+    kind: 'OfficialCloseBanner(unified)',
+    reason: 'requireOfficialClose',
+    inputs: universe,
+    outputs: { count: unified.missing.length },
+    missing: unified.missing,
+    snapshotAt: Date.now(),
   });
-  return missing;
+  pushSample({
+    stage,
+    kind: 'OfficialCloseBanner(packaged-only)',
+    reason: 'packaged-only',
+    inputs: universe,
+    outputs: { count: packaged.missing.length },
+    missing: packaged.missing,
+    snapshotAt: Date.now(),
+  });
+  return { unified, packaged };
 }
