@@ -9,6 +9,9 @@ import {
 } from "@/app/lib/diagnostics/reportMissingOfficialClose";
 import { getOfficialCloseOverlayPrice } from "@/app/lib/officialCloseOverlayStore";
 import { getAdjustmentFactor } from "@/app/lib/officialCloseAdjustments";
+import { ymdInNY } from "@/lib/timezone";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 interface OfficialCloseContext {
   map: ClosePriceMap;
@@ -51,8 +54,11 @@ export function requireOfficialClose(
   purpose: MissingOfficialClosePurpose,
 ): { ok: true; price: number } | { ok: false; reason: "no_official_close" } {
   const symbol = normalizeSymbol(symbolInput ?? "");
-  const date = (dateInput ?? "").slice(0, 10);
-  if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  const rawDate = dateInput ?? "";
+  const source = DATE_RE.test(rawDate) ? `${rawDate}T12:00:00Z` : rawDate;
+  const nyDate = ymdInNY(source);
+  const date = DATE_RE.test(nyDate) ? nyDate : "";
+  if (!symbol || !DATE_RE.test(date)) {
     return { ok: false, reason: "no_official_close" };
   }
 

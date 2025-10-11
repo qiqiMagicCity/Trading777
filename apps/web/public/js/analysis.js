@@ -3,6 +3,57 @@ import { ymdInNY } from './ny-safe.js';
 /* Trading777 交易分析 – v7.7.3 */
 (function () {
   const { nowNY, toNY, getLatestTradingDayStr } = window;
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function normalizeToNyDate(value) {
+    if (!value) return null;
+    try {
+      if (value instanceof Date) {
+        return value;
+      }
+      if (typeof value === "number") {
+        return new Date(value);
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        if (DATE_RE.test(trimmed)) {
+          return new Date(`${trimmed}T12:00:00Z`);
+        }
+        return new Date(trimmed);
+      }
+      return null;
+    } catch (err) {
+      console.warn("normalizeToNyDate failed", value, err);
+      return null;
+    }
+  }
+
+  function resolveNyDay(value) {
+    const date = normalizeToNyDate(value);
+    if (!date) return null;
+    const ny = ymdInNY(date);
+    return DATE_RE.test(ny) ? ny : null;
+  }
+
+  function resolveTradeDay(trade) {
+    if (!trade || typeof trade !== "object") return null;
+    const candidates = [
+      trade.datetime,
+      trade.dateTime,
+      trade.executedAt,
+      trade.executed_at,
+      trade.time,
+      trade.timestamp,
+      trade.filled_at,
+      trade.date,
+    ];
+    for (const candidate of candidates) {
+      const nyDay = resolveNyDay(candidate);
+      if (nyDay) return nyDay;
+    }
+    return null;
+  }
   /* ---------- utilities ---------- */
   function numberColor(v) {
     if (v > 0) return "green";
@@ -25,15 +76,24 @@ import { ymdInNY } from './ny-safe.js';
 
   /* ---------- load trades ---------- */
   let trades = JSON.parse(localStorage.getItem("trades") || "[]");
-  trades.forEach((t) => {
-    t.date = t.date || t.time || t.datetime;
-  });
-  trades = trades.filter((t) => t.date && isFinite(t.pl));
+  trades = trades
+    .map((t) => {
+      const nyDay = resolveTradeDay(t);
+      const pnl = Number(t.pl);
+      if (!nyDay || !Number.isFinite(pnl)) {
+        return null;
+      }
+      return { ...t, date: nyDay, pl: pnl };
+    })
+    .filter(Boolean);
 
   /* ---------- build daily pnl map ---------- */
   const dailyMap = {};
   trades.forEach((t) => {
-    const d = t.date.slice(0, 10);
+    const d = resolveNyDay(t.date);
+    if (!d) {
+      return;
+    }
     const pl = Number(t.pl) || 0;
     dailyMap[d] = (dailyMap[d] || 0) + pl;
   });

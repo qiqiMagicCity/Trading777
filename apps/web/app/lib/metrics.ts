@@ -12,6 +12,7 @@ import {
   toNY,
   getLatestTradingDayStr,
   endOfDayNY,
+  ymdInNY,
 } from "@/lib/timezone";
 import { nyDateStr, startOfDayNY, startOfWeekNY } from "./time";
 import { tsFromYmdAtNoonUTC } from "./nyParse";
@@ -3142,9 +3143,13 @@ export function normalizeMetrics(input: any): MetricsContract {
           typeof entry?.symbol === "string"
             ? entry.symbol.trim().toUpperCase()
             : "";
-        const rawDate =
-          typeof entry?.date === "string" ? entry.date.slice(0, 10) : "";
-        if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+        const rawDate = (() => {
+          if (typeof entry?.date !== "string") return "";
+          const raw = entry.date;
+          const source = DATE_ONLY_RE.test(raw) ? `${raw}T12:00:00Z` : raw;
+          return ymdInNY(source);
+        })();
+        if (!symbol || !DATE_ONLY_RE.test(rawDate)) {
           return null;
         }
         const purposes = Array.isArray(entry?.purposes)

@@ -1,4 +1,7 @@
 import type { MissingOfficialCloseEntry } from "@/app/lib/types/metrics";
+import { ymdInNY } from "@/lib/timezone";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type MissingOfficialClosePurpose =
   | "M6"
@@ -56,8 +59,11 @@ export function reportMissingOfficialClose(
 ): void {
   if (!diagnostics) return;
   const symbol = normalizeSymbol(payload.symbol ?? "");
-  const date = (payload.date ?? "").slice(0, 10);
-  if (!symbol || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const rawDate = payload.date ?? "";
+  const source = DATE_RE.test(rawDate) ? `${rawDate}T12:00:00Z` : rawDate;
+  const nyDate = ymdInNY(source);
+  const date = DATE_RE.test(nyDate) ? nyDate : "";
+  if (!symbol || !DATE_RE.test(date)) return;
 
   const impact = IMPACT_MAP[payload.purpose] ?? [];
 
