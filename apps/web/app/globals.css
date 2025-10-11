@@ -169,6 +169,27 @@ body {
   background: #004040;
 }
 
+#positions col.col-logo { width: 56px; }
+#positions col.col-symbol { width: 96px; }
+#positions col.col-name { width: 120px; }
+#positions col.col-price { width: 120px; }
+#positions col.col-qty { width: 96px; }
+#positions col.col-avg { width: 120px; }
+#positions col.col-market { width: 128px; }
+#positions col.col-breakeven { width: 132px; }
+#positions col.col-intraday { width: 180px; }
+#positions col.col-percent { width: 120px; }
+#positions col.col-pnl { width: 120px; }
+#positions col.col-trades { width: 120px; }
+#positions col.col-details { width: 96px; }
+#positions th,
+#positions td {
+  vertical-align: middle;
+}
+#positions thead th {
+  white-space: nowrap;
+}
+
 .details {
   color: #0090ff !important;
   text-decoration: none;
@@ -342,15 +363,6 @@ body {
 .error {
   color: #e53935;
   font-size: 0.9em;
-}
-
-/* 总计行样式 */
-.summary-row {
-  font-weight: 500;
-}
-
-.summary-row td {
-  border-top: 2px solid #ddd;
 }
 
 /* 持仓表格头部样式 */

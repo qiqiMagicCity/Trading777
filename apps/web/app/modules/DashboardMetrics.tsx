@@ -20,19 +20,12 @@ import type {
   PeriodParseError,
 } from "@/app/lib/types/metrics";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { MissingCloseFallback } from "@/app/lib/dailyResults";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 import {
   getPeriodOfficialCloseSummary,
   formatOfficialCloseEntries,
   formatPendingSummary,
 } from "@/app/lib/periodOfficialClose";
-
-const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
-  MARK_PRICE: "使用最新价兜底",
-  PREVIOUS_CLOSE: "沿用上一日价格",
-  AVERAGE_COST: "使用均价兜底",
-};
 
 const DEGRADE_REASON_LABELS: Record<PeriodDegradationReason, string> = {
   DEGEN_NO_BASELINE: "缺基线",
@@ -942,92 +935,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
 
   const metricsReady = Boolean(metrics);
 
-  const degradedKeys = useMemo(
-    () =>
-      (["M11", "M12", "M13"] as const).filter(
-        (key) => periodCardStates[key] === "degraded",
-      ),
-    [periodCardStates],
-  );
-
-  const issues = periodHealth?.issues ?? [];
-  const partialIssues = issues.filter(
-    (issue) => issue.kind === "BASELINE_DELTA_MISSING",
-  );
-  const blockingIssues = issues.filter(
-    (issue) => issue.kind !== "BASELINE_DELTA_MISSING",
-  );
-
-  const hasMissingOrIgnored =
-    periodStatus === "missing" || periodStatus === "ignored";
-  const shouldShowMissingSummary =
-    hasMissingOrIgnored && periodHealth?.origin !== "missing-close-banner";
-  const shouldShowPeriodSummary =
-    shouldShowMissingSummary ||
-    degradedKeys.length > 0 ||
-    issues.length > 0 ||
-    periodStatus === "partial";
-
-  const summaryMessages = useMemo(() => {
-    const messages: string[] = [];
-    if (periodHealth?.summaries?.length) {
-      for (const summary of periodHealth.summaries) {
-        const details = summary.symbols
-          .map((detail) => {
-            const labels = detail.fallbacks
-              .map((fb) => FALLBACK_LABELS[fb] ?? fb)
-              .filter(Boolean);
-            const suffix = labels.length > 0 ? `（${labels.join("、")}）` : "";
-            return `${detail.symbol}${suffix}`;
-          })
-          .join("、");
-        const dayLabel = summary.ymd ?? (summary as any).date ?? "数据缺失";
-        messages.push(`${dayLabel}：${details}`);
-      }
-    }
-    if (periodHealth?.issues?.length) {
-      for (const issue of periodHealth.issues) {
-        if (issue?.message) messages.push(issue.message);
-      }
-    }
-    return messages;
-  }, [periodHealth?.issues, periodHealth?.summaries]);
-
-  const summaryIntroParts: string[] = [];
-  if (periodStatus === "missing") {
-    summaryIntroParts.push("缺少必要收盘价数据");
-  }
-  if (periodStatus === "ignored") {
-    summaryIntroParts.push("存在缺失数据已被忽略");
-  }
-  if (
-    blockingIssues.length > 0 &&
-    (periodStatus === "missing" || periodStatus === "degraded")
-  ) {
-    summaryIntroParts.push("检测到其它关键数据缺失");
-  }
-  const periodLabelMap: Record<"M11" | "M12" | "M13", string> = {
-    M11: "WTD",
-    M12: "MTD",
-    M13: "YTD",
-  };
-  if (degradedKeys.length > 0) {
-    summaryIntroParts.push(
-      `指标退化：${degradedKeys.map((key) => periodLabelMap[key]).join("、")}`,
-    );
-  }
-  const partialWindows = (Object.entries(periodStatusMap ?? {})
-    .filter(([, state]) => state === "partial")
-    .map(([window]) => window) as Array<"wtd" | "mtd" | "ytd">).map(
-    (windowKey) =>
-      windowKey === "wtd" ? "WTD" : windowKey === "mtd" ? "MTD" : "YTD",
-  );
-  if (partialWindows.length > 0) {
-    summaryIntroParts.push(`ΔU 待补充：${partialWindows.join("、")}`);
-  } else if (periodStatus === "partial" || partialIssues.length > 0) {
-    summaryIntroParts.push("ΔU 待补充");
-  }
-
   return (
     <section id="stats" className="my-5" data-trading-day={tradingDayFallback}>
       {metricsReady ? (
@@ -1051,34 +958,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
               data-testid="period-self-check"
             >
               {selfCheckMessage}
-            </div>
-          )}
-          {shouldShowPeriodSummary && (
-            <div
-              className={
-                periodStatus === "partial"
-                  ? "w-full max-w-3xl rounded-md border border-slate-200 bg-slate-100 p-3 text-sm text-slate-700"
-                  : "w-full max-w-3xl rounded-md border border-amber-200 bg-amber-100/70 p-3 text-sm text-amber-900"
-              }
-              data-testid="period-health-summary"
-            >
-              <div className="font-medium">
-                指标异常提醒
-                {summaryIntroParts.length > 0
-                  ? `（${summaryIntroParts.join("；")}）`
-                  : ""}
-              </div>
-              {summaryMessages.length > 0 ? (
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  {summaryMessages.map((msg) => (
-                    <li key={msg}>{msg}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2">
-                  请检查 close_prices 数据源，补充缺失的收盘价或确认兜底策略。
-                </p>
-              )}
             </div>
           )}
         </div>
