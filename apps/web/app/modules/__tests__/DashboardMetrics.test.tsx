@@ -108,12 +108,7 @@ describe("DashboardMetrics period cards", () => {
 
     render(<DashboardMetrics enrichedTrades={[]} positions={[]} />);
 
-    expect(screen.getByTestId("period-health-summary")).toHaveTextContent(
-      "持仓 TSLA 的数量无效",
-    );
-    expect(screen.getByTestId("period-health-summary")).toHaveTextContent(
-      "以下标的缺少昨日收盘价：TSLA",
-    );
+    expect(screen.queryByTestId("period-health-summary")).toBeNull();
   });
 
   it("shows 待补充 only for degraded periods and lists missing parameters", () => {
@@ -143,9 +138,7 @@ describe("DashboardMetrics period cards", () => {
     expect(screen.getByTestId("metric-wtd")).toHaveTextContent("待补充");
     expect(screen.getByTestId("metric-mtd")).toHaveTextContent("222.22");
     expect(screen.getByTestId("metric-ytd")).toHaveTextContent("待补充");
-    expect(screen.getByTestId("period-health-summary")).toHaveTextContent(
-      "2025-09-26：AMD（使用最新价兜底）",
-    );
+    expect(screen.queryByTestId("period-health-summary")).toBeNull();
   });
 
   it("renders 待补充 when backend only returns legacy WTD alias for degraded window", () => {

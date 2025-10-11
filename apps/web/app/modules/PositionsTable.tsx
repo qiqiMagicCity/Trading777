@@ -9,8 +9,7 @@ import { useEffect, useState, useMemo } from "react";
 import SymbolLogo from "@/components/SymbolLogo";
 import type { EnrichedTrade } from '@/lib/fifo';
 import { useStore } from '@/lib/store';
-import { formatCurrency, normalizeMetrics } from '@/lib/metrics';
-import { selectM4TodaySummary } from '@/app/lib/m4Today';
+import { normalizeMetrics } from '@/lib/metrics';
 import { logger } from '@/lib/logger';
 import { PriceBadge } from '@/components/PriceBadge';
 import {
@@ -286,53 +285,24 @@ export function PositionsTable({ positions, trades }: Props) {
     });
   }, [positions, results, intradayDataset]);
 
-  // 计算总计
-  const totals = useMemo(() => {
-    logger.debug('计算总计，positionSummaries:', positionSummaries);
-
-    const totalMarketValue = positionSummaries.reduce((sum, item) => sum + item.market, 0);
-    const totalUnrealized = positionSummaries.reduce((sum, item) => sum + item.unrealized, 0);
-    const allIntradayReady = positionSummaries.every(item => item.intradayResult.status === "ok");
-    const totalIntraday = allIntradayReady
-      ? positionSummaries.reduce((sum, item) => sum + (item.intraday ?? 0), 0)
-      : undefined;
-    const intradayIssueSet = new Set<string>();
-    if (!allIntradayReady) {
-      for (const item of positionSummaries) {
-        if (item.intradayResult.status === "missing") {
-          intradayIssueSet.add(item.intradayResult.message);
-        }
-      }
-    }
-    const intradayIssues = Array.from(intradayIssueSet);
-    const totalRealized = metrics?.M9 || 0; // 所有历史平仓盈利
-    const todayM4 = selectM4TodaySummary(metrics ?? null);
-    const totalPnL = totalUnrealized + totalRealized;
-
-    logger.debug('总计结果:', {
-      totalMarketValue,
-      totalUnrealized,
-      totalIntraday,
-      intradayIssues,
-      totalRealized,
-      totalPnL,
-      todayM4,
-    });
-
-    return {
-      marketValue: totalMarketValue,
-      unrealized: totalUnrealized,
-      intraday: totalIntraday,
-      intradayIssues,
-      realized: totalRealized,
-      todayM4,
-      total: totalPnL,
-    };
-  }, [positionSummaries, metrics]);
-
   return (
     <div data-trading-day={tradingDayTag}>
       <table id="positions" className="table">
+        <colgroup>
+          <col className="col-logo" />
+          <col className="col-symbol" />
+          <col className="col-name" />
+          <col className="col-price" />
+          <col className="col-qty" />
+          <col className="col-avg" />
+          <col className="col-market" />
+          <col className="col-breakeven" />
+          <col className="col-intraday" />
+          <col className="col-percent" />
+          <col className="col-pnl" />
+          <col className="col-trades" />
+          <col className="col-details" />
+        </colgroup>
         <thead>
           <tr>
             <th>logo</th>
@@ -383,6 +353,15 @@ export function PositionsTable({ positions, trades }: Props) {
               intradayResult,
               breakdownEntry,
             );
+            const symbolLabel = pos.symbol?.trim().toUpperCase();
+            const missingIntradayMessage =
+              intradayResult.status === "missing"
+                ? intradayResult.reason === "missing_legs" && symbolLabel
+                  ? `待补充：缺少 ${symbolLabel} 的 M6 legs 拆解，请补充该标的的隔夜与当日未平拆解数据。如果算法问题或者其他有问题只写待补充，回头我们逐个修复。`
+                  : intradayResult.message.startsWith("待补充")
+                    ? intradayResult.message
+                    : `待补充：${intradayResult.message}`
+                : "";
             const unrealizedPercent =
               resolvedPrice && pos.avgPrice ? (resolvedPrice - pos.avgPrice) / pos.avgPrice : undefined;
 
@@ -474,11 +453,9 @@ export function PositionsTable({ positions, trades }: Props) {
                 <td>{formatNumber(marketValue)}</td>
                 <td className="text-center">{breakEvenDisplay}</td>
                 <td className={intradayClass} title={intradayTooltip}>
-                  {intradayResult.status === "ok" ? (
-                    formatNumber(intraday)
-                  ) : (
-                    <span>{`待补充：${intradayResult.message}`}</span>
-                  )}
+                  {intradayResult.status === "ok"
+                    ? formatNumber(intraday)
+                    : <span>{missingIntradayMessage}</span>}
                 </td>
                 <td className={percentClass}>{
                   unrealizedPercent !== undefined
@@ -491,66 +468,6 @@ export function PositionsTable({ positions, trades }: Props) {
               </tr>
             );
           })}
-          {/* 总计行 */}
-          <tr className="summary-row">
-            <td colSpan={6}><strong>总计</strong></td>
-            <td><strong>{formatCurrency(totals.marketValue)}</strong></td>
-            <td></td>
-            <td
-              className={
-                totals.intraday !== undefined
-                  ? totals.intraday > 0
-                    ? 'green'
-                    : totals.intraday < 0
-                      ? 'red'
-                      : ''
-                  : totals.intradayIssues.length > 0
-                    ? 'text-yellow-600'
-                    : ''
-              }
-            >
-              <div className="flex flex-col gap-1">
-                <strong>
-                  {totals.intraday !== undefined
-                    ? formatCurrency(totals.intraday)
-                    : totals.intradayIssues.length > 0
-                      ? `待补充：${totals.intradayIssues.join('；')}`
-                      : '数据缺失'}
-                </strong>
-                <span
-                  className={
-                    totals.todayM4.total > 0
-                      ? 'green font-medium'
-                      : totals.todayM4.total < 0
-                        ? 'red font-medium'
-                        : 'font-medium'
-                  }
-                  title={totals.todayM4.tooltip ?? undefined}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <span>今日盈亏(M4)</span>
-                    {totals.todayM4.degraded && (
-                      <span
-                        style={{
-                          backgroundColor: '#f59e0b',
-                          borderRadius: '9999px',
-                          display: 'inline-flex',
-                          height: '8px',
-                          width: '8px',
-                        }}
-                      />
-                    )}
-                  </span>
-                  ：{formatCurrency(totals.todayM4.total)}
-                </span>
-              </div>
-            </td>
-            <td></td>
-            <td className={totals.total > 0 ? 'green' : totals.total < 0 ? 'red' : ''}>
-              <strong>{formatCurrency(totals.total)}</strong>
-            </td>
-            <td colSpan={2}></td>
-          </tr>
         </tbody>
       </table>
     </div>
