@@ -6,6 +6,7 @@ import { isOfficialCloseFixEnabled } from "@/app/lib/prices/officialCloseFeature
 import { normalizeOfficialSourceTag } from "@/app/lib/prices/compareOfficialSourcePriority";
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
+import { toNY, ymdInNY } from "../timezone";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -20,6 +21,22 @@ export const DATASET_SOURCE_CUSTOM = "custom";
 
 const LEGACY_DATASET_SOURCE_KEY = "datasetSource";
 const LEGACY_DATASET_HASH_KEY = "datasetHash";
+
+function resolveNyDayString(input: string | Date | number): string {
+  if (input instanceof Date) {
+    const ny = ymdInNY(input);
+    return ISO_DATE_RE.test(ny) ? ny : "";
+  }
+  if (typeof input === "number") {
+    return resolveNyDayString(new Date(input));
+  }
+  if (typeof input !== "string" || input.length === 0) {
+    return "";
+  }
+  const source = ISO_DATE_RE.test(input) ? `${input}T12:00:00Z` : input;
+  const ny = ymdInNY(source);
+  return ISO_DATE_RE.test(ny) ? ny : "";
+}
 
 export function markDatasetAsCustom(): void {
   try {
@@ -276,19 +293,25 @@ function toISODate(date: Date): string {
 }
 
 function getBaselineDate(rawTrades: ImportableTrade[]): string {
-  let minTime = Number.POSITIVE_INFINITY;
+  let minYmd: string | null = null;
   for (const trade of rawTrades) {
-    const d = new Date(`${trade.date}T00:00:00Z`);
-    const time = d.getTime();
-    if (Number.isFinite(time) && time < minTime) {
-      minTime = time;
+    const resolved = resolveNyDayString(trade.date);
+    if (!resolved) continue;
+    if (!minYmd || resolved < minYmd) {
+      minYmd = resolved;
     }
   }
-  if (!Number.isFinite(minTime)) {
+  if (!minYmd) {
     return "1900-01-01";
   }
-  const baselineDate = new Date(minTime - 24 * 60 * 60 * 1000);
-  return toISODate(baselineDate);
+  const nyDate = toNY(`${minYmd}T12:00:00Z`);
+  if (Number.isNaN(nyDate.getTime())) {
+    return minYmd;
+  }
+  nyDate.setHours(0, 0, 0, 0);
+  nyDate.setDate(nyDate.getDate() - 1);
+  const baseline = ymdInNY(nyDate);
+  return ISO_DATE_RE.test(baseline) ? baseline : minYmd;
 }
 
 function coerceNumber(value: unknown): number | undefined {
@@ -635,7 +658,13 @@ export function getEvalDateStr(
     "1900-01-01",
   );
   const lastTrade = lastTradeDateStr ?? "1900-01-01";
-  return (lastDaily > lastTrade ? lastDaily : lastTrade).slice(0, 10);
+  const candidate = lastDaily > lastTrade ? lastDaily : lastTrade;
+  const nyDay = resolveNyDayString(candidate);
+  if (ISO_DATE_RE.test(nyDay)) {
+    return nyDay;
+  }
+  const fallback = resolveTradingDayStr();
+  return ISO_DATE_RE.test(fallback) ? fallback : "";
 }
 
 type PersistableTradeInput = Pick<
@@ -862,8 +891,11 @@ export async function getOfficialCloseMapFromCache(): Promise<Record<string, Rec
         continue;
       }
       const symbol = toUpperSafe(row.symbol);
-      const date = typeof row.date === "string" ? row.date.slice(0, 10) : "";
-      if (!symbol || !ISO_DATE_RE.test(date)) {
+      const date =
+        typeof row.date === "string" && row.date
+          ? resolveNyDayString(row.date)
+          : "";
+      if (!symbol || !date) {
         continue;
       }
       const price = Number(row.close);

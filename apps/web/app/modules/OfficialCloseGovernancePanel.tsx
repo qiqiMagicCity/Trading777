@@ -12,6 +12,7 @@ import {
   type OfficialCloseOverlayRecord,
 } from '@/app/lib/officialCloseOverlayStore';
 import { getAdjustmentFactor } from '@/app/lib/officialCloseAdjustments';
+import { ymdInNY } from '@/lib/timezone';
 
 interface GovernanceFilters {
   status?: 'all' | 'missing' | 'pending';
@@ -66,6 +67,17 @@ function formatTimestamp(value?: string): string {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+const normalizeNyDay = (value: string): string => {
+  if (!value) return '';
+  try {
+    const source = DATE_RE.test(value) ? `${value}T12:00:00Z` : value;
+    const ny = ymdInNY(source);
+    return DATE_RE.test(ny) ? ny : '';
+  } catch {
+    return '';
+  }
+};
+
 function normalizeSymbol(value: string): string {
   return value.trim().toUpperCase();
 }
@@ -109,7 +121,7 @@ function parseImportText(raw: string): ImportEntry[] {
     if (tokens.length < 3) continue;
     const [symbolRaw = "", dateRaw = "", priceRaw = ""] = tokens;
     const symbol = normalizeSymbol(symbolRaw);
-    const date = dateRaw.slice(0, 10);
+    const date = normalizeNyDay(dateRaw);
     const price = Number(priceRaw);
     if (!symbol || !DATE_RE.test(date) || !Number.isFinite(price) || price <= 0) {
       continue;
@@ -356,7 +368,7 @@ export function OfficialCloseGovernancePanel({
     const map = new Map<string, ImportEntry>();
     for (const entry of [...importPreview, ...entries]) {
       const symbol = normalizeSymbol(entry.symbol);
-      const date = entry.date.slice(0, 10);
+      const date = normalizeNyDay(entry.date);
       if (!symbol || !DATE_RE.test(date) || entry.price <= 0) continue;
       map.set(`${symbol}|${date}`, { symbol, date, price: entry.price });
     }
@@ -391,7 +403,7 @@ export function OfficialCloseGovernancePanel({
 
   const handleManualAdd = () => {
     const symbol = normalizeSymbol(importForm.symbol);
-    const date = importForm.date.slice(0, 10);
+    const date = normalizeNyDay(importForm.date);
     const price = Number(importForm.price);
     if (!symbol || !DATE_RE.test(date) || !Number.isFinite(price) || price <= 0) {
       setImportError('请填写有效的标的、日期与价格');

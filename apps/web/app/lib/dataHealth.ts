@@ -3,6 +3,7 @@ import type { DailyResult } from "@/app/lib/types";
 import type { Position, Trade } from "@/lib/services/dataService";
 import type { MetricsContract } from "@/app/lib/types/metrics";
 import type { PeriodHealthIssue } from "@/app/lib/types/health";
+import { ymdInNY } from "@/lib/timezone";
 
 interface CollectIssuesOptions {
   evalDate: string;
@@ -12,8 +13,16 @@ interface CollectIssuesOptions {
   metrics: MetricsContract | null | undefined;
 }
 
-const toDay = (input: string | undefined): string =>
-  typeof input === "string" && input.length >= 10 ? input.slice(0, 10) : "";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const toDay = (input: string | undefined): string => {
+  if (typeof input !== "string" || input.length === 0) {
+    return "";
+  }
+  const source = DATE_RE.test(input) ? `${input}T12:00:00Z` : input;
+  const ny = ymdInNY(source);
+  return DATE_RE.test(ny) ? ny : "";
+};
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);

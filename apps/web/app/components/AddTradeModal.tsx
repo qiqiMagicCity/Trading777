@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import type { Trade } from '@/lib/services/dataService';
-import { nowNY, toNY } from '@/lib/timezone';
+import { nowNY, toNY, ymdInNY } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 
 const SYMBOL_HISTORY_KEY = 'tradeSymbolHistory';
@@ -58,6 +58,26 @@ const sanitizeDateTimeInput = (raw: string): string => {
 };
 
 const normalizeSymbol = (value: string): string => value.toUpperCase().replace(/[^A-Z]/g, '');
+
+const DATETIME_LOCAL_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+const resolveNyDayFromLocal = (value: string): string | null => {
+  const match = DATETIME_LOCAL_RE.exec(value);
+  if (!match) return null;
+  const [, y, m, d, hh, mm, ss] = match;
+  const nyDate = ymdInNY(
+    toNY(
+      Number(y),
+      Number(m) - 1,
+      Number(d),
+      Number(hh),
+      Number(mm),
+      Number(ss ?? '0'),
+    ),
+  );
+  return /^\d{4}-\d{2}-\d{2}$/.test(nyDate) ? nyDate : null;
+};
 
 export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
   const editing = !!trade;
@@ -148,10 +168,15 @@ export default function AddTradeModal({ onClose, onAdded, trade }: Props) {
       alert('请输入有效的交易时间');
       return;
     }
-    const tradeDate = normalizedDateTime.slice(0, 10); // YYYY-MM-DD
-    const tradeTimestamp = normalizedDateTime.length >= 19
-      ? normalizedDateTime.slice(0, 19)
-      : `${normalizedDateTime}T00:00:00`;
+    const tradeDate = resolveNyDayFromLocal(normalizedDateTime);
+    if (!tradeDate) {
+      alert('无法解析交易日期，请检查输入的时间');
+      return;
+    }
+    const timePart = normalizedDateTime.length >= 19
+      ? normalizedDateTime.slice(11, 19)
+      : '00:00:00';
+    const tradeTimestamp = `${tradeDate}T${timePart}`;
 
     const baseTrade = {
       symbol: symbol.toUpperCase(),

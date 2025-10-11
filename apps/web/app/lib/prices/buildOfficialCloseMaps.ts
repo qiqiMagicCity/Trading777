@@ -16,7 +16,10 @@ import {
   isHigherPriority,
   normalizeOfficialSourceTag,
 } from "@/app/lib/prices/compareOfficialSourcePriority";
+import { ymdInNY } from "@/lib/timezone";
 import { type CloseMapByDate } from "./normalizeCloseMap";
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface OfficialCloseMaps {
   overlay: ClosePriceMap;
@@ -101,7 +104,12 @@ function buildDetailMapFromRows(rows: CachedPrice[]): OfficialCloseDetailMap {
   const detailMap: OfficialCloseDetailMap = {};
   for (const row of rows) {
     const symbol = row.symbol?.trim().toUpperCase();
-    const date = typeof row.date === "string" ? row.date.slice(0, 10) : "";
+    const nyDate = (() => {
+      if (typeof row.date !== "string" || !row.date) return "";
+      const source = DATE_RE.test(row.date) ? `${row.date}T12:00:00Z` : row.date;
+      return ymdInNY(source);
+    })();
+    const date = DATE_RE.test(nyDate) ? nyDate : "";
     const price = Number(row.close);
     if (!symbol || !date || !Number.isFinite(price)) {
       continue;

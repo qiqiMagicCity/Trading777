@@ -20,6 +20,45 @@ import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
 import { evaluateCloseRequirement as evaluateMarketCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
 import { type CloseMapByDate } from '@/app/lib/prices/normalizeCloseMap';
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function resolveNyDay(value: string): string {
+  if (!value) return '';
+  if (DATE_RE.test(value)) return value;
+  const ny = nyYmd(value);
+  return DATE_RE.test(ny) ? ny : '';
+}
+
+function nyEpochRange(ymd: string): { from: number; to: number } | null {
+  const canonical = resolveNyDay(ymd);
+  if (!canonical) return null;
+  const anchor = toNY(`${canonical}T12:00:00Z`);
+  if (Number.isNaN(anchor.getTime())) {
+    return null;
+  }
+  const startLocal = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth(),
+    anchor.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const endLocal = new Date(
+    anchor.getFullYear(),
+    anchor.getMonth(),
+    anchor.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+  const from = Math.floor(zonedTimeToUtc(startLocal, NY_TZ).getTime() / 1000);
+  const to = Math.floor(zonedTimeToUtc(endLocal, NY_TZ).getTime() / 1000);
+  return { from, to };
+}
+
 // Node 降级缓存
 const mem = new Map<string, string>();
 function cacheGet(key: string): string | null {
@@ -206,8 +245,12 @@ async function fetchFinnhubDailyClose(symbol: string, date: string): Promise<num
   const token = await getFinnhubToken();
   if (!token) { console.warn('未设置 Finnhub 令牌'); return null; }
 
-  const fromTs = Math.floor(new Date(`${date}T00:00:00Z`).getTime() / 1000);
-  const toTs   = Math.floor(new Date(`${date}T23:59:59Z`).getTime() / 1000);
+  const range = nyEpochRange(date);
+  if (!range) {
+    console.warn('[priceService] 无法解析 Finnhub 查询日期', date);
+    return null;
+  }
+  const { from: fromTs, to: toTs } = range;
   const url    = `/api/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}`;
 
   try {
