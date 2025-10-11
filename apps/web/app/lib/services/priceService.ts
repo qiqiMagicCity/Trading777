@@ -22,10 +22,29 @@ import { type CloseMapByDate } from '@/app/lib/prices/normalizeCloseMap';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function resolveNyDay(value: string): string {
-  if (!value) return '';
-  if (DATE_RE.test(value)) return value;
-  const ny = nyYmd(value);
+function resolveNyDay(value: string | number | Date): string {
+  if (value instanceof Date) {
+    const ny = nyYmd(value);
+    return DATE_RE.test(ny) ? ny : '';
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return resolveNyDay(new Date(value));
+  }
+  if (typeof value !== 'string') {
+    return '';
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (DATE_RE.test(trimmed)) {
+    return trimmed;
+  }
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  const ny = nyYmd(parsed);
   return DATE_RE.test(ny) ? ny : '';
 }
 
