@@ -134,7 +134,6 @@ describe('missing banner uses requireOfficialClose verdict', () => {
     const filtered = filterMissingOfficialEntries(MISSING_ENTRIES.slice(), {
       official: maps.official,
       overlay: maps.overlay,
-      packaged: maps.packaged,
       idb: debug?.idb ?? {},
     });
     setLatestMissingOfficialEntries(filtered);
@@ -148,7 +147,7 @@ describe('missing banner uses requireOfficialClose verdict', () => {
     expect(missing).toEqual({});
   });
 
-  it('retains symbols when no official close exists in packaged/idb/overlay', async () => {
+  it('retains symbols when no official close exists in idb/overlay', async () => {
     setStoreMetrics();
 
     beginBuild();
@@ -162,7 +161,6 @@ describe('missing banner uses requireOfficialClose verdict', () => {
     const filtered = filterMissingOfficialEntries(MISSING_ENTRIES.slice(), {
       official: maps.official,
       overlay: maps.overlay,
-      packaged: maps.packaged,
       idb: debug?.idb ?? {},
     });
     setLatestMissingOfficialEntries(filtered);

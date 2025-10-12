@@ -16,7 +16,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 interface OfficialCloseContext {
   map: ClosePriceMap;
   overlayMap?: ClosePriceMap;
-  packagedMap?: ClosePriceMap;
   idbMap?: ClosePriceMap;
   diagnostics: MissingOfficialCloseDiagnostics;
   fallbackResolver?: (symbol: string, date: string) => boolean;
@@ -95,11 +94,6 @@ export function requireOfficialClose(
     return { ok: true, price: applyAdjustments(price) };
   }
 
-  const packagedPrice = context.packagedMap?.[symbol]?.[date];
-  if (typeof packagedPrice === "number" && Number.isFinite(packagedPrice)) {
-    return { ok: true, price: applyAdjustments(packagedPrice) };
-  }
-
   const idbPrice = context.idbMap?.[symbol]?.[date];
   if (typeof idbPrice === "number" && Number.isFinite(idbPrice)) {
     return { ok: true, price: applyAdjustments(idbPrice) };
@@ -107,8 +101,6 @@ export function requireOfficialClose(
 
   const hasFallback = context.fallbackResolver?.(symbol, date) ?? false;
   const inWindow = context.closeWindowEvaluator?.(date) ?? false;
-  const packagedAvailable =
-    typeof packagedPrice === "number" && Number.isFinite(packagedPrice);
   const idbAvailable = typeof idbPrice === "number" && Number.isFinite(idbPrice);
   reportMissingOfficialClose(context.diagnostics, {
     symbol,
@@ -117,7 +109,6 @@ export function requireOfficialClose(
     hasFallback,
     status: inWindow ? "pending" : "missing",
     sources: {
-      packagedPrice: packagedAvailable ? packagedPrice : undefined,
       idbPrice: idbAvailable ? idbPrice : undefined,
       fallbackAvailable: hasFallback,
     },

@@ -23,7 +23,6 @@ export interface MissingOfficialCloseDiagnostics {
 }
 
 export interface MissingOfficialCloseSourceInfo {
-  packagedPrice?: number;
   idbPrice?: number;
   overlayPrice?: number;
   fallbackAvailable?: boolean;
@@ -123,9 +122,6 @@ function mergeSourceInfo(
     return { ...incoming };
   }
   const result: MissingOfficialCloseSourceInfo = { ...existing };
-  if (incoming.packagedPrice !== undefined) {
-    result.packagedPrice = incoming.packagedPrice;
-  }
   if (incoming.idbPrice !== undefined) {
     result.idbPrice = incoming.idbPrice;
   }

@@ -17,7 +17,6 @@ import { useStore } from '@/app/lib/store';
 interface OfficialCloseContextMaps {
   official: ClosePriceMap;
   overlay: ClosePriceMap;
-  packaged: ClosePriceMap;
   idb: ClosePriceMap;
 }
 
@@ -30,7 +29,6 @@ export function filterMissingOfficialEntries(
   const release = setOfficialCloseContext({
     map: maps.official,
     overlayMap: maps.overlay,
-    packagedMap: maps.packaged,
     idbMap: maps.idb,
     diagnostics: createMissingOfficialCloseDiagnostics(),
   });

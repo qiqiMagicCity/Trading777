@@ -191,11 +191,6 @@ export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult
 
   const packagedBySymbol = byDateToSymbolMap(fileClosePricesRaw);
   const normalizedFileCloses = normalizeClosePriceMap(packagedBySymbol);
-  const packagedDetail = buildDetailMapFromNumeric(
-    normalizedFileCloses,
-    "official/packaged",
-    "packaged",
-  );
   const overlayDetail = buildDetailMapFromOverlay(overlayEntries);
   const overlayMap = overlayEntriesToMap(overlayEntries);
 
@@ -205,7 +200,7 @@ export async function buildOfficialCloseMaps(): Promise<OfficialCloseBuildResult
   );
   const idbDetail = buildDetailMapFromRows(officialRows);
 
-  const officialDetailMap = mergeDetailMaps(idbDetail, packagedDetail, overlayDetail);
+  const officialDetailMap = mergeDetailMaps(idbDetail, overlayDetail);
   const officialPriceMap = detailMapToPrices(officialDetailMap);
   const mergedCloseMap = mergeClosePriceMaps(cachedFallbackCloses, officialPriceMap);
 
