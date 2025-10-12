@@ -788,8 +788,6 @@ function _calcM6Strict(params: {
   todayTrades: EnrichedTrade[]; // 仅 todayStr 的交易
   sortedTrades: EnrichedTrade[];
   todayStr: string;
-  M4: number;
-  M5_2: number; // FIFO 未实现（当日）
   lastPriceFallback?: (symbol: string) => number | null; // 可选：没有行情时从当日成交价取
 }) {
   const {
@@ -797,8 +795,6 @@ function _calcM6Strict(params: {
     todayTrades,
     sortedTrades,
     todayStr,
-    M4,
-    M5_2,
     lastPriceFallback,
   } = params;
 
@@ -1169,10 +1165,10 @@ function _calcM6Strict(params: {
   mtmOvernight = round4(mtmOvernight);
   mtmIntradayOpen = round4(mtmIntradayOpen);
 
-  const realizedTotal = M4 + M5_2;
+  const realizedTotal = realizedRows.sumM4 + realizedRows.sumM52;
   if (Math.abs(realizedToday - realizedTotal) > 1e-6) {
     warnings.push(
-      `M6 严格口径：已实现拆解(${realizedToday.toFixed(2)}) 与总计(${realizedTotal.toFixed(
+      `M6 严格口径：已实现拆解(${realizedToday.toFixed(2)}) 与快照合计(${realizedTotal.toFixed(
         2,
       )}) 不一致。`,
     );
@@ -2591,8 +2587,6 @@ export function calcMetricsInternal(
       todayTrades,
       sortedTrades,
       todayStr,
-      M4: todayHistoricalRealizedPnl,
-      M5_2: pnlFifo,
       lastPriceFallback: (symbol) => {
         const p = lastTradePriceToday.get(symbol);
         return Number.isFinite(Number(p)) ? Number(p) : null;

@@ -15,8 +15,7 @@ describe("calcM6Detailed", () => {
       positions: [
         { symbol: "AAA", qty: 10, priceNow: 110, prevClose: 100 },
       ],
-      M4: 5,
-      M5_FIFO: 2,
+      realizedToday: 7,
     });
 
     expect(result.mtm).toBe(100);
@@ -31,8 +30,7 @@ describe("calcM6Detailed", () => {
       positions: [
         { symbol: "BBB", qty: -5, priceNow: 90, prevClose: 100 },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBe(50);
@@ -44,8 +42,7 @@ describe("calcM6Detailed", () => {
       positions: [
         { symbol: "CCC", qty: 0, priceNow: 105, prevClose: 100 },
       ],
-      M4: 12,
-      M5_FIFO: -2,
+      realizedToday: 10,
     });
 
     expect(result.mtm).toBe(0);
@@ -58,8 +55,7 @@ describe("calcM6Detailed", () => {
         { symbol: "DDD", qty: 4, priceNow: 12, prevClose: 10 },
         { symbol: "EEE", qty: -3, priceNow: 18, prevClose: 20 },
       ],
-      M4: 1,
-      M5_FIFO: 2,
+      realizedToday: 3,
     });
 
     const expectedMtm = (12 - 10) * 4 + (18 - 20) * -3;
@@ -75,8 +71,7 @@ describe("calcM6Detailed", () => {
       positions: [
         { symbol: "FFF", qty: 2, priceNow: 55, prevClose: null },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
       fallbackOpen,
     });
 
@@ -94,8 +89,7 @@ describe("calcM6Detailed", () => {
       positions: [
         { symbol: "GGG", qty: 3, priceNow: null, prevClose: 10 },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBe(0);
@@ -112,8 +106,7 @@ describe("calcM6Detailed", () => {
           symbol: "H", qty: 5, priceNow: 12, prevClose: 10, todayLongQty: 5,
         },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBe(0);
@@ -136,8 +129,7 @@ describe("calcM6Detailed", () => {
           overnightQty: -10,
         },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBeCloseTo((17 - 18) * 10 + (19 - 18) * 5, 6);

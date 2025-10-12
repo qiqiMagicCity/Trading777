@@ -9,8 +9,7 @@ describe("calcM6Detailed pure scenarios", () => {
       positions: [
         { symbol: "AAPL", qty: 100, prevClose: 100, priceNow: 103 },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBeCloseTo(300, 6);
@@ -20,8 +19,7 @@ describe("calcM6Detailed pure scenarios", () => {
   it("示例B：纯日内开平（当日无持仓）", () => {
     const result = calcM6Detailed({
       positions: [],
-      M4: 0,
-      M5_FIFO: 120,
+      realizedToday: 120,
     });
 
     expect(result.mtm).toBeCloseTo(0, 6);
@@ -40,8 +38,7 @@ describe("calcM6Detailed pure scenarios", () => {
           todayLongAvg: 890,
         },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBeCloseTo(-400, 6);
@@ -61,8 +58,7 @@ describe("calcM6Detailed pure scenarios", () => {
           overnightQty: -100,
         },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBeCloseTo(540, 6);
@@ -82,8 +78,7 @@ describe("calcM6Detailed pure scenarios", () => {
           todayShortAvg: 110,
         },
       ],
-      M4: 0,
-      M5_FIFO: 0,
+      realizedToday: 0,
     });
 
     expect(result.mtm).toBeCloseTo((110 - 108) * 5, 6);
