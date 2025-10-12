@@ -19,7 +19,8 @@ export type ClosePriceMap = Record<string, Record<string, number>>;
 export type MissingCloseFallback =
   | "MARK_PRICE"
   | "PREVIOUS_CLOSE"
-  | "AVERAGE_COST";
+  | "AVERAGE_COST"
+  | "OFFICIAL_CLOSE";
 
 export interface MissingCloseEntry {
   symbol: string;
@@ -292,9 +293,9 @@ export function generateDailyResults({
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   const state = new Map<string, PositionState>();
-  const lastKnownPrice = new Map<string, number>();
   const results: DailyResult[] = [];
   let prevUnrealizedDec = new M(0);
+  let prevUnrealizedValid = true;
 
   const diagTracker = diagnostics
     ? (() => {
@@ -338,6 +339,7 @@ export function generateDailyResults({
       MARK_PRICE: 0,
       PREVIOUS_CLOSE: 1,
       AVERAGE_COST: 2,
+      OFFICIAL_CLOSE: 3,
     };
 
     let entry = diagnostics.pendingCloses!.find((row) => row.date === tradingDate);
@@ -422,6 +424,7 @@ export function generateDailyResults({
       }
     }
 
+    const missingSymbols = new Set<string>();
     const unrealizedDec = Array.from(state.entries()).reduce((sum, [symbol, posState]) => {
       const qty = posState.qty;
       const absQty = Math.abs(qty);
@@ -438,18 +441,10 @@ export function generateDailyResults({
         }
       }
       if (price === undefined) {
-        const prev = lastKnownPrice.get(symbol);
-        if (prev !== undefined && Number.isFinite(prev)) {
-          price = prev;
-          reportMissing(symbol, date, "PREVIOUS_CLOSE");
-        }
+        missingSymbols.add(symbol);
+        reportMissing(symbol, date, "OFFICIAL_CLOSE");
+        return sum;
       }
-      if (price === undefined && Number.isFinite(posState.avgPrice)) {
-        price = posState.avgPrice;
-        reportMissing(symbol, date, "AVERAGE_COST");
-      }
-      if (price === undefined) return sum;
-      lastKnownPrice.set(symbol, price);
       const diff = qty >= 0 ? price - posState.avgPrice : posState.avgPrice - price;
       return sum.plus(new M(diff).mul(absQty));
     }, new M(0));
@@ -461,16 +456,34 @@ export function generateDailyResults({
     }
 
     const realized = round2(realizedDec);
-    const unrealized = round2(unrealizedDec);
-    const delta = round2(unrealizedDec.minus(prevUnrealizedDec));
-    prevUnrealizedDec = unrealizedDec;
+    if (missingSymbols.size > 0) {
+      const snapshot = {
+        date,
+        realized,
+        unrealized: Number.NaN,
+      } as DailyResult & { missingBaselineSymbols?: string[] };
+      snapshot.missingBaselineSymbols = Array.from(missingSymbols).sort((a, b) =>
+        a.localeCompare(b),
+      );
+      results.push(snapshot);
+      prevUnrealizedValid = false;
+      continue;
+    }
 
-    results.push({
+    const unrealized = round2(unrealizedDec);
+    const row: DailyResult = {
       date,
       realized,
       unrealized,
-      unrealizedDelta: delta,
-    });
+    };
+    if (prevUnrealizedValid) {
+      row.unrealizedDelta = round2(unrealizedDec.minus(prevUnrealizedDec));
+    } else {
+      prevUnrealizedValid = true;
+    }
+    prevUnrealizedDec = unrealizedDec;
+
+    results.push(row);
   }
 
   return results.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));

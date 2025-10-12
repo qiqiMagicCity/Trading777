@@ -71,12 +71,12 @@ describe("generateDailyResults diagnostics", () => {
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "AMD",
       ymd: "2025-09-22",
-      fallback: "AVERAGE_COST",
+      fallback: "OFFICIAL_CLOSE",
     });
     expect(diagnostics.missingCloses).not.toContainEqual({
       symbol: "AMD",
       ymd: "2025-09-26",
-      fallback: "MARK_PRICE",
+      fallback: "OFFICIAL_CLOSE",
     });
     const pending = diagnostics.pendingCloses?.find((entry) => entry.date === evalDate);
     expect(pending).toBeUndefined();
@@ -107,17 +107,12 @@ describe("generateDailyResults diagnostics", () => {
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "AMD",
       ymd: "2025-09-22",
-      fallback: "AVERAGE_COST",
+      fallback: "OFFICIAL_CLOSE",
     });
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "AMD",
       ymd: "2025-09-26",
-      fallback: "PREVIOUS_CLOSE",
-    });
-    expect(diagnostics.missingCloses).not.toContainEqual({
-      symbol: "AMD",
-      ymd: "2025-09-26",
-      fallback: "MARK_PRICE",
+      fallback: "OFFICIAL_CLOSE",
     });
     expect(diagnostics.pendingCloses?.find((entry) => entry.date === evalDate)).toBeUndefined();
     expect(diagnostics.closeWindow).toMatchObject({

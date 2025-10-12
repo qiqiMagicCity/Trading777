@@ -48,7 +48,7 @@ describe("close missing policy - post close grace", () => {
     expect(diagnostics.missingCloses).toContainEqual({
       symbol: "TSLA",
       ymd: "2025-10-07",
-      fallback: "PREVIOUS_CLOSE",
+      fallback: "OFFICIAL_CLOSE",
     });
     expect(diagnostics.pendingCloses?.find((entry) => entry.date === "2025-10-07")).toBeUndefined();
     expect(diagnostics.closeWindow).toMatchObject({
