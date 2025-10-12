@@ -26,7 +26,10 @@
     "test:m4:edge": "jest apps/web/app/lib/__tests__/m4.edgecases.test.ts --runInBand",
     "lint:time": "eslint -c .eslintrc.time.js --no-error-on-unmatched-pattern --ext .ts,.tsx,.js,.mjs,.cjs apps packages libs server api public",
     "time:selfcheck": "node scripts/time-selfcheck.mjs",
-    "time:ci": "npm run lint:time && npm run time:selfcheck"
+    "time:ci": "npm run lint:time && npm run time:selfcheck",
+    "rules:extract": "node scripts/extractRules.js",
+    "rules:check": "node scripts/checkRules.js",
+    "guard:rules": "bash -lc \"if rg -n --hidden -S '(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)' --glob '!**/__tests__/**' --glob '!**/*.test.*' --glob '!**/*.spec.*' --glob '!**/*.fixture.*' apps packages; then echo 'Forbidden patterns detected.' >&2; exit 1; else echo 'No forbidden patterns found.'; fi\""
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
