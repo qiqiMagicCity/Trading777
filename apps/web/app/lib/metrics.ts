@@ -22,6 +22,7 @@ import {
   type SnapshotFieldParseError,
   type SnapshotNumericField,
 } from "./snapshotNumber";
+import { calcM1M2M3 } from "./metrics/calcM1M2M3";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MIDNIGHT_ISO_RE =
@@ -98,6 +99,9 @@ import { sumPeriod as sumPeriodBase, type PeriodTotalsOptions } from "./metrics-
 import { round4, add4, sub4, mul4, div4 } from "./precision";
 import type {
   MetricsContract,
+  M3Value,
+  M123Snapshot,
+  M1toM3Meta,
   M4TodayDetail,
   PeriodDegradedMap,
   SummaryMetrics,
@@ -450,10 +454,23 @@ export async function fetchSummaryMetrics(init?: {
       ? summary.M5.fifo
       : undefined;
 
+  const rawM3 = summary?.M3;
+  const summaryM3 =
+    typeof rawM3 === "number" ||
+    (rawM3 && typeof rawM3 === "object")
+      ? (rawM3 as number | M3Value)
+      : undefined;
+  const summaryM3Legacy =
+    typeof summary?.M3Legacy === "number"
+      ? summary.M3Legacy
+      : typeof rawM3 === "number"
+      ? rawM3
+      : undefined;
+
   const result: SummaryMetrics = {
     M1: typeof summary?.M1 === "number" ? summary.M1 : undefined,
     M2: typeof summary?.M2 === "number" ? summary.M2 : undefined,
-    M3: typeof summary?.M3 === "number" ? summary.M3 : undefined,
+    M3: summaryM3,
     M4: typeof summary?.M4 === "number" ? summary.M4 : summary?.M4?.total,
     M5_2: fallbackM5_2,
     M6:
@@ -463,6 +480,8 @@ export async function fetchSummaryMetrics(init?: {
         ? summary.M6.total
         : undefined,
     M7: typeof summary?.M7 === "number" ? summary.M7 : summary?.M7?.total,
+    ...(summary?.M123 ? { M123: summary.M123 as M123Snapshot } : {}),
+    ...(summaryM3Legacy !== undefined ? { M3Legacy: summaryM3Legacy } : {}),
     _m6:
       summary?._m6 && typeof summary._m6 === "object"
         ? {
@@ -523,7 +542,7 @@ function seedInitialLots(
 export interface Metrics {
   M1: number;
   M2: number;
-  M3: number;
+  M3: M3Value;
   /**
    * @deprecated 前端请改读 {@link normalizeMetrics}.M4（与 runAll().result.M4 对齐）。
    * 仅用于兼容旧有调用，避免直接消费 calcMetrics 内部口径。
@@ -572,6 +591,8 @@ export interface Metrics {
   M11: number;
   M12: number;
   M13: number;
+  M123?: M123Snapshot;
+  M3Legacy?: number;
   aux?: {
     m6PriceChange?: number;
     m6PrevRealizedTotal?: number;
@@ -2678,26 +2699,11 @@ export function calcMetricsInternal(
     return set;
   })();
 
-  // M1: 持仓成本
-  const totalCost = sum(positions.map((p) => Math.abs(p.avgPrice * p.qty)));
-
-  // M2: 持仓市值
-  const currentValue = sum(
-    positions.map((p) => {
-      const marketValue = p.last * Math.abs(p.qty);
-      return marketValue;
-    }),
-  );
-
-  // M3: 持仓浮盈
-  const floatPnl = positions.reduce((acc, pos) => {
-    const qty = Math.abs(pos.qty);
-    if (pos.qty >= 0) {
-      return acc + (pos.last - pos.avgPrice) * qty;
-    } else {
-      return acc + (pos.avgPrice - pos.last) * qty;
-    }
-  }, 0);
+  const m123 = calcM1M2M3(positions);
+  const totalCost = m123.m1;
+  const currentValue = m123.m2;
+  const floatPnl = m123.m3.nominal;
+  const floatPnlDirectional = m123.m3.dir;
 
   // M5
   const pnlTrade = calcTodayTradePnL(sortedTrades, todayStr);
@@ -2979,7 +2985,9 @@ export function calcMetricsInternal(
   const metrics: Metrics = {
     M1: totalCost,
     M2: currentValue,
-    M3: floatPnl,
+    M3: { dir: floatPnlDirectional, nominal: floatPnl },
+    M123: m123,
+    M3Legacy: floatPnl,
     M4: todayHistoricalRealizedPnl,
     M5: {
       trade: pnlTrade,
@@ -3116,9 +3124,78 @@ export function normalizeMetrics(input: any): MetricsContract {
     return { win, loss, flat, rate };
   };
 
-  const M1 = Number(input?.M1 ?? 0);
-  const M2 = Number(input?.M2 ?? 0);
-  const M3 = Number(input?.M3 ?? 0);
+  const toNumber = (value: any, fallback = 0): number => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+  };
+  const normalizeM3Value = (value: any): M3Value => {
+    if (typeof value === "number") {
+      const dir = toNumber(value, 0);
+      return { dir, nominal: Math.abs(dir) };
+    }
+    if (typeof value === "string") {
+      const dir = toNumber(value, 0);
+      return { dir, nominal: Math.abs(dir) };
+    }
+    if (value && typeof value === "object") {
+      const dirCandidate =
+        value.dir ?? value.direction ?? value.directional ?? value.signed ?? value.delta;
+      const nominalCandidate =
+        value.nominal ?? value.abs ?? value.absolute ?? value.value ?? value.total ?? value.amount;
+      const dir = toNumber(dirCandidate, 0);
+      const nominal = toNumber(nominalCandidate, Math.abs(dir));
+      return { dir, nominal };
+    }
+    return { dir: 0, nominal: 0 };
+  };
+  const normalizeM123Meta = (meta: any): M1toM3Meta => {
+    const status = meta?.priceStatus === "stale" ? "stale" : "live";
+    const lastRaw = meta?.lastPriceAtNY;
+    const lastPriceAtNY =
+      typeof lastRaw === "string" && lastRaw.length > 0 ? lastRaw : null;
+    const staleList = Array.isArray(meta?.staleSymbols)
+      ? meta.staleSymbols.filter(
+          (sym: unknown): sym is string => typeof sym === "string" && sym.length > 0,
+        )
+      : [];
+    return {
+      priceStatus: status,
+      lastPriceAtNY,
+      ...(staleList.length > 0 ? { staleSymbols: staleList } : {}),
+    };
+  };
+
+  const baseM1 = toNumber(input?.M1, 0);
+  const baseM2 = toNumber(input?.M2, 0);
+  const rawM123 = input?.M123;
+  const normalizedM123: M123Snapshot | undefined =
+    rawM123 && typeof rawM123 === "object"
+      ? {
+          m1: toNumber(rawM123.m1 ?? rawM123.M1, baseM1),
+          m2: toNumber(rawM123.m2 ?? rawM123.M2, baseM2),
+          m3: normalizeM3Value(rawM123.m3 ?? rawM123.M3 ?? input?.M3),
+          meta: normalizeM123Meta(rawM123.meta ?? {}),
+        }
+      : undefined;
+
+  const M1 = normalizedM123?.m1 ?? baseM1;
+  const M2 = normalizedM123?.m2 ?? baseM2;
+  const M3 = normalizedM123?.m3 ?? normalizeM3Value(input?.M3);
+  const legacyCandidates = [
+    input?.M3Legacy,
+    (input?.M3 as any)?.legacy,
+    (input?.M3 as any)?.nominal,
+    typeof input?.M3 === "number" ? input?.M3 : undefined,
+  ];
+  let legacyRaw: number | undefined;
+  for (const candidate of legacyCandidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric)) {
+      legacyRaw = numeric;
+      break;
+    }
+  }
+  const M3Legacy = toNumber(legacyRaw, M3.nominal);
   const M4 = Number.isFinite(Number(input?.M4))
     ? Number(input?.M4)
     : pickTotal(input?.M4);
@@ -3484,6 +3561,8 @@ export function normalizeMetrics(input: any): MetricsContract {
     M1,
     M2,
     M3,
+    ...(normalizedM123 ? { M123: normalizedM123 } : {}),
+    M3Legacy,
     M4,
     M4_today: normalizedM4Today,
     M5,

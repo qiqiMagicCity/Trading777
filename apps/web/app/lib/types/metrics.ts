@@ -132,8 +132,30 @@ export interface M4TodayDetail {
   reason?: "missing_official_close_prev";
 }
 
+export type M1toM3PriceStatus = "live" | "stale";
+
+export interface M1toM3Meta {
+  priceStatus: M1toM3PriceStatus;
+  lastPriceAtNY: string | null;
+  staleSymbols?: string[];
+}
+
+export interface M3Value {
+  dir: number;
+  nominal: number;
+}
+
+export interface M123Snapshot {
+  m1: number;
+  m2: number;
+  m3: M3Value;
+  meta: M1toM3Meta;
+}
+
 export interface MetricsContract {
-  M1: number; M2: number; M3: number;
+  M1: number;
+  M2: number;
+  M3: M3Value;
   /**
    * 今天历史平仓盈利（M4）：runAll 覆盖后的最终数值，来源于历史腿 pnl_raw 求和后 round2。
    */
@@ -155,6 +177,11 @@ export interface MetricsContract {
     diagnostics?: Record<PeriodWindowKey, PeriodWindowDiagnostics>;
   };
   M7?: any; M8?: any; M9?: number; M10?: any; M11?: any; M12?: any; M13?: any;
+  M123?: M123Snapshot;
+  /**
+   * @deprecated 兼容旧版：沿用原 M3 数值（名义值）。
+   */
+  M3Legacy?: number;
   aux?: {
     breakdown?: BreakdownCollection;
     m6PriceChange?: number;
@@ -200,12 +227,14 @@ export interface MetricsContract {
 export interface SummaryMetrics {
   M1?: number;
   M2?: number;
-  M3?: number;
+  M3?: number | M3Value;
   M4?: number;
   M4_today?: M4TodayDetail;
   M5_2?: number; // 今日未平日内（FIFO 未实现）
   M6?: number;   // 今日总盈亏（后端已按规则计算）
   M7?: number;
+  M123?: M123Snapshot;
+  M3Legacy?: number;
   _m6?: {
     realizedToday: number;
     mtmOvernight: number;

@@ -40,7 +40,11 @@ for (const day of days) {
   const totalRealized = m.M4 + m.M5.fifo;
   const prevRealized = dailyResults.reduce((s, r) => s + r.realized, 0);
   const realized = Math.round((totalRealized - prevRealized) * 100) / 100;
-  const unrealized = Math.round(m.M3 * 100) / 100;
+  const m3Nominal =
+    typeof m.M3Legacy === "number" && Number.isFinite(m.M3Legacy)
+      ? m.M3Legacy
+      : m.M3.nominal;
+  const unrealized = Math.round(m3Nominal * 100) / 100;
   const M6 = m.M6.total;
   const record = { date: day, realized, unrealized, M6 };
   dailyResults.push(record);

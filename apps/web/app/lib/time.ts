@@ -58,6 +58,13 @@ export function nyDateStrSafe(d: Date | string | number): string {
   return toETYYYYMMDD(normalizeToNyDay(d));
 }
 
+export function fmtNY(
+  input: Date | string | number,
+  pattern = 'yyyy-MM-dd HH:mm:ss',
+): string {
+  return formatInTimeZone(normalizeToNyDay(input), NY_TZ, pattern);
+}
+
 /**
  * 判定两个时间是否属于同一纽约交易日。
  * ⚠️ 禁止使用 `toISOString()` 结果直接截取前 10 位等 UTC 截串方式判别今日/历史。

@@ -18,7 +18,7 @@ describe("replay days generation", () => {
       const totalRealized = m.M4 + m.M5.fifo;
       const prevReal = daily.reduce((s: number, r: any) => s + r.realized, 0);
       const realized = Math.round((totalRealized - prevReal) * 100) / 100;
-      const unrealized = Math.round(m.M3 * 100) / 100;
+      const unrealized = Math.round(m.M3.nominal * 100) / 100;
       daily.push({ date: d, realized, unrealized });
     }
     expect(daily).toEqual([{ date: "2024-01-01", realized: 0, unrealized: 1 }]);
@@ -42,7 +42,7 @@ describe("replay days generation", () => {
       const totalRealized = m.M4 + m.M5.fifo;
       const prevReal = daily.reduce((s: number, r: any) => s + r.realized, 0);
       const realized = Math.round((totalRealized - prevReal) * 100) / 100;
-      const unrealized = Math.round(m.M3 * 100) / 100;
+      const unrealized = Math.round(m.M3.nominal * 100) / 100;
       daily.push({ date: d, realized, unrealized });
     }
     const lastDay = days[days.length - 1];

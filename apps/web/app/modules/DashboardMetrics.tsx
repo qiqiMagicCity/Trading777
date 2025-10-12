@@ -154,15 +154,20 @@ function MetricCard({
   value,
   colorClass,
   dataTestId,
+  badge,
 }: {
   title: ReactNode;
   value: ReactNode;
   colorClass?: string;
   dataTestId?: string;
+  badge?: ReactNode;
 }) {
   return (
     <div className="box" data-testid={dataTestId}>
-      <div className="title">{title}</div>
+      <div className="title flex items-start justify-between gap-2">
+        <span>{title}</span>
+        {badge ? <span>{badge}</span> : null}
+      </div>
       <div className={`value ${colorClass || ""}`}>{value}</div>
     </div>
   );
@@ -616,11 +621,12 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           ? periodValues.M11.value
           : key === "M12"
           ? periodValues.M12.value
-          : key === "M13"
+      : key === "M13"
           ? periodValues.M13.value
           : metrics[key];
       let formattedValue: ReactNode;
       let colorClass = "";
+      let badgeNode: ReactNode | undefined;
       const dataTestId =
         key === "M11"
           ? "metric-wtd"
@@ -681,6 +687,44 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
               FIFO: {formatCurrency(m5.fifo)}
             </span>
           </>
+        );
+      } else if (key === "M3") {
+        const m3 = metrics.M3;
+        const meta = metrics.M123?.meta ?? {
+          priceStatus: "live" as const,
+          lastPriceAtNY: null,
+        };
+        formattedValue = (
+          <div className="flex flex-col gap-1">
+            <span>{formatCurrency(m3.dir)}</span>
+            <span className="text-xs text-muted-foreground">
+              名义：{formatCurrency(m3.nominal)}
+            </span>
+            {meta.lastPriceAtNY ? (
+              <span className="text-xs text-muted-foreground">
+                最近价（NY）：{meta.lastPriceAtNY}
+              </span>
+            ) : null}
+          </div>
+        );
+        numericForColor = m3.dir;
+        badgeNode = (
+          <span
+            className={
+              meta.priceStatus === "stale"
+                ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+                : "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
+            }
+            title={
+              meta.priceStatus === "stale"
+                ? "部分行情待更新"
+                : meta.lastPriceAtNY
+                ? `最新行情时间（NY）：${meta.lastPriceAtNY}`
+                : "行情实时"
+            }
+          >
+            {meta.priceStatus === "stale" ? "待更新" : "live"}
+          </span>
         );
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
@@ -905,6 +949,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         value: formattedValue,
         colorClass,
         dataTestId,
+        badge: badgeNode,
       };
     });
   }, [
@@ -948,6 +993,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                   value={metric.value}
                   colorClass={metric.colorClass}
                   dataTestId={metric.dataTestId}
+                  badge={metric.badge}
                 />
               ))}
             </div>

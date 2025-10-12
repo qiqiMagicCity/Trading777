@@ -1098,7 +1098,11 @@ async function runAllCore(
   const M4_r = round2(M4_override);
   const M5_1_r = round2(M5_1_override);
   const M5_2_r = round2(M5_2_override);
-  const M3_r = round2(metrics.M3);
+  const m3Nominal =
+    typeof metrics.M3Legacy === "number" && Number.isFinite(metrics.M3Legacy)
+      ? metrics.M3Legacy
+      : metrics.M3.nominal;
+  const M3_r = round2(m3Nominal);
   const priceChangeRaw = metrics.aux?.m6PriceChange ?? 0;
   const todayRealizedTotalRaw = M4_override + M5_2_override;
   const todayRealizedTotal = round2(todayRealizedTotalRaw);

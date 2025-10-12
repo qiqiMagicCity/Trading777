@@ -39,7 +39,13 @@ for (const date of dates) {
     { evalDate: date },
   );
   const realized = Math.round((res.M4 + res.M5_2) * 100) / 100;
-  const unrealized = Math.round(res.M3 * 100) / 100;
+  const unrealizedSource =
+    typeof res.M3Legacy === "number" && Number.isFinite(res.M3Legacy)
+      ? res.M3Legacy
+      : typeof res.M3 === "object"
+      ? res.M3.nominal
+      : Number(res.M3 ?? 0);
+  const unrealized = Math.round(unrealizedSource * 100) / 100;
 
   const snapshotDaily = readJSON(path.join(dayDir, "dailyResult.json"));
   const record = snapshotDaily.find((r: any) => r.date === date);
