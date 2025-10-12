@@ -28,7 +28,8 @@
     "test:m4:edge": "jest apps/web/app/lib/__tests__/m4.edgecases.test.ts --runInBand",
     "lint:time": "eslint -c .eslintrc.time.js --no-error-on-unmatched-pattern --ext .ts,.tsx,.js,.mjs,.cjs apps packages libs server api public",
     "time:selfcheck": "node scripts/time-selfcheck.mjs",
-    "time:ci": "npm run lint:time && npm run time:selfcheck"
+    "time:ci": "npm run lint:time && npm run time:selfcheck",
+    "test:unit": "jest -c jest.unit.config.js --runInBand"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
