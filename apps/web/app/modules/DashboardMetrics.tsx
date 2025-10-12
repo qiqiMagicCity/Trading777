@@ -20,12 +20,29 @@ import type {
   PeriodParseError,
 } from "@/app/lib/types/metrics";
 import { useEffect, useMemo, useState, type ReactNode, type FC } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 import {
   getPeriodOfficialCloseSummary,
   formatOfficialCloseEntries,
   formatPendingSummary,
 } from "@/app/lib/periodOfficialClose";
+
+const fmtMoney = (n: number) =>
+  Number.isFinite(n)
+    ? n.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 2,
+      })
+    : "-";
+const formatNYShort = (iso?: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString("en-US", {
+        hour12: false,
+        timeZone: "America/New_York",
+      })
+    : "-";
 
 const DEGRADE_REASON_LABELS: Record<PeriodDegradationReason, string> = {
   DEGEN_NO_BASELINE: "缺基线",
@@ -130,21 +147,31 @@ function composeDegradeTooltip(
   return lines.join("\n");
 }
 
-const StatusBreath: FC<{ status: "live" | "stale"; title?: string }> = ({
+const StatusBadge: FC<{ status: "live" | "stale"; title?: string }> = ({
   status,
   title,
 }) => (
-  <div className="flex justify-center mb-1" title={title}>
+  <div className="mb-1 flex justify-center">
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ring-1
         ${status === "live"
-          ? "text-emerald-300 ring-emerald-500/30 bg-emerald-500/10"
-          : "text-amber-300 ring-amber-500/30 bg-amber-500/10"}`}
+          ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/30"
+          : "bg-amber-500/10 text-amber-300 ring-amber-500/30"}`}
+      aria-live="polite"
+      title={title}
     >
-      <span
-        className={`h-1.5 w-1.5 rounded-full animate-pulse
-        ${status === "live" ? "bg-emerald-400" : "bg-amber-400"}`}
-      />
+      <span className="relative flex h-2 w-2">
+        <span
+          className={`${
+            status === "live" ? "bg-emerald-400" : "bg-amber-400"
+          } absolute inline-flex h-full w-full rounded-full opacity-40 motion-safe:animate-ping motion-reduce:animate-none`}
+        />
+        <span
+          className={`${
+            status === "live" ? "bg-emerald-400" : "bg-amber-400"
+          } relative inline-flex h-2 w-2 rounded-full`}
+        />
+      </span>
       {status === "live" ? "LIVE" : "待更新"}
     </span>
   </div>
@@ -218,6 +245,16 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     () => getPeriodOfficialCloseSummary(metrics ?? null),
     [metrics],
   );
+
+  const m123 = metrics?.M123 ?? null;
+  const m123PriceStatus =
+    m123?.meta?.priceStatus === "stale" ? "stale" : "live";
+  const m123PriceStatusTitle =
+    m123PriceStatus === "stale"
+      ? "部分行情待更新"
+      : m123?.meta?.lastPriceAtNY
+      ? `最新行情时间（NY）：${m123.meta.lastPriceAtNY}`
+      : "行情实时";
 
   const m6Card = useMemo(() => {
     if (!metrics) {
@@ -635,7 +672,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const formattedMetrics = useMemo(() => {
     if (!metrics) return [];
     const diagnostics = rawMetrics?._period?.diagnostics;
-    const m123Meta = metrics.M123?.meta;
     return order.map((key) => {
       const value =
         key === "M11"
@@ -711,33 +747,13 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         );
       } else if (key === "M3") {
         const m3 = metrics.M3;
-        const meta = m123Meta ?? {
-          priceStatus: "live" as const,
-          lastPriceAtNY: null,
-        };
-        formattedValue = (
-          <div className="flex flex-col gap-1">
-            <span>{formatCurrency(m3.dir)}</span>
-            <span className="text-xs text-muted-foreground">
-              名义：{formatCurrency(m3.nominal)}
-            </span>
-            {meta.lastPriceAtNY ? (
-              <span className="text-xs text-muted-foreground">
-                最近价（NY）：{meta.lastPriceAtNY}
-              </span>
-            ) : null}
-          </div>
-        );
+        formattedValue = formatCurrency(m3.dir);
         numericForColor = m3.dir;
-        const priceStatus = meta.priceStatus === "stale" ? "stale" : "live";
-        const badgeTitle =
-          priceStatus === "stale"
-            ? "部分行情待更新"
-            : meta.lastPriceAtNY
-            ? `最新行情时间（NY）：${meta.lastPriceAtNY}`
-            : "行情实时";
         badgeNode = (
-          <StatusBreath status={priceStatus} title={badgeTitle} />
+          <StatusBadge
+            status={m123PriceStatus}
+            title={m123PriceStatusTitle}
+          />
         );
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
@@ -846,15 +862,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const status = card?.status ?? "missing";
         const tooltip = card?.tooltip ?? "无当日快照";
         const hasAlerts = card?.hasAlerts ?? false;
-        const priceStatus =
-          m123Meta?.priceStatus === "stale" ? "stale" : "live";
-        const badgeTitle =
-          priceStatus === "stale"
-            ? "部分行情待更新"
-            : m123Meta?.lastPriceAtNY
-            ? `最新行情时间（NY）：${m123Meta.lastPriceAtNY}`
-            : "行情实时";
-
         if (status === "missing") {
           formattedValue = (
             <span className="text-muted-foreground font-medium">待补充</span>
@@ -894,7 +901,12 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           value: formattedValue,
           colorClass,
           dataTestId,
-          badge: <StatusBreath status={priceStatus} title={badgeTitle} />,
+          badge: (
+            <StatusBadge
+              status={m123PriceStatus}
+              title={m123PriceStatusTitle}
+            />
+          ),
         };
       }
 
@@ -983,6 +995,9 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     periodBreakdown,
     rawMetrics?._period?.diagnostics,
     m6Card,
+    officialCloseSummary,
+    m123PriceStatus,
+    m123PriceStatusTitle,
   ]);
 
   const rows = useMemo(
@@ -1008,16 +1023,111 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         <div className="flex flex-col items-center gap-4">
           {rows.map((row, index) => (
             <div key={index} className={rowClassNames[index] ?? "grid gap-4"}>
-              {row.map((metric) => (
-                <MetricCard
-                  key={metric.key}
-                  title={metric.title!}
-                  value={metric.value}
-                  colorClass={metric.colorClass}
-                  dataTestId={metric.dataTestId}
-                  badge={metric.badge}
-                />
-              ))}
+              {row.map((metric) => {
+                if (metric.key === "M2") {
+                  const m2Value =
+                    typeof m123?.m2 === "number"
+                      ? m123.m2
+                      : typeof metrics?.M2 === "number"
+                      ? metrics.M2
+                      : 0;
+                  return (
+                    <div
+                      key={metric.key}
+                      className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5"
+                    >
+                      {m123?.meta ? (
+                        <StatusBadge
+                          status={m123PriceStatus}
+                          title={m123PriceStatusTitle}
+                        />
+                      ) : null}
+                      <div className="text-center text-sm text-emerald-200/80">
+                        持仓市值
+                      </div>
+                      <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
+                        {fmtMoney(m2Value)}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (metric.key === "M3") {
+                  const m3Dir =
+                    typeof m123?.m3?.dir === "number"
+                      ? m123.m3.dir
+                      : typeof metrics?.M3?.dir === "number"
+                      ? metrics.M3.dir
+                      : 0;
+                  const m3Nominal =
+                    typeof m123?.m3?.nominal === "number"
+                      ? m123.m3.nominal
+                      : typeof metrics?.M3?.nominal === "number"
+                      ? metrics.M3.nominal
+                      : 0;
+                  const tooltipSymbols = m123?.meta?.staleSymbols ?? [];
+                  const tooltipText = `名义：${fmtMoney(m3Nominal)}
+最近价（NY）：${formatNYShort(m123?.meta?.lastPriceAtNY)}
+${tooltipSymbols.length ? `受影响：${tooltipSymbols.join(", ")}` : ""}`.trim();
+                  const valueClass =
+                    m3Dir >= 0 ? "text-emerald-300" : "text-rose-300";
+                  return (
+                    <div
+                      key={metric.key}
+                      className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5"
+                    >
+                      {m123?.meta ? (
+                        <StatusBadge
+                          status={m123PriceStatus}
+                          title={m123PriceStatusTitle}
+                        />
+                      ) : null}
+
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="text-sm text-emerald-200/80">持仓浮盈</div>
+
+                        <TooltipProvider>
+                          <Tooltip delayDuration={150}>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="更多信息"
+                                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] text-emerald-300/80 ring-1 ring-emerald-500/30 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                              >
+                                !
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              align="center"
+                              className="whitespace-pre text-xs"
+                            >
+                              {tooltipText}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+
+                      <div
+                        className={`mt-2 text-center text-xl font-semibold ${valueClass}`}
+                      >
+                        {fmtMoney(m3Dir)}
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <MetricCard
+                    key={metric.key}
+                    title={metric.title!}
+                    value={metric.value}
+                    colorClass={metric.colorClass}
+                    dataTestId={metric.dataTestId}
+                    badge={metric.badge}
+                  />
+                );
+              })}
             </div>
           ))}
           {selfCheckMessage && (
