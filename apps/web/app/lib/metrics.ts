@@ -75,7 +75,10 @@ function nyTodayStr(): string {
   return nyDayStr(nowNY());
 }
 import { calcTodayTradePnL } from "./calcTodayTradePnL";
-import { resolveTradingDayStr as resolveAuthorityTradingDayStr } from "./nyDay";
+import {
+  resolveTradingDayStr as resolveAuthorityTradingDayStr,
+  isTradingDay,
+} from "./nyDay";
 import type { ClosePriceMap } from "./dailyResults";
 import {
   createMissingOfficialCloseDiagnostics,
@@ -117,6 +120,121 @@ import {
 } from "./missingOfficialClose";
 
 const EPSILON = 1e-6;
+
+type MetricsResult = ReturnType<typeof calcMetricsInternal>;
+
+type CalcMetricsCacheEntry = {
+  key: string;
+  metrics: MetricsResult;
+};
+
+let __lastCalcMetricsCache: CalcMetricsCacheEntry | null = null;
+
+function stableNumber(value: unknown): string {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toString() : "NaN";
+}
+
+function buildCalcMetricsCacheKey(
+  trades: EnrichedTrade[],
+  positions: Position[],
+  dailyResults: DailyResult[],
+  options: CalcMetricsOptions,
+): string {
+  const tradeKey = trades
+    .map((trade) =>
+      [
+        trade.symbol ?? "",
+        trade.action ?? "",
+        stableNumber(trade.price),
+        stableNumber(trade.quantity),
+        (() => {
+          try {
+            return nyDayStr(trade.date ?? "");
+          } catch {
+            return String(trade.date ?? "");
+          }
+        })(),
+      ].join("|"),
+    )
+    .sort()
+    .join(";");
+
+  const positionKey = positions
+    .map((pos) =>
+      [
+        pos.symbol ?? "",
+        stableNumber(pos.qty),
+        stableNumber(pos.avgPrice),
+      ].join("|"),
+    )
+    .sort()
+    .join(";");
+
+  const dailyKey = dailyResults
+    .map((row) => {
+      const day = (() => {
+        try {
+          return nyDayStr(row.date ?? "");
+        } catch {
+          return String(row.date ?? "");
+        }
+      })();
+      const realized = stableNumber(row.realized);
+      const unrealized = stableNumber((row as any)?.unrealized);
+      const unrealizedDelta = stableNumber((row as any)?.unrealizedDelta);
+      const parseErrors = Array.isArray((row as any)?.parseErrors)
+        ? (row as any).parseErrors.length
+        : 0;
+      return [day, realized, unrealized, unrealizedDelta, parseErrors].join("|");
+    })
+    .sort()
+    .join(";");
+
+  const optionKey = [
+    options.tradingDateStr ?? "",
+    options.periodEvalYmd ?? "",
+  ].join("|");
+
+  const officialKey = options.officialCloseMap
+    ? Object.entries(options.officialCloseMap)
+        .map(([symbol, byDate]) => {
+          const entries = Object.entries(byDate ?? {})
+            .map(([day, value]) => `${day}=${stableNumber(value)}`)
+            .sort()
+            .join(",");
+          return `${symbol}|${entries}`;
+        })
+        .sort()
+        .join(";")
+    : "";
+
+  return [tradeKey, positionKey, dailyKey, optionKey, officialKey].join("#");
+}
+
+function rememberCalcMetricsCache(
+  trades: EnrichedTrade[],
+  positions: Position[],
+  dailyResults: DailyResult[],
+  options: CalcMetricsOptions,
+  metrics: MetricsResult,
+) {
+  const key = buildCalcMetricsCacheKey(trades, positions, dailyResults, options);
+  __lastCalcMetricsCache = { key, metrics };
+}
+
+export function reuseCalcMetricsFromCache(
+  trades: EnrichedTrade[],
+  positions: Position[],
+  dailyResults: DailyResult[],
+  options: CalcMetricsOptions = {},
+): MetricsResult | null {
+  if (!__lastCalcMetricsCache) return null;
+  const key = buildCalcMetricsCacheKey(trades, positions, dailyResults, options);
+  return __lastCalcMetricsCache.key === key
+    ? __lastCalcMetricsCache.metrics
+    : null;
+}
 
 export const STALE_BASELINE_BDAYS = 5;
 
@@ -1532,7 +1650,10 @@ export function sumWindowByTelescope(
   const baselineEntry = [...sortedUnrealized]
     .reverse()
     .find(([day]) => day < windowStart);
-  const baselineValue = baselineEntry ? baselineEntry[1] : 0;
+  if (!baselineEntry) {
+    return Number.NaN;
+  }
+  const baselineValue = baselineEntry[1];
 
   return realizedSum + (endValue - baselineValue);
 }
@@ -1548,6 +1669,7 @@ function deriveWindowTotals(
   options: WindowTotalsOptions,
 ): WindowTotalsResult {
   const rows = resolveUnrealizedForWindow(rowsInput);
+  const evalIsTradingDay = isTradingDay(evalDay);
   const telescopeDailyBook: TelescopeDailyBook = (() => {
     const realizedByDay: Record<string, number> = {};
     const uCloseByDay: Record<string, number> = {};
@@ -1616,6 +1738,7 @@ function deriveWindowTotals(
     let degradeReason: PeriodDegradationReason | undefined;
     const windowParseErrors: SnapshotFieldParseError[] = [];
     let sameDayDuplicates = 0;
+    let baselineSynthesized = false;
 
     for (const row of rows) {
       if (row.day < windowStart || row.day > evalDay) continue;
@@ -1650,6 +1773,7 @@ function deriveWindowTotals(
         } else {
           baselineMode = "partial";
         }
+        baselineSynthesized = true;
       } else {
         degradeReason = "DEGEN_NO_BASELINE";
       }
@@ -1679,6 +1803,22 @@ function deriveWindowTotals(
           ...baselineRow.parseErrors.map((err) => ({ ...err })),
         );
       }
+    }
+
+    if (!evalIsTradingDay) {
+      degradeReason = degradeReason ?? "DEGEN_WINDOW_EMPTY";
+    }
+
+    const synthesizedNeedsDegrade =
+      baselineSynthesized &&
+      baselineRow &&
+      baselineRow.day === evalDay &&
+      (!baselineRow.sameDayDuplicateCount || baselineRow.sameDayDuplicateCount <= 0);
+
+    if (synthesizedNeedsDegrade) {
+      degradeReason = degradeReason ?? "DEGEN_NO_BASELINE";
+      baselineMode = "missing";
+      baselineValue = undefined;
     }
 
     if (
@@ -2905,6 +3045,8 @@ export function calcMetricsInternal(
   };
 
   assertM6(metrics);
+
+  rememberCalcMetricsCache(trades, positions, dailyResults, options, metrics);
 
   return metrics;
 }
