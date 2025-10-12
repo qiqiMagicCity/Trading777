@@ -2,7 +2,7 @@
 //       runAllCore 会在第一时间归一化字符串/空值，确保后续调用始终是纯数值。
 import type { InitialPosition } from "./fifo";
 import type { Trade, Position } from "./services/dataService";
-import { calcMetrics } from "./metrics";
+import { calcMetrics, reuseCalcMetricsFromCache } from "./metrics";
 import { createM4TodayDetail } from "./m4Today";
 import { computePeriods } from "./metrics-periods";
 import { generateDailyResults } from "./dailyResults";
@@ -944,13 +944,24 @@ async function runAllCore(
     );
   }
 
-  let metrics;
-  try {
-    metrics = calcMetrics(enriched, positions, effectiveDailyResults, {
+  let metrics = reuseCalcMetricsFromCache(
+    enriched,
+    positions,
+    effectiveDailyResults,
+    {
       tradingDateStr: evalISO,
       periodEvalYmd: evalISO,
       officialCloseMap: closePrices,
-    });
+    },
+  );
+  try {
+    if (!metrics) {
+      metrics = calcMetrics(enriched, positions, effectiveDailyResults, {
+        tradingDateStr: evalISO,
+        periodEvalYmd: evalISO,
+        officialCloseMap: closePrices,
+      });
+    }
   } finally {
     if (prevFreeze === undefined) {
       delete process.env.NEXT_PUBLIC_FREEZE_DATE;

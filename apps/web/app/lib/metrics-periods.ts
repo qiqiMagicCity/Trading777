@@ -154,7 +154,11 @@ function buildDailyPnlMap(
     let delta = 0;
 
     if (typeof unrealizedDelta === 'number') {
-      delta = unrealizedDelta;
+      if (typeof prevUnrealized === 'number') {
+        delta = unrealizedDelta;
+      } else {
+        delta = 0;
+      }
     } else if (
       typeof unrealized === 'number' &&
       typeof prevUnrealized === 'number'
