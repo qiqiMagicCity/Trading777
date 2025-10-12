@@ -40,11 +40,10 @@ for (const date of dates) {
   );
   const realized = Math.round((res.M4 + res.M5_2) * 100) / 100;
   const unrealizedSource =
-    typeof res.M3Legacy === "number" && Number.isFinite(res.M3Legacy)
-      ? res.M3Legacy
-      : typeof res.M3 === "object"
-      ? res.M3.nominal
-      : Number(res.M3 ?? 0);
+    "M3Legacy" in (res as any) &&
+    Number.isFinite((res as any).M3Legacy)
+      ? (res as any).M3Legacy
+      : (res as any).M3?.nominal ?? Number(res.M3 ?? 0);
   const unrealized = Math.round(unrealizedSource * 100) / 100;
 
   const snapshotDaily = readJSON(path.join(dayDir, "dailyResult.json"));
