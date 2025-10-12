@@ -153,6 +153,7 @@ const FALLBACK_LABELS: Record<MissingCloseFallback, string> = {
   MARK_PRICE: '使用最新价兜底',
   PREVIOUS_CLOSE: '沿用上一日价格',
   AVERAGE_COST: '使用均价兜底',
+  OFFICIAL_CLOSE: '缺官方收盘价',
 };
 
 function areSummariesEqual(

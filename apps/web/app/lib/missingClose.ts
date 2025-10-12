@@ -10,6 +10,7 @@ function sortFallbacks(fallbacks: MissingCloseFallback[]): MissingCloseFallback[
     MARK_PRICE: 0,
     PREVIOUS_CLOSE: 1,
     AVERAGE_COST: 2,
+    OFFICIAL_CLOSE: 3,
   };
   return [...fallbacks].sort((a, b) => order[a] - order[b]);
 }
