@@ -138,7 +138,7 @@ export default function ClosePriceDebugger() {
     setStatsLoading(true);
     try {
       const { maps, debug } = await buildOfficialCloseMaps();
-      const packagedCount = countEntries(maps.packaged);
+      const packagedCount = countEntries(maps.packaged ?? {});
       const overlayCount = countEntries(maps.overlay);
       const fallbackCount = countEntries(maps.fallback);
       const version = readClosePricesVersion();
