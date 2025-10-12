@@ -16,7 +16,7 @@
     "snapshot:daily": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/snapshot.ts",
     "verify:history": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-history.ts",
     "guard:rules": "node scripts/guardRules.js",
-    "verify:readme": "node scripts/extractRules.js && node scripts/checkRules.js && npm test --silent || true && npm run guard:rules && npm -w web run build",
+    "verify:readme": "node scripts/extractRules.js && node scripts/checkRules.js && npm run guard:rules && npm run test:unit && npm -w web run prebuild && CI=1 npm -w web run build",
     "ci:pr": "npm run check:conflicts && npm run check:calcmetrics-daily && npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only",
     "check:types": "tsc -p apps/web/tsconfig.json --noEmit",
     "ci": "npm run check:calcmetrics-daily && npm run check:types -w web && npm run test -w web && npm run build -w web",
@@ -29,7 +29,7 @@
     "lint:time": "eslint -c .eslintrc.time.js --no-error-on-unmatched-pattern --ext .ts,.tsx,.js,.mjs,.cjs apps packages libs server api public",
     "time:selfcheck": "node scripts/time-selfcheck.mjs",
     "time:ci": "npm run lint:time && npm run time:selfcheck",
-    "test:unit": "jest -c jest.unit.config.js --runInBand"
+    "test:unit": "jest -c ./jest.unit.config.mjs --runInBand"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
