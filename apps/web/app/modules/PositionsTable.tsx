@@ -15,6 +15,8 @@ import { PriceBadge } from '@/components/PriceBadge';
 import {
   buildIntradayFloatingBreakdown,
   buildIntradayFloatingPnlMap,
+  buildTradeBasedIntradayFloatingContext,
+  calculateTradeBasedIntradayFloatingEntry,
   calculateIntradayValue,
   getResolvedPrice,
   normalizeSymbol,
@@ -192,6 +194,20 @@ export function PositionsTable({ positions, trades }: Props) {
     [metrics, positions],
   );
 
+  const tradeFloatingContext = useMemo(() => {
+    if (!trades || !tradingDayTag) return null;
+    try {
+      return buildTradeBasedIntradayFloatingContext({
+        trades,
+        positions,
+        todayStr: tradingDayTag,
+      });
+    } catch (error) {
+      logger.error("trade-based intraday context failed", error);
+      return null;
+    }
+  }, [positions, trades, tradingDayTag]);
+
   const results = useQueries({
     queries: positions.map((pos) => ({
       queryKey: ['quote', pos.symbol],
@@ -263,7 +279,30 @@ export function PositionsTable({ positions, trades }: Props) {
       const marketValue = isShort ? Math.abs(signedMarketValue) : signedMarketValue;
       // 按 (实时价格 - 成本价格) × 数量 计算浮动盈亏
       const unrealized = (resolvedPrice - pos.avgPrice) * pos.qty;
-      const intradayResult = calculateIntradayValue(pos, intradayDataset);
+      const intradayResultInitial = calculateIntradayValue(pos, intradayDataset);
+      const symbolKey = normalizeSymbol(pos.symbol);
+      let breakdownEntry = symbolKey
+        ? floatingBreakdown.values.get(symbolKey)
+        : undefined;
+
+      let intradayResult = intradayResultInitial;
+      if (intradayResult.status !== "ok" && tradeFloatingContext) {
+        const fallbackEntry = calculateTradeBasedIntradayFloatingEntry(
+          tradeFloatingContext,
+          {
+            symbol: symbolKey,
+            qty: pos.qty,
+            mark: resolvedPrice,
+            prevClose: pos.prevClose,
+          },
+        );
+
+        if (fallbackEntry) {
+          intradayResult = { status: "ok", value: fallbackEntry.floating };
+          breakdownEntry = fallbackEntry;
+        }
+      }
+
       const intraday = intradayResult.status === "ok" ? intradayResult.value : undefined;
 
       logger.debug(`${pos.symbol} 市值计算:`, {
@@ -279,11 +318,18 @@ export function PositionsTable({ positions, trades }: Props) {
         intraday,
         intradayDetail: intradayResult,
         intradayFromLegs: intradayDataset.values.get(pos.symbol?.trim().toUpperCase() ?? ""),
+        tradeFallback: breakdownEntry?.floating,
       });
 
-      return { market: marketValue, unrealized, intraday, intradayResult };
+      return {
+        market: marketValue,
+        unrealized,
+        intraday,
+        intradayResult,
+        breakdownEntry,
+      };
     });
-  }, [positions, results, intradayDataset]);
+  }, [positions, results, intradayDataset, floatingBreakdown, tradeFloatingContext]);
 
   return (
     <div data-trading-day={tradingDayTag}>
@@ -345,10 +391,7 @@ export function PositionsTable({ positions, trades }: Props) {
               message: "缺少 M6 legs 拆解数据，请补充隔夜与当日未平拆解后再查看当日盈亏。",
             };
             const intraday = intradayResult.status === "ok" ? intradayResult.value : undefined;
-            const symbolKey = normalizeSymbol(pos.symbol);
-            const breakdownEntry = symbolKey
-              ? floatingBreakdown.values.get(symbolKey)
-              : undefined;
+            const breakdownEntry = summary?.breakdownEntry;
             const intradayTooltip = buildIntradayTooltip(
               intradayResult,
               breakdownEntry,
