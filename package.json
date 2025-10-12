@@ -15,6 +15,8 @@
     "check:calcmetrics-daily": "node scripts/check-calcmetrics-daily.mjs",
     "snapshot:daily": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/snapshot.ts",
     "verify:history": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/verify-history.ts",
+    "guard:rules": "node scripts/guardRules.js",
+    "verify:readme": "node scripts/extractRules.js && node scripts/checkRules.js && npm test --silent || true && npm run guard:rules && npm -w web run build",
     "ci:pr": "npm run check:conflicts && npm run check:calcmetrics-daily && npm run verify:golden && turbo run build --filter=!web --output-logs=errors-only",
     "check:types": "tsc -p apps/web/tsconfig.json --noEmit",
     "ci": "npm run check:calcmetrics-daily && npm run check:types -w web && npm run test -w web && npm run build -w web",
