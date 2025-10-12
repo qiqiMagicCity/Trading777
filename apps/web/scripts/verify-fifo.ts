@@ -5,6 +5,7 @@ import { runAll, RawTrade, ClosePriceMap } from '../app/lib/runAll';
 import { computeFifo, type InitialPosition } from '../app/lib/fifo';
 import { calcM5Split } from '../app/lib/m5-intraday';
 import { calcM9FromDaily } from '../app/lib/metrics';
+import { calcM1M2M3 } from '../app/lib/metrics/calcM1M2M3';
 import { round2 } from '../app/lib/money';
 import { calcM6Detailed, type M6PositionInput } from '../app/lib/m6';
 import { nyDateStr } from '../app/lib/time';
@@ -57,7 +58,14 @@ for (const t of enriched) {
   posMap.set(t.symbol, { qty: t.quantityAfter, avgPrice: t.averageCost });
 }
 
-type Position = { symbol: string; qty: number; avgPrice: number; last: number; prevClose?: number };
+type Position = {
+  symbol: string;
+  qty: number;
+  avgPrice: number;
+  last: number;
+  prevClose?: number;
+  multiplier?: number;
+};
 const positions: Position[] = [];
 for (const [symbol, { qty, avgPrice }] of posMap.entries()) {
   if (!qty) continue;
@@ -187,16 +195,10 @@ for (const [symbol, pos] of positionBySymbol.entries()) {
   });
 }
 
-const M1 = round2(positions.reduce((s, p) => s + Math.abs(p.avgPrice * p.qty), 0));
-const M2 = round2(positions.reduce((s, p) => s + Math.abs(p.last * p.qty), 0));
-const M3 = round2(
-  positions.reduce((s, p) => {
-    const qty = Math.abs(p.qty);
-    return p.qty >= 0
-      ? s + (p.last - p.avgPrice) * qty
-      : s + (p.avgPrice - p.last) * qty;
-  }, 0),
-);
+const m123 = calcM1M2M3(positions as any);
+const M1 = round2(m123.m1);
+const M2 = round2(m123.m2);
+const M3 = round2(m123.m3.nominal);
 const split = calcM5Split(enriched as any, evalDate, initialPositions);
 const M5_1 = round2(split.trade);
 const M5_2_raw = split.fifo;

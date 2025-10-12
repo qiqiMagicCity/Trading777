@@ -77,6 +77,9 @@ export interface Position {
   priceOk: boolean;
   stale?: boolean;
   lastUpdatedAt?: number;
+  instrumentType?: string | null;
+  /** 合约乘数，默认为 1 */
+  multiplier?: number;
   /** 前一交易日的收盘价，用于计算当日价格变动 */
   prevClose?: number;
   /** 含历史盈亏的滚动保本价 */

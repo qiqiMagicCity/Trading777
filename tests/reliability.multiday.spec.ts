@@ -31,7 +31,7 @@ describe('reliability multi-day baseline', () => {
 
     expect(res.M1).toBeCloseTo(111170, 2);
     expect(res.M2).toBeCloseTo(111420.5, 2);
-    expect(res.M3).toBeCloseTo(1102.5, 2);
+    expect(res.M3.nominal).toBeCloseTo(1102.5, 2);
     expect(res.M4).toBeCloseTo(6530, 2);
     expect(res.M5_1).toBeCloseTo(1670, 2);
     expect(res.M5_2).toBeCloseTo(1320, 2);

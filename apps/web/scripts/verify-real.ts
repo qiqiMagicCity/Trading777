@@ -16,7 +16,13 @@ function pickTotals(metrics: AnyRec) {
   const M5_1 = Number(metrics?.M5?.behavior ?? metrics?.M5_1 ?? 0);
   const M5_2 = Number(metrics?.M5?.fifo ?? metrics?.M5_2 ?? 0);
   const realized = Number(metrics?.realized ?? (M4 + M5_2));
-  const unrealized = Number(metrics?.unrealized ?? metrics?.M3 ?? 0);
+  const m3Nominal =
+    typeof metrics?.M3Legacy === "number"
+      ? metrics?.M3Legacy
+      : typeof metrics?.M3 === "object"
+      ? Number(metrics?.M3?.nominal ?? 0)
+      : Number(metrics?.M3 ?? 0);
+  const unrealized = Number(metrics?.unrealized ?? m3Nominal ?? 0);
   const M9 = Number(metrics?.M9?.total ?? metrics?.M9 ?? 0);
   const m6 = Number(metrics?.M6?.total ?? metrics?.M6 ?? 0);
   return { realized, unrealized, m6, M4, M5_1, M5_2, M9 };
