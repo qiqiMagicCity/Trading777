@@ -204,8 +204,7 @@ const M5_2 = round2(M5_2_raw);
 const M4_raw = split.historyRealized;
 const m6Calc = calcM6Detailed({
   positions: positionsForM6,
-  M4: M4_raw,
-  M5_FIFO: M5_2_raw,
+  realizedToday: M4_raw + M5_2_raw,
   nowMarkFallback: (symbol) => {
     const tradePrice = lastTradePriceToday.get(symbol);
     return Number.isFinite(tradePrice) ? Number(tradePrice) : null;

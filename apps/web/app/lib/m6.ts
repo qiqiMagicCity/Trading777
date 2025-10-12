@@ -24,8 +24,7 @@ export interface M6PositionInput {
 
 export interface M6Inputs {
   positions: M6PositionInput[];
-  M4: number;
-  M5_FIFO: number;
+  realizedToday: number;
   fallbackOpen?: (symbol: string) => number | null;
   nowMarkFallback?: (symbol: string) => number | null;
 }
@@ -224,7 +223,7 @@ export function calcM6Detailed(input: M6Inputs): CalcM6DetailedResult {
   }
 
   mtm = round4(mtm);
-  const total = round2(input.M4 + input.M5_FIFO + mtm);
+  const total = round2(input.realizedToday + mtm);
   return { total, mtm, legs, warnings };
 }
 
