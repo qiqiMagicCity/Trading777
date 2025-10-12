@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { toNY, ymdInNY } from '@/lib/timezone';
 
 const CANDIDATE_FILE_PATH = path.join(process.cwd(), 'public', 'trades.json');
 const FILE_PATH = CANDIDATE_FILE_PATH.includes(
@@ -54,39 +55,56 @@ function normaliseAction(raw: unknown): PersistedTrade['action'] | null {
 function normaliseTime(date: string, raw: unknown): string | null {
   if (!date) return null;
 
+  const baseTradingDay = ymdInNY(`${date}T12:00:00Z`);
+  const formatNY = (value: Date): string => {
+    const year = value.getFullYear().toString().padStart(4, '0');
+    const month = pad(value.getMonth() + 1);
+    const day = pad(value.getDate());
+    const hours = pad(value.getHours());
+    const minutes = pad(value.getMinutes());
+    const seconds = pad(value.getSeconds());
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+  };
+
   if (raw instanceof Date) {
-    return `${raw.getFullYear()}-${pad(raw.getMonth() + 1)}-${pad(raw.getDate())}` +
-      `T${pad(raw.getHours())}:${pad(raw.getMinutes())}:${pad(raw.getSeconds())}`;
+    const ny = toNY(raw);
+    if (Number.isNaN(ny.getTime())) return null;
+    return formatNY(ny);
   }
 
   if (typeof raw === 'number' && Number.isFinite(raw)) {
-    return normaliseTime(date, new Date(raw));
+    const ny = toNY(raw);
+    if (Number.isNaN(ny.getTime())) return null;
+    return formatNY(ny);
   }
 
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     if (!trimmed) {
-      return `${date}T00:00:00`;
+      return `${baseTradingDay}T00:00:00`;
     }
 
     if (!trimmed.includes('T')) {
       if (DATE_PATTERN.test(trimmed)) {
-        return `${trimmed}T00:00:00`;
+        const nyDate = ymdInNY(`${trimmed}T12:00:00Z`);
+        return `${nyDate}T00:00:00`;
       }
 
-      const sanitized = trimmed.replace('Z', '').split('.')[0] ?? '';
+      const sanitized = trimmed.replace(/Z$/i, '').split('.')[0] ?? '';
       const [h = '00', m = '00', s = '00'] = sanitized.split(':');
-      return `${date}T${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
+      return `${baseTradingDay}T${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
     }
 
     const [datePartRaw = '', timePartRaw = ''] = trimmed.split('T');
-    const baseDate = DATE_PATTERN.test(datePartRaw) ? datePartRaw : date;
-    const sanitized = timePartRaw.replace('Z', '').split('.')[0] ?? '';
+    const nyDatePart = DATE_PATTERN.test(datePartRaw)
+      ? ymdInNY(`${datePartRaw}T12:00:00Z`)
+      : baseTradingDay;
+    const sanitized = timePartRaw.replace(/Z$/i, '').split('.')[0] ?? '';
     const [h = '00', m = '00', s = '00'] = sanitized.split(':');
-    return `${baseDate}T${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
+    return `${nyDatePart}T${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
   }
 
-  return `${date}T00:00:00`;
+  return `${baseTradingDay}T00:00:00`;
 }
 
 async function readJson<T>(filePath: string, fallback: T): Promise<T> {
