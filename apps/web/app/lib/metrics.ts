@@ -306,7 +306,6 @@ export interface CalcMetricsOptions {
   periodEvalYmd?: string;
   officialCloseMap?: ClosePriceMap;
   officialCloseOverlayMap?: ClosePriceMap;
-  officialClosePackagedMap?: ClosePriceMap;
   officialCloseIdbMap?: ClosePriceMap;
 }
 
@@ -2471,8 +2470,6 @@ export function calcMetricsInternal(
   const officialOverlayMap: ClosePriceMap =
     (options.officialCloseOverlayMap as ClosePriceMap | undefined) ??
     overlayCacheToMap();
-  const officialPackagedMap: ClosePriceMap =
-    (options.officialClosePackagedMap as ClosePriceMap | undefined) ?? {};
   const officialIdbMap: ClosePriceMap =
     (options.officialCloseIdbMap as ClosePriceMap | undefined) ?? {};
   const missingOfficialDiagnostics = createMissingOfficialCloseDiagnostics();
@@ -2493,7 +2490,6 @@ export function calcMetricsInternal(
   const releaseOfficialContext = setOfficialCloseContext({
     map: officialCloseMap,
     overlayMap: officialOverlayMap,
-    packagedMap: officialPackagedMap,
     idbMap: officialIdbMap,
     diagnostics: missingOfficialDiagnostics,
     fallbackResolver: (symbol, date) =>

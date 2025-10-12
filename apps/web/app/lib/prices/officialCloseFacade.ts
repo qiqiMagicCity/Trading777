@@ -124,12 +124,11 @@ function applyLayer(
 
 export function mergeOfficialCloses(
   idb: ClosePriceMap,
-  packaged: ClosePriceMap,
+  _packaged: ClosePriceMap,
   overlay: ClosePriceMap,
 ): { detail: OfficialCloseDetailMap; map: ClosePriceMap } {
   const detail: OfficialCloseDetailMap = {};
   applyLayer(detail, idb, "idb", "official/import");
-  applyLayer(detail, packaged, "packaged", "official/packaged");
   applyLayer(detail, overlay, "overlay", "official/import");
   const map: ClosePriceMap = {};
   for (const [symbol, byDate] of Object.entries(detail)) {

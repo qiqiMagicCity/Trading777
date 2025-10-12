@@ -578,18 +578,12 @@ export default function DashboardPage() {
       }
 
       await runWithOfficialCloseCommit('dashboard:load', async ({ maps, debug }) => {
-        const {
-          overlay: overlayMap,
-          official: officialClosePrices,
-          merged: mergedClosePrices,
-          packaged: packagedClosePrices,
-        } = maps;
+        const { overlay: overlayMap, official: officialClosePrices, merged: mergedClosePrices } = maps;
         const idbClosePrices = debug?.idb ?? {};
 
         setLatestOfficialCloseMaps({
           official: officialClosePrices,
           overlay: overlayMap,
-          packaged: packagedClosePrices,
           idb: idbClosePrices,
         });
 
@@ -620,7 +614,6 @@ export default function DashboardPage() {
           periodEvalYmd: evalDateStr,
           officialCloseMap: officialClosePrices,
           officialCloseOverlayMap: overlayMap,
-          officialClosePackagedMap: packagedClosePrices,
           officialCloseIdbMap: idbClosePrices,
         });
         const metrics = normalizeMetrics(rawMetrics);
@@ -629,7 +622,6 @@ export default function DashboardPage() {
           {
             official: officialClosePrices,
             overlay: overlayMap,
-            packaged: packagedClosePrices,
             idb: idbClosePrices,
           },
         );
@@ -799,18 +791,12 @@ export default function DashboardPage() {
     }
 
     await runWithOfficialCloseCommit('dashboard:refresh', async ({ maps, debug }) => {
-      const {
-        overlay: overlayMap,
-        merged: mergedClosePrices,
-        official: officialCloseMap,
-        packaged: packagedClosePrices,
-      } = maps;
+      const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } = maps;
       const idbClosePrices = debug?.idb ?? {};
 
       setLatestOfficialCloseMaps({
         official: officialCloseMap,
         overlay: overlayMap,
-        packaged: packagedClosePrices,
         idb: idbClosePrices,
       });
 
@@ -841,7 +827,6 @@ export default function DashboardPage() {
         periodEvalYmd: evalDateStr,
         officialCloseMap: officialCloseMap,
         officialCloseOverlayMap: overlayMap,
-        officialClosePackagedMap: packagedClosePrices,
         officialCloseIdbMap: idbClosePrices,
       });
       const metrics = normalizeMetrics(rawMetrics);
@@ -854,7 +839,6 @@ export default function DashboardPage() {
         {
           official: officialCloseMap,
           overlay: overlayMap,
-          packaged: packagedClosePrices,
           idb: idbClosePrices,
         },
       );
@@ -913,18 +897,12 @@ export default function DashboardPage() {
       const evalDateStr = freezeTradingDay ?? resolveTradingDayStr();
 
       await runWithOfficialCloseCommit('dashboard:reload', async ({ maps, debug }) => {
-        const {
-          overlay: overlayMap,
-          merged: mergedClosePrices,
-          official: officialCloseMap,
-          packaged: packagedClosePrices,
-        } = maps;
+        const { overlay: overlayMap, merged: mergedClosePrices, official: officialCloseMap } = maps;
         const idbClosePrices = debug?.idb ?? {};
 
         setLatestOfficialCloseMaps({
           official: officialCloseMap,
           overlay: overlayMap,
-          packaged: packagedClosePrices,
           idb: idbClosePrices,
         });
 
@@ -956,7 +934,6 @@ export default function DashboardPage() {
           periodEvalYmd: evalDateStr,
           officialCloseMap: officialCloseMap,
           officialCloseOverlayMap: overlayMap,
-          officialClosePackagedMap: packagedClosePrices,
           officialCloseIdbMap: idbClosePrices,
         });
         const metrics = normalizeMetrics(rawMetrics);
@@ -969,7 +946,6 @@ export default function DashboardPage() {
           {
             official: officialCloseMap,
             overlay: overlayMap,
-            packaged: packagedClosePrices,
             idb: idbClosePrices,
           },
         );

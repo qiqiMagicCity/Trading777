@@ -78,7 +78,6 @@ describe("official close whitespace handling", () => {
         },
       },
       overlayMap: {},
-      packagedMap: {},
       idbMap: {},
       diagnostics: createMissingOfficialCloseDiagnostics(),
     });

@@ -389,7 +389,7 @@ describe('official close consistency fixes', () => {
     global.window = savedWindow;
   });
 
-  it('testD: packaged seeding respects official/import overlays', async () => {
+  it('testD: packaged seeding is fully disabled', async () => {
     process.env.NEXT_PUBLIC_FREEZE_DATE = '2025-10-01';
     (window as any).NEXT_PUBLIC_FREEZE_DATE = '2025-10-01';
 
@@ -415,13 +415,16 @@ describe('official close consistency fixes', () => {
     } = await import('@/app/lib/prices/syncPackagedClosesToIdb');
 
     const result = await syncPackagedClosesToIdb();
-    expect(result.skipped.higherPriority).toBeGreaterThan(0);
-    expect(result.skipped.total).toBeGreaterThan(0);
+    expect(result).toEqual({
+      total: 0,
+      inserted: 0,
+      skipped: { total: 0, higherPriority: 0, same: 0 },
+    });
     const cached = await getPrice('AAPL', '2025-10-01');
     expect(cached?.close).toBe(12);
     const stats = getLastPackagedSyncStats();
-    expect(stats.skipped.total).toBe(result.skipped.total);
-    expect(stats.skipped.higherPriority).toBe(result.skipped.higherPriority);
+    expect(stats).toEqual(result);
+    expect(loadJsonMock).not.toHaveBeenCalled();
   });
 
   it('testE: import writeback reports success and failure paths', async () => {

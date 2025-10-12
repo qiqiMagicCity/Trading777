@@ -4,7 +4,10 @@ import type { MissingOfficialCloseEntry } from '@/app/lib/types/metrics';
 interface OfficialCloseCache {
   official: ClosePriceMap;
   overlay: ClosePriceMap;
-  packaged: ClosePriceMap;
+  /**
+   * @deprecated debug-only; must NOT be used in business logic
+   */
+  packaged?: ClosePriceMap;
   idb: ClosePriceMap;
 }
 

@@ -51,21 +51,22 @@ describe("calcMetrics official close enforcement", () => {
     });
   });
 
-  it("reads packaged close when merged map misses entry", () => {
+  it("rejects packaged close fallback when official data is missing", () => {
     const positions: Position[] = [createPosition({})];
     const metrics = calcMetrics([], positions, [], {
       periodEvalYmd: baseEvalDate,
       tradingDateStr: baseEvalDate,
       officialCloseMap: {},
-      officialClosePackagedMap: {
-        AAPL: {
-          "2024-01-02": 100,
-        },
-      },
     });
     const normalized = normalizeMetrics(metrics);
-    expect(normalized._m6?.mtmOvernight).toBeCloseTo(20, 6);
-    expect(normalized.diagnostics?.missingOfficialCloses).toBeUndefined();
+    expect(normalized._m6?.mtmOvernight).toBe(0);
+    const diag = normalized.diagnostics?.missingOfficialCloses ?? [];
+    expect(diag).toHaveLength(1);
+    expect(diag[0]).toMatchObject({
+      symbol: "AAPL",
+      date: "2024-01-02",
+      impact: expect.arrayContaining(["M6过夜桶=0"]),
+    });
   });
 
   it("does not produce diagnostics for intraday-only trades", () => {

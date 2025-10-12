@@ -6,14 +6,13 @@ import { setOfficialCloseContext } from "@/app/lib/price/requireOfficialClose";
 
 export type ScanUniverse = { dates: string[]; symbols: string[] }; // dates 内包含 E 或 E-1
 
-// A) 统一官方口径（overlay + official/import + packaged + idb）
+// A) 统一官方口径（overlay + official/import + idb）
 export async function scanUnified(universe: ScanUniverse) {
   const maps = getLatestOfficialCloseMaps();
   const diagnostics = createMissingOfficialCloseDiagnostics();
   const release = setOfficialCloseContext({
     map: maps?.official ?? {},
     overlayMap: maps?.overlay ?? {},
-    packagedMap: maps?.packaged ?? {},
     idbMap: maps?.idb ?? {},
     diagnostics,
   });
