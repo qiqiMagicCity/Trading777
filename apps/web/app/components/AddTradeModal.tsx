@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { formatInTimeZone } from 'date-fns-tz';
 import { addTrade, updateTrade } from '@/lib/services/dataService';
 import type { Trade } from '@/lib/services/dataService';
 import { nowNY, toNY, ymdInNY } from '@/lib/timezone';
+import { NY_TZ } from '@/app/lib/time';
 import { logger } from '@/lib/logger';
 
 const SYMBOL_HISTORY_KEY = 'tradeSymbolHistory';
@@ -23,28 +25,54 @@ const normalizeTimePart = (timePart: string | undefined): string => {
   return `${pad(h)}:${pad(m)}:${pad(s ?? '00')}`;
 };
 
-const toInputDateTime = (value: string | number | Date): string => {
+const DATETIME_LOCAL_RE =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
+
+const toNyDate = (value: string | number | Date): Date | null => {
   if (value instanceof Date) {
-    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` +
-      `T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+    return Number.isNaN(value.getTime()) ? null : value;
   }
 
   if (typeof value === 'number') {
-    return toInputDateTime(new Date(value));
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   if (typeof value === 'string') {
     if (value.includes('T')) {
       const [datePart, timePart] = value.split('T');
-      if (!datePart) return '';
-      return `${datePart}T${normalizeTimePart(timePart)}`;
+      if (!datePart) return null;
+      const normalized = `${datePart}T${normalizeTimePart(timePart)}`;
+      const match = DATETIME_LOCAL_RE.exec(normalized);
+      if (match) {
+        const [, y, m, d, hh, mm, ss] = match;
+        const nyDate = toNY(
+          Number(y),
+          Number(m) - 1,
+          Number(d),
+          Number(hh),
+          Number(mm),
+          Number(ss ?? '0'),
+        );
+        return Number.isNaN(nyDate.getTime()) ? null : nyDate;
+      }
+      const ny = toNY(value);
+      return Number.isNaN(ny.getTime()) ? null : ny;
     }
+
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      return `${value}T00:00:00`;
+      const ny = toNY(value);
+      return Number.isNaN(ny.getTime()) ? null : ny;
     }
   }
 
-  return '';
+  return null;
+};
+
+export const toInputDateTime = (value: string | number | Date): string => {
+  const nyDate = toNyDate(value);
+  if (!nyDate) return '';
+  return formatInTimeZone(nyDate, NY_TZ, "yyyy-MM-dd'T'HH:mm:ss");
 };
 
 const sanitizeDateTimeInput = (raw: string): string => {
@@ -58,9 +86,6 @@ const sanitizeDateTimeInput = (raw: string): string => {
 };
 
 const normalizeSymbol = (value: string): string => value.toUpperCase().replace(/[^A-Z]/g, '');
-
-const DATETIME_LOCAL_RE =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 const resolveNyDayFromLocal = (value: string): string | null => {
   const match = DATETIME_LOCAL_RE.exec(value);
