@@ -1,10 +1,6 @@
 import { jest } from '@jest/globals';
 
-describe('syncPackagedClosesToIdb priority safeguards', () => {
-  beforeEach(() => {
-    process.env.NEXT_PUBLIC_FREEZE_DATE = '2025-10-01';
-  });
-
+describe('syncPackagedClosesToIdb disabled mode', () => {
   afterEach(() => {
     jest.resetModules();
     jest.restoreAllMocks();
@@ -12,64 +8,26 @@ describe('syncPackagedClosesToIdb priority safeguards', () => {
     process.env.FREEZE_DATE = undefined;
   });
 
-  it('skips packaged seeds when higher-priority sources already exist', async () => {
-    const sources = ['import', 'official/manual', 'official/vendor', 'official/exchange'];
+  it('shouldSyncPackagedToIdb always returns false even when freeze flags exist', async () => {
+    process.env.NEXT_PUBLIC_FREEZE_DATE = '2025-10-01';
+    process.env.FREEZE_DATE = '2025-10-02';
 
-    for (const source of sources) {
-      jest.resetModules();
-      const loadJsonMock = jest.fn().mockResolvedValue({
-        AAPL: { '2025-09-19': 9 },
-      });
-      const getPriceMock = jest.fn().mockResolvedValue({
-        symbol: 'AAPL',
-        date: '2025-09-19',
-        close: 12,
-        source,
-      });
-      const putPriceMock = jest.fn();
+    const { shouldSyncPackagedToIdb } = await import(
+      '@/app/lib/prices/syncPackagedClosesToIdb'
+    );
 
-      jest.unstable_mockModule('@/app/lib/dataSource', () =>
-        ({
-          loadJson: loadJsonMock,
-        }) as unknown as Partial<typeof import('@/app/lib/dataSource')>,
-      );
-      jest.unstable_mockModule('@/lib/services/dataService', () =>
-        ({
-          getPrice: getPriceMock,
-          putPrice: putPriceMock,
-        }) as unknown as Partial<typeof import('@/lib/services/dataService')>,
-      );
-
-      const { syncPackagedClosesToIdb } = await import(
-        '@/app/lib/prices/syncPackagedClosesToIdb'
-      );
-
-      const result = await syncPackagedClosesToIdb();
-      expect(result.inserted).toBe(0);
-      expect(result.skipped.higherPriority).toBe(1);
-      expect(result.skipped.total).toBe(1);
-      expect(result.skipped.same).toBe(0);
-      expect(putPriceMock).not.toHaveBeenCalled();
-    }
+    expect(shouldSyncPackagedToIdb()).toBe(false);
   });
 
-  it('skips packaged seeds when the same packaged value already exists', async () => {
-    jest.resetModules();
-    const loadJsonMock = jest.fn().mockResolvedValue({
-      MSFT: { '2025-10-03': 18 },
-    });
-    const getPriceMock = jest.fn().mockResolvedValue({
-      symbol: 'MSFT',
-      date: '2025-10-03',
-      close: 18,
-      source: 'official/packaged',
-    });
+  it('syncPackagedClosesToIdb short-circuits without touching data sources', async () => {
+    const loadJsonMock = jest.fn();
+    const getPriceMock = jest.fn();
     const putPriceMock = jest.fn();
 
     jest.unstable_mockModule('@/app/lib/dataSource', () =>
-      ({
-        loadJson: loadJsonMock,
-      }) as unknown as Partial<typeof import('@/app/lib/dataSource')>,
+      ({ loadJson: loadJsonMock }) as unknown as Partial<
+        typeof import('@/app/lib/dataSource')
+      >,
     );
     jest.unstable_mockModule('@/lib/services/dataService', () =>
       ({
@@ -78,15 +36,19 @@ describe('syncPackagedClosesToIdb priority safeguards', () => {
       }) as unknown as Partial<typeof import('@/lib/services/dataService')>,
     );
 
-    const { syncPackagedClosesToIdb } = await import(
+    const { syncPackagedClosesToIdb, getLastPackagedSyncStats } = await import(
       '@/app/lib/prices/syncPackagedClosesToIdb'
     );
 
     const result = await syncPackagedClosesToIdb();
-    expect(result.inserted).toBe(0);
-    expect(result.skipped.same).toBe(1);
-    expect(result.skipped.total).toBe(1);
-    expect(result.skipped.higherPriority).toBe(0);
+    expect(result).toEqual({
+      total: 0,
+      inserted: 0,
+      skipped: { total: 0, higherPriority: 0, same: 0 },
+    });
+    expect(getLastPackagedSyncStats()).toEqual(result);
+    expect(loadJsonMock).not.toHaveBeenCalled();
+    expect(getPriceMock).not.toHaveBeenCalled();
     expect(putPriceMock).not.toHaveBeenCalled();
   });
 });

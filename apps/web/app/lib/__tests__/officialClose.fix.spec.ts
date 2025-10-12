@@ -26,7 +26,6 @@ type DebugDetail = Record<
   string,
   Record<string, { price?: number; source?: string; fromLayer?: string }>
 >;
-type LoadJson = typeof import('@/app/lib/dataSource')['loadJson'];
 type GetAllPrices = typeof import('@/app/lib/services/dataService')['getAllPrices'];
 type ReadOverlay = typeof import('@/app/lib/officialCloseOverlayStore')['readOfficialCloseOverlay'];
 
@@ -398,30 +397,20 @@ describe('official close consistency fixes', () => {
     );
     await importClosePrices({ AAPL: { '2025-10-01': 12 } });
 
-    const loadJsonMock = jest.fn<LoadJson>();
-    loadJsonMock.mockResolvedValue({
-      '2025-10-01': { AAPL: 9 },
-      '2025-10-02': { AAPL: 13 },
-    } as Awaited<ReturnType<LoadJson>>);
-    jest.unstable_mockModule('@/app/lib/dataSource', () =>
-      ({ loadJson: loadJsonMock }) as unknown as Partial<
-        typeof import('@/app/lib/dataSource')
-      >,
-    );
-
     const {
       syncPackagedClosesToIdb,
       getLastPackagedSyncStats,
     } = await import('@/app/lib/prices/syncPackagedClosesToIdb');
 
     const result = await syncPackagedClosesToIdb();
-    expect(result.skipped.higherPriority).toBeGreaterThan(0);
-    expect(result.skipped.total).toBeGreaterThan(0);
+    expect(result).toEqual({
+      total: 0,
+      inserted: 0,
+      skipped: { total: 0, higherPriority: 0, same: 0 },
+    });
     const cached = await getPrice('AAPL', '2025-10-01');
     expect(cached?.close).toBe(12);
-    const stats = getLastPackagedSyncStats();
-    expect(stats.skipped.total).toBe(result.skipped.total);
-    expect(stats.skipped.higherPriority).toBe(result.skipped.higherPriority);
+    expect(getLastPackagedSyncStats()).toEqual(result);
   });
 
   it('testE: import writeback reports success and failure paths', async () => {

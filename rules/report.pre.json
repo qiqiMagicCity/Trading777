@@ -1,0 +1,39 @@
+{
+  "violations": [
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    },
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    },
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    },
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    },
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    },
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    },
+    {
+      "kind": "FORBID",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)",
+      "hits": 23
+    }
+  ]
+}

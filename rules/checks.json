@@ -1,0 +1,82 @@
+{
+  "forbids": [
+    {
+      "rule": "R007",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    },
+    {
+      "rule": "R014",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    },
+    {
+      "rule": "R015",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    },
+    {
+      "rule": "R016",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    },
+    {
+      "rule": "R019",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    },
+    {
+      "rule": "R025",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    },
+    {
+      "rule": "R026",
+      "pattern": "(均价|沿用上一日|latest as close|lastKnownPrice|realtimeAsClose|close_fallback|fallbackClose|trades/server|broker/|trades/packaged)"
+    }
+  ],
+  "requires": [
+    {
+      "rule": "R008",
+      "type": "archTest",
+      "file": "apps/web/app/lib/__tests__/arch/metrics.arch.test.ts"
+    },
+    {
+      "rule": "R010",
+      "type": "archTest",
+      "file": "apps/web/app/lib/__tests__/arch/metrics.arch.test.ts"
+    },
+    {
+      "rule": "R017",
+      "type": "importInvalidate",
+      "keys": [
+        "close_prices_version",
+        "trades_version"
+      ]
+    },
+    {
+      "rule": "R018",
+      "type": "strictMissing",
+      "name": "SAFE_STRICT"
+    },
+    {
+      "rule": "R023",
+      "type": "archTest",
+      "file": "apps/web/app/lib/__tests__/arch/metrics.arch.test.ts"
+    },
+    {
+      "rule": "R026",
+      "type": "strictMissing",
+      "name": "SAFE_STRICT"
+    }
+  ],
+  "allows": [
+    {
+      "rule": "R025",
+      "allowClose": [
+        "official/import",
+        "import",
+        "official/manual"
+      ],
+      "allowTrade": [
+        "trades/import",
+        "trades/manual"
+      ]
+    }
+  ],
+  "notes": []
+}

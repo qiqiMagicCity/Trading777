@@ -1,30 +1,3 @@
-import { loadJson } from "@/app/lib/dataSource";
-import { compareOfficialSourcePriority } from "@/app/lib/prices/compareOfficialSourcePriority";
-import { getPrice, putPrice } from "@/lib/services/dataService";
-import { type CloseMapByDate } from "./normalizeCloseMap";
-
-function readFreezeFlag(): string | null {
-  const envFreeze =
-    (typeof process !== "undefined" &&
-      (process.env.NEXT_PUBLIC_FREEZE_DATE || process.env.FREEZE_DATE)) ||
-    "";
-  if (typeof envFreeze === "string" && envFreeze.trim()) {
-    return envFreeze.trim();
-  }
-  if (typeof window !== "undefined") {
-    const win = window as typeof window & { NEXT_PUBLIC_FREEZE_DATE?: string };
-    const value = win.NEXT_PUBLIC_FREEZE_DATE;
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-  return null;
-}
-
-export function shouldSyncPackagedToIdb(): boolean {
-  return readFreezeFlag() !== null;
-}
-
 export interface SyncPackagedClosesStats {
   total: number;
   inserted: number;
@@ -53,93 +26,11 @@ export function getLastPackagedSyncStats(): SyncPackagedClosesStats {
   };
 }
 
-function isValidDate(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+export function shouldSyncPackagedToIdb(): boolean {
+  return false;
 }
 
 export async function syncPackagedClosesToIdb(): Promise<SyncPackagedClosesStats> {
-  if (!shouldSyncPackagedToIdb()) {
-    lastSyncStats = createEmptyStats();
-    return lastSyncStats;
-  }
-  try {
-    const data = (await loadJson("close_prices")) as CloseMapByDate;
-    if (!data || typeof data !== "object") {
-      lastSyncStats = createEmptyStats();
-      return lastSyncStats;
-    }
-
-    const tasks: Promise<void>[] = [];
-    let skippedTotal = 0;
-    let skippedHigherPriority = 0;
-    let skippedSame = 0;
-    let inserted = 0;
-    let total = 0;
-    for (const [rawDate, rawSymbols] of Object.entries(data)) {
-      if (!isValidDate(rawDate) || !rawSymbols || typeof rawSymbols !== "object") {
-        continue;
-      }
-      for (const [rawSymbol, rawClose] of Object.entries(rawSymbols)) {
-        if (!rawSymbol || typeof rawSymbol !== "string" || !isFiniteNumber(rawClose)) {
-          continue;
-        }
-        const symbol = rawSymbol.trim().toUpperCase();
-        if (!symbol) continue;
-        total += 1;
-        try {
-          const existing = await getPrice(symbol, rawDate);
-          if (existing) {
-            const priority = compareOfficialSourcePriority(
-              existing.source,
-              "official/packaged",
-            );
-            if (priority < 0) {
-              skippedHigherPriority += 1;
-              skippedTotal += 1;
-              continue;
-            }
-            if (priority === 0 && Number(existing.close) === rawClose) {
-              skippedSame += 1;
-              skippedTotal += 1;
-              continue;
-            }
-          }
-        } catch (error) {
-          console.warn("[syncPackagedClosesToIdb] read existing price failed", error);
-        }
-        tasks.push(
-          putPrice({
-            symbol,
-            date: rawDate,
-            close: rawClose,
-            source: "official/packaged",
-          }).then(() => {
-            inserted += 1;
-          }),
-        );
-      }
-    }
-
-    if (tasks.length > 0) {
-      await Promise.all(tasks);
-    }
-    lastSyncStats = {
-      total,
-      inserted,
-      skipped: {
-        total: skippedTotal,
-        higherPriority: skippedHigherPriority,
-        same: skippedSame,
-      },
-    };
-    return lastSyncStats;
-  } catch (err) {
-    console.warn("[syncPackagedClosesToIdb] failed", err);
-    lastSyncStats = createEmptyStats();
-    return lastSyncStats;
-  }
+  lastSyncStats = createEmptyStats();
+  return lastSyncStats;
 }
