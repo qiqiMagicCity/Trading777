@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from "idb";
+import { formatInTimeZone } from "date-fns-tz";
 import type { DailyResult } from "@/lib/types";
 import { logger } from "@/lib/logger";
 import { migrateClosePriceMap } from "@/lib/closePriceMigration";
@@ -7,6 +8,7 @@ import { normalizeOfficialSourceTag } from "@/app/lib/prices/compareOfficialSour
 import { extractInitialPositionsFromTrades, replayPortfolio } from "../tradeReplay";
 import { resolveTradingDayStr } from "../nyDay";
 import { toNY, ymdInNY } from "../timezone";
+import { NY_TZ, normalizeToNyDay } from "../time";
 
 const DB_NAME = "TradingApp";
 const DB_VERSION = 3; // Incremented version for schema change
@@ -685,6 +687,8 @@ interface PersistableTradePayload {
   id?: number;
 }
 
+const NY_TIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ss";
+
 function toPersistableTradePayload(
   trade: PersistableTradeInput,
 ): PersistableTradePayload | undefined {
@@ -697,27 +701,35 @@ function toPersistableTradePayload(
   const action = trade.action;
   if (!action) return undefined;
 
-  let time: string;
+  const fallbackTime = formatInTimeZone(
+    normalizeToNyDay(trade.date),
+    NY_TZ,
+    NY_TIME_FORMAT,
+  );
+
+  let time = fallbackTime;
   const rawTime = trade.time;
   if (rawTime instanceof Date) {
-    time = `${rawTime.getFullYear()}-${String(rawTime.getMonth() + 1).padStart(2, "0")}-${String(
-      rawTime.getDate(),
-    ).padStart(2, "0")}`;
-    time += `T${String(rawTime.getHours()).padStart(2, "0")}:${String(
-      rawTime.getMinutes(),
-    ).padStart(2, "0")}:${String(rawTime.getSeconds()).padStart(2, "0")}`;
+    if (!Number.isNaN(rawTime.getTime())) {
+      time = formatInTimeZone(rawTime, NY_TZ, NY_TIME_FORMAT);
+    }
   } else if (typeof rawTime === "number" && Number.isFinite(rawTime)) {
     const asDate = new Date(rawTime);
-    time = `${asDate.getFullYear()}-${String(asDate.getMonth() + 1).padStart(2, "0")}-${String(
-      asDate.getDate(),
-    ).padStart(2, "0")}`;
-    time += `T${String(asDate.getHours()).padStart(2, "0")}:${String(
-      asDate.getMinutes(),
-    ).padStart(2, "0")}:${String(asDate.getSeconds()).padStart(2, "0")}`;
-  } else if (typeof rawTime === "string" && rawTime.trim()) {
-    time = rawTime.trim();
-  } else {
-    time = `${trade.date}T00:00:00`;
+    if (!Number.isNaN(asDate.getTime())) {
+      time = formatInTimeZone(asDate, NY_TZ, NY_TIME_FORMAT);
+    }
+  } else if (typeof rawTime === "string") {
+    const trimmed = rawTime.trim();
+    if (trimmed) {
+      const normalized = normalizeToNyDay(trimmed);
+      const parsed =
+        normalized instanceof Date
+          ? normalized
+          : new Date(normalized as string | number);
+      if (!Number.isNaN(parsed.getTime())) {
+        time = formatInTimeZone(parsed, NY_TZ, NY_TIME_FORMAT);
+      }
+    }
   }
 
   const payload: PersistableTradePayload = {
@@ -939,3 +951,7 @@ export async function deleteTrade(id: number): Promise<void> {
   markDatasetAsCustom();
   await persistTradesToPrimarySource();
 }
+
+export const __test__ = {
+  toPersistableTradePayload,
+};
