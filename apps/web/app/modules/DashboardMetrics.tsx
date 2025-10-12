@@ -19,7 +19,7 @@ import type {
   PeriodDegradationReason,
   PeriodParseError,
 } from "@/app/lib/types/metrics";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode, type FC } from "react";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 import {
   getPeriodOfficialCloseSummary,
@@ -130,6 +130,26 @@ function composeDegradeTooltip(
   return lines.join("\n");
 }
 
+const StatusBreath: FC<{ status: "live" | "stale"; title?: string }> = ({
+  status,
+  title,
+}) => (
+  <div className="flex justify-center mb-1" title={title}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ring-1
+        ${status === "live"
+          ? "text-emerald-300 ring-emerald-500/30 bg-emerald-500/10"
+          : "text-amber-300 ring-amber-500/30 bg-amber-500/10"}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full animate-pulse
+        ${status === "live" ? "bg-emerald-400" : "bg-amber-400"}`}
+      />
+      {status === "live" ? "LIVE" : "待更新"}
+    </span>
+  </div>
+);
+
 const WINDOW_KEY_MAP: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
   M11: "wtd",
   M12: "mtd",
@@ -164,9 +184,9 @@ function MetricCard({
 }) {
   return (
     <div className="box" data-testid={dataTestId}>
+      {badge}
       <div className="title flex items-start justify-between gap-2">
         <span>{title}</span>
-        {badge ? <span>{badge}</span> : null}
       </div>
       <div className={`value ${colorClass || ""}`}>{value}</div>
     </div>
@@ -615,6 +635,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const formattedMetrics = useMemo(() => {
     if (!metrics) return [];
     const diagnostics = rawMetrics?._period?.diagnostics;
+    const m123Meta = metrics.M123?.meta;
     return order.map((key) => {
       const value =
         key === "M11"
@@ -690,7 +711,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         );
       } else if (key === "M3") {
         const m3 = metrics.M3;
-        const meta = metrics.M123?.meta ?? {
+        const meta = m123Meta ?? {
           priceStatus: "live" as const,
           lastPriceAtNY: null,
         };
@@ -708,23 +729,15 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           </div>
         );
         numericForColor = m3.dir;
+        const priceStatus = meta.priceStatus === "stale" ? "stale" : "live";
+        const badgeTitle =
+          priceStatus === "stale"
+            ? "部分行情待更新"
+            : meta.lastPriceAtNY
+            ? `最新行情时间（NY）：${meta.lastPriceAtNY}`
+            : "行情实时";
         badgeNode = (
-          <span
-            className={
-              meta.priceStatus === "stale"
-                ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
-                : "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"
-            }
-            title={
-              meta.priceStatus === "stale"
-                ? "部分行情待更新"
-                : meta.lastPriceAtNY
-                ? `最新行情时间（NY）：${meta.lastPriceAtNY}`
-                : "行情实时"
-            }
-          >
-            {meta.priceStatus === "stale" ? "待更新" : "live"}
-          </span>
+          <StatusBreath status={priceStatus} title={badgeTitle} />
         );
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
@@ -833,6 +846,14 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const status = card?.status ?? "missing";
         const tooltip = card?.tooltip ?? "无当日快照";
         const hasAlerts = card?.hasAlerts ?? false;
+        const priceStatus =
+          m123Meta?.priceStatus === "stale" ? "stale" : "live";
+        const badgeTitle =
+          priceStatus === "stale"
+            ? "部分行情待更新"
+            : m123Meta?.lastPriceAtNY
+            ? `最新行情时间（NY）：${m123Meta.lastPriceAtNY}`
+            : "行情实时";
 
         if (status === "missing") {
           formattedValue = (
@@ -873,6 +894,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           value: formattedValue,
           colorClass,
           dataTestId,
+          badge: <StatusBreath status={priceStatus} title={badgeTitle} />,
         };
       }
 
