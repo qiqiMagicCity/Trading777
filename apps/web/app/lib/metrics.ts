@@ -2987,7 +2987,7 @@ export function calcMetricsInternal(
     M2: currentValue,
     M3: { dir: floatPnlDirectional, nominal: floatPnl },
     M123: m123,
-    M3Legacy: floatPnl,
+    M3Legacy: m123.m3.nominal,
     M4: todayHistoricalRealizedPnl,
     M5: {
       trade: pnlTrade,

@@ -234,6 +234,7 @@ export interface SummaryMetrics {
   M6?: number;   // 今日总盈亏（后端已按规则计算）
   M7?: number;
   M123?: M123Snapshot;
+  // 兼容字段：仅为过渡期脚本使用，计划后续移除
   M3Legacy?: number;
   _m6?: {
     realizedToday: number;
