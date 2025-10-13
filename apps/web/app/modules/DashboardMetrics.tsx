@@ -19,7 +19,7 @@ import type {
   PeriodDegradationReason,
   PeriodParseError,
 } from "@/app/lib/types/metrics";
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import StatusBadge from "@/components/StatusBadge";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
@@ -173,20 +173,24 @@ function MetricCard({
   colorClass,
   dataTestId,
   badge,
+  children,
 }: {
   title: ReactNode;
-  value: ReactNode;
+  value?: ReactNode;
   colorClass?: string;
   dataTestId?: string;
   badge?: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div className="box" data-testid={dataTestId}>
       {badge}
       <div className="title flex items-start justify-between gap-2">
-        <span>{title}</span>
+        <div className="flex-1">{title}</div>
       </div>
-      <div className={`value ${colorClass || ""}`}>{value}</div>
+      {children ?? (
+        <div className={`value ${colorClass || ""}`}>{value}</div>
+      )}
     </div>
   );
 }
@@ -979,60 +983,73 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
               {row.map((metric) => {
                 if (metric.key === "M2") {
                   return (
-                    <Fragment key={metric.key}>
-                      {/* M2 card start */}
-                      <div className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5">
-                        {m123?.meta && <StatusBadge status={m123.meta.priceStatus} />}
+                    <MetricCard
+                      key={metric.key}
+                      title={
                         <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
-                        <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
-                          {fmtMoney(m123?.m2 ?? 0)}
-                        </div>
+                      }
+                      badge={
+                        m123?.meta ? <StatusBadge status={m123PriceStatus} /> : undefined
+                      }
+                    >
+                      <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
+                        {fmtMoney(m123?.m2 ?? 0)}
                       </div>
-                      {/* M2 card end */}
-                    </Fragment>
+                    </MetricCard>
                   );
                 }
 
                 if (metric.key === "M3") {
-                  return (
-                    <Fragment key={metric.key}>
-                      {/* M3 card start */}
-                      <div className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5">
-                        {m123?.meta && <StatusBadge status={m123.meta.priceStatus} />}
+                  const tooltipText = `名义：${fmtMoney(m123?.m3?.nominal ?? 0)}\n纽约：${formatNYShort(
+                    m123?.meta?.lastPriceAtNY,
+                  )}${
+                    m123?.meta?.staleSymbols?.length
+                      ? `\n受影响：${m123.meta.staleSymbols.join(", ")}`
+                      : ""
+                  }`;
 
-                        <div className="relative">
-                          <div className="text-sm text-emerald-200/80 text-center">持仓浮盈</div>
+                  return (
+                    <MetricCard
+                      key={metric.key}
+                      title={
+                        <div className="relative flex items-center justify-center">
+                          <span className="text-sm text-emerald-200/80">持仓浮盈</span>
                           <div className="absolute right-0 -top-0.5">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
+                                    type="button"
                                     aria-label="更多信息"
                                     className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ring-1 ring-emerald-500/30 text-emerald-300/80 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                                   >
                                     !
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="bottom" align="center" className="whitespace-pre text-xs">
-                                  {`名义：${fmtMoney(m123?.m3?.nominal ?? 0)}
-纽约：${formatNYShort(m123?.meta?.lastPriceAtNY)}
-${m123?.meta?.staleSymbols?.length ? `受影响：${m123.meta.staleSymbols.join(', ')}` : ''}`}
+                                <TooltipContent
+                                  side="bottom"
+                                  align="center"
+                                  className="whitespace-pre text-xs"
+                                >
+                                  {tooltipText}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           </div>
                         </div>
-
-                        <div
-                          className={`mt-2 text-center text-xl font-semibold ${
-                            (m123?.m3?.dir ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"
-                          }`}
-                        >
-                          {fmtMoney(m123?.m3?.dir ?? 0)}
-                        </div>
+                      }
+                      badge={
+                        m123?.meta ? <StatusBadge status={m123PriceStatus} /> : undefined
+                      }
+                    >
+                      <div
+                        className={`mt-2 text-center text-xl font-semibold ${
+                          (m123?.m3?.dir ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"
+                        }`}
+                      >
+                        {fmtMoney(m123?.m3?.dir ?? 0)}
                       </div>
-                      {/* M3 card end */}
-                    </Fragment>
+                    </MetricCard>
                   );
                 }
 
