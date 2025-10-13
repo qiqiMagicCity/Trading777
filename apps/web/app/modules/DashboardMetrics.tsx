@@ -19,7 +19,7 @@ import type {
   PeriodDegradationReason,
   PeriodParseError,
 } from "@/app/lib/types/metrics";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import StatusBadge from "@/components/StatusBadge";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
@@ -979,68 +979,60 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
               {row.map((metric) => {
                 if (metric.key === "M2") {
                   return (
-                    <div
-                      key={metric.key}
-                      className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5"
-                    >
-                      {m123?.meta && (
-                        <StatusBadge status={m123.meta.priceStatus} />
-                      )}
-                      <div className="text-sm text-emerald-200/80 text-center">
-                        持仓市值
+                    <Fragment key={metric.key}>
+                      {/* M2 card start */}
+                      <div className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5">
+                        {m123?.meta && <StatusBadge status={m123.meta.priceStatus} />}
+                        <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
+                        <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
+                          {fmtMoney(m123?.m2 ?? 0)}
+                        </div>
                       </div>
-                      <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
-                        {fmtMoney(m123?.m2 ?? 0)}
-                      </div>
-                    </div>
+                      {/* M2 card end */}
+                    </Fragment>
                   );
                 }
 
                 if (metric.key === "M3") {
                   return (
-                    <div
-                      key={metric.key}
-                      className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5"
-                    >
-                      {m123?.meta && (
-                        <StatusBadge status={m123.meta.priceStatus} />
-                      )}
+                    <Fragment key={metric.key}>
+                      {/* M3 card start */}
+                      <div className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5">
+                        {m123?.meta && <StatusBadge status={m123.meta.priceStatus} />}
 
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="text-sm text-emerald-200/80">持仓浮盈</div>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                aria-label="更多信息"
-                                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ring-1 ring-emerald-500/30 text-emerald-300/80 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                              >
-                                !
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="bottom"
-                              align="center"
-                              className="whitespace-pre text-xs"
-                            >
-                              {`名义：${fmtMoney(m123?.m3?.nominal ?? 0)}
+                        <div className="relative">
+                          <div className="text-sm text-emerald-200/80 text-center">持仓浮盈</div>
+                          <div className="absolute right-0 -top-0.5">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    aria-label="更多信息"
+                                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ring-1 ring-emerald-500/30 text-emerald-300/80 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                  >
+                                    !
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" align="center" className="whitespace-pre text-xs">
+                                  {`名义：${fmtMoney(m123?.m3?.nominal ?? 0)}
 纽约：${formatNYShort(m123?.meta?.lastPriceAtNY)}
 ${m123?.meta?.staleSymbols?.length ? `受影响：${m123.meta.staleSymbols.join(', ')}` : ''}`}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </div>
 
-                      <div
-                        className={`mt-2 text-center text-xl font-semibold ${
-                          (m123?.m3?.dir ?? 0) >= 0
-                            ? "text-emerald-300"
-                            : "text-rose-300"
-                        }`}
-                      >
-                        {fmtMoney(m123?.m3?.dir ?? 0)}
+                        <div
+                          className={`mt-2 text-center text-xl font-semibold ${
+                            (m123?.m3?.dir ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"
+                          }`}
+                        >
+                          {fmtMoney(m123?.m3?.dir ?? 0)}
+                        </div>
                       </div>
-                    </div>
+                      {/* M3 card end */}
+                    </Fragment>
                   );
                 }
 
