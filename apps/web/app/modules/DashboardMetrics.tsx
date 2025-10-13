@@ -19,8 +19,9 @@ import type {
   PeriodDegradationReason,
   PeriodParseError,
 } from "@/app/lib/types/metrics";
-import { useEffect, useMemo, useState, type ReactNode, type FC } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import StatusBadge from "@/components/StatusBadge";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 import {
   getPeriodOfficialCloseSummary,
@@ -147,36 +148,6 @@ function composeDegradeTooltip(
   return lines.join("\n");
 }
 
-const StatusBadge: FC<{ status: "live" | "stale"; title?: string }> = ({
-  status,
-  title,
-}) => (
-  <div className="mb-1 flex justify-center">
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ring-1
-        ${status === "live"
-          ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/30"
-          : "bg-amber-500/10 text-amber-300 ring-amber-500/30"}`}
-      aria-live="polite"
-      title={title}
-    >
-      <span className="relative flex h-2 w-2">
-        <span
-          className={`${
-            status === "live" ? "bg-emerald-400" : "bg-amber-400"
-          } absolute inline-flex h-full w-full rounded-full opacity-40 motion-safe:animate-ping motion-reduce:animate-none`}
-        />
-        <span
-          className={`${
-            status === "live" ? "bg-emerald-400" : "bg-amber-400"
-          } relative inline-flex h-2 w-2 rounded-full`}
-        />
-      </span>
-      {status === "live" ? "LIVE" : "待更新"}
-    </span>
-  </div>
-);
-
 const WINDOW_KEY_MAP: Record<"M11" | "M12" | "M13", "wtd" | "mtd" | "ytd"> = {
   M11: "wtd",
   M12: "mtd",
@@ -249,13 +220,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const m123 = metrics?.M123 ?? null;
   const m123PriceStatus =
     m123?.meta?.priceStatus === "stale" ? "stale" : "live";
-  const m123PriceStatusTitle =
-    m123PriceStatus === "stale"
-      ? "部分行情待更新"
-      : m123?.meta?.lastPriceAtNY
-      ? `最新行情时间（NY）：${m123.meta.lastPriceAtNY}`
-      : "行情实时";
-
   const m6Card = useMemo(() => {
     if (!metrics) {
       return null;
@@ -749,12 +713,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const m3 = metrics.M3;
         formattedValue = formatCurrency(m3.dir);
         numericForColor = m3.dir;
-        badgeNode = (
-          <StatusBadge
-            status={m123PriceStatus}
-            title={m123PriceStatusTitle}
-          />
-        );
+        badgeNode = <StatusBadge status={m123PriceStatus} />;
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
         formattedValue = (
@@ -901,12 +860,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           value: formattedValue,
           colorClass,
           dataTestId,
-          badge: (
-            <StatusBadge
-              status={m123PriceStatus}
-              title={m123PriceStatusTitle}
-            />
-          ),
+          badge: <StatusBadge status={m123PriceStatus} />,
         };
       }
 
@@ -997,7 +951,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     m6Card,
     officialCloseSummary,
     m123PriceStatus,
-    m123PriceStatusTitle,
   ]);
 
   const rows = useMemo(
@@ -1025,74 +978,42 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
             <div key={index} className={rowClassNames[index] ?? "grid gap-4"}>
               {row.map((metric) => {
                 if (metric.key === "M2") {
-                  const m2Value =
-                    typeof m123?.m2 === "number"
-                      ? m123.m2
-                      : typeof metrics?.M2 === "number"
-                      ? metrics.M2
-                      : 0;
                   return (
                     <div
                       key={metric.key}
                       className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5"
                     >
-                      {m123?.meta ? (
-                        <StatusBadge
-                          status={m123PriceStatus}
-                          title={m123PriceStatusTitle}
-                        />
-                      ) : null}
-                      <div className="text-center text-sm text-emerald-200/80">
+                      {m123?.meta && (
+                        <StatusBadge status={m123.meta.priceStatus} />
+                      )}
+                      <div className="text-sm text-emerald-200/80 text-center">
                         持仓市值
                       </div>
                       <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
-                        {fmtMoney(m2Value)}
+                        {fmtMoney(m123?.m2 ?? 0)}
                       </div>
                     </div>
                   );
                 }
 
                 if (metric.key === "M3") {
-                  const m3Dir =
-                    typeof m123?.m3?.dir === "number"
-                      ? m123.m3.dir
-                      : typeof metrics?.M3?.dir === "number"
-                      ? metrics.M3.dir
-                      : 0;
-                  const m3Nominal =
-                    typeof m123?.m3?.nominal === "number"
-                      ? m123.m3.nominal
-                      : typeof metrics?.M3?.nominal === "number"
-                      ? metrics.M3.nominal
-                      : 0;
-                  const tooltipSymbols = m123?.meta?.staleSymbols ?? [];
-                  const tooltipText = `名义：${fmtMoney(m3Nominal)}
-最近价（NY）：${formatNYShort(m123?.meta?.lastPriceAtNY)}
-${tooltipSymbols.length ? `受影响：${tooltipSymbols.join(", ")}` : ""}`.trim();
-                  const valueClass =
-                    m3Dir >= 0 ? "text-emerald-300" : "text-rose-300";
                   return (
                     <div
                       key={metric.key}
                       className="rounded-2xl border border-emerald-900/30 bg-emerald-950/10 p-4 md:p-5"
                     >
-                      {m123?.meta ? (
-                        <StatusBadge
-                          status={m123PriceStatus}
-                          title={m123PriceStatusTitle}
-                        />
-                      ) : null}
+                      {m123?.meta && (
+                        <StatusBadge status={m123.meta.priceStatus} />
+                      )}
 
                       <div className="flex items-center justify-center gap-2">
                         <div className="text-sm text-emerald-200/80">持仓浮盈</div>
-
                         <TooltipProvider>
-                          <Tooltip delayDuration={150}>
+                          <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                type="button"
                                 aria-label="更多信息"
-                                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] text-emerald-300/80 ring-1 ring-emerald-500/30 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ring-1 ring-emerald-500/30 text-emerald-300/80 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                               >
                                 !
                               </button>
@@ -1102,16 +1023,22 @@ ${tooltipSymbols.length ? `受影响：${tooltipSymbols.join(", ")}` : ""}`.trim
                               align="center"
                               className="whitespace-pre text-xs"
                             >
-                              {tooltipText}
+                              {`名义：${fmtMoney(m123?.m3?.nominal ?? 0)}
+纽约：${formatNYShort(m123?.meta?.lastPriceAtNY)}
+${m123?.meta?.staleSymbols?.length ? `受影响：${m123.meta.staleSymbols.join(', ')}` : ''}`}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
 
                       <div
-                        className={`mt-2 text-center text-xl font-semibold ${valueClass}`}
+                        className={`mt-2 text-center text-xl font-semibold ${
+                          (m123?.m3?.dir ?? 0) >= 0
+                            ? "text-emerald-300"
+                            : "text-rose-300"
+                        }`}
                       >
-                        {fmtMoney(m3Dir)}
+                        {fmtMoney(m123?.m3?.dir ?? 0)}
                       </div>
                     </div>
                   );
