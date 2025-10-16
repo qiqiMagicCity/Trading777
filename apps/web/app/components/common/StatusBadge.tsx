@@ -79,7 +79,28 @@ function summarizeMissingPairs(meta: GlobalMeta): MissingPairsSummary {
 }
 
 export function StatusBadge({ meta, status, className }: Props) {
+  // meta-only阶段：当 meta 缺失时，不再伪装为 LIVE，而是显示 UNKNOWN/未知
+  // （可观测性优先，避免误导）
   const shouldUseMeta = !!meta;
+  // meta 缺失时的兜底：展示“未知”徽标与轻提示
+  if (!shouldUseMeta) {
+    return (
+      <div className={clsx("flex justify-center mb-2", className)}>
+        <span
+          className={clsx(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ring-1",
+            "text-gray-200",
+            "ring-gray-500/30",
+            "bg-gray-500/10",
+          )}
+          data-state="unknown"
+          title="全局元信息不可用（未知状态）"
+        >
+          未知
+        </span>
+      </div>
+    );
+  }
   const warnedLegacyStatus = useRef(false);
   const hasMixedProps = shouldUseMeta && typeof status !== "undefined";
 

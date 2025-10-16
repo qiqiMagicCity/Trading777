@@ -5,7 +5,7 @@ import { render, screen } from "@testing-library/react";
 import StatusBadge from "@/components/StatusBadge";
 import type { GlobalMeta } from "@/app/lib/mode/globalMeta";
 
-describe("StatusBadge (mode engine v2)", () => {
+describe("StatusBadge V2 (meta-only)", () => {
   const baseMeta: GlobalMeta = {
     mode: "live",
     evaluationDay: "2025-01-02",
@@ -49,5 +49,11 @@ describe("StatusBadge (mode engine v2)", () => {
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveAttribute("title", expect.stringContaining("AAPL"));
     expect(badge).toHaveAttribute("title", expect.stringContaining("MSFT"));
+  });
+
+  it("renders UNKNOWN when meta is absent", () => {
+    // @ts-expect-error testing fallback without meta
+    const { getByText } = render(<StatusBadge />);
+    expect(getByText("未知")).toBeInTheDocument();
   });
 });
