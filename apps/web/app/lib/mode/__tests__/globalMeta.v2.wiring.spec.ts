@@ -1,10 +1,6 @@
 import { computeGlobalMeta } from "@/app/lib/mode/globalMeta";
 
 describe("computeGlobalMeta wiring (v2)", () => {
-  beforeAll(() => {
-    process.env.NEXT_PUBLIC_MODE_ENGINE_V2 = "1";
-  });
-
   const evaluationDay = "2025-07-03"; // 假设半日市
   const relatedSymbols = ["AAPL", "MSFT", "TSLA"];
 

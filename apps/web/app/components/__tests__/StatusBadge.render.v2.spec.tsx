@@ -1,7 +1,5 @@
 /** @jest-environment jsdom */
 
-process.env.NEXT_PUBLIC_MODE_ENGINE_V2 = "1";
-
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 import StatusBadge from "@/components/StatusBadge";

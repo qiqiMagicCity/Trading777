@@ -15,8 +15,6 @@ import StatusBadge from '@/components/StatusBadge';
 import { useGlobalMeta } from '@/app/state/globalModeStore';
 import { ModePopover } from '@/app/components/diagnostics/ModePopover';
 
-const MODE_ENGINE_V2_ENABLED = process.env.NEXT_PUBLIC_MODE_ENGINE_V2 === '1';
-
 type DatasetImportPayload = {
   trades: Array<RawTrade | Trade>;
   positions: Array<Partial<Position> & Record<string, unknown>>;
@@ -51,29 +49,35 @@ export function Header() {
       const currentDate = nowNY();
 
       // 获取各时区的时间
-      setNyTime(currentDate.toLocaleTimeString('en-US', {
-        timeZone: 'America/New_York',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }));
+      setNyTime(
+        currentDate.toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }),
+      );
 
-      setValenciaTime(currentDate.toLocaleTimeString('en-US', {
-        timeZone: 'Europe/Madrid',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }));
+      setValenciaTime(
+        currentDate.toLocaleTimeString('en-US', {
+          timeZone: 'Europe/Madrid',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }),
+      );
 
-      setShanghaiTime(currentDate.toLocaleTimeString('en-US', {
-        timeZone: 'Asia/Shanghai',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }));
+      setShanghaiTime(
+        currentDate.toLocaleTimeString('en-US', {
+          timeZone: 'Asia/Shanghai',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }),
+      );
 
       setNow(currentDate);
     }
@@ -132,8 +136,8 @@ export function Header() {
       const core = await exportData(); // {positions,trades}
       const data = {
         ...core,
-        equityCurve: [],        // 暂无专门存储，留空占位
-        generated: nowNY().toISOString()
+        equityCurve: [], // 暂无专门存储，留空占位
+        generated: nowNY().toISOString(),
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -165,17 +169,15 @@ export function Header() {
         if (!json || typeof json !== 'object' || Array.isArray(json)) {
           throw new Error('文件需为对象格式，支持“代码→日期”或“日期→代码”的嵌套结构');
         }
-        const result = await importClosePrices(
-          json as Record<string, Record<string, number>>,
-        );
+        const result = await importClosePrices(json as Record<string, Record<string, number>>);
         const message = buildImportMessage(result);
         if (result.writebackStatus === 'failed') {
           console.warn('[Header] close price writeback failed', result.error);
         }
         alert(message);
         try {
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new Event("pricesImported"));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('pricesImported'));
           }
         } catch (err) {
           console.error(err);
@@ -203,7 +205,7 @@ export function Header() {
       const prices = await getAllPrices(); // flat array
       // group by date -> symbol
       const nested: Record<string, Record<string, number>> = {};
-      prices.forEach(p => {
+      prices.forEach((p) => {
         const bucket = nested[p.date] || (nested[p.date] = {});
         bucket[p.symbol] = p.close;
       });
@@ -235,19 +237,50 @@ export function Header() {
         <span>瓦伦西亚: {valenciaTime}</span>
         <span className="mx-2">|</span>
         <span>上海: {shanghaiTime}</span>
-        {MODE_ENGINE_V2_ENABLED ? (
-          <div className="ml-4 flex items-center gap-2">
-            <StatusBadge meta={globalMeta ?? undefined} className="mb-0" />
-            <ModePopover meta={globalMeta} />
-          </div>
-        ) : null}
+
+        {/* meta-only，始终渲染（无构建期开关 gating） */}
+        <div className="ml-4 flex items-center gap-2">
+          <StatusBadge meta={globalMeta ?? undefined} className="mb-0" />
+          <ModePopover meta={globalMeta} />
+        </div>
       </div>
+
       <div className="right-btns flex items-center" style={{ marginLeft: 'auto' }}>
-        <span id="nyDate" className="date font-bold" style={{ marginRight: '12px' }}>{dateDisplay}</span>
-        <button id="import" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleImport}>导入</button>
-        <button id="export" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleExport}>导出</button>
-        <button id="exportPrices" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleExportPrices}>导出收盘价格</button>
-        <button id="importPrices" className="px-3 py-1 border-none" style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }} onClick={handleImportPrices}>导入收盘价格</button>
+        <span id="nyDate" className="date font-bold" style={{ marginRight: '12px' }}>
+          {dateDisplay}
+        </span>
+        <button
+          id="import"
+          className="px-3 py-1 border-none"
+          style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }}
+          onClick={handleImport}
+        >
+          导入
+        </button>
+        <button
+          id="export"
+          className="px-3 py-1 border-none"
+          style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }}
+          onClick={handleExport}
+        >
+          导出
+        </button>
+        <button
+          id="exportPrices"
+          className="px-3 py-1 border-none"
+          style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }}
+          onClick={handleExportPrices}
+        >
+          导出收盘价格
+        </button>
+        <button
+          id="importPrices"
+          className="px-3 py-1 border-none"
+          style={{ background: '#00e676', color: '#000000', borderRadius: '4px', marginLeft: '10px' }}
+          onClick={handleImportPrices}
+        >
+          导入收盘价格
+        </button>
       </div>
     </header>
   );
@@ -270,4 +303,4 @@ function buildImportMessage(result: ImportClosePricesResult): string {
 }
 
 // We need to add a "primary" variant to our button component
-// I'll do that by modifying the button.tsx file next. 
+// I'll do that by modifying the button.tsx file next.

@@ -8,8 +8,6 @@ interface Props {
   meta?: GlobalMeta | null;
 }
 
-const MODE_ENGINE_V2_ENABLED = process.env.NEXT_PUBLIC_MODE_ENGINE_V2 === "1";
-
 export function ModePopover({ meta }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -44,7 +42,7 @@ export function ModePopover({ meta }: Props) {
     return { items, rest };
   }, [meta]);
 
-  if (!MODE_ENGINE_V2_ENABLED || !meta) {
+  if (!meta) {
     return null;
   }
 

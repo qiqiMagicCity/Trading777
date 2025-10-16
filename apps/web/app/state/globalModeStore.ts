@@ -20,8 +20,6 @@ import {
   unsubscribeOfficialCloseChanged,
 } from "@/app/lib/prices/officialCloseStatus";
 
-const ENABLED = process.env.NEXT_PUBLIC_MODE_ENGINE_V2 === "1";
-
 interface GlobalMetaState {
   value: GlobalMeta | null;
 }
@@ -76,7 +74,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 function getSnapshot(): GlobalMeta | null {
-  return ENABLED ? state.value : null;
+  return state.value;
 }
 
 function getServerSnapshot(): GlobalMeta | null {
@@ -101,7 +99,6 @@ let focusAttached = false;
 const BOUNDARY_MINUTES = new Set<number>([9 * 60 + 30, 13 * 60, 16 * 60]);
 
 function requestRecompute(): void {
-  if (!ENABLED) return;
   if (throttleTimer) return;
   throttleTimer = setTimeout(() => {
     throttleTimer = null;
@@ -110,7 +107,6 @@ function requestRecompute(): void {
 }
 
 async function triggerRecompute(): Promise<void> {
-  if (!ENABLED) return;
   if (recomputeRunning) {
     recomputeQueued = true;
     return;
@@ -157,7 +153,6 @@ function startClockWatcher(): void {
     return;
   }
   const tick = () => {
-    if (!ENABLED) return;
     const now = nowNY();
     const evaluationDay = pickEvaluationDay(now);
     const tradingDay = isTradingDay(now);
@@ -187,7 +182,7 @@ function startClockWatcher(): void {
 }
 
 function initialize(): void {
-  if (initialized || !ENABLED) {
+  if (initialized) {
     return;
   }
   initialized = true;
@@ -211,7 +206,6 @@ export function useGlobalMeta(): GlobalMeta | null {
 }
 
 export function forceRecomputeGlobalMeta(): void {
-  if (!ENABLED) return;
   void triggerRecompute();
 }
 
