@@ -38,9 +38,8 @@ export function ModePopover({ meta }: Props) {
     if (!meta || !meta.missingPairs?.length) {
       return { items: [] as Array<{ day: string; symbol: string }>, rest: 0 };
     }
-    const items = meta.missingPairs.slice(0, 10);
-    const rest = meta.missingPairs.length - items.length;
-    return { items, rest };
+    const items = meta.missingPairs;
+    return { items, rest: 0 };
   }, [meta]);
 
   if (!meta) {
@@ -132,9 +131,6 @@ export function ModePopover({ meta }: Props) {
                     <span className="text-emerald-200/80">{pair.day}</span>
                   </li>
                 ))}
-                {missingSummary.rest > 0 ? (
-                  <li className="text-emerald-200/70">其余 {missingSummary.rest} 条…</li>
-                ) : null}
               </ul>
             )}
           </div>
