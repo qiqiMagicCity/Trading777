@@ -237,7 +237,7 @@ export function Header() {
         <span>上海: {shanghaiTime}</span>
         {MODE_ENGINE_V2_ENABLED ? (
           <div className="ml-4 flex items-center gap-2">
-            <StatusBadge meta={globalMeta ?? undefined} status="live" className="mb-0" />
+            <StatusBadge meta={globalMeta ?? undefined} className="mb-0" />
             <ModePopover meta={globalMeta} />
           </div>
         ) : null}
