@@ -11,6 +11,11 @@ import {
   type ImportClosePricesResult,
 } from '@/app/lib/prices/importClosePrices';
 import type { RawTrade, Trade, Position } from '@/lib/services/dataService';
+import StatusBadge from '@/components/StatusBadge';
+import { useGlobalMeta } from '@/app/state/globalModeStore';
+import { ModePopover } from '@/app/components/diagnostics/ModePopover';
+
+const MODE_ENGINE_V2_ENABLED = process.env.NEXT_PUBLIC_MODE_ENGINE_V2 === '1';
 
 type DatasetImportPayload = {
   trades: Array<RawTrade | Trade>;
@@ -38,6 +43,7 @@ export function Header() {
   const [nyTime, setNyTime] = useState('');
   const [valenciaTime, setValenciaTime] = useState('');
   const [shanghaiTime, setShanghaiTime] = useState('');
+  const globalMeta = useGlobalMeta();
 
   useEffect(() => {
     // 更新所有时区的时间
@@ -229,6 +235,12 @@ export function Header() {
         <span>瓦伦西亚: {valenciaTime}</span>
         <span className="mx-2">|</span>
         <span>上海: {shanghaiTime}</span>
+        {MODE_ENGINE_V2_ENABLED ? (
+          <div className="ml-4 flex items-center gap-2">
+            <StatusBadge meta={globalMeta ?? undefined} status="live" className="mb-0" />
+            <ModePopover meta={globalMeta} />
+          </div>
+        ) : null}
       </div>
       <div className="right-btns flex items-center" style={{ marginLeft: 'auto' }}>
         <span id="nyDate" className="date font-bold" style={{ marginRight: '12px' }}>{dateDisplay}</span>

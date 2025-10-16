@@ -19,6 +19,7 @@ import { nyDateStr, toNY, NY_TZ } from '../time';
 import { fromZonedTime as zonedTimeToUtc } from 'date-fns-tz';
 import { evaluateCloseRequirement as evaluateMarketCloseRequirement, resolveCloseGraceMinutes } from '@/lib/marketHours';
 import { normalizeCloseMap, type CloseMapByDate } from '@/app/lib/prices/normalizeCloseMap';
+import { recordLiveQuote } from '@/app/state/livePriceStatus';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -921,6 +922,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     if (finnhubPrice !== null) {
       const entry = writeRealtimeCache(symbol, finnhubPrice);
       void persistRealtimeClose(symbol, finnhubPrice, entry.ts);
+      recordLiveQuote(symbol, entry.ts);
       return { kind: 'quote', price: finnhubPrice, stale: false, priceOk: true, updatedAt: entry.ts };
     }
   } catch (e) {
@@ -932,6 +934,7 @@ export async function fetchRealtimeQuote(symbol: string): Promise<QuoteResult> {
     if (tiingoPrice !== null) {
       const entry = writeRealtimeCache(symbol, tiingoPrice);
       void persistRealtimeClose(symbol, tiingoPrice, entry.ts);
+      recordLiveQuote(symbol, entry.ts);
       return { kind: 'quote', price: tiingoPrice, stale: false, priceOk: true, updatedAt: entry.ts };
     }
   } catch (e) {
