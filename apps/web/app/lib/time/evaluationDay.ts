@@ -12,7 +12,7 @@ type ParsedYmd = {
 };
 
 function parseYmd(ymd: string): ParsedYmd {
-  const [yearStr, monthStr, dayStr] = ymd.split("-");
+  const [yearStr, monthStr, dayStr] = ymd.split("-") as [string, string, string];
   const year = Number.parseInt(yearStr, 10);
   const month = Number.parseInt(monthStr, 10) as MonthIndex;
   const day = Number.parseInt(dayStr, 10);
