@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Header } from "@/components/layout/Header";
+import GlobalModeProvider from "@/providers/GlobalModeProvider";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
@@ -27,12 +28,14 @@ export default function RootLayout({
         <Script id="official-close-flag" strategy="beforeInteractive">
           {`window.OFFICIAL_CLOSE_FIX_ENABLED=${JSON.stringify(process.env.NEXT_PUBLIC_OFFICIAL_CLOSE_FIX_ENABLED ?? process.env.OFFICIAL_CLOSE_FIX_ENABLED ?? "")};`}
         </Script>
-        <Providers>
-          <div className="flex flex-col min-h-screen">
-            <Header />
-            <main className="flex-grow">{children}</main>
-          </div>
-        </Providers>
+        <GlobalModeProvider>
+          <Providers>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow">{children}</main>
+            </div>
+          </Providers>
+        </GlobalModeProvider>
       </body>
     </html>
   );

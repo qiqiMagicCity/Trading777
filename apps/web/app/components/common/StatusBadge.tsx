@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import type { GlobalMeta } from "@/app/lib/mode/globalMeta";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 
 export type LegacyStatus = "live" | "stale";
 
@@ -11,8 +11,6 @@ interface Props {
   status?: LegacyStatus;
   className?: string;
 }
-
-const ENABLED = process.env.NEXT_PUBLIC_MODE_ENGINE_V2 === "1";
 
 const LEGACY_TOKENS: Record<LegacyStatus, { dot: string; text: string; ring: string; bg: string; label: string }> = {
   live: {
@@ -80,13 +78,22 @@ function summarizeMissingPairs(meta: GlobalMeta): MissingPairsSummary {
   return { title, lines: pairs };
 }
 
-export function StatusBadge({ meta, status = "live", className }: Props) {
-  const shouldUseMeta = ENABLED && meta;
+export function StatusBadge({ meta, status, className }: Props) {
+  const shouldUseMeta = !!meta;
+  const warnedLegacyStatus = useRef(false);
+  const hasMixedProps = shouldUseMeta && typeof status !== "undefined";
+
+  if (hasMixedProps && !warnedLegacyStatus.current) {
+    console.warn("[StatusBadge] meta provided; ignoring legacy 'status' prop.");
+    warnedLegacyStatus.current = true;
+  }
+
+  const legacyStatus = status ?? "live";
 
   const { token, title } = useMemo(() => {
     if (shouldUseMeta && meta) {
       const mode = meta.mode as ModeKey;
-      const modeToken = MODE_TOKENS[mode];
+      const modeToken = MODE_TOKENS[mode] ?? MODE_TOKENS.live;
       let tooltipTitle: string | undefined;
       if (mode === "degraded") {
         const summary = summarizeMissingPairs(meta);
@@ -96,11 +103,14 @@ export function StatusBadge({ meta, status = "live", className }: Props) {
       }
       return { token: modeToken, title: tooltipTitle };
     }
-    const legacyToken = LEGACY_TOKENS[status];
+    const legacyToken = LEGACY_TOKENS[legacyStatus];
     return { token: legacyToken, title: undefined };
-  }, [meta, shouldUseMeta, status]);
+  }, [legacyStatus, meta, shouldUseMeta]);
 
-  const animate = shouldUseMeta && meta ? MODE_TOKENS[meta.mode as ModeKey].animate : status === "live";
+  const animate =
+    shouldUseMeta && meta
+      ? MODE_TOKENS[meta.mode as ModeKey]?.animate ?? false
+      : legacyStatus === "live";
 
   return (
     <div className={clsx("flex justify-center mb-2", className)}>

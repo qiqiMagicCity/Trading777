@@ -1,7 +1,5 @@
 /** @jest-environment jsdom */
 
-process.env.NEXT_PUBLIC_MODE_ENGINE_V2 = "1";
-
 import { act, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { useGlobalMeta, __resetGlobalMetaStoreForTests } from "@/app/state/globalModeStore";
@@ -84,7 +82,6 @@ function Viewer() {
 
 describe("globalModeStore", () => {
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_MODE_ENGINE_V2 = "1";
     currentNow = new Date("2025-07-03T10:30:00-04:00");
     mockedEvaluationDay = "2025-07-03";
     mockedBeforeClose = true;
