@@ -240,7 +240,7 @@ export function Header() {
 
         {/* meta-only，始终渲染（无构建期开关 gating） */}
         <div className="ml-4 flex items-center gap-2">
-          <StatusBadge meta={globalMeta ?? undefined} className="mb-0" />
+          <StatusBadge meta={globalMeta ?? undefined} className="mb-0" variant="pill" />
           <ModePopover meta={globalMeta} />
         </div>
       </div>
