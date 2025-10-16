@@ -15,14 +15,22 @@ export function ModePopover({ meta }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const source = "header";
 
-  const getMissingCount = (m: GlobalMeta | null | undefined): number => {
-    if (!m) return 0;
-    if (Array.isArray(m.missingPairs)) return m.missingPairs.length;
-    if (Array.isArray(m.missing?.items)) return m.missing.items.length;
-    if (typeof m.missingCount === "number") return m.missingCount;
-    return 0;
+  // 宽松+安全访问，兼容多种 meta 形状，避免类型约束引发的构建错误
+  const getMissingCount = (m: unknown): number => {
+    try {
+      const metaLike = (m as Record<string, unknown>) ?? null;
+      if (!metaLike) return 0;
+      if (Array.isArray((metaLike as any).missingPairs)) return (metaLike as any).missingPairs.length;
+      const missing = (metaLike as any).missing;
+      if (missing && Array.isArray((missing as any).items)) return (missing as any).items.length;
+      if (typeof (metaLike as any).missingCount === "number") return (metaLike as any).missingCount;
+      return 0;
+    } catch {
+      return 0;
+    }
   };
 
+  // 点击外部时关闭，并打点 outside-click
   useEffect(() => {
     if (!open) return;
     const handleClick = (event: MouseEvent) => {
@@ -43,6 +51,7 @@ export function ModePopover({ meta }: Props) {
     };
   }, [meta, open, source]);
 
+  // meta 置空时强制关闭，并打点 meta-cleared
   useEffect(() => {
     if (!meta) {
       if (open) {
@@ -56,14 +65,16 @@ export function ModePopover({ meta }: Props) {
     }
   }, [meta, open, source]);
 
+  // 缺失对：完整展示（不再截断）
   const missingSummary = useMemo(() => {
-    if (!meta || !meta.missingPairs?.length) {
-      return { items: [] as Array<{ day: string; symbol: string }>, rest: 0 };
-    }
-    const items = meta.missingPairs;
-    return { items, rest: 0 };
+    const empty = { items: [] as Array<{ day: string; symbol: string }>, rest: 0 };
+    if (!meta) return empty;
+    const pairs = Array.isArray((meta as any).missingPairs) ? ((meta as any).missingPairs as Array<{ day: string; symbol: string }>) : [];
+    if (!pairs.length) return empty;
+    return { items: pairs, rest: 0 };
   }, [meta]);
 
+  // 回退视图：meta 不可用时仍显示“诊断未就绪”与“重试计算”
   if (!meta) {
     return (
       <div
@@ -81,7 +92,7 @@ export function ModePopover({ meta }: Props) {
             emitTelemetry("mode-popover-retry-clicked", { source });
             try {
               forceRecomputeGlobalMeta();
-            } catch (_) {
+            } catch {
               // ignore
             }
           }}
@@ -117,6 +128,7 @@ export function ModePopover({ meta }: Props) {
       >
         i
       </button>
+
       {open ? (
         <div className="absolute right-0 z-50 mt-2 w-64 rounded-md border border-emerald-500/40 bg-slate-900/95 p-3 text-xs text-emerald-50 shadow-lg backdrop-blur">
           <div className="text-sm font-semibold text-emerald-200">模式诊断</div>
@@ -152,6 +164,7 @@ export function ModePopover({ meta }: Props) {
               <dd className="text-emerald-50">{meta.degradedReason ?? "-"}</dd>
             </div>
           </dl>
+
           <div className="mt-3">
             <div className="text-emerald-200/80">缺失标的</div>
             {missingSummary.items.length === 0 ? (
