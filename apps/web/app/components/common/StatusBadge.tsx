@@ -12,23 +12,6 @@ interface Props {
   className?: string;
 }
 
-const LEGACY_TOKENS: Record<LegacyStatus, { dot: string; text: string; ring: string; bg: string; label: string }> = {
-  live: {
-    dot: "bg-emerald-400",
-    text: "text-emerald-300",
-    ring: "ring-emerald-500/30",
-    bg: "bg-emerald-500/10",
-    label: "LIVE",
-  },
-  stale: {
-    dot: "bg-amber-400",
-    text: "text-amber-300",
-    ring: "ring-amber-500/30",
-    bg: "bg-amber-500/10",
-    label: "待更新",
-  },
-};
-
 const MODE_TOKENS = {
   live: {
     dot: "bg-emerald-400",
@@ -81,27 +64,8 @@ function summarizeMissingPairs(meta: GlobalMeta): MissingPairsSummary {
 export function StatusBadge({ meta, status, className }: Props) {
   // meta-only阶段：当 meta 缺失时，不再伪装为 LIVE，而是显示 UNKNOWN/未知
   // （可观测性优先，避免误导）
-  const shouldUseMeta = !!meta;
-  // meta 缺失时的兜底：展示“未知”徽标与轻提示
-  if (!shouldUseMeta) {
-    return (
-      <div className={clsx("flex justify-center mb-2", className)}>
-        <span
-          className={clsx(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ring-1",
-            "text-gray-200",
-            "ring-gray-500/30",
-            "bg-gray-500/10",
-          )}
-          data-state="unknown"
-          title="全局元信息不可用（未知状态）"
-        >
-          未知
-        </span>
-      </div>
-    );
-  }
   const warnedLegacyStatus = useRef(false);
+  const shouldUseMeta = !!meta;
   const hasMixedProps = shouldUseMeta && typeof status !== "undefined";
 
   if (hasMixedProps && !warnedLegacyStatus.current) {
@@ -109,53 +73,68 @@ export function StatusBadge({ meta, status, className }: Props) {
     warnedLegacyStatus.current = true;
   }
 
-  const legacyStatus = status ?? "live";
-
-  const { token, title } = useMemo(() => {
-    if (shouldUseMeta && meta) {
-      const mode = meta.mode as ModeKey;
-      const modeToken = MODE_TOKENS[mode] ?? MODE_TOKENS.live;
-      let tooltipTitle: string | undefined;
-      if (mode === "degraded") {
-        const summary = summarizeMissingPairs(meta);
-        if (summary.lines.length > 0) {
-          tooltipTitle = [summary.title, ...summary.lines].join("\n");
-        }
-      }
-      return { token: modeToken, title: tooltipTitle };
+  const view = useMemo(() => {
+    if (!meta) {
+      return {
+        state: "unknown" as const,
+        token: {
+          dot: "bg-gray-500",
+          text: "text-gray-200",
+          ring: "ring-gray-500/30",
+          bg: "bg-gray-500/10",
+        },
+        label: "未知",
+        title: "全局元信息不可用（未知状态）",
+        animate: false,
+      };
     }
-    const legacyToken = LEGACY_TOKENS[legacyStatus];
-    return { token: legacyToken, title: undefined };
-  }, [legacyStatus, meta, shouldUseMeta]);
 
-  const animate =
-    shouldUseMeta && meta
-      ? MODE_TOKENS[meta.mode as ModeKey]?.animate ?? false
-      : legacyStatus === "live";
+    const mode = (meta.mode as ModeKey) ?? "live";
+    const modeToken = MODE_TOKENS[mode] ?? MODE_TOKENS.live;
+    let tooltipTitle: string | undefined;
+
+    if (mode === "degraded") {
+      const summary = summarizeMissingPairs(meta);
+      if (summary.lines.length > 0) {
+        tooltipTitle = [summary.title, ...summary.lines].join("\n");
+      }
+    }
+
+    return {
+      state: mode,
+      token: modeToken,
+      label: modeToken.label,
+      title: tooltipTitle,
+      animate: modeToken.animate,
+    } as const;
+  }, [meta]);
 
   return (
     <div className={clsx("flex justify-center mb-2", className)}>
       <span
         className={clsx(
           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ring-1",
-          token.text,
-          token.ring,
-          token.bg,
+          view.token.text,
+          view.token.ring,
+          view.token.bg,
         )}
+        data-state={view.state}
         aria-live="polite"
-        title={title}
+        title={view.title}
       >
-        <span className="relative flex h-2.5 w-2.5">
-          <span
-            className={clsx(
-              "absolute inline-flex h-full w-full rounded-full opacity-40",
-              animate && "motion-safe:animate-ping",
-              token.dot,
-            )}
-          />
-          <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", token.dot)} />
-        </span>
-        {token.label}
+        {view.state !== "unknown" && (
+          <span className="relative flex h-2.5 w-2.5">
+            <span
+              className={clsx(
+                "absolute inline-flex h-full w-full rounded-full opacity-40",
+                view.animate && "motion-safe:animate-ping",
+                view.token.dot,
+              )}
+            />
+            <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", view.token.dot)} />
+          </span>
+        )}
+        {view.label}
       </span>
     </div>
   );
