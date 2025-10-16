@@ -22,6 +22,7 @@ import type {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import StatusBadge from "@/components/StatusBadge";
+import { useGlobalMeta } from "@/app/state/globalModeStore";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 import {
   getPeriodOfficialCloseSummary,
@@ -206,6 +207,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   const rawMetrics = useStore((state) => state.metrics);
   const periodHealth = useStore((state) => state.periodHealth);
   const metrics = normalizeMetrics(rawMetrics);
+  const globalMeta = useGlobalMeta();
   const tradingDayAuthority = useTradingDay();
   const tradingDayFallback = useMemo(() => tradingDayAuthority || resolveTradingDayStr(), [tradingDayAuthority]);
   const debugEnabled =
@@ -717,7 +719,9 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         const m3 = metrics.M3;
         formattedValue = formatCurrency(m3.dir);
         numericForColor = m3.dir;
-        badgeNode = <StatusBadge status={m123PriceStatus} />;
+        badgeNode = (
+          <StatusBadge meta={globalMeta ?? undefined} status={m123PriceStatus} />
+        );
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
         formattedValue = (
@@ -864,7 +868,9 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           value: formattedValue,
           colorClass,
           dataTestId,
-          badge: <StatusBadge status={m123PriceStatus} />,
+          badge: (
+            <StatusBadge meta={globalMeta ?? undefined} status={m123PriceStatus} />
+          ),
         };
       }
 
@@ -955,6 +961,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     m6Card,
     officialCloseSummary,
     m123PriceStatus,
+    globalMeta,
   ]);
 
   const rows = useMemo(
@@ -989,7 +996,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
                       }
                       badge={
-                        m123?.meta ? <StatusBadge status={m123PriceStatus} /> : undefined
+                        <StatusBadge
+                          meta={globalMeta ?? undefined}
+                          status={m123PriceStatus}
+                        />
                       }
                     >
                       <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
@@ -1039,7 +1049,10 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         </div>
                       }
                       badge={
-                        m123?.meta ? <StatusBadge status={m123PriceStatus} /> : undefined
+                        <StatusBadge
+                          meta={globalMeta ?? undefined}
+                          status={m123PriceStatus}
+                        />
                       }
                     >
                       <div
