@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlobalMeta } from "@/app/lib/mode/globalMeta";
 import clsx from "clsx";
 import { forceRecomputeGlobalMeta } from "@/app/state/globalModeStore";
+import { emit as emitTelemetry } from "@/app/lib/telemetry";
 
 interface Props {
   meta?: GlobalMeta | null;
@@ -12,6 +13,21 @@ interface Props {
 export function ModePopover({ meta }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const source = "header";
+
+  const getMissingCount = (m: unknown): number => {
+    try {
+      const metaLike = (m as Record<string, unknown>) ?? null;
+      if (!metaLike) return 0;
+      if (Array.isArray((metaLike as any).missingPairs)) return (metaLike as any).missingPairs.length;
+      const missing = (metaLike as any).missing;
+      if (missing && Array.isArray((missing as any).items)) return (missing as any).items.length;
+      if (typeof (metaLike as any).missingCount === "number") return (metaLike as any).missingCount;
+      return 0;
+    } catch {
+      return 0;
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -20,19 +36,31 @@ export function ModePopover({ meta }: Props) {
       if (!containerRef.current || !target) return;
       if (!containerRef.current.contains(target)) {
         setOpen(false);
+        emitTelemetry("mode-popover-closed", {
+          reason: "outside-click",
+          source,
+          missingCount: getMissingCount(meta),
+        });
       }
     };
     window.addEventListener("mousedown", handleClick);
     return () => {
       window.removeEventListener("mousedown", handleClick);
     };
-  }, [open]);
+  }, [meta, open, source]);
 
   useEffect(() => {
     if (!meta) {
+      if (open) {
+        emitTelemetry("mode-popover-closed", {
+          reason: "meta-cleared",
+          source,
+          missingCount: 0,
+        });
+      }
       setOpen(false);
     }
-  }, [meta]);
+  }, [meta, open, source]);
 
   const missingSummary = useMemo(() => {
     if (!meta || !meta.missingPairs?.length) {
@@ -56,9 +84,10 @@ export function ModePopover({ meta }: Props) {
         <button
           type="button"
           onClick={() => {
+            emitTelemetry("mode-popover-retry-clicked", { source });
             try {
               forceRecomputeGlobalMeta();
-            } catch (_) {
+            } catch {
               // ignore
             }
           }}
@@ -80,7 +109,17 @@ export function ModePopover({ meta }: Props) {
           "flex h-5 w-5 items-center justify-center rounded-full border border-emerald-200/70 text-[10px] font-semibold",
           "text-emerald-50 transition hover:bg-emerald-500/20",
         )}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          setOpen((prev) => {
+            const next = !prev;
+            emitTelemetry(next ? "mode-popover-opened" : "mode-popover-closed", {
+              reason: "toggle",
+              source,
+              missingCount: getMissingCount(meta),
+            });
+            return next;
+          });
+        }}
       >
         i
       </button>
