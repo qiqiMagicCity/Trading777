@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlobalMeta } from "@/app/lib/mode/globalMeta";
 import clsx from "clsx";
+import { forceRecomputeGlobalMeta } from "@/app/state/globalModeStore";
 
 interface Props {
   meta?: GlobalMeta | null;
@@ -43,7 +44,31 @@ export function ModePopover({ meta }: Props) {
   }, [meta]);
 
   if (!meta) {
-    return null;
+    return (
+      <div
+        className="inline-flex items-center gap-2 text-amber-300"
+        data-qa="mode-popover-unavailable"
+        aria-live="polite"
+        title="全局诊断元信息暂不可用"
+      >
+        <span className="rounded px-2 py-0.5 border border-dashed border-amber-300/60">
+          诊断未就绪
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              forceRecomputeGlobalMeta();
+            } catch (_) {
+              // ignore
+            }
+          }}
+          className="text-xs underline underline-offset-2 hover:opacity-80"
+        >
+          重试计算
+        </button>
+      </div>
+    );
   }
 
   return (
