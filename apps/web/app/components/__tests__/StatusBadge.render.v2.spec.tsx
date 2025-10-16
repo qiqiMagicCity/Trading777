@@ -19,7 +19,7 @@ describe("StatusBadge (mode engine v2)", () => {
   };
 
   it("renders live state with breathing animation", () => {
-    const { container } = render(<StatusBadge meta={baseMeta} status="live" />);
+    const { container } = render(<StatusBadge meta={baseMeta} />);
     expect(screen.getByText("盘中（实时）")).toBeInTheDocument();
     expect(container.querySelector(".motion-safe\\:animate-ping")).not.toBeNull();
   });
@@ -28,7 +28,6 @@ describe("StatusBadge (mode engine v2)", () => {
     const { container } = render(
       <StatusBadge
         meta={{ ...baseMeta, mode: "close", latestPriceOk: false, officialCloseOk: true }}
-        status="live"
       />,
     );
     expect(screen.getByText("收盘口径")).toBeInTheDocument();
@@ -47,7 +46,7 @@ describe("StatusBadge (mode engine v2)", () => {
         { day: "2025-01-02", symbol: "MSFT" },
       ],
     };
-    render(<StatusBadge meta={degradedMeta} status="stale" />);
+    render(<StatusBadge meta={degradedMeta} />);
     const badge = screen.getByText("待更新/仅昨收基线");
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveAttribute("title", expect.stringContaining("AAPL"));

@@ -224,8 +224,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
   );
 
   const m123 = metrics?.M123 ?? null;
-  const m123PriceStatus =
-    m123?.meta?.priceStatus === "stale" ? "stale" : "live";
   const m6Card = useMemo(() => {
     if (!metrics) {
       return null;
@@ -720,7 +718,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         formattedValue = formatCurrency(m3.dir);
         numericForColor = m3.dir;
         badgeNode = (
-          <StatusBadge meta={globalMeta ?? undefined} status={m123PriceStatus} />
+          <StatusBadge meta={globalMeta ?? undefined} />
         );
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
@@ -869,7 +867,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           colorClass,
           dataTestId,
           badge: (
-            <StatusBadge meta={globalMeta ?? undefined} status={m123PriceStatus} />
+            <StatusBadge meta={globalMeta ?? undefined} />
           ),
         };
       }
@@ -960,7 +958,6 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     rawMetrics?._period?.diagnostics,
     m6Card,
     officialCloseSummary,
-    m123PriceStatus,
     globalMeta,
   ]);
 
@@ -996,10 +993,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
                       }
                       badge={
-                        <StatusBadge
-                          meta={globalMeta ?? undefined}
-                          status={m123PriceStatus}
-                        />
+                        <StatusBadge meta={globalMeta ?? undefined} />
                       }
                     >
                       <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
@@ -1049,10 +1043,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         </div>
                       }
                       badge={
-                        <StatusBadge
-                          meta={globalMeta ?? undefined}
-                          status={m123PriceStatus}
-                        />
+                        <StatusBadge meta={globalMeta ?? undefined} />
                       }
                     >
                       <div
