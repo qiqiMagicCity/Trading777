@@ -961,6 +961,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
     m6Card,
     officialCloseSummary,
     m123PriceStatus,
+    globalMeta,
   ]);
 
   const rows = useMemo(

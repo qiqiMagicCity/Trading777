@@ -54,7 +54,10 @@ export function ModePopover({ meta }: Props) {
         type="button"
         aria-haspopup="true"
         aria-expanded={open}
-        className="flex h-5 w-5 items-center justify-center rounded-full border border-emerald-200/70 text-[10px] font-semibold text-emerald-50 transition hover:bg-emerald-500/20"
+        className={clsx(
+          "flex h-5 w-5 items-center justify-center rounded-full border border-emerald-200/70 text-[10px] font-semibold",
+          "text-emerald-50 transition hover:bg-emerald-500/20",
+        )}
         onClick={() => setOpen((prev) => !prev)}
       >
         i
@@ -73,25 +76,25 @@ export function ModePopover({ meta }: Props) {
             </div>
             <div className="flex justify-between gap-2">
               <dt className="text-emerald-200/70">latestPriceOk</dt>
-              <dd className={clsx(meta.latestPriceOk ? "text-emerald-200" : "text-amber-300")}>{
-                meta.latestPriceOk ? "true" : "false"
-              }</dd>
+              <dd className={clsx(meta.latestPriceOk ? "text-emerald-200" : "text-amber-300")}>
+                {meta.latestPriceOk ? "true" : "false"}
+              </dd>
             </div>
             <div className="flex justify-between gap-2">
               <dt className="text-emerald-200/70">officialCloseOk</dt>
-              <dd className={clsx(meta.officialCloseOk ? "text-emerald-200" : "text-amber-300")}>{
-                meta.officialCloseOk ? "true" : "false"
-              }</dd>
+              <dd className={clsx(meta.officialCloseOk ? "text-emerald-200" : "text-amber-300")}>
+                {meta.officialCloseOk ? "true" : "false"}
+              </dd>
             </div>
             <div className="flex justify-between gap-2">
               <dt className="text-emerald-200/70">isComplete</dt>
-              <dd className={clsx(meta.isComplete ? "text-emerald-200" : "text-amber-300")}>{
-                meta.isComplete ? "true" : "false"
-              }</dd>
+              <dd className={clsx(meta.isComplete ? "text-emerald-200" : "text-amber-300")}>
+                {meta.isComplete ? "true" : "false"}
+              </dd>
             </div>
             <div className="flex justify-between gap-2">
               <dt className="text-emerald-200/70">degradedReason</dt>
-              <dd className="text-emerald-50">{meta.degradedReason ?? '-'}</dd>
+              <dd className="text-emerald-50">{meta.degradedReason ?? "-"}</dd>
             </div>
           </dl>
           <div className="mt-3">
