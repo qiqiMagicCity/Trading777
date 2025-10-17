@@ -718,7 +718,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
         formattedValue = formatCurrency(m3.dir);
         numericForColor = m3.dir;
         badgeNode = (
-          <StatusBadge meta={globalMeta ?? undefined} />
+          <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
         );
       } else if (key === "M7" || key === "M8") {
         const counts = value as MetricsContract["M7"] | MetricsContract["M8"];
@@ -867,7 +867,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           colorClass,
           dataTestId,
           badge: (
-            <StatusBadge meta={globalMeta ?? undefined} />
+            <StatusBadge meta={globalMeta ?? undefined} variant="static" />
           ),
         };
       }
@@ -993,7 +993,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
                       }
                       badge={
-                        <StatusBadge meta={globalMeta ?? undefined} />
+                        <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
                       }
                     >
                       <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
@@ -1043,7 +1043,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         </div>
                       }
                       badge={
-                        <StatusBadge meta={globalMeta ?? undefined} />
+                        <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
                       }
                     >
                       <div
