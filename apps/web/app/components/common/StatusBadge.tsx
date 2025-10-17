@@ -160,7 +160,7 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
           view.token.ring,
           view.token.bg,
         )}
-        data-variant={variant}
+        data-variant={variant ?? "ripple"}
         data-state={view.state}
         aria-live="polite"
         title={view.title}
