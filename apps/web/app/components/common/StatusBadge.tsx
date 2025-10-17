@@ -5,6 +5,7 @@ import type { GlobalMeta } from "@/app/lib/mode/globalMeta";
 import { useMemo, useRef } from "react";
 
 export type LegacyStatus = "live" | "stale";
+type BadgeState = "live" | "degraded" | "close" | "unknown";
 export type BadgeVariant = "ripple" | "halo" | "pill" | "static";
 
 interface Props {
@@ -14,34 +15,153 @@ interface Props {
   variant?: BadgeVariant;
 }
 
-const MODE_TOKENS = {
-  live: {
-    dot: "bg-emerald-400",
-    text: "text-emerald-300",
-    ring: "ring-emerald-500/30",
-    bg: "bg-emerald-500/10",
-    label: "盘中（实时）",
-    animate: true,
+const TOKENS: Record<
+  BadgeVariant,
+  Record<
+    BadgeState,
+    {
+      text: string;
+      ring: string;
+      bg: string;
+      dot?: string;
+      animate: boolean;
+      label?: string;
+    }
+  >
+> = {
+  ripple: {
+    live: {
+      text: "text-emerald-300",
+      ring: "ring-emerald-500/30",
+      bg: "bg-emerald-500/10",
+      dot: "bg-emerald-400",
+      animate: true,
+      label: "盘中（实时）",
+    },
+    degraded: {
+      text: "text-amber-300",
+      ring: "ring-amber-500/30",
+      bg: "bg-amber-500/10",
+      dot: "bg-amber-400",
+      animate: false,
+      label: "待更新/仅昨收基线",
+    },
+    close: {
+      text: "text-sky-300",
+      ring: "ring-sky-500/30",
+      bg: "bg-sky-500/10",
+      dot: "bg-sky-400",
+      animate: false,
+      label: "收盘口径",
+    },
+    unknown: {
+      text: "text-gray-200",
+      ring: "ring-gray-500/30",
+      bg: "bg-gray-500/10",
+      animate: false,
+      label: "未知",
+    },
   },
-  degraded: {
-    dot: "bg-amber-400",
-    text: "text-amber-300",
-    ring: "ring-amber-500/30",
-    bg: "bg-amber-500/10",
-    label: "待更新/仅昨收基线",
-    animate: false,
+  halo: {
+    live: {
+      text: "text-emerald-300",
+      ring: "ring-2 ring-emerald-400/50",
+      bg: "bg-emerald-500/10",
+      dot: "bg-emerald-400",
+      animate: true,
+      label: "盘中（实时）",
+    },
+    degraded: {
+      text: "text-amber-300",
+      ring: "ring-2 ring-amber-400/50",
+      bg: "bg-amber-500/10",
+      dot: "bg-amber-400",
+      animate: false,
+      label: "待更新/仅昨收基线",
+    },
+    close: {
+      text: "text-sky-300",
+      ring: "ring-2 ring-sky-400/50",
+      bg: "bg-sky-500/10",
+      dot: "bg-sky-400",
+      animate: false,
+      label: "收盘口径",
+    },
+    unknown: {
+      text: "text-gray-200",
+      ring: "ring-2 ring-gray-400/40",
+      bg: "bg-gray-500/10",
+      animate: false,
+      label: "未知",
+    },
   },
-  close: {
-    dot: "bg-sky-400",
-    text: "text-sky-300",
-    ring: "ring-sky-500/30",
-    bg: "bg-sky-500/10",
-    label: "收盘口径",
-    animate: false,
+  pill: {
+    live: {
+      text: "text-emerald-300",
+      ring: "ring-emerald-500/30",
+      bg: "bg-emerald-500/10",
+      dot: "bg-emerald-400",
+      animate: true,
+      label: "盘中（实时）",
+    },
+    degraded: {
+      text: "text-amber-300",
+      ring: "ring-amber-500/30",
+      bg: "bg-amber-500/10",
+      dot: "bg-amber-400",
+      animate: false,
+      label: "待更新/仅昨收基线",
+    },
+    close: {
+      text: "text-sky-300",
+      ring: "ring-sky-500/30",
+      bg: "bg-sky-500/10",
+      dot: "bg-sky-400",
+      animate: false,
+      label: "收盘口径",
+    },
+    unknown: {
+      text: "text-gray-200",
+      ring: "ring-gray-500/30",
+      bg: "bg-gray-500/10",
+      animate: false,
+      label: "未知",
+    },
   },
-} as const;
-
-type ModeKey = keyof typeof MODE_TOKENS;
+  static: {
+    live: {
+      text: "text-emerald-300",
+      ring: "ring-emerald-500/30",
+      bg: "bg-emerald-500/10",
+      dot: "bg-emerald-400",
+      animate: false,
+      label: "盘中（实时）",
+    },
+    degraded: {
+      text: "text-amber-300",
+      ring: "ring-amber-500/30",
+      bg: "bg-amber-500/10",
+      dot: "bg-amber-400",
+      animate: false,
+      label: "待更新/仅昨收基线",
+    },
+    close: {
+      text: "text-sky-300",
+      ring: "ring-sky-500/30",
+      bg: "bg-sky-500/10",
+      dot: "bg-sky-400",
+      animate: false,
+      label: "收盘口径",
+    },
+    unknown: {
+      text: "text-gray-200",
+      ring: "ring-gray-500/30",
+      bg: "bg-gray-500/10",
+      animate: false,
+      label: "未知",
+    },
+  },
+};
 
 type MissingPairsSummary = {
   title?: string;
@@ -52,11 +172,12 @@ function summarizeMissingPairs(meta: GlobalMeta): MissingPairsSummary {
   if (!meta.missingPairs || meta.missingPairs.length === 0) {
     return { lines: [] };
   }
+  const limit = 10;
   const pairs = meta.missingPairs
-    .slice(0, 10)
+    .slice(0, limit)
     .map((pair) => `${pair.day} · ${pair.symbol}`);
-  if (meta.missingPairs.length > 10) {
-    const rest = meta.missingPairs.length - 10;
+  const rest = meta.missingPairs.length - pairs.length;
+  if (rest > 0) {
     pairs.push(`其余 ${rest} 条…`);
   }
   const title = `缺失标的（共 ${meta.missingPairs.length} 条）`;
@@ -71,8 +192,8 @@ function Dot({
 }: {
   variant: BadgeVariant;
   animate: boolean;
-  state: string;
-  dotClass: string;
+  state: BadgeState;
+  dotClass?: string;
 }) {
   if (state === "unknown") return null;
   switch (variant) {
@@ -83,7 +204,7 @@ function Dot({
             className={clsx(
               "absolute inline-flex h-full w-full rounded-full opacity-40",
               dotClass,
-              animate ? "motion-safe:animate-ping" : "",
+              animate && "motion-safe:animate-ping",
             )}
           />
           <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", dotClass)} />
@@ -92,11 +213,25 @@ function Dot({
     case "halo":
       return (
         <span className={clsx("relative h-2.5 w-2.5 rounded-full", dotClass)}>
-          <span className={clsx("absolute inset-[-4px] rounded-full blur-sm opacity-40", dotClass)} />
+          <span
+            className={clsx(
+              "absolute inset-[-4px] rounded-full blur-sm opacity-40",
+              dotClass,
+              animate && "motion-safe:animate-ping",
+            )}
+          />
         </span>
       );
     case "pill":
-      return <span className={clsx("h-1.5 w-1.5 rounded-full motion-safe:animate-pulse", dotClass)} />;
+      return (
+        <span
+          className={clsx(
+            "h-1.5 w-1.5 rounded-full",
+            dotClass,
+            animate && "motion-safe:animate-pulse",
+          )}
+        />
+      );
     case "static":
     default:
       return <span className={clsx("h-2 w-2 rounded-full", dotClass)} />;
@@ -118,23 +253,21 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
   }
 
   const view = useMemo(() => {
+    const variantTokens = TOKENS[resolvedVariant];
+
     if (!meta) {
+      const token = variantTokens.unknown;
       return {
         state: "unknown" as const,
-        token: {
-          dot: "bg-gray-500",
-          text: "text-gray-200",
-          ring: "ring-gray-500/30",
-          bg: "bg-gray-500/10",
-        },
-        label: "未知",
+        token,
+        label: token.label ?? "未知",
         title: "全局元信息不可用（未知状态）",
-        animate: false,
+        animate: token.animate,
       };
     }
 
-    const mode = (meta.mode as ModeKey) ?? "live";
-    const modeToken = MODE_TOKENS[mode] ?? MODE_TOKENS.live;
+    const mode = (meta.mode as BadgeState) ?? "live";
+    const token = variantTokens[mode] ?? variantTokens.live;
     let tooltipTitle: string | undefined;
 
     if (mode === "degraded") {
@@ -146,12 +279,12 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
 
     return {
       state: mode,
-      token: modeToken,
-      label: modeToken.label,
+      token,
+      label: token.label ?? "",
       title: tooltipTitle,
-      animate: modeToken.animate,
+      animate: token.animate,
     } as const;
-  }, [meta]);
+  }, [meta, resolvedVariant]);
 
   return (
     <div className={clsx("flex justify-center mb-2", className)}>
