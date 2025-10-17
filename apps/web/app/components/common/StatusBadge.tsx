@@ -110,6 +110,8 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
   const shouldUseMeta = !!meta;
   const hasMixedProps = shouldUseMeta && typeof status !== "undefined";
 
+  const resolvedVariant = variant ?? "ripple";
+
   if (hasMixedProps && !warnedLegacyStatus.current) {
     console.warn("[StatusBadge] meta provided; ignoring legacy 'status' prop.");
     warnedLegacyStatus.current = true;
@@ -160,13 +162,13 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
           view.token.ring,
           view.token.bg,
         )}
-        data-variant={variant ?? "ripple"}
+        data-variant={resolvedVariant}
         data-state={view.state}
         aria-live="polite"
         title={view.title}
       >
         <Dot
-          variant={variant ?? "ripple"}
+          variant={resolvedVariant}
           animate={view.animate}
           state={view.state}
           dotClass={view.token.dot}
