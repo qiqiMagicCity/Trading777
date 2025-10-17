@@ -5,11 +5,13 @@ import type { GlobalMeta } from "@/app/lib/mode/globalMeta";
 import { useMemo, useRef } from "react";
 
 export type LegacyStatus = "live" | "stale";
+export type BadgeVariant = "ripple" | "halo" | "pill" | "static";
 
 interface Props {
   meta?: GlobalMeta | null;
   status?: LegacyStatus;
   className?: string;
+  variant?: BadgeVariant;
 }
 
 const MODE_TOKENS = {
@@ -61,7 +63,47 @@ function summarizeMissingPairs(meta: GlobalMeta): MissingPairsSummary {
   return { title, lines: pairs };
 }
 
-export function StatusBadge({ meta, status, className }: Props) {
+function Dot({
+  variant,
+  animate,
+  state,
+  dotClass,
+}: {
+  variant: BadgeVariant;
+  animate: boolean;
+  state: string;
+  dotClass: string;
+}) {
+  if (state === "unknown") return null;
+  switch (variant) {
+    case "ripple":
+      return (
+        <span className="relative flex h-2.5 w-2.5">
+          <span
+            className={clsx(
+              "absolute inline-flex h-full w-full rounded-full opacity-40",
+              dotClass,
+              animate ? "motion-safe:animate-ping" : "",
+            )}
+          />
+          <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", dotClass)} />
+        </span>
+      );
+    case "halo":
+      return (
+        <span className={clsx("relative h-2.5 w-2.5 rounded-full", dotClass)}>
+          <span className={clsx("absolute inset-[-4px] rounded-full blur-sm opacity-40", dotClass)} />
+        </span>
+      );
+    case "pill":
+      return <span className={clsx("h-1.5 w-1.5 rounded-full motion-safe:animate-pulse", dotClass)} />;
+    case "static":
+    default:
+      return <span className={clsx("h-2 w-2 rounded-full", dotClass)} />;
+  }
+}
+
+export function StatusBadge({ meta, status, className, variant }: Props) {
   // meta-only阶段：当 meta 缺失时，不再伪装为 LIVE，而是显示 UNKNOWN/未知
   // （可观测性优先，避免误导）
   const warnedLegacyStatus = useRef(false);
@@ -122,18 +164,12 @@ export function StatusBadge({ meta, status, className }: Props) {
         aria-live="polite"
         title={view.title}
       >
-        {view.state !== "unknown" && (
-          <span className="relative flex h-2.5 w-2.5">
-            <span
-              className={clsx(
-                "absolute inline-flex h-full w-full rounded-full opacity-40",
-                view.animate && "motion-safe:animate-ping",
-                view.token.dot,
-              )}
-            />
-            <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", view.token.dot)} />
-          </span>
-        )}
+        <Dot
+          variant={variant ?? "ripple"}
+          animate={view.animate}
+          state={view.state}
+          dotClass={view.token.dot}
+        />
         {view.label}
       </span>
     </div>
