@@ -48,10 +48,52 @@ describe("StatusBadge · variant/state matrix", () => {
     expect(el).toHaveAttribute("title");
   });
 
+  test("halo + live：data-variant= halo，ring-2 存在且含动画", () => {
+    const { container } = render(<StatusBadge meta={meta("live")} variant="halo" />);
+    const el = screen.getByText(/盘中（实时）/);
+    expect(el).toHaveAttribute("data-variant", "halo");
+    expect(el).toHaveAttribute("data-state", "live");
+    expect(el.className).toContain("ring-2");
+    expect(container.innerHTML).toContain("motion-safe:animate-ping");
+  });
+
+  test("degraded 缺失 ≤10 条：tooltip 不展示“其余 0 条”", () => {
+    render(
+      <StatusBadge
+        meta={meta("degraded", {
+          missingPairs: [
+            { day: "2024-01-03", symbol: "AAPL" },
+            { day: "2024-01-04", symbol: "MSFT" },
+          ],
+        })}
+        variant="pill"
+      />,
+    );
+    const el = screen.getByText(/待更新/);
+    const title = el.getAttribute("title");
+    expect(title).toBeTruthy();
+    expect(title).not.toContain("其余 0 条");
+  });
+
   test("unknown（无 meta）：文案“未知”，data-state= unknown（variant 兜底不影响渲染）", () => {
     // @ts-expect-error: 测试 unknown 分支
     render(<StatusBadge meta={undefined} variant="ripple" />);
     const el = screen.getByText("未知");
     expect(el).toHaveAttribute("data-state", "unknown");
+  });
+
+  test("unknown → live：默认 variant 保持，状态切换，aria-live 保留", () => {
+    const { rerender } = render(<StatusBadge />);
+    const unknownEl = screen.getByText("未知");
+    expect(unknownEl).toHaveAttribute("data-state", "unknown");
+    expect(unknownEl).toHaveAttribute("data-variant", "ripple");
+
+    rerender(<StatusBadge meta={meta("live")} />);
+
+    expect(screen.queryByText("未知")).not.toBeInTheDocument();
+    const liveEl = screen.getByText(/盘中（实时）/);
+    expect(liveEl).toHaveAttribute("data-state", "live");
+    expect(liveEl).toHaveAttribute("data-variant", "ripple");
+    expect(liveEl).toHaveAttribute("aria-live", "polite");
   });
 });
