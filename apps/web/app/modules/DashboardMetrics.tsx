@@ -22,6 +22,7 @@ import type {
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import StatusBadge from "@/components/StatusBadge";
+import WarnChip from "@/components/common/WarnChip";
 import { useGlobalMeta } from "@/app/state/globalModeStore";
 import { parseSnapshotNumber } from "@/app/lib/snapshotNumber";
 import {
@@ -1012,48 +1013,52 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                       : ""
                   }`;
 
+                  const infoChip = (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <WarnChip>
+                            <span className="sr-only">更多信息</span>
+                            <span aria-hidden className="font-semibold leading-none">
+                              !
+                            </span>
+                          </WarnChip>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="bottom"
+                          align="center"
+                          className="whitespace-pre text-xs"
+                        >
+                          {tooltipText}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+
                   return (
-                    <MetricCard
-                      key={metric.key}
-                      title={
-                        <div className="relative flex items-center justify-center">
-                          <span className="text-sm text-emerald-200/80">持仓浮盈</span>
-                          <div className="absolute right-0 -top-0.5">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    aria-label="更多信息"
-                                    className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ring-1 ring-emerald-500/30 text-emerald-300/80 hover:text-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                  >
-                                    !
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="bottom"
-                                  align="center"
-                                  className="whitespace-pre text-xs"
-                                >
-                                  {tooltipText}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                    <div key={metric.key} className="relative">
+                      <MetricCard
+                        title={
+                          <div className="flex items-center justify-center">
+                            <span className="text-sm text-emerald-200/80">持仓浮盈</span>
                           </div>
-                        </div>
-                      }
-                      badge={
-                        <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
-                      }
-                    >
-                      <div
-                        className={`mt-2 text-center text-xl font-semibold ${
-                          (m123?.m3?.dir ?? 0) >= 0 ? "text-emerald-300" : "text-rose-300"
-                        }`}
+                        }
+                        badge={
+                          <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
+                        }
                       >
-                        {fmtMoney(m123?.m3?.dir ?? 0)}
-                      </div>
-                    </MetricCard>
+                        <div
+                          className={`mt-2 text-center text-xl font-semibold ${
+                            (m123?.m3?.dir ?? 0) >= 0
+                              ? "text-emerald-300"
+                              : "text-rose-300"
+                          }`}
+                        >
+                          {fmtMoney(m123?.m3?.dir ?? 0)}
+                        </div>
+                      </MetricCard>
+                      <div className="absolute right-2 top-2 z-20">{infoChip}</div>
+                    </div>
                   );
                 }
 

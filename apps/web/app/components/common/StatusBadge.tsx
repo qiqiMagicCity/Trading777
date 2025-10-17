@@ -13,6 +13,7 @@ interface Props {
   status?: LegacyStatus;
   className?: string;
   variant?: BadgeVariant;
+  forceMotion?: boolean;
 }
 
 const TOKENS: Record<
@@ -189,11 +190,15 @@ function Dot({
   animate,
   state,
   dotClass,
+  pingClass,
+  pulseClass,
 }: {
   variant: BadgeVariant;
   animate: boolean;
   state: BadgeState;
   dotClass?: string;
+  pingClass: string;
+  pulseClass: string;
 }) {
   if (state === "unknown") return null;
   switch (variant) {
@@ -204,7 +209,7 @@ function Dot({
             className={clsx(
               "absolute inline-flex h-full w-full rounded-full opacity-40",
               dotClass,
-              animate && "motion-safe:animate-ping",
+              animate && pingClass,
             )}
           />
           <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", dotClass)} />
@@ -217,7 +222,7 @@ function Dot({
             className={clsx(
               "absolute inset-[-4px] rounded-full blur-sm opacity-40",
               dotClass,
-              animate && "motion-safe:animate-ping",
+              animate && pingClass,
             )}
           />
         </span>
@@ -228,7 +233,7 @@ function Dot({
           className={clsx(
             "h-1.5 w-1.5 rounded-full",
             dotClass,
-            animate && "motion-safe:animate-pulse",
+            animate && pulseClass,
           )}
         />
       );
@@ -238,7 +243,8 @@ function Dot({
   }
 }
 
-export function StatusBadge({ meta, status, className, variant }: Props) {
+export function StatusBadge(props: Props) {
+  const { meta, status, className, variant } = props;
   // meta-only阶段：当 meta 缺失时，不再伪装为 LIVE，而是显示 UNKNOWN/未知
   // （可观测性优先，避免误导）
   const warnedLegacyStatus = useRef(false);
@@ -246,6 +252,13 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
   const hasMixedProps = shouldUseMeta && typeof status !== "undefined";
 
   const resolvedVariant = variant ?? "ripple";
+
+  const forceMotionEnv =
+    typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_FORCE_BADGE_MOTION === "1";
+  const forceMotion = !!props.forceMotion || forceMotionEnv;
+  const pingClass = forceMotion ? "animate-ping" : "motion-safe:animate-ping";
+  const pulseClass = forceMotion ? "animate-pulse" : "motion-safe:animate-pulse";
 
   if (hasMixedProps && !warnedLegacyStatus.current) {
     console.warn("[StatusBadge] meta provided; ignoring legacy 'status' prop.");
@@ -298,6 +311,7 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
         data-variant={resolvedVariant}
         data-state={view.state}
         aria-live="polite"
+        role="status"
         title={view.title}
       >
         <Dot
@@ -305,8 +319,12 @@ export function StatusBadge({ meta, status, className, variant }: Props) {
           animate={view.animate}
           state={view.state}
           dotClass={view.token.dot}
+          pingClass={pingClass}
+          pulseClass={pulseClass}
         />
-        {view.label}
+        {resolvedVariant === "halo" && view.animate
+          ? <span className={pulseClass}>{view.label}</span>
+          : view.label}
       </span>
     </div>
   );
