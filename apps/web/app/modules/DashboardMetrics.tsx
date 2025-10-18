@@ -994,7 +994,7 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                         <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
                       }
                       badge={
-                        <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
+                        <StatusBadge meta={globalMeta ?? undefined} variant="halo" />
                       }
                     >
                       <div className="mt-2 text-center text-xl font-semibold text-emerald-300">

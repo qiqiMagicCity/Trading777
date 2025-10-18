@@ -204,23 +204,24 @@ function Dot({
   switch (variant) {
     case "ripple":
       return (
-        <span className="relative flex h-2.5 w-2.5">
+        <span className="relative flex h-3 w-3">
           <span
             className={clsx(
-              "absolute inline-flex h-full w-full rounded-full opacity-40",
+              "absolute inline-flex h-full w-full rounded-full opacity-70",
+              "inset-[-6px]",
               dotClass,
               animate && pingClass,
             )}
           />
-          <span className={clsx("relative inline-flex h-2.5 w-2.5 rounded-full", dotClass)} />
+          <span className={clsx("relative inline-flex h-3 w-3 rounded-full", dotClass)} />
         </span>
       );
     case "halo":
       return (
-        <span className={clsx("relative h-2.5 w-2.5 rounded-full", dotClass)}>
+        <span className={clsx("relative h-3 w-3 rounded-full", dotClass)}>
           <span
             className={clsx(
-              "absolute inset-[-4px] rounded-full blur-sm opacity-40",
+              "absolute inset-[-6px] rounded-full blur-sm opacity-60",
               dotClass,
               animate && pingClass,
             )}
