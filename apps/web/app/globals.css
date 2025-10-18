@@ -32,6 +32,25 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* 编译兜底：即便 safelist 被忽略，也会把这些规则打进产物 */
+  .tw-status-badge-sentinel {
+    @apply text-emerald-300 bg-emerald-500/10 ring-emerald-500/30 text-amber-300 bg-amber-500/10
+      ring-amber-500/30 text-sky-300 bg-sky-500/10 ring-sky-500/30 text-gray-200 bg-gray-500/10
+      ring-gray-500/30 ring-2 ring-emerald-400/50 ring-amber-400/50 ring-sky-400/50 ring-gray-400/40
+      motion-safe:animate-ping motion-safe:animate-pulse animate-ping animate-pulse bg-emerald-400
+      bg-amber-400 bg-sky-400;
+  }
+  /* 不会影响布局：仅作为样式保活器存在 */
+  .tw-status-badge-sentinel {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+}
+
 /* Global body styles matching legacy project */
 body {
   background-color: var(--c-bg);

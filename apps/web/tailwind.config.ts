@@ -8,6 +8,38 @@ export default {
     './components/**/*.{ts,tsx}',
     './modules/**/*.{ts,tsx}',
   ],
+  safelist: [
+    // 绿色（live）
+    'text-emerald-300',
+    'bg-emerald-500/10',
+    'ring-emerald-500/30',
+    'bg-emerald-400',
+    // 琥珀色（degraded）
+    'text-amber-300',
+    'bg-amber-500/10',
+    'ring-amber-500/30',
+    'bg-amber-400',
+    // 天蓝（close）
+    'text-sky-300',
+    'bg-sky-500/10',
+    'ring-sky-500/30',
+    'bg-sky-400',
+    // 灰（unknown）
+    'text-gray-200',
+    'bg-gray-500/10',
+    'ring-gray-500/30',
+    // halo 专用
+    'ring-2',
+    'ring-emerald-400/50',
+    'ring-amber-400/50',
+    'ring-sky-400/50',
+    'ring-gray-400/40',
+    // 动效类（带与不带 motion-safe 的两套）
+    'motion-safe:animate-ping',
+    'motion-safe:animate-pulse',
+    'animate-ping',
+    'animate-pulse',
+  ],
   theme: {
     extend: {
       colors: {
