@@ -253,35 +253,65 @@ export function StatusBadge(props: Props) {
 
   const resolvedVariant = variant ?? "ripple";
 
+  // --- 动效/视觉覆盖策略 ---
   const forceMotionEnv =
     typeof process !== "undefined" &&
     process.env.NEXT_PUBLIC_FORCE_BADGE_MOTION === "1";
-  const forceMotion = !!props.forceMotion || forceMotionEnv;
-  const pingClass = forceMotion ? "animate-ping" : "motion-safe:animate-ping";
-  const pulseClass = forceMotion ? "animate-pulse" : "motion-safe:animate-pulse";
+  const forceVisualEnv =
+    typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_FORCE_BADGE_VISUAL === "1";
+  const respectReducedMotionEnv =
+    typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_RESPECT_REDUCED_MOTION === "1";
+
+  // 外部 props、强制动效 与 强制视觉 三者任一为真，则视为“必须动”
+  const forceMotion = !!props.forceMotion || forceMotionEnv || forceVisualEnv;
+
+  // 默认：**不尊重** reduced-motion（给你当前诉求的默认行为：总是动）
+  // 如需恢复无障碍友好，在环境中设置 NEXT_PUBLIC_RESPECT_REDUCED_MOTION=1
+  const pingClass =
+    respectReducedMotionEnv && !forceMotion
+      ? "motion-safe:animate-ping"
+      : "animate-ping";
+  const pulseClass =
+    respectReducedMotionEnv && !forceMotion
+      ? "motion-safe:animate-pulse"
+      : "animate-pulse";
 
   if (hasMixedProps && !warnedLegacyStatus.current) {
     console.warn("[StatusBadge] meta provided; ignoring legacy 'status' prop.");
     warnedLegacyStatus.current = true;
   }
 
-  const view = useMemo(() => {
-    const variantTokens = TOKENS[resolvedVariant];
+    const view = useMemo(() => {
+      const variantTokens = TOKENS[resolvedVariant];
 
-    if (!meta) {
-      const token = variantTokens.unknown;
-      return {
-        state: "unknown" as const,
-        token,
-        label: token.label ?? "未知",
-        title: "全局元信息不可用（未知状态）",
-        animate: token.animate,
-      };
-    }
+      // 强制视觉时，无论 meta 存在与否，都走 "live"+动画
+      if (forceVisualEnv) {
+        const token = variantTokens.live;
+        return {
+          state: "live" as const,
+          token,
+          label: token.label ?? "盘中（实时）",
+          title: "强制视觉：live",
+          animate: true,
+        };
+      }
 
-    const mode = (meta.mode as BadgeState) ?? "live";
-    const token = variantTokens[mode] ?? variantTokens.live;
-    let tooltipTitle: string | undefined;
+      if (!meta) {
+        const token = variantTokens.unknown;
+        return {
+          state: "unknown" as const,
+          token,
+          label: token.label ?? "未知",
+          title: "全局元信息不可用（未知状态）",
+          animate: token.animate,
+        };
+      }
+
+      const mode = (meta.mode as BadgeState) ?? "live";
+      const token = variantTokens[mode] ?? variantTokens.live;
+      let tooltipTitle: string | undefined;
 
     if (mode === "degraded") {
       const summary = summarizeMissingPairs(meta);
@@ -290,14 +320,15 @@ export function StatusBadge(props: Props) {
       }
     }
 
-    return {
-      state: mode,
-      token,
-      label: token.label ?? "",
-      title: tooltipTitle,
-      animate: token.animate,
-    } as const;
-  }, [meta, resolvedVariant]);
+      return {
+        state: mode,
+        token,
+        label: token.label ?? "",
+        title: tooltipTitle,
+        // 如果开启了强制动效（但不强制视觉），沿用当前视觉 token，但**强制开动画**
+        animate: forceMotion ? true : token.animate,
+      } as const;
+    }, [meta, resolvedVariant, forceMotion, forceVisualEnv]);
 
   return (
     <div className={clsx("flex justify-center mb-2", className)}>
