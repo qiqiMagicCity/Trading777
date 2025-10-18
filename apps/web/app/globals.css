@@ -518,3 +518,25 @@ body {
   transform: rotate(-45deg);
   text-align: center;
 }
+
+/* ===== Badge animation fallbacks (ensure ping/pulse exist even if Tailwind strips them) ===== */
+@layer utilities {
+  /* keyframes 与时序与 Tailwind 保持一致 */
+  @keyframes tw-ping {
+    75%, 100% { transform: scale(2); opacity: 0; }
+  }
+  @keyframes tw-pulse {
+    50% { opacity: .5; }
+  }
+
+  /* 基础动画类 */
+  .animate-ping { animation: tw-ping 1s cubic-bezier(0,0,0.2,1) infinite; }
+  .animate-pulse { animation: tw-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+
+  /* motion-safe 变体（注意选择器需转义冒号） */
+  @media (prefers-reduced-motion: no-preference) {
+    .motion-safe\:animate-ping { animation: tw-ping 1s cubic-bezier(0,0,0.2,1) infinite; }
+    .motion-safe\:animate-pulse { animation: tw-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+  }
+}
+
