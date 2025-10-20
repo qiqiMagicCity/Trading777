@@ -990,17 +990,19 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                   return (
                     <MetricCard
                       key={metric.key}
-                      title={
-                        <div className="text-sm text-emerald-200/80 text-center">持仓市值</div>
-                      }
+                      title={metric.title!}
+                      value={metric.value}
+                      colorClass={metric.colorClass}
+                      dataTestId={metric.dataTestId}
                       badge={
-                        <StatusBadge meta={globalMeta ?? undefined} variant="halo" />
+                        metric.badge ?? (
+                          <StatusBadge
+                            meta={globalMeta ?? undefined}
+                            variant="halo"
+                          />
+                        )
                       }
-                    >
-                      <div className="mt-2 text-center text-xl font-semibold text-emerald-300">
-                        {fmtMoney(m123?.m2 ?? 0)}
-                      </div>
-                    </MetricCard>
+                    />
                   );
                 }
 
@@ -1038,25 +1040,12 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
                   return (
                     <div key={metric.key} className="relative">
                       <MetricCard
-                        title={
-                          <div className="flex items-center justify-center">
-                            <span className="text-sm text-emerald-200/80">持仓浮盈</span>
-                          </div>
-                        }
-                        badge={
-                          <StatusBadge meta={globalMeta ?? undefined} variant="ripple" />
-                        }
-                      >
-                        <div
-                          className={`mt-2 text-center text-xl font-semibold ${
-                            (m123?.m3?.dir ?? 0) >= 0
-                              ? "text-emerald-300"
-                              : "text-rose-300"
-                          }`}
-                        >
-                          {fmtMoney(m123?.m3?.dir ?? 0)}
-                        </div>
-                      </MetricCard>
+                        title={metric.title!}
+                        value={metric.value}
+                        colorClass={metric.colorClass}
+                        dataTestId={metric.dataTestId}
+                        badge={metric.badge}
+                      />
                       <div className="absolute right-2 top-2 z-20">{infoChip}</div>
                     </div>
                   );
