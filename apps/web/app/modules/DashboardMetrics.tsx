@@ -793,32 +793,29 @@ export function DashboardMetrics({ enrichedTrades, positions }: Props) {
           formattedValue = formatCurrency(numValue);
           numericForColor = numValue;
         }
+      }
 
-        // 设置颜色
-        if (
-          ["M1", "M2", "M3", "M4", "M6", "M9", "M11", "M12", "M13"].includes(
-            key,
-          )
-        ) {
-          if (key === "M11" || key === "M12" || key === "M13") {
-            colorClass =
-              periodCardStates[key] === "ok" && numericForColor !== undefined
-                ? numericForColor > 0
-                  ? "green"
-                  : numericForColor < 0
-                  ? "red"
-                  : ""
-                : "";
-          } else {
-            colorClass =
-              numericForColor !== undefined
-                ? numericForColor > 0
-                  ? "green"
-                  : numericForColor < 0
-                  ? "red"
-                  : ""
-                : "";
-          }
+      if (
+        ["M1", "M2", "M3", "M4", "M9", "M11", "M12", "M13"].includes(key)
+      ) {
+        if (key === "M11" || key === "M12" || key === "M13") {
+          colorClass =
+            periodCardStates[key] === "ok" && numericForColor !== undefined
+              ? numericForColor > 0
+                ? "green"
+                : numericForColor < 0
+                ? "red"
+                : ""
+              : "";
+        } else {
+          colorClass =
+            numericForColor !== undefined
+              ? numericForColor > 0
+                ? "green"
+                : numericForColor < 0
+                ? "red"
+                : ""
+              : "";
         }
       }
 
